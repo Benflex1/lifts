@@ -1,0 +1,655 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { Search, X, Dumbbell, Plus, ChevronRight, Info } from 'lucide-react-native';
+import { Exercise } from '../types';
+import { searchExercises, createCustomExercise } from '../database/db';
+
+const MUSCLE_GROUPS = [
+  'All',
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Biceps',
+  'Triceps',
+  'Quadriceps',
+  'Hamstrings',
+  'Glutes',
+  'Abdominals',
+  'Calves',
+];
+
+const EQUIPMENT_LIST = [
+  'All',
+  'Barbell',
+  'Dumbbell',
+  'Machine',
+  'Cable',
+  'Body Only',
+];
+
+export const ExercisesScreen: React.FC = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMuscle, setSelectedMuscle] = useState('All');
+  const [selectedEquipment, setSelectedEquipment] = useState('All');
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Selected exercise for detail view
+  const [activeDetail, setActiveDetail] = useState<Exercise | null>(null);
+
+  // Custom exercise modal
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customMuscle, setCustomMuscle] = useState('Chest');
+  const [customEquipment, setCustomEquipment] = useState('Barbell');
+
+  useEffect(() => {
+    loadExercises();
+  }, [searchQuery, selectedMuscle, selectedEquipment]);
+
+  const loadExercises = async () => {
+    setLoading(true);
+    try {
+      const results = await searchExercises(searchQuery, selectedMuscle, selectedEquipment);
+      setExercises(results);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateCustom = async () => {
+    if (!customName.trim()) return;
+    const created = await createCustomExercise({
+      name: customName.trim(),
+      category: 'strength',
+      equipment: customEquipment.toLowerCase(),
+      primaryMuscles: [customMuscle.toLowerCase()],
+    });
+    setShowCustomModal(false);
+    setCustomName('');
+    loadExercises();
+    setActiveDetail(created);
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Exercise Library</Text>
+        <TouchableOpacity
+          style={styles.addCustomBtn}
+          onPress={() => setShowCustomModal(true)}
+        >
+          <Plus size={16} color="#FFFFFF" />
+          <Text style={styles.addCustomBtnText}>Custom</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchRow}>
+        <Search size={18} color="#9CA3AF" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search 800+ movements..."
+          placeholderTextColor="#6B7280"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <X size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Muscle Filter Horizontal Scroll */}
+      <View style={styles.filterSection}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={MUSCLE_GROUPS}
+          keyExtractor={item => item}
+          contentContainerStyle={styles.filterScroll}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.filterChip, selectedMuscle === item && styles.filterChipActive]}
+              onPress={() => setSelectedMuscle(item)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  selectedMuscle === item && styles.filterChipTextActive,
+                ]}
+              >
+                {item}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+
+      {/* Equipment Filter Horizontal Scroll */}
+      <View style={styles.filterSectionSmall}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={EQUIPMENT_LIST}
+          keyExtractor={item => item}
+          contentContainerStyle={styles.filterScroll}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.subChip, selectedEquipment === item && styles.subChipActive]}
+              onPress={() => setSelectedEquipment(item)}
+            >
+              <Text style={[styles.subChipText, selectedEquipment === item && styles.subChipTextActive]}>
+                {item}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+
+      {/* Exercise List */}
+      {loading ? (
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      ) : (
+        <FlatList
+          data={exercises}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.exerciseCard}
+              onPress={() => setActiveDetail(item)}
+            >
+              <View style={styles.iconWrap}>
+                <Dumbbell size={20} color="#3B82F6" />
+              </View>
+
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <View style={styles.tagRow}>
+                  <Text style={styles.tagMuscle}>
+                    {item.primaryMuscles.join(', ') || 'General'}
+                  </Text>
+                  <Text style={styles.tagDot}>•</Text>
+                  <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                </View>
+              </View>
+
+              <ChevronRight size={18} color="#4B5563" />
+            </TouchableOpacity>
+          )}
+        />
+      )}
+
+      {/* Exercise Detail Modal */}
+      <Modal visible={activeDetail !== null} animationType="slide">
+        <View style={styles.detailContainer}>
+          <View style={styles.detailHeader}>
+            <TouchableOpacity onPress={() => setActiveDetail(null)}>
+              <X size={24} color="#9CA3AF" />
+            </TouchableOpacity>
+            <Text style={styles.detailHeaderTitle}>Exercise Details</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {activeDetail && (
+            <ScrollView style={styles.detailContent} contentContainerStyle={{ paddingBottom: 40 }}>
+              <Text style={styles.detailName}>{activeDetail.name}</Text>
+
+              {/* Tag Badges */}
+              <View style={styles.detailBadgeRow}>
+                <View style={styles.badgePrimary}>
+                  <Text style={styles.badgePrimaryText}>
+                    Primary: {activeDetail.primaryMuscles.join(', ')}
+                  </Text>
+                </View>
+                <View style={styles.badgeSecondary}>
+                  <Text style={styles.badgeSecondaryText}>Equipment: {activeDetail.equipment}</Text>
+                </View>
+              </View>
+
+              {activeDetail.secondaryMuscles && activeDetail.secondaryMuscles.length > 0 && (
+                <Text style={styles.secondaryMusclesText}>
+                  Secondary: {activeDetail.secondaryMuscles.join(', ')}
+                </Text>
+              )}
+
+              {/* Instructions */}
+              <View style={styles.instructionsBox}>
+                <View style={styles.instructionHeadRow}>
+                  <Info size={16} color="#3B82F6" />
+                  <Text style={styles.instructionsHeading}>HOW TO PERFORM</Text>
+                </View>
+
+                {activeDetail.instructions && activeDetail.instructions.length > 0 ? (
+                  activeDetail.instructions.map((step, idx) => (
+                    <View key={idx} style={styles.stepRow}>
+                      <View style={styles.stepNum}>
+                        <Text style={styles.stepNumText}>{idx + 1}</Text>
+                      </View>
+                      <Text style={styles.stepText}>{step}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noInstructionsText}>
+                    Perform with controlled technique and full range of motion.
+                  </Text>
+                )}
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
+
+      {/* Create Custom Modal */}
+      <Modal visible={showCustomModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailHeaderTitle}>Add Custom Exercise</Text>
+              <TouchableOpacity onPress={() => setShowCustomModal(false)}>
+                <X size={22} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>EXERCISE NAME</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. Incline Machine Chest Press"
+              placeholderTextColor="#6B7280"
+              value={customName}
+              onChangeText={setCustomName}
+            />
+
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>PRIMARY MUSCLE</Text>
+            <View style={styles.modalPills}>
+              {['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quadriceps', 'Hamstrings', 'Glutes', 'Abdominals'].map(m => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.modalPill, customMuscle === m && styles.modalPillActive]}
+                  onPress={() => setCustomMuscle(m)}
+                >
+                  <Text style={[styles.modalPillText, customMuscle === m && styles.modalPillTextActive]}>
+                    {m}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>EQUIPMENT</Text>
+            <View style={styles.modalPills}>
+              {['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'].map(eq => (
+                <TouchableOpacity
+                  key={eq}
+                  style={[styles.modalPill, customEquipment === eq && styles.modalPillActive]}
+                  onPress={() => setCustomEquipment(eq)}
+                >
+                  <Text style={[styles.modalPillText, customEquipment === eq && styles.modalPillTextActive]}>
+                    {eq}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.saveCustomBtn} onPress={handleCreateCustom}>
+              <Text style={styles.saveCustomBtnText}>Save Exercise</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0D0E12',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 54,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    backgroundColor: '#181A20',
+    borderBottomWidth: 1,
+    borderBottomColor: '#262A34',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  addCustomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2563EB',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  addCustomBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#181A20',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 15,
+  },
+  filterSection: {
+    marginBottom: 6,
+  },
+  filterSectionSmall: {
+    marginBottom: 12,
+  },
+  filterScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#181A20',
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  filterChipActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  filterChipText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  subChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#1B1E26',
+  },
+  subChipActive: {
+    backgroundColor: '#2563EB',
+  },
+  subChipText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+  },
+  subChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
+  exerciseCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#181A20',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    gap: 12,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#1E2638',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tagMuscle: {
+    color: '#3B82F6',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  tagDot: {
+    color: '#6B7280',
+    fontSize: 10,
+  },
+  tagEquipment: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  centerBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailContainer: {
+    flex: 1,
+    backgroundColor: '#0D0E12',
+    paddingTop: 50,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#262A34',
+  },
+  detailHeaderTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  detailContent: {
+    padding: 20,
+  },
+  detailName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 14,
+  },
+  detailBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  badgePrimary: {
+    backgroundColor: '#1E2638',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  badgePrimaryText: {
+    color: '#3B82F6',
+    fontWeight: '600',
+    fontSize: 13,
+    textTransform: 'capitalize',
+  },
+  badgeSecondary: {
+    backgroundColor: '#20242E',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  badgeSecondaryText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    textTransform: 'capitalize',
+  },
+  secondaryMusclesText: {
+    color: '#6B7280',
+    fontSize: 12,
+    marginBottom: 20,
+    textTransform: 'capitalize',
+  },
+  instructionsBox: {
+    backgroundColor: '#181A20',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    marginTop: 10,
+  },
+  instructionHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+  },
+  instructionsHeading: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    gap: 12,
+  },
+  stepNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumText: {
+    color: '#3B82F6',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  stepText: {
+    flex: 1,
+    color: '#D1D5DB',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  noInstructionsText: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#181A20',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#2F3442',
+  },
+  fieldLabel: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  modalInput: {
+    backgroundColor: '#262A34',
+    borderRadius: 10,
+    height: 44,
+    color: '#FFFFFF',
+    paddingHorizontal: 14,
+    fontSize: 15,
+  },
+  modalPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  modalPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#262A34',
+    borderRadius: 12,
+  },
+  modalPillActive: {
+    backgroundColor: '#3B82F6',
+  },
+  modalPillText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  modalPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  saveCustomBtn: {
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  saveCustomBtnText: {
+    color: '#000000',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+});
