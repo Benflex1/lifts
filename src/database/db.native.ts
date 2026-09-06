@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
-import defaultExercisesData from './defaultExercises.json';
 import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+
+const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
@@ -301,60 +302,33 @@ function initWebStorage() {
   ];
 }
 
-// ==========================================
-// EXERCISE QUERIES
-// ==========================================
+import { smartSearchExercises } from '../utils/search';
+
+let cachedExercises: Exercise[] = [];
 
 export async function searchExercises(query: string, muscle?: string, equipment?: string): Promise<Exercise[]> {
-  if (Platform.OS === 'web') {
-    let list = webStorage.exercises;
-    if (query) {
-      const q = query.toLowerCase();
-      list = list.filter(e => e.name.toLowerCase().includes(q));
+  if (cachedExercises.length === 0) {
+    // Populate cache from DB or default
+    const db = await getDatabase();
+    if (db) {
+      const rows = await db.getAllAsync<any>('SELECT * FROM exercises ORDER BY name ASC');
+      cachedExercises = rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        equipment: r.equipment,
+        primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
+        secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
+        instructions: JSON.parse(r.instructions || '[]'),
+        isCustom: Boolean(r.is_custom),
+      }));
     }
-    if (muscle && muscle !== 'All') {
-      const m = muscle.toLowerCase();
-      list = list.filter(e => e.primaryMuscles.some(pm => pm.toLowerCase().includes(m)));
+    if (cachedExercises.length === 0) {
+      cachedExercises = defaultExercisesData;
     }
-    if (equipment && equipment !== 'All') {
-      const eq = equipment.toLowerCase();
-      list = list.filter(e => e.equipment.toLowerCase().includes(eq));
-    }
-    return list.slice(0, 100);
   }
 
-  const db = await getDatabase();
-  if (!db) return [];
-
-  let sql = 'SELECT * FROM exercises WHERE 1=1';
-  const params: any[] = [];
-
-  if (query.trim()) {
-    sql += ' AND name LIKE ?';
-    params.push(`%${query.trim()}%`);
-  }
-  if (muscle && muscle !== 'All') {
-    sql += ' AND primary_muscles LIKE ?';
-    params.push(`%${muscle.toLowerCase()}%`);
-  }
-  if (equipment && equipment !== 'All') {
-    sql += ' AND equipment LIKE ?';
-    params.push(`%${equipment.toLowerCase()}%`);
-  }
-
-  sql += ' ORDER BY name ASC LIMIT 100';
-
-  const rows = await db.getAllAsync<any>(sql, params);
-  return rows.map(r => ({
-    id: r.id,
-    name: r.name,
-    category: r.category,
-    equipment: r.equipment,
-    primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
-    secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
-    instructions: JSON.parse(r.instructions || '[]'),
-    isCustom: Boolean(r.is_custom),
-  }));
+  return smartSearchExercises(cachedExercises, query, muscle, equipment);
 }
 
 export async function getExerciseById(id: string): Promise<Exercise | null> {
@@ -406,6 +380,7 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
       JSON.stringify(customExercise.instructions || [])
     );
   }
+  cachedExercises.unshift(customExercise);
   return customExercise;
 }
 

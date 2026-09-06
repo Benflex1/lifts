@@ -1,5 +1,6 @@
-import defaultExercisesData from './defaultExercises.json';
 import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+
+const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
 const webStorage = {
   exercises: [] as Exercise[],
@@ -113,21 +114,10 @@ export async function initDatabase(): Promise<void> {
   ];
 }
 
+import { smartSearchExercises } from '../utils/search';
+
 export async function searchExercises(query: string, muscle?: string, equipment?: string): Promise<Exercise[]> {
-  let list = webStorage.exercises;
-  if (query) {
-    const q = query.toLowerCase();
-    list = list.filter(e => e.name.toLowerCase().includes(q));
-  }
-  if (muscle && muscle !== 'All') {
-    const m = muscle.toLowerCase();
-    list = list.filter(e => e.primaryMuscles.some(pm => pm.toLowerCase().includes(m)));
-  }
-  if (equipment && equipment !== 'All') {
-    const eq = equipment.toLowerCase();
-    list = list.filter(e => e.equipment.toLowerCase().includes(eq));
-  }
-  return list.slice(0, 100);
+  return smartSearchExercises(webStorage.exercises, query, muscle, equipment);
 }
 
 export async function getExerciseById(id: string): Promise<Exercise | null> {

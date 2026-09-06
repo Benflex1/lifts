@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Modal,
+  BackHandler,
 } from 'react-native';
 import {
   Clock,
@@ -19,6 +20,7 @@ import {
   X,
   Trophy,
   Award,
+  ChevronDown,
 } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatTimer, formatDuration } from '../utils/calculator';
@@ -31,6 +33,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
   const {
     activeWorkout,
     elapsedSeconds,
+    minimizeWorkout,
     addExerciseToWorkout,
     removeExerciseFromWorkout,
     addSet,
@@ -50,6 +53,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
 
   // Completed workout celebration modal
   const [completedSummary, setCompletedSummary] = useState<Workout | null>(null);
+
+  // Handle hardware back press on Android to minimize instead of exiting
+  useEffect(() => {
+    const onBackPress = () => {
+      minimizeWorkout();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [minimizeWorkout]);
 
   if (!activeWorkout) {
     return null;
@@ -129,18 +142,24 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     <View style={styles.screenContainer}>
       {/* Top App Bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={handleCancel} style={styles.discardBtn}>
-          <Text style={styles.discardBtnText}>Discard</Text>
+        <TouchableOpacity onPress={minimizeWorkout} style={styles.minimizeBtn}>
+          <ChevronDown size={20} color="#FFFFFF" />
+          <Text style={styles.minimizeBtnText}>Back</Text>
         </TouchableOpacity>
 
         <View style={styles.timerWrap}>
-          <Clock size={16} color="#10B981" />
+          <Clock size={15} color="#10B981" />
           <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
         </View>
 
-        <TouchableOpacity onPress={handleFinish} style={styles.finishBtn}>
-          <Text style={styles.finishBtnText}>Finish</Text>
-        </TouchableOpacity>
+        <View style={styles.topRightActions}>
+          <TouchableOpacity onPress={handleCancel} style={styles.discardBtn}>
+            <Text style={styles.discardBtnText}>Discard</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleFinish} style={styles.finishBtn}>
+            <Text style={styles.finishBtnText}>Finish</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Metrics Strip */}
@@ -168,6 +187,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {activeWorkout.exercises.map(activeEx => {
           return (
@@ -257,6 +277,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                           set.previousWeightKg ? set.previousWeightKg.toString() : '0'
                         }
                         placeholderTextColor="#6B7280"
+                        selectTextOnFocus={true}
                         onChangeText={txt => {
                           const val = parseFloat(txt) || 0;
                           updateSet(activeEx.id, set.id, { weightKg: val });
@@ -272,6 +293,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                         value={set.reps > 0 ? set.reps.toString() : ''}
                         placeholder={set.previousReps ? set.previousReps.toString() : '10'}
                         placeholderTextColor="#6B7280"
+                        selectTextOnFocus={true}
                         onChangeText={txt => {
                           const val = parseInt(txt, 10) || 0;
                           updateSet(activeEx.id, set.id, { reps: val });
@@ -361,7 +383,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
       />
 
       {/* Finished Summary Celebration Modal */}
-      <Modal visible={completedSummary !== null} animationType="fade">
+      <Modal
+        visible={completedSummary !== null}
+        animationType="fade"
+        onRequestClose={() => {
+          setCompletedSummary(null);
+          onFinish();
+        }}
+      >
         <View style={styles.celebrationOverlay}>
           <View style={styles.celebrationCard}>
             <View style={styles.trophyCircle}>
@@ -436,13 +465,30 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#262A34',
   },
+  minimizeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+  },
+  minimizeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  topRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   discardBtn: {
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
   },
   discardBtnText: {
     color: '#EF4444',
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
   },
   timerWrap: {

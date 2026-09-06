@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -42,16 +43,31 @@ const EQUIPMENT_LIST = [
   'Body Only',
 ];
 
+const QUICK_SUGGESTIONS = [
+  'Bench',
+  'Squat',
+  'Deadlift',
+  'Incline DB',
+  'Pull-up',
+  'Military Press',
+  'Barbell Row',
+  'Bicep Curl',
+  'Triceps',
+  'Leg Press',
+  'Lateral Raise',
+];
+
 export const ExercisePickerModal: React.FC<Props> = ({
   visible,
   onClose,
   onSelectExercise,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
   const [selectedEquipment, setSelectedEquipment] = useState('All');
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Custom exercise modal state
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -60,20 +76,34 @@ export const ExercisePickerModal: React.FC<Props> = ({
   const [customEquipment, setCustomEquipment] = useState('Barbell');
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     if (visible) {
       loadExercises();
     }
-  }, [visible, searchQuery, selectedMuscle, selectedEquipment]);
+  }, [visible, debouncedQuery, selectedMuscle, selectedEquipment]);
 
   const loadExercises = async () => {
-    setLoading(true);
     try {
-      const results = await searchExercises(searchQuery, selectedMuscle, selectedEquipment);
+      const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
       setExercises(results);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+    }
+  };
+
+  const handleSuggestionPress = (suggestion: string) => {
+    if (searchQuery.toLowerCase() === suggestion.toLowerCase()) {
+      setSearchQuery('');
+    } else {
+      setSearchQuery(suggestion);
     }
   };
 
@@ -97,7 +127,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Select Exercise</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <X color="#9CA3AF" size={24} />
           </TouchableOpacity>
         </View>
@@ -112,12 +142,38 @@ export const ExercisePickerModal: React.FC<Props> = ({
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
+            clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <X size={16} color="#9CA3AF" />
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Quick Suggestion Chips */}
+        <View style={styles.suggestionsContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.suggestionsScroll}
+            keyboardShouldPersistTaps="handled"
+          >
+            {QUICK_SUGGESTIONS.map(s => {
+              const isActive = searchQuery.toLowerCase() === s.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.suggestionChip, isActive && styles.suggestionChipActive]}
+                  onPress={() => handleSuggestionPress(s)}
+                >
+                  <Text style={[styles.suggestionText, isActive && styles.suggestionTextActive]}>
+                    {s}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* Muscle Filter Horizontal List */}
@@ -128,6 +184,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
             data={MUSCLE_GROUPS}
             keyExtractor={item => item}
             contentContainerStyle={styles.filterScroll}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={[styles.filterChip, selectedMuscle === item && styles.filterChipActive]}
@@ -149,6 +206,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
             data={EQUIPMENT_LIST}
             keyExtractor={item => item}
             contentContainerStyle={styles.filterScroll}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={[styles.subFilterChip, selectedEquipment === item && styles.subFilterChipActive]}
@@ -177,7 +235,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
         </TouchableOpacity>
 
         {/* Exercise List */}
-        {loading ? (
+        {initialLoading ? (
           <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color="#3B82F6" />
           </View>
@@ -186,6 +244,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
             data={exercises}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.exerciseItem}
@@ -198,13 +257,9 @@ export const ExercisePickerModal: React.FC<Props> = ({
                   <Dumbbell size={20} color="#3B82F6" />
                 </View>
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
+                  <Text style={styles.itemName}>{item.name}</Text>
                   <View style={styles.tagRow}>
-                    <Text style={styles.tagMuscle}>
-                      {item.primaryMuscles.join(', ') || 'General'}
-                    </Text>
+                    <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
                     <Text style={styles.tagDot}>•</Text>
                     <Text style={styles.tagEquipment}>{item.equipment}</Text>
                   </View>
@@ -220,7 +275,12 @@ export const ExercisePickerModal: React.FC<Props> = ({
         )}
 
         {/* Custom Exercise Modal */}
-        <Modal visible={showCustomModal} transparent animationType="fade">
+        <Modal
+          visible={showCustomModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowCustomModal(false)}
+        >
           <View style={styles.customModalOverlay}>
             <View style={styles.customModalCard}>
               <View style={styles.header}>
@@ -318,6 +378,33 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#FFFFFF',
     fontSize: 15,
+  },
+  suggestionsContainer: {
+    marginBottom: 10,
+  },
+  suggestionsScroll: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  suggestionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#1E232E',
+    borderWidth: 1,
+    borderColor: '#2F3748',
+  },
+  suggestionChipActive: {
+    backgroundColor: '#1D4ED8',
+    borderColor: '#3B82F6',
+  },
+  suggestionText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  suggestionTextActive: {
+    color: '#FFFFFF',
   },
   filterSection: {
     marginBottom: 8,

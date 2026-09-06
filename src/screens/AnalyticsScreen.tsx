@@ -50,7 +50,11 @@ export const AnalyticsScreen: React.FC = () => {
         <Text style={styles.headerTitle}>Tools & Analytics</Text>
       </View>
 
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Open-Source Promise Card */}
         <View style={styles.promiseCard}>
           <ShieldCheck size={24} color="#10B981" />
@@ -80,6 +84,7 @@ export const AnalyticsScreen: React.FC = () => {
                 keyboardType="decimal-pad"
                 value={weight}
                 onChangeText={setWeight}
+                selectTextOnFocus={true}
               />
             </View>
 
@@ -90,6 +95,7 @@ export const AnalyticsScreen: React.FC = () => {
                 keyboardType="number-pad"
                 value={reps}
                 onChangeText={setReps}
+                selectTextOnFocus={true}
               />
             </View>
           </View>

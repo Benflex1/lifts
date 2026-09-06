@@ -14,9 +14,12 @@ interface RestTimerState {
 interface WorkoutContextType {
   activeWorkout: Workout | null;
   isWorkingOut: boolean;
+  isMinimized: boolean;
   elapsedSeconds: number;
   restTimer: RestTimerState;
   startWorkout: (routine?: Routine, customName?: string) => Promise<void>;
+  minimizeWorkout: () => void;
+  maximizeWorkout: () => void;
   addExerciseToWorkout: (exercise: Exercise) => Promise<void>;
   removeExerciseFromWorkout: (activeExerciseId: string) => void;
   addSet: (activeExerciseId: string, setType?: SetType) => void;
@@ -35,6 +38,7 @@ const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
 export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeWorkout, setActiveWorkout] = useState<Workout | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
     remainingSeconds: 0,
@@ -43,6 +47,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const minimizeWorkout = () => setIsMinimized(true);
+  const maximizeWorkout = () => setIsMinimized(false);
 
   // Workout duration timer
   useEffect(() => {
@@ -272,7 +279,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         return {
           ...e,
-          sets: e.sets.map(s => {
+          sets: e.sets.map((s, idx) => {
             if (s.id !== setId) return s;
             const willBeCompleted = !s.isCompleted;
 
@@ -281,14 +288,24 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }
 
-            // Auto-fill defaults if zero
-            const finalWeight = s.weightKg > 0 ? s.weightKg : (s.previousWeightKg || 20);
-            const finalReps = s.reps > 0 ? s.reps : (s.previousReps || 10);
+            // Prior set in this session for seamless straight sets
+            const prevSetInSession = idx > 0 ? e.sets[idx - 1] : null;
+
+            // Auto-fill defaults if zero when completing
+            const finalWeight =
+              s.weightKg > 0
+                ? s.weightKg
+                : (prevSetInSession?.weightKg || s.previousWeightKg || 20);
+
+            const finalReps =
+              s.reps > 0
+                ? s.reps
+                : (prevSetInSession?.reps || s.previousReps || 10);
 
             return {
               ...s,
-              weightKg: finalWeight,
-              reps: finalReps,
+              weightKg: willBeCompleted ? finalWeight : s.weightKg,
+              reps: willBeCompleted ? finalReps : s.reps,
               isCompleted: willBeCompleted,
               completedAt: willBeCompleted ? new Date().toISOString() : undefined,
             };
@@ -337,12 +354,14 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     setActiveWorkout(null);
+    setIsMinimized(false);
     stopRestTimer();
     return finished;
   };
 
   const cancelWorkout = () => {
     setActiveWorkout(null);
+    setIsMinimized(false);
     stopRestTimer();
   };
 
@@ -351,9 +370,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       value={{
         activeWorkout,
         isWorkingOut: activeWorkout !== null,
+        isMinimized,
         elapsedSeconds,
         restTimer,
         startWorkout,
+        minimizeWorkout,
+        maximizeWorkout,
         addExerciseToWorkout,
         removeExerciseFromWorkout,
         addSet,

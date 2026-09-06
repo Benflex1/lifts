@@ -100,7 +100,11 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollArea}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Quick Start Card */}
         <View style={styles.quickStartCard}>
           <View style={styles.quickStartInfo}>
@@ -228,6 +232,7 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
       <RoutineEditorModal
         visible={showEditor}
         routineToEdit={routineToEdit}
+        existingFolders={folders.filter(f => f !== 'All')}
         onClose={() => setShowEditor(false)}
         onSaved={loadRoutines}
       />

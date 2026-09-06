@@ -61,7 +61,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Input Row */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Target Weight (Total Barbell Load)</Text>
@@ -71,6 +71,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                   keyboardType="numeric"
                   value={targetWeight}
                   onChangeText={setTargetWeight}
+                  selectTextOnFocus={true}
                   placeholder="e.g. 100"
                   placeholderTextColor="#6B7280"
                 />

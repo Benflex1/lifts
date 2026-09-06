@@ -37,12 +37,27 @@ const EQUIPMENT_LIST = [
   'Body Only',
 ];
 
+const QUICK_SUGGESTIONS = [
+  'Bench',
+  'Squat',
+  'Deadlift',
+  'Incline DB',
+  'Pull-up',
+  'Military Press',
+  'Barbell Row',
+  'Bicep Curl',
+  'Triceps',
+  'Leg Press',
+  'Lateral Raise',
+];
+
 export const ExercisesScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
   const [selectedEquipment, setSelectedEquipment] = useState('All');
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // Selected exercise for detail view
   const [activeDetail, setActiveDetail] = useState<Exercise | null>(null);
@@ -54,18 +69,32 @@ export const ExercisesScreen: React.FC = () => {
   const [customEquipment, setCustomEquipment] = useState('Barbell');
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     loadExercises();
-  }, [searchQuery, selectedMuscle, selectedEquipment]);
+  }, [debouncedQuery, selectedMuscle, selectedEquipment]);
 
   const loadExercises = async () => {
-    setLoading(true);
     try {
-      const results = await searchExercises(searchQuery, selectedMuscle, selectedEquipment);
+      const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
       setExercises(results);
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+    }
+  };
+
+  const handleSuggestionPress = (suggestion: string) => {
+    if (searchQuery.toLowerCase() === suggestion.toLowerCase()) {
+      setSearchQuery('');
+    } else {
+      setSearchQuery(suggestion);
     }
   };
 
@@ -106,12 +135,39 @@ export const ExercisesScreen: React.FC = () => {
           placeholderTextColor="#6B7280"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          clearButtonMode="while-editing"
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
+          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <X size={16} color="#9CA3AF" />
           </TouchableOpacity>
         )}
+      </View>
+
+      {/* Quick Suggestion Chips */}
+      <View style={styles.suggestionsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.suggestionsScroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {QUICK_SUGGESTIONS.map(s => {
+            const isActive = searchQuery.toLowerCase() === s.toLowerCase();
+            return (
+              <TouchableOpacity
+                key={s}
+                style={[styles.suggestionChip, isActive && styles.suggestionChipActive]}
+                onPress={() => handleSuggestionPress(s)}
+              >
+                <Text style={[styles.suggestionText, isActive && styles.suggestionTextActive]}>
+                  {s}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Muscle Filter Horizontal Scroll */}
@@ -122,6 +178,7 @@ export const ExercisesScreen: React.FC = () => {
           data={MUSCLE_GROUPS}
           keyExtractor={item => item}
           contentContainerStyle={styles.filterScroll}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.filterChip, selectedMuscle === item && styles.filterChipActive]}
@@ -148,6 +205,7 @@ export const ExercisesScreen: React.FC = () => {
           data={EQUIPMENT_LIST}
           keyExtractor={item => item}
           contentContainerStyle={styles.filterScroll}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.subChip, selectedEquipment === item && styles.subChipActive]}
@@ -162,7 +220,7 @@ export const ExercisesScreen: React.FC = () => {
       </View>
 
       {/* Exercise List */}
-      {loading ? (
+      {initialLoading ? (
         <View style={styles.centerBox}>
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
@@ -171,6 +229,7 @@ export const ExercisesScreen: React.FC = () => {
           data={exercises}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.exerciseCard}
@@ -196,14 +255,23 @@ export const ExercisesScreen: React.FC = () => {
               <ChevronRight size={18} color="#4B5563" />
             </TouchableOpacity>
           )}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No exercises found.</Text>
+            </View>
+          }
         />
       )}
 
       {/* Exercise Detail Modal */}
-      <Modal visible={activeDetail !== null} animationType="slide">
+      <Modal 
+        visible={activeDetail !== null} 
+        animationType="slide"
+        onRequestClose={() => setActiveDetail(null)}
+      >
         <View style={styles.detailContainer}>
           <View style={styles.detailHeader}>
-            <TouchableOpacity onPress={() => setActiveDetail(null)}>
+            <TouchableOpacity onPress={() => setActiveDetail(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <X size={24} color="#9CA3AF" />
             </TouchableOpacity>
             <Text style={styles.detailHeaderTitle}>Exercise Details</Text>
@@ -211,7 +279,11 @@ export const ExercisesScreen: React.FC = () => {
           </View>
 
           {activeDetail && (
-            <ScrollView style={styles.detailContent} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView 
+              style={styles.detailContent} 
+              contentContainerStyle={{ paddingBottom: 40 }}
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={styles.detailName}>{activeDetail.name}</Text>
 
               {/* Tag Badges */}
@@ -260,7 +332,12 @@ export const ExercisesScreen: React.FC = () => {
       </Modal>
 
       {/* Create Custom Modal */}
-      <Modal visible={showCustomModal} transparent animationType="fade">
+      <Modal 
+        visible={showCustomModal} 
+        transparent 
+        animationType="fade"
+        onRequestClose={() => setShowCustomModal(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.detailHeader}>
@@ -372,6 +449,33 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#FFFFFF',
     fontSize: 15,
+  },
+  suggestionsContainer: {
+    marginBottom: 8,
+  },
+  suggestionsScroll: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  suggestionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#1E232E',
+    borderWidth: 1,
+    borderColor: '#2F3748',
+  },
+  suggestionChipActive: {
+    backgroundColor: '#1D4ED8',
+    borderColor: '#3B82F6',
+  },
+  suggestionText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  suggestionTextActive: {
+    color: '#FFFFFF',
   },
   filterSection: {
     marginBottom: 6,
@@ -651,5 +755,13 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 15,
     fontWeight: '700',
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#6B7280',
+    fontSize: 15,
   },
 });

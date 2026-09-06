@@ -17,14 +17,16 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { ExercisesScreen } from './src/screens/ExercisesScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 
+import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
+
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
 function MainAppContent() {
-  const { isWorkingOut } = useWorkout();
+  const { isWorkingOut, isMinimized } = useWorkout();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
 
-  // If in an active gym session, show gym floor logger directly
-  if (isWorkingOut) {
+  // If in an active gym session and NOT minimized, show gym floor logger directly
+  if (isWorkingOut && !isMinimized) {
     return (
       <View style={styles.appWrapper}>
         <StatusBar style="light" />
@@ -48,6 +50,9 @@ function MainAppContent() {
         {currentTab === 'exercises' && <ExercisesScreen />}
         {currentTab === 'analytics' && <AnalyticsScreen />}
       </View>
+
+      {/* Persistent Mini Bar when workout is active in background */}
+      <ActiveWorkoutMiniBar />
 
       {/* Modern Bottom Navigation Bar */}
       <View style={styles.bottomNav}>
