@@ -13,6 +13,7 @@ export interface WebStoreOptions {
 export interface WebStore extends Store {
   isReadOnly(): boolean;
   tryAcquireLease(): Promise<boolean>;
+  onReadOnlyChange(listener: (isReadOnly: boolean) => void): () => void;
   close(): Promise<void>;
 }
 
@@ -28,6 +29,79 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   let readOnlyMode = false;
   let db: IDBDatabase | null = null;
   let cachedExercises: Exercise[] | null = null;
+  let heartbeatTimer: any = null;
+  const readOnlyListeners = new Set<(isReadOnly: boolean) => void>();
+
+  function setReadOnly(val: boolean): void {
+    const changed = readOnlyMode !== val;
+    readOnlyMode = val;
+    if (readOnlyMode) {
+      stopHeartbeat();
+    } else {
+      startHeartbeat();
+    }
+    if (changed) {
+      for (const listener of readOnlyListeners) {
+        try {
+          listener(readOnlyMode);
+        } catch (err) {
+          console.error('Error notifying readOnly listener:', err);
+        }
+      }
+    }
+  }
+
+  function stopHeartbeat(): void {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+
+  function startHeartbeat(): void {
+    if (heartbeatTimer || readOnlyMode) return;
+    const intervalMs = Math.max(1000, Math.min(Math.floor(leaseDurationMs / 3), 3000));
+    heartbeatTimer = setInterval(async () => {
+      if (readOnlyMode || !db) return;
+      try {
+        await renewLeaseIfOwned();
+      } catch (_) {}
+    }, intervalMs);
+    if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
+      heartbeatTimer.unref();
+    }
+  }
+
+  async function renewLeaseIfOwned(): Promise<void> {
+    if (!db || readOnlyMode) return;
+    return new Promise((resolve) => {
+      try {
+        const tx = db!.transaction('metadata', 'readwrite');
+        const store = tx.objectStore('metadata');
+        const getReq = store.get('writer_lease');
+        getReq.onsuccess = () => {
+          const lease = getReq.result;
+          const now = getNow();
+          if (lease && lease.ownerId === tabOwnerId) {
+            store.put({
+              ...lease,
+              heartbeat: now,
+            });
+            tx.oncomplete = () => resolve();
+          } else {
+            // Lease lost to another tab or cleared
+            setReadOnly(true);
+            tx.abort();
+            resolve();
+          }
+        };
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch (_) {
+        resolve();
+      }
+    });
+  }
 
   async function openDb(): Promise<IDBDatabase> {
     if (db) return db;
@@ -90,12 +164,12 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             leaseDurationMs,
           });
           tx.oncomplete = () => {
-            readOnlyMode = false;
+            setReadOnly(false);
             resolve(true);
           };
         } else {
           tx.oncomplete = () => {
-            readOnlyMode = true;
+            setReadOnly(true);
             resolve(false);
           };
         }
@@ -119,14 +193,14 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         const lease = getReq.result;
         const now = getNow();
 
-        if (lease && lease.ownerId === tabOwnerId && now - lease.heartbeat <= lease.leaseDurationMs) {
+        if (lease && lease.ownerId === tabOwnerId) {
           store.put({
             ...lease,
             heartbeat: now,
           });
           tx.oncomplete = () => resolve();
         } else {
-          readOnlyMode = true;
+          setReadOnly(true);
           tx.abort();
           reject(new Error('Cannot write: lease has expired or was acquired by another tab'));
         }
@@ -228,7 +302,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     const custom: Exercise = {
       ...exercise,
-      id: `custom-${Date.now()}`,
+      id: (exercise as any).id || `custom-${Date.now()}`,
       isCustom: true,
     };
 
@@ -720,6 +794,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function close(): Promise<void> {
+    stopHeartbeat();
     await releaseLease();
     if (db) {
       db.close();
@@ -730,6 +805,12 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   return {
     isReadOnly: () => readOnlyMode,
     tryAcquireLease,
+    onReadOnlyChange: (listener: (isReadOnly: boolean) => void) => {
+      readOnlyListeners.add(listener);
+      return () => {
+        readOnlyListeners.delete(listener);
+      };
+    },
     close,
     init,
     readSnapshot,

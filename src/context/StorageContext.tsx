@@ -60,6 +60,41 @@ export function StorageProvider({ children }: { children: ReactNode }) {
     init();
   }, [init]);
 
+  useEffect(() => {
+    if (!isReady) return;
+    let unsubscribe: (() => void) | undefined;
+    getStore()
+      .then((store) => {
+        setIsReadOnly(Boolean(store.isReadOnly?.()));
+        if (store.onReadOnlyChange) {
+          unsubscribe = store.onReadOnlyChange((ro) => {
+            setIsReadOnly(ro);
+          });
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [isReady]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    const handleFocus = async () => {
+      try {
+        const store = await getStore();
+        if (store.isReadOnly) {
+          setIsReadOnly(Boolean(store.isReadOnly()));
+        }
+      } catch (_) {}
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
   return (
     <StorageContext.Provider
       value={{

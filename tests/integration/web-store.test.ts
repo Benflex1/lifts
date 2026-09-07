@@ -3,6 +3,8 @@ import * as assert from 'node:assert/strict';
 import { indexedDB } from 'fake-indexeddb';
 import { createStoreFixture } from '../helpers/storeFixture';
 import { createWebStore } from '../../src/database/webStore';
+import { createSessionController } from '../../src/workout/session';
+import { restoreBackup } from '../../src/utils/restore';
 
 describe('webStore persistence and lease handling', () => {
   it('persists every user record type across store recreation and matches snapshot', async () => {
@@ -128,5 +130,198 @@ describe('webStore persistence and lease handling', () => {
 
     if (tab1.close) await tab1.close();
     if (tab2.close) await tab2.close();
+  });
+
+  it('allows write and renews lease after being idle past lease duration when no other tab acquired lease', async () => {
+    let currentTime = 200000;
+    const now = () => currentTime;
+    const dbName = `test-idle-${Date.now()}`;
+
+    const tab = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    await tab.init();
+    assert.equal(tab.isReadOnly(), false, 'Tab should initially be writer');
+
+    // Tab is idle and clock advances beyond leaseDurationMs (15 seconds)
+    currentTime += 15000;
+
+    // Subsequent write must succeed and renew the lease without switching to read-only
+    await tab.setSetting('auto_lock', 'enabled');
+    assert.equal(await tab.getSetting('auto_lock'), 'enabled');
+    assert.equal(tab.isReadOnly(), false, 'Tab should remain active writer');
+
+    if (tab.close) await tab.close();
+  });
+
+  it('notifies onReadOnlyChange listeners when lease is lost to another tab', async () => {
+    let currentTime = 300000;
+    const now = () => currentTime;
+    const dbName = `test-notify-${Date.now()}`;
+
+    const tab1 = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    await tab1.init();
+
+    const tab1StateChanges: boolean[] = [];
+    const unsub = tab1.onReadOnlyChange((isReadOnly) => {
+      tab1StateChanges.push(isReadOnly);
+    });
+
+    assert.equal(tab1.isReadOnly(), false);
+
+    // Advance clock past lease duration
+    currentTime += 6000;
+
+    // Tab 2 acquires the expired lease
+    const tab2 = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    await tab2.init();
+    assert.equal(tab2.isReadOnly(), false, 'Tab 2 acquired the lease');
+
+    // Tab 1 attempts a write -> must be rejected and switch Tab 1 to read-only, notifying listeners
+    await assert.rejects(async () => {
+      await tab1.setSetting('theme', 'neon');
+    }, /Cannot write: lease has expired or was acquired by another tab/);
+
+    assert.equal(tab1.isReadOnly(), true, 'Tab 1 is now read-only');
+    assert.ok(tab1StateChanges.includes(true), 'onReadOnlyChange listener must be notified with true');
+
+    unsub();
+    if (tab1.close) await tab1.close();
+    if (tab2.close) await tab2.close();
+  });
+
+  it('smoke tests workout recovery in browser storage: draft resume, idle update, completion, and rejects corrupt draft restore', async () => {
+    let currentTime = 400000;
+    const now = () => currentTime;
+    const dbName = `test-smoke-${Date.now()}`;
+
+    const store = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    await store.init();
+
+    // 1. Verify attempting to restore corrupt draft (invalid timestamp and exercises: null) fails and mutates nothing
+    const corruptBackup = JSON.stringify({
+      version: 2,
+      exportedAt: new Date(currentTime).toISOString(),
+      workouts: [],
+      routines: [],
+      exercises: [],
+      drafts: [
+        {
+          version: 1,
+          savedAt: 'invalid-timestamp',
+          revision: 1,
+          workout: {
+            id: 'corrupt-draft',
+            name: 'Corrupt Draft',
+            startTime: 'bad-date',
+            exercises: null,
+          },
+        },
+      ],
+      settings: {},
+    });
+
+    await assert.rejects(async () => {
+      await restoreBackup(corruptBackup, store);
+    }, /Invalid timestamp/);
+
+    const draftsBefore = await store.getWorkoutDrafts();
+    assert.equal(draftsBefore.length, 0, 'No corrupt draft should be stored');
+
+    // 2. Start a real workout session and save a valid draft
+    const controller = createSessionController(store, now);
+    const workout = {
+      id: 'browser-workout-1',
+      name: 'Chest & Triceps',
+      startTime: new Date(currentTime).toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: [
+        {
+          id: 'we-smoke-1',
+          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+          orderIndex: 0,
+          restTimerSeconds: 90,
+          exercise: {
+            id: 'Barbell_Bench_Press_-_Medium_Grip',
+            name: 'Barbell Bench Press',
+            category: 'Chest',
+            equipment: 'Barbell',
+            primaryMuscles: ['Chest'],
+          },
+          sets: [
+            {
+              id: 'set-smoke-1',
+              setNumber: 1,
+              type: 'normal' as const,
+              weightKg: 80,
+              reps: 10,
+              isCompleted: true,
+              completedAt: new Date(currentTime).toISOString(),
+            },
+          ],
+        },
+      ],
+    };
+    await controller.start(workout);
+
+    // 3. Close old store and reopen (simulating page reload in browser)
+    await store.close();
+
+    const reopened = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    await reopened.init();
+    const storedDrafts = await reopened.getWorkoutDrafts();
+    assert.equal(storedDrafts.length, 1);
+    assert.equal(storedDrafts[0].workout.id, 'browser-workout-1');
+
+    // 4. Resume draft with new session controller
+    currentTime += 30000; // 30s elapsed
+    const recoveryController = createSessionController(reopened, now);
+    recoveryController.resume(storedDrafts[0]);
+    assert.equal(recoveryController.getState().phase, 'active');
+    assert.equal(recoveryController.getState().workout?.exercises.length, 1);
+
+    // 5. Simulate idle tab beyond lease duration (advanced clock by 25 seconds)
+    currentTime += 25000;
+
+    // Add another completed set and flush
+    const activeWorkout = recoveryController.getState().workout!;
+    const updatedWorkout = {
+      ...activeWorkout,
+      exercises: [
+        {
+          ...activeWorkout.exercises[0],
+          sets: [
+            ...activeWorkout.exercises[0].sets,
+            {
+              id: 'set-smoke-2',
+              setNumber: 2,
+              type: 'normal' as const,
+              weightKg: 85,
+              reps: 8,
+              isCompleted: true,
+              completedAt: new Date(currentTime).toISOString(),
+            },
+          ],
+        },
+      ],
+    };
+    recoveryController.update(updatedWorkout);
+    // Flush should succeed even after 25s idle because the same tab still owns the lease
+    await recoveryController.flush();
+
+    // 6. Finish workout and verify durable state
+    currentTime += 5000;
+    const completed = await recoveryController.finish();
+    assert.equal(completed.id, 'browser-workout-1');
+    assert.equal(completed.exercises[0].sets.length, 2);
+
+    const finalDrafts = await reopened.getWorkoutDrafts();
+    assert.equal(finalDrafts.length, 0, 'Draft deleted after finish');
+
+    const history = await reopened.getWorkoutHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].id, 'browser-workout-1');
+
+    if (store.close) await store.close();
+    if (reopened.close) await reopened.close();
   });
 });

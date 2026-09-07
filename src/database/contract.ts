@@ -20,6 +20,7 @@ export interface Store {
   init(): Promise<void>;
   isReadOnly?(): boolean;
   tryAcquireLease?(): Promise<boolean>;
+  onReadOnlyChange?(listener: (isReadOnly: boolean) => void): () => void;
   readSnapshot(): Promise<DataSnapshot>;
   saveDraft(draft: WorkoutDraft): Promise<void>;
   getWorkoutDrafts(): Promise<WorkoutDraft[]>;

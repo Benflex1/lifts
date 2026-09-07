@@ -157,7 +157,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
     return writeQueue(async () => {
-      const newId = `custom-${Date.now()}`;
+      const newId = (exercise as any).id || `custom-${Date.now()}`;
       const customExercise: Exercise = {
         ...exercise,
         id: newId,

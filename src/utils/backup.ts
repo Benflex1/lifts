@@ -96,10 +96,94 @@ export function parseBackup(json: string): BackupV2 {
     }
   }
 
+  function validateWorkoutStructure(
+    w: any,
+    knownExerciseIds: Set<string>,
+    entityLabel: string
+  ): void {
+    if (!w || typeof w !== 'object') {
+      throw new Error(`Invalid ${entityLabel}: expected object`);
+    }
+    if (!w.id || typeof w.id !== 'string') {
+      throw new Error(`Invalid ${entityLabel}: missing or non-string id`);
+    }
+    if (!w.name || typeof w.name !== 'string') {
+      throw new Error(`Invalid name in ${entityLabel} ${w.id}`);
+    }
+    if (!w.startTime || isNaN(Date.parse(w.startTime))) {
+      throw new Error(`Invalid timestamp in ${entityLabel} ${w.id}: ${w.startTime}`);
+    }
+    if (w.endTime && isNaN(Date.parse(w.endTime))) {
+      throw new Error(`Invalid timestamp in ${entityLabel} ${w.id}: ${w.endTime}`);
+    }
+    if (w.durationSeconds !== undefined && w.durationSeconds !== null) {
+      if (typeof w.durationSeconds !== 'number' || !isFinite(w.durationSeconds) || w.durationSeconds < 0) {
+        throw new Error(`Invalid durationSeconds in ${entityLabel} ${w.id}: ${w.durationSeconds}`);
+      }
+    }
+    if (w.totalVolumeKg !== undefined && w.totalVolumeKg !== null) {
+      if (typeof w.totalVolumeKg !== 'number' || !isFinite(w.totalVolumeKg) || w.totalVolumeKg < 0) {
+        throw new Error(`Invalid totalVolumeKg in ${entityLabel} ${w.id}: ${w.totalVolumeKg}`);
+      }
+    }
+
+    if (!Array.isArray(w.exercises)) {
+      throw new Error(`Invalid exercises in ${entityLabel} ${w.id}: expected array`);
+    }
+
+    const setIds = new Set<string>();
+    for (const we of w.exercises) {
+      if (!we || typeof we !== 'object') {
+        throw new Error(`Invalid exercise entry in ${entityLabel} ${w.id}`);
+      }
+      if (!we.exerciseId || typeof we.exerciseId !== 'string') {
+        throw new Error(`Missing exercise definition for ${entityLabel} exercise: ${we?.exerciseId}`);
+      }
+      if (!knownExerciseIds.has(we.exerciseId)) {
+        throw new Error(`Missing exercise definition for ${entityLabel} exercise: ${we.exerciseId}`);
+      }
+
+      if (!Array.isArray(we.sets)) {
+        throw new Error(`Invalid sets in ${entityLabel} ${w.id}: expected array`);
+      }
+
+      for (const s of we.sets) {
+        if (!s || typeof s !== 'object') {
+          throw new Error(`Invalid set entry in ${entityLabel} ${w.id}`);
+        }
+        if (s.id) {
+          if (setIds.has(s.id)) {
+            throw new Error(`Duplicate set ID in ${entityLabel} ${w.id}: ${s.id}`);
+          }
+          setIds.add(s.id);
+        }
+
+        if (typeof s.weightKg !== 'number' || !isFinite(s.weightKg) || s.weightKg < 0) {
+          throw new Error(`Invalid weightKg: ${s.weightKg}`);
+        }
+
+        if (typeof s.reps !== 'number' || !isFinite(s.reps) || s.reps < 0) {
+          throw new Error(`Invalid reps: ${s.reps}`);
+        }
+
+        const validTypes = ['normal', 'warmup', 'drop', 'failure'];
+        if (!validTypes.includes(s.type)) {
+          throw new Error(`Invalid set type: ${s.type}`);
+        }
+
+        if (s.rpe !== undefined && s.rpe !== null) {
+          if (typeof s.rpe !== 'number' || !isFinite(s.rpe) || s.rpe < 1 || s.rpe > 10) {
+            throw new Error(`Invalid RPE: ${s.rpe}`);
+          }
+        }
+      }
+    }
+  }
+
   // Validate workouts
   const workoutIds = new Set<string>();
   for (const w of parsed.workouts) {
-    if (!w.id || typeof w.id !== 'string') {
+    if (!w || typeof w !== 'object' || !w.id || typeof w.id !== 'string') {
       throw new Error('Invalid workout in backup: missing or non-string id');
     }
     if (workoutIds.has(w.id)) {
@@ -107,63 +191,47 @@ export function parseBackup(json: string): BackupV2 {
     }
     workoutIds.add(w.id);
 
-    if (!w.startTime || isNaN(Date.parse(w.startTime))) {
-      throw new Error(`Invalid timestamp in workout ${w.id}: ${w.startTime}`);
-    }
-    if (w.endTime && isNaN(Date.parse(w.endTime))) {
-      throw new Error(`Invalid timestamp in workout ${w.id}: ${w.endTime}`);
-    }
-
-    const setIds = new Set<string>();
-    if (Array.isArray(w.exercises)) {
-      for (const we of w.exercises) {
-        if (!knownExerciseIds.has(we.exerciseId)) {
-          throw new Error(`Missing exercise definition for workout exercise: ${we.exerciseId}`);
-        }
-
-        if (Array.isArray(we.sets)) {
-          for (const s of we.sets) {
-            if (s.id) {
-              if (setIds.has(s.id)) {
-                throw new Error(`Duplicate set ID in workout ${w.id}: ${s.id}`);
-              }
-              setIds.add(s.id);
-            }
-
-            if (typeof s.weightKg !== 'number' || !isFinite(s.weightKg) || s.weightKg < 0) {
-              throw new Error(`Invalid weightKg: ${s.weightKg}`);
-            }
-
-            if (typeof s.reps !== 'number' || !isFinite(s.reps) || s.reps < 0) {
-              throw new Error(`Invalid reps: ${s.reps}`);
-            }
-
-            const validTypes = ['normal', 'warmup', 'drop', 'failure'];
-            if (!validTypes.includes(s.type)) {
-              throw new Error(`Invalid set type: ${s.type}`);
-            }
-
-            if (s.rpe !== undefined && s.rpe !== null) {
-              if (typeof s.rpe !== 'number' || !isFinite(s.rpe) || s.rpe < 1 || s.rpe > 10) {
-                throw new Error(`Invalid RPE: ${s.rpe}`);
-              }
-            }
-          }
-        }
-      }
-    }
+    validateWorkoutStructure(w, knownExerciseIds, 'workout');
   }
 
   // Validate drafts
   const draftIds = new Set<string>();
   for (const d of parsed.drafts) {
-    if (!d.workout || !d.workout.id) {
+    if (!d || typeof d !== 'object') {
+      throw new Error('Invalid draft in backup: expected object');
+    }
+    if (!d.workout || typeof d.workout !== 'object' || !d.workout.id || typeof d.workout.id !== 'string') {
       throw new Error('Invalid draft in backup: missing workout or workout.id');
     }
     if (draftIds.has(d.workout.id)) {
       throw new Error(`Duplicate draft ID in backup: ${d.workout.id}`);
     }
     draftIds.add(d.workout.id);
+
+    if (!d.savedAt || isNaN(Date.parse(d.savedAt))) {
+      throw new Error(`Invalid timestamp in draft ${d.workout.id}: ${d.savedAt}`);
+    }
+
+    if (d.revision !== undefined && d.revision !== null) {
+      if (typeof d.revision !== 'number' || !isFinite(d.revision) || d.revision < 0) {
+        throw new Error(`Invalid revision in draft ${d.workout.id}: ${d.revision}`);
+      }
+    }
+
+    if (d.restTimer !== undefined && d.restTimer !== null) {
+      if (
+        typeof d.restTimer !== 'object' ||
+        typeof d.restTimer.endsAt !== 'number' ||
+        !isFinite(d.restTimer.endsAt) ||
+        typeof d.restTimer.totalSeconds !== 'number' ||
+        !isFinite(d.restTimer.totalSeconds) ||
+        d.restTimer.totalSeconds < 0
+      ) {
+        throw new Error(`Invalid restTimer in draft ${d.workout.id}`);
+      }
+    }
+
+    validateWorkoutStructure(d.workout, knownExerciseIds, 'draft workout');
   }
 
   return parsed as BackupV2;

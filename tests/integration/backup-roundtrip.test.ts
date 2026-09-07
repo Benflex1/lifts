@@ -223,4 +223,55 @@ describe('Backup Roundtrip & Merge Safety', () => {
 
     await fixture.dispose();
   });
+
+  it('routine with modified notes or rest timers is recognized as conflict and aborts restore', async () => {
+    const fixture = await createStoreFixture('native');
+    await populateSourceStore(fixture.store);
+
+    const backupJson = await buildBackupJson(fixture.store);
+
+    // Test 1: Changed routine notes
+    const parsedNotes = JSON.parse(backupJson);
+    parsedNotes.routines[0].notes = 'Changed routine notes text';
+    await assert.rejects(async () => {
+      await restoreBackup(JSON.stringify(parsedNotes), fixture.store);
+    }, /Conflicting routine ID/);
+
+    // Test 2: Changed routine exercise restTimerSeconds
+    const parsedTimer = JSON.parse(backupJson);
+    parsedTimer.routines[0].exercises[0].restTimerSeconds = 180;
+    await assert.rejects(async () => {
+      await restoreBackup(JSON.stringify(parsedTimer), fixture.store);
+    }, /Conflicting routine ID/);
+
+    await fixture.dispose();
+  });
+
+  it('workout with modified notes or RPE is recognized as conflict and aborts restore', async () => {
+    const fixture = await createStoreFixture('native');
+    await populateSourceStore(fixture.store);
+
+    const backupJson = await buildBackupJson(fixture.store);
+
+    // Test 1: Changed workout notes
+    const parsedNotes = JSON.parse(backupJson);
+    parsedNotes.workouts[0].notes = 'Modified post-workout notes';
+    await assert.rejects(async () => {
+      await restoreBackup(JSON.stringify(parsedNotes), fixture.store);
+    }, /Conflicting workout ID/);
+
+    // Test 2: Changed workout set RPE
+    const parsedRpe = JSON.parse(backupJson);
+    parsedRpe.workouts[0].exercises[0].sets[0].rpe = 9.5;
+    await assert.rejects(async () => {
+      await restoreBackup(JSON.stringify(parsedRpe), fixture.store);
+    }, /Conflicting workout ID/);
+
+    // Destination remains intact
+    const snap = await fixture.store.readSnapshot();
+    assert.equal(snap.workouts[0].notes, 'Great workout session');
+    assert.equal(snap.workouts[0].exercises[0].sets[0].rpe, 5);
+
+    await fixture.dispose();
+  });
 });

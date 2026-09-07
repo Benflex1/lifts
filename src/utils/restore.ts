@@ -18,12 +18,20 @@ function isIdenticalExercise(a: Exercise, b: Exercise): boolean {
     a.name === b.name &&
     a.category === b.category &&
     a.equipment === b.equipment &&
-    Boolean(a.isCustom) === Boolean(b.isCustom)
+    Boolean(a.isCustom) === Boolean(b.isCustom) &&
+    JSON.stringify(a.primaryMuscles || []) === JSON.stringify(b.primaryMuscles || []) &&
+    JSON.stringify(a.secondaryMuscles || []) === JSON.stringify(b.secondaryMuscles || []) &&
+    JSON.stringify(a.instructions || []) === JSON.stringify(b.instructions || [])
   );
 }
 
 function isIdenticalRoutine(a: Routine, b: Routine): boolean {
-  if (a.id !== b.id || a.name !== b.name || (a.folderName || '') !== (b.folderName || '')) {
+  if (
+    a.id !== b.id ||
+    a.name !== b.name ||
+    (a.folderName || '') !== (b.folderName || '') ||
+    (a.notes || '') !== (b.notes || '')
+  ) {
     return false;
   }
   const aEx = a.exercises || [];
@@ -33,7 +41,9 @@ function isIdenticalRoutine(a: Routine, b: Routine): boolean {
     if (
       aEx[i].exerciseId !== bEx[i].exerciseId ||
       aEx[i].targetSets !== bEx[i].targetSets ||
-      aEx[i].targetReps !== bEx[i].targetReps
+      aEx[i].targetReps !== bEx[i].targetReps ||
+      (aEx[i].restTimerSeconds ?? 0) !== (bEx[i].restTimerSeconds ?? 0) ||
+      (aEx[i].orderIndex ?? i) !== (bEx[i].orderIndex ?? i)
     ) {
       return false;
     }
@@ -44,9 +54,13 @@ function isIdenticalRoutine(a: Routine, b: Routine): boolean {
 function isIdenticalWorkout(a: Workout, b: Workout): boolean {
   if (
     a.id !== b.id ||
+    (a.routineId || '') !== (b.routineId || '') ||
     a.name !== b.name ||
     a.startTime !== b.startTime ||
-    Math.round((a.totalVolumeKg || 0) * 100) !== Math.round((b.totalVolumeKg || 0) * 100)
+    (a.endTime || '') !== (b.endTime || '') ||
+    (a.durationSeconds ?? 0) !== (b.durationSeconds ?? 0) ||
+    Math.round((a.totalVolumeKg || 0) * 100) !== Math.round((b.totalVolumeKg || 0) * 100) ||
+    (a.notes || '') !== (b.notes || '')
   ) {
     return false;
   }
@@ -54,7 +68,14 @@ function isIdenticalWorkout(a: Workout, b: Workout): boolean {
   const bEx = b.exercises || [];
   if (aEx.length !== bEx.length) return false;
   for (let i = 0; i < aEx.length; i++) {
-    if (aEx[i].exerciseId !== bEx[i].exerciseId) return false;
+    if (
+      aEx[i].exerciseId !== bEx[i].exerciseId ||
+      (aEx[i].notes || '') !== (bEx[i].notes || '') ||
+      (aEx[i].restTimerSeconds ?? 0) !== (bEx[i].restTimerSeconds ?? 0) ||
+      (aEx[i].targetReps || '') !== (bEx[i].targetReps || '')
+    ) {
+      return false;
+    }
     const aSets = aEx[i].sets || [];
     const bSets = bEx[i].sets || [];
     if (aSets.length !== bSets.length) return false;
@@ -64,7 +85,9 @@ function isIdenticalWorkout(a: Workout, b: Workout): boolean {
         aSets[j].type !== bSets[j].type ||
         aSets[j].weightKg !== bSets[j].weightKg ||
         aSets[j].reps !== bSets[j].reps ||
-        aSets[j].isCompleted !== bSets[j].isCompleted
+        (aSets[j].rpe ?? null) !== (bSets[j].rpe ?? null) ||
+        Boolean(aSets[j].isCompleted) !== Boolean(bSets[j].isCompleted) ||
+        (aSets[j].completedAt || '') !== (bSets[j].completedAt || '')
       ) {
         return false;
       }
@@ -74,7 +97,23 @@ function isIdenticalWorkout(a: Workout, b: Workout): boolean {
 }
 
 function isIdenticalDraft(a: WorkoutDraft, b: WorkoutDraft): boolean {
-  return a.workout.id === b.workout.id && isIdenticalWorkout(a.workout, b.workout);
+  if (a.workout.id !== b.workout.id) return false;
+  if (!isIdenticalWorkout(a.workout, b.workout)) return false;
+  if ((a.savedAt || '') !== (b.savedAt || '')) return false;
+  if ((a.revision ?? 0) !== (b.revision ?? 0)) return false;
+
+  const aHasTimer = Boolean(a.restTimer);
+  const bHasTimer = Boolean(b.restTimer);
+  if (aHasTimer !== bHasTimer) return false;
+  if (aHasTimer && bHasTimer) {
+    if (
+      a.restTimer!.endsAt !== b.restTimer!.endsAt ||
+      a.restTimer!.totalSeconds !== b.restTimer!.totalSeconds
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function computeRestorePlan(

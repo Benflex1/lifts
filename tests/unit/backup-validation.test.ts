@@ -249,4 +249,192 @@ describe('Backup validation (parseBackup)', () => {
       parseBackup(JSON.stringify(badTimestamp));
     }, /Invalid timestamp/);
   });
+
+  it('accepts valid drafts in backup', () => {
+    const backupWithDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          workout: {
+            id: 'draft-1',
+            name: 'Draft Workout',
+            startTime: '2026-09-07T11:00:00.000Z',
+            durationSeconds: 120,
+            totalVolumeKg: 500,
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                orderIndex: 0,
+                sets: [
+                  { id: 'ds1', setNumber: 1, type: 'normal', weightKg: 80, reps: 8, isCompleted: true, rpe: 7.5 },
+                ],
+              },
+            ],
+          },
+          savedAt: '2026-09-07T11:02:00.000Z',
+          revision: 1,
+          restTimer: { endsAt: Date.now() + 60000, totalSeconds: 60 },
+        },
+      ],
+    };
+
+    const parsed = parseBackup(JSON.stringify(backupWithDraft));
+    assert.equal(parsed.drafts.length, 1);
+    assert.equal(parsed.drafts[0].workout.id, 'draft-1');
+  });
+
+  it('rejects draft containing invalid timestamp', () => {
+    const badDraftSavedAt = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          workout: {
+            id: 'draft-1',
+            name: 'Draft Workout',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [],
+          },
+          savedAt: 'invalid-date',
+          revision: 1,
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badDraftSavedAt));
+    }, /Invalid timestamp/);
+
+    const badDraftStartTime = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          workout: {
+            id: 'draft-1',
+            name: 'Draft Workout',
+            startTime: 'not-a-valid-date',
+            exercises: [],
+          },
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badDraftStartTime));
+    }, /Invalid timestamp/);
+  });
+
+  it('rejects draft containing exercises: null or missing exercises array', () => {
+    const nullExercisesDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          workout: {
+            id: 'draft-1',
+            name: 'Draft Workout',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: null,
+          },
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(nullExercisesDraft));
+    }, /Invalid exercises in draft workout/);
+  });
+
+  it('rejects draft referencing unknown exercise', () => {
+    const unknownExDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          workout: {
+            id: 'draft-1',
+            name: 'Draft Workout',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'nonexistent-exercise-xyz',
+                orderIndex: 0,
+                sets: [],
+              },
+            ],
+          },
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(unknownExDraft));
+    }, /Missing exercise definition/);
+  });
+
+  it('rejects draft containing invalid set weight, reps, or RPE', () => {
+    const badWeightDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          workout: {
+            id: 'draft-1',
+            name: 'Draft Workout',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                orderIndex: 0,
+                sets: [
+                  { id: 's1', setNumber: 1, type: 'normal', weightKg: -10, reps: 5, isCompleted: true },
+                ],
+              },
+            ],
+          },
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badWeightDraft));
+    }, /Invalid weightKg/);
+
+    const badRpeDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          workout: {
+            id: 'draft-1',
+            name: 'Draft Workout',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                orderIndex: 0,
+                sets: [
+                  { id: 's1', setNumber: 1, type: 'normal', weightKg: 50, reps: 5, isCompleted: true, rpe: 12 },
+                ],
+              },
+            ],
+          },
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badRpeDraft));
+    }, /Invalid RPE/);
+  });
 });
