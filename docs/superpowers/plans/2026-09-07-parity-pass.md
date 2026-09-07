@@ -2683,7 +2683,7 @@ git commit -m "feat: active workout draft persistence with resume/discard on lau
 **Interfaces:**
 - No new exports — cleanup only
 
-- [ ] **Step 1: Remove dead Platform.OS web branches from db.native.ts**
+- [x] **Step 1: Remove dead Platform.OS web branches from db.native.ts**
 
 Delete the `webStorage` object (lines 10–14), the `initWebStorage` function (lines 249–303), and every `if (Platform.OS === 'web')` block throughout the file. Remove the `Platform` import if no longer needed (keep it if `saveWorkoutDraft` or export uses it).
 
@@ -2697,7 +2697,7 @@ if (!db) return /* default */;
 
 Also remove the `Platform` import at the top if unused.
 
-- [ ] **Step 2: Dedupe row mappers in db.native.ts**
+- [x] **Step 2: Dedupe row mappers in db.native.ts**
 
 Add helper functions near the top (after imports):
 
@@ -2731,15 +2731,15 @@ function mapSetRow(s: any): WorkoutSet {
 
 Replace inline mapping objects in `searchExercises`, `getExerciseById`, `getRoutines`, `getWorkoutDetail`, `getWorkoutDraft`, `getPreviousSetsForExercise`, `getAllExercises` with calls to these helpers.
 
-- [ ] **Step 3: Remove dead types from types/index.ts**
+- [x] **Step 3: Remove dead types from types/index.ts**
 
 Delete the `RoutineFolder` interface (lines 69–73). Remove `folderId` from `Routine` (line 61). Keep `folderName` (still used).
 
-- [ ] **Step 4: Remove unused onStartActiveWorkout prop**
+- [x] **Step 4: Remove unused onStartActiveWorkout prop**
 
 In `WorkoutScreen.tsx`, remove `onStartActiveWorkout` from the component props type and destructuring. In `HistoryScreen.tsx`, same. In `App.tsx`, remove `onStartActiveWorkout={() => {}}` from both component usages.
 
-- [ ] **Step 5: Fix ExercisePickerModal equipment case + label**
+- [x] **Step 5: Fix ExercisePickerModal equipment case + label**
 
 Line 46 — change `'Body Only'` to `'Body Only'` but make search case-insensitive. In `src/utils/search.ts`, find the equipment filter comparison and make it case-insensitive:
 
@@ -2763,21 +2763,21 @@ to:
 Add {selectedExercises.size} Exercise{selectedExercises.size > 1 ? 's' : ''}
 ```
 
-- [ ] **Step 6: README truthfulness pass**
+- [x] **Step 6: README truthfulness pass**
 
 In `README.md`:
 - Line 55: "Data Ownership: Export all workout logs and routines to JSON anytime." — keep (now true after Task 12).
 - Line 54: "RPE notes" in workout log — keep (now true after Task 9).
 - Verify all other claims match implemented features.
 
-- [ ] **Step 7: ROADMAP truthfulness pass**
+- [x] **Step 7: ROADMAP truthfulness pass**
 
 In `ROADMAP.md`:
 - Mark Phase 1 and Phase 2 items as ✅ (already done).
 - Update Phase 3 backlog: note which items this parity pass addressed (draft persistence, RPE, kg/lb, export, repeat, folders).
 - Remove any claims that contradict code.
 
-- [ ] **Step 8: Final typecheck + tests**
+- [x] **Step 8: Final typecheck + tests**
 
 ```bash
 npx tsc --noEmit && npm test
@@ -2796,7 +2796,7 @@ Expected: typecheck clean, all tests PASS.
 7. Folder rename/delete — verify routines update.
 8. Plate calculator — verify kg and lb modes.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add -A

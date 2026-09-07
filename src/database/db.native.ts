@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { ActiveExercise, Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
 
@@ -6,17 +5,33 @@ const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
-// In-memory fallback for web preview
-const webStorage = {
-  exercises: [] as Exercise[],
-  routines: [] as Routine[],
-  workouts: [] as Workout[],
-};
+function mapExerciseRow(r: any): Exercise {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    equipment: r.equipment,
+    primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
+    secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
+    instructions: JSON.parse(r.instructions || '[]'),
+    isCustom: Boolean(r.is_custom),
+  };
+}
+
+function mapSetRow(s: any): WorkoutSet {
+  return {
+    id: s.id,
+    setNumber: s.set_number,
+    type: s.set_type as any,
+    weightKg: s.weight_kg,
+    reps: s.reps,
+    rpe: s.rpe,
+    isCompleted: Boolean(s.is_completed),
+    completedAt: s.completed_at,
+  };
+}
 
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase | null> {
-  if (Platform.OS === 'web') {
-    return null;
-  }
   if (!dbInstance) {
     dbInstance = await SQLite.openDatabaseAsync('lifts.db');
   }
@@ -24,11 +39,6 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase | null> {
 }
 
 export async function initDatabase(): Promise<void> {
-  if (Platform.OS === 'web') {
-    initWebStorage();
-    return;
-  }
-
   const db = await getDatabase();
   if (!db) return;
 
@@ -259,62 +269,6 @@ async function seedDefaultData(db: SQLite.SQLiteDatabase) {
   });
 }
 
-function initWebStorage() {
-  webStorage.exercises = (defaultExercisesData as Exercise[]).slice(0, 300);
-  webStorage.routines = [
-    {
-      id: 'routine-push',
-      name: 'Push Day (Chest / Shoulders / Triceps)',
-      folderName: 'Push Pull Legs',
-      notes: 'Focus on progressive overload on bench press.',
-      createdAt: new Date().toISOString(),
-      exercises: [
-        {
-          id: 're-1',
-          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
-          exercise: webStorage.exercises.find(e => e.id.includes('Bench')) || webStorage.exercises[0],
-          orderIndex: 0,
-          targetSets: 4,
-          targetReps: '6-8',
-          restTimerSeconds: 120,
-        },
-      ],
-    },
-    {
-      id: 'routine-pull',
-      name: 'Pull Day (Back & Biceps)',
-      folderName: 'Push Pull Legs',
-      notes: 'Focus on controlled back contraction.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-    {
-      id: 'routine-legs',
-      name: 'Leg Day (Quads, Hamstrings & Calves)',
-      folderName: 'Push Pull Legs',
-      notes: 'Keep core braced throughout squats.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-    {
-      id: 'routine-upper',
-      name: 'Upper Body Power',
-      folderName: 'Upper / Lower',
-      notes: 'Heavy compounds for upper torso.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-    {
-      id: 'routine-lower',
-      name: 'Lower Body Strength',
-      folderName: 'Upper / Lower',
-      notes: 'Squats and hip hinges.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-  ];
-}
-
 import { smartSearchExercises } from '../utils/search';
 
 let cachedExercises: Exercise[] = [];
@@ -325,16 +279,7 @@ export async function searchExercises(query: string, muscle?: string, equipment?
     const db = await getDatabase();
     if (db) {
       const rows = await db.getAllAsync<any>('SELECT * FROM exercises ORDER BY name ASC');
-      cachedExercises = rows.map(r => ({
-        id: r.id,
-        name: r.name,
-        category: r.category,
-        equipment: r.equipment,
-        primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
-        secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
-        instructions: JSON.parse(r.instructions || '[]'),
-        isCustom: Boolean(r.is_custom),
-      }));
+      cachedExercises = rows.map(mapExerciseRow);
     }
     if (cachedExercises.length === 0) {
       cachedExercises = defaultExercisesData;
@@ -345,25 +290,13 @@ export async function searchExercises(query: string, muscle?: string, equipment?
 }
 
 export async function getExerciseById(id: string): Promise<Exercise | null> {
-  if (Platform.OS === 'web') {
-    return webStorage.exercises.find(e => e.id === id) || null;
-  }
   const db = await getDatabase();
   if (!db) return null;
 
   const r = await db.getFirstAsync<any>('SELECT * FROM exercises WHERE id = ?', id);
   if (!r) return null;
 
-  return {
-    id: r.id,
-    name: r.name,
-    category: r.category,
-    equipment: r.equipment,
-    primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
-    secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
-    instructions: JSON.parse(r.instructions || '[]'),
-    isCustom: Boolean(r.is_custom),
-  };
+  return mapExerciseRow(r);
 }
 
 export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
@@ -373,11 +306,6 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
     id: newId,
     isCustom: true,
   };
-
-  if (Platform.OS === 'web') {
-    webStorage.exercises.unshift(customExercise);
-    return customExercise;
-  }
 
   const db = await getDatabase();
   if (db) {
@@ -397,15 +325,12 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
   return customExercise;
 }
 
+
 // ==========================================
 // ROUTINE QUERIES (UNLIMITED ROUTINES)
 // ==========================================
 
 export async function getRoutines(): Promise<Routine[]> {
-  if (Platform.OS === 'web') {
-    return webStorage.routines;
-  }
-
   const db = await getDatabase();
   if (!db) return [];
 
@@ -462,33 +387,6 @@ export async function saveRoutine(
 ): Promise<string> {
   const routineId = existingId || `routine-${Date.now()}`;
 
-  if (Platform.OS === 'web') {
-    const routine: Routine = {
-      id: routineId,
-      name,
-      folderName,
-      notes,
-      createdAt: new Date().toISOString(),
-      exercises: exercises.map((item, idx) => ({
-        id: `re-${routineId}-${idx}`,
-        exerciseId: item.exerciseId,
-        exercise: webStorage.exercises.find(e => e.id === item.exerciseId) || webStorage.exercises[0],
-        orderIndex: idx,
-        targetSets: item.targetSets,
-        targetReps: item.targetReps,
-        restTimerSeconds: item.restTimerSeconds,
-      })),
-    };
-    if (existingId) {
-      const idx = webStorage.routines.findIndex(r => r.id === existingId);
-      if (idx >= 0) webStorage.routines[idx] = routine;
-      else webStorage.routines.unshift(routine);
-    } else {
-      webStorage.routines.unshift(routine);
-    }
-    return routineId;
-  }
-
   const db = await getDatabase();
   if (!db) return routineId;
 
@@ -525,10 +423,6 @@ export async function saveRoutine(
 }
 
 export async function deleteRoutine(id: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    webStorage.routines = webStorage.routines.filter(r => r.id !== id);
-    return;
-  }
   const db = await getDatabase();
   if (!db) return;
   await db.runAsync('DELETE FROM routines WHERE id = ?', id);
@@ -539,15 +433,6 @@ export async function deleteRoutine(id: string): Promise<void> {
 // ==========================================
 
 export async function saveCompletedWorkout(workout: Workout): Promise<void> {
-  if (Platform.OS === 'web') {
-    webStorage.workouts.unshift(workout);
-    if (workout.routineId) {
-      const r = webStorage.routines.find(rt => rt.id === workout.routineId);
-      if (r) r.lastPerformedAt = workout.endTime || workout.startTime;
-    }
-    return;
-  }
-
   const db = await getDatabase();
   if (!db) return;
 
@@ -611,21 +496,6 @@ export async function saveCompletedWorkout(workout: Workout): Promise<void> {
 }
 
 export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
-  if (Platform.OS === 'web') {
-    return webStorage.workouts.map(w => ({
-      id: w.id,
-      name: w.name,
-      routineId: w.routineId,
-      startTime: w.startTime,
-      endTime: w.endTime,
-      durationSeconds: w.durationSeconds,
-      totalVolumeKg: w.totalVolumeKg,
-      totalSets: w.exercises.reduce((acc, e) => acc + e.sets.filter(s => s.isCompleted).length, 0),
-      exerciseNames: w.exercises.map(e => e.exercise.name),
-      notes: w.notes,
-    }));
-  }
-
   const db = await getDatabase();
   if (!db) return [];
 
@@ -679,15 +549,7 @@ export async function getPreviousSetsForExercise(exerciseId: string): Promise<Wo
     exerciseId
   );
 
-  return rows.map(r => ({
-    id: r.id,
-    setNumber: r.set_number,
-    type: r.set_type as any,
-    weightKg: r.weight_kg,
-    reps: r.reps,
-    rpe: r.rpe,
-    isCompleted: true,
-  }));
+  return rows.map(mapSetRow);
 }
 
 export async function deleteWorkout(workoutId: string): Promise<void> {
@@ -734,16 +596,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<Workout | nul
         secondaryMuscles: JSON.parse(we.ex_sm || '[]'),
         instructions: JSON.parse(we.ex_inst || '[]'),
       },
-      sets: sRows.map(s => ({
-        id: s.id,
-        setNumber: s.set_number,
-        type: s.set_type as any,
-        weightKg: s.weight_kg,
-        reps: s.reps,
-        rpe: s.rpe,
-        isCompleted: Boolean(s.is_completed),
-        completedAt: s.completed_at,
-      })),
+      sets: sRows.map(mapSetRow),
     });
   }
 
@@ -881,16 +734,7 @@ export async function getAllExercises(): Promise<Exercise[]> {
   const db = await getDatabase();
   if (!db) return [];
   const rows = await db.getAllAsync<any>('SELECT * FROM exercises ORDER BY name ASC');
-  return rows.map(r => ({
-    id: r.id,
-    name: r.name,
-    category: r.category,
-    equipment: r.equipment,
-    primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
-    secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
-    instructions: JSON.parse(r.instructions || '[]'),
-    isCustom: Boolean(r.is_custom),
-  }));
+  return rows.map(mapExerciseRow);
 }
 
 export async function getRoutineById(id: string): Promise<Routine | null> {
@@ -1013,16 +857,7 @@ export async function getWorkoutDraft(): Promise<Workout | null> {
         secondaryMuscles: JSON.parse(we.ex_sm || '[]'),
         instructions: JSON.parse(we.ex_inst || '[]'),
       },
-      sets: sRows.map(s => ({
-        id: s.id,
-        setNumber: s.set_number,
-        type: s.set_type as any,
-        weightKg: s.weight_kg,
-        reps: s.reps,
-        rpe: s.rpe,
-        isCompleted: Boolean(s.is_completed),
-        completedAt: s.completed_at,
-      })),
+      sets: sRows.map(mapSetRow),
     });
   }
 
@@ -1043,6 +878,3 @@ export async function discardWorkoutDraft(id: string): Promise<void> {
   if (!db) return;
   await db.runAsync('DELETE FROM workouts WHERE id = ?', id);
 }
-
-
-

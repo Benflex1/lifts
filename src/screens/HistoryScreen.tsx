@@ -25,9 +25,7 @@ import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 
-export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
-  onStartActiveWorkout,
-}) => {
+export const HistoryScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
   const { unit } = useSettings();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
@@ -129,7 +127,6 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
       }
 
       await startWorkout(routine, item.name);
-      onStartActiveWorkout();
     } catch (e) {
       Alert.alert('Error', 'Failed to start workout.');
     }

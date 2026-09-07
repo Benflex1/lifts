@@ -26,9 +26,7 @@ import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
 
-export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
-  onStartActiveWorkout,
-}) => {
+export const WorkoutScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('All');
@@ -48,7 +46,6 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   const handleStartEmpty = async () => {
     try {
       await startWorkout(undefined, 'Empty Workout');
-      onStartActiveWorkout();
     } catch (e) {
       Alert.alert('Error', 'Failed to start workout.');
     }
@@ -57,7 +54,6 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   const handleStartRoutine = async (routine: Routine) => {
     try {
       await startWorkout(routine);
-      onStartActiveWorkout();
     } catch (e) {
       Alert.alert('Error', `Failed to start "${routine.name}".`);
     }

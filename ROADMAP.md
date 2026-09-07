@@ -28,9 +28,12 @@
 | **Keep-Awake During Workout** | Screen stays on | Native keep-awake lock | ✅ Screen stays on during active workouts |
 | **Set Types** | Normal, Warmup, Drop, Failure | Normal, Warmup, Drop, Failure | ✅ Interactive badge cycling (W, D, F, 1-2-3) |
 | **Rest Timer** | Floating popup with +30s / -30s | Floating countdown overlay + haptics | ✅ Completed (+30s / -30s enlarged controls) |
-| **Plate Calculator** | Visual barbell plate calculator | Olympic 20kg/15kg/10kg plate calc | ✅ Completed (Color-coded Olympic bumper plates) |
+| **Plate Calculator** | Visual barbell plate calculator | Olympic kg/lb plate calc | ✅ Completed (Color-coded kg & lb plates + bar presets) |
+| **Units (kg / lb)** | Locked or buggy conversions | Seamless kg / lb switching across app | ✅ Completed (SQLite persisted settings) |
 | **1RM Calculator** | Locked in premium | Unlocked with Epley & Brzycki formulas | ✅ Completed with suggested training loads table |
-| **Data Ownership & Export** | Locked / proprietary export | Local JSON backup and export | ✅ Completed (JSON data export in Analytics) |
+| **Data Ownership & Export** | Locked / proprietary export | Local JSON backup and share sheet | ✅ Completed (Real JSON schema v1 export in Analytics) |
+| **Workout Recovery** | Cloud sync required | Local SQLite draft autosave & resume | ✅ Completed (3s autosave + backgrounding + resume banner) |
+| **RPE Tracking** | Premium feature | Interactive RPE cycle badge (5–10) | ✅ Completed (Active workout badge + history breakdown) |
 | **Supersets & Giant Sets** | Premium feature | Planned Phase 3 | 📋 Backlog |
 | **Apple Health / Health Connect** | Premium feature | Planned Phase 4 | 📋 Backlog |
 
@@ -47,16 +50,21 @@
 - [x] Visual Olympic barbell plate calculator modal.
 - [x] Ngrok tunneling script for physical device testing.
 
-### Phase 2: UI/UX & Gym Floor Usability (Completed) ✅
+### Phase 2: UI/UX & Parity Pass (Completed) ✅
 - [x] **Workout Minimization**: Floating mini-bar to freely navigate tabs during training.
 - [x] **Hardware Back Handling**: Android hardware/gesture back press minimizes session instead of trapping or exiting.
 - [x] **Smart Search Engine**: Slang & abbreviation resolution (`bench`, `ohp`, `rdl`, `db`, `bb`, `tri`, `bi`).
 - [x] **Revamped Routine Creator**: 1-tap in-place Exercise Swapping (`⇄`), Multi-Select Batch Adding (`Add 3 Exercises`), Compact Reorder vs Detailed view toggle, 1-tap Set Presets (`2, 3, 4, 5, 6`), Direct Custom Reps Input, Rest timer presets (`Off, 30s, 60s, 90s, 2m, 3m, 5m`), and 1-tap Exercise Duplication (`⎘`).
+- [x] **Folder Management**: Create, rename, and delete routine folders cleanly.
 - [x] **Gym-First Touch Targets**: Upgrade table cell inputs, set number badges, checkmark buttons, and action icons to generous 44–54px touch targets.
 - [x] **Detailed Exercise History Modal**: Show past sessions, max weight, and estimated 1RM when tapping an exercise.
-- [x] **Workout History Drill-Down**: Expand past workout cards to review completed sets, weights, and reps.
+- [x] **Workout History Drill-Down & Perform Again**: Expand past workout cards to review completed sets, weights, and reps. Re-run past workouts with 1 tap.
 - [x] **Delete Past Workout**: Allow lifters to delete erroneous or test workouts from History.
-- [x] **Exercise Notes & RPE**: Optional note field per exercise card (e.g., "Seat notch 4", "felt sharp").
+- [x] **Exercise Notes & Set-Level RPE**: Optional note field per exercise card + cycle badge for RPE 5–10 per set.
+- [x] **Wall-Clock Accurate Timers**: Elapsed workout duration and rest timers compute from absolute timestamps (`startTime`, `endsAt`), unaffected by backgrounding.
+- [x] **Draft Persistence & Crash Recovery**: Periodic (3s) and background autosave to SQLite with a global resume banner.
+- [x] **Unit System (kg / lb)**: Global user preference persisted in SQLite; full display formatting, WeightInput fluid decimal handling, and plate calculator support.
+- [x] **Real JSON Backup & Export**: Export complete workout logs, routines, and custom exercises via `expo-file-system` and `expo-sharing`.
 - [x] **Routine Cloning / Duplication**: 1-tap duplicate any routine with all configured exercises, target sets, reps, and rest timers.
 - [x] **Screen Wake Lock**: Keep screen active during gym sessions via `expo-keep-awake`.
 

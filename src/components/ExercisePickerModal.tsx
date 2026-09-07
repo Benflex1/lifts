@@ -334,7 +334,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
             >
               <Check size={20} color="#000000" strokeWidth={2.5} />
               <Text style={styles.floatingAddBtnText}>
-                Add {selectedExercises.size} Exercise{selectedExercises.size > 1 ? 's' : ''} to Routine
+                Add {selectedExercises.size} Exercise{selectedExercises.size > 1 ? 's' : ''}
               </Text>
             </TouchableOpacity>
           </View>

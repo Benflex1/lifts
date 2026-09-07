@@ -58,18 +58,11 @@ export interface RoutineExercise {
 export interface Routine {
   id: string;
   name: string;
-  folderId?: string;
   folderName?: string;
   exercises: RoutineExercise[];
   notes?: string;
   lastPerformedAt?: string;
   createdAt: string;
-}
-
-export interface RoutineFolder {
-  id: string;
-  name: string;
-  sortOrder: number;
 }
 
 export interface WorkoutHistorySummary {

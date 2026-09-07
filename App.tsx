@@ -44,12 +44,8 @@ function MainAppContent() {
       {/* Screen Views */}
       <View style={styles.screenContent}>
         <DraftResumeBanner />
-        {currentTab === 'workout' && (
-          <WorkoutScreen onStartActiveWorkout={() => {}} />
-        )}
-        {currentTab === 'history' && (
-          <HistoryScreen onStartActiveWorkout={() => {}} />
-        )}
+        {currentTab === 'workout' && <WorkoutScreen />}
+        {currentTab === 'history' && <HistoryScreen />}
         {currentTab === 'exercises' && <ExercisesScreen />}
         {currentTab === 'analytics' && <AnalyticsScreen />}
       </View>
