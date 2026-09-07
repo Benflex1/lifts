@@ -161,7 +161,7 @@ assert.equal(initialReps('AMRAP', 0, 12), 12);
 
 **Interfaces:** `BackupV2 = DataSnapshot & { version: 2; exportedAt: string }`; `parseBackup(json: string): BackupV2`; `pickBackupJson(): Promise<string | null>`; `restoreBackup(json: string, store: Store): Promise<void>`. A public `buildBackupJson()` now reads the store's consistent snapshot rather than history summaries.
 
-- [ ] Build a round-trip fixture containing two occurrences of one exercise, zero/fractional weights, all set types, RPE, exercise/workout notes, targets, a custom exercise, routines, settings, completed history, and drafts. Export → empty destination restore → compare semantic content, ignoring only export timestamps.
+- [x] Build a round-trip fixture containing two occurrences of one exercise, zero/fractional weights, all set types, RPE, exercise/workout notes, targets, a custom exercise, routines, settings, completed history, and drafts. Export → empty destination restore → compare semantic content, ignoring only export timestamps.
 
 ```ts
 const json = JSON.stringify({ version: 2,
@@ -170,12 +170,12 @@ await restoreBackup(json, destination);
 assert.deepEqual(await destination.readSnapshot(), await source.readSnapshot());
 ```
 
-- [ ] Test malformed JSON, unknown versions, v1 summary-only data, duplicate IDs, missing exercise references, non-finite/negative weights, invalid timestamps and set types, invalid RPE, repeated import, conflicting IDs, and transaction failure halfway through restore. Run `npx tsx --test tests/unit/backup-validation.test.ts tests/integration/backup-roundtrip.test.ts` before implementation.
-- [ ] Make exports self-contained: include custom exercises and definitions for every referenced bundled exercise, complete workouts/sets, routine metadata, drafts, and user settings. Exclude internal schema versions, browser leases, and migration metadata from user settings.
-- [ ] Validate an unknown parsed object explicitly before any writes. Set a documented initial 50 MiB file limit and check selected-file size before reading on both platforms. Reject oversize files without changes. Never claim a v1 summary file can restore missing sets.
-- [ ] Add native document picking through an SDK-compatible expo-document-picker installation; use cache copying before reading native files. Web uses the selected File. Cancellation is a no-op. Show a preview of record counts and merge semantics before confirmation.
-- [ ] Implement a single-transaction merge: insert missing records in dependency order, skip identical records, abort all changes on conflicting IDs. Preserve existing settings; import only missing setting keys and show that rule in the preview. Block restore while active/starting/finishing/discarding. Refresh settings, history, routines, custom-exercise caches, and recovery state after success.
-- [ ] Confirm both cross-platform directions, native → web and web → native, on actual runtime builds. Run targeted tests and existing checks. Gate: restored sets and PRs match the source and a failed import changes nothing.
+- [x] Test malformed JSON, unknown versions, v1 summary-only data, duplicate IDs, missing exercise references, non-finite/negative weights, invalid timestamps and set types, invalid RPE, repeated import, conflicting IDs, and transaction failure halfway through restore. Run `npx tsx --test tests/unit/backup-validation.test.ts tests/integration/backup-roundtrip.test.ts` before implementation.
+- [x] Make exports self-contained: include custom exercises and definitions for every referenced bundled exercise, complete workouts/sets, routine metadata, drafts, and user settings. Exclude internal schema versions, browser leases, and migration metadata from user settings.
+- [x] Validate an unknown parsed object explicitly before any writes. Set a documented initial 50 MiB file limit and check selected-file size before reading on both platforms. Reject oversize files without changes. Never claim a v1 summary file can restore missing sets.
+- [x] Add native document picking through an SDK-compatible expo-document-picker installation; use cache copying before reading native files. Web uses the selected File. Cancellation is a no-op. Show a preview of record counts and merge semantics before confirmation.
+- [x] Implement a single-transaction merge: insert missing records in dependency order, skip identical records, abort all changes on conflicting IDs. Preserve existing settings; import only missing setting keys and show that rule in the preview. Block restore while active/starting/finishing/discarding. Refresh settings, history, routines, custom-exercise caches, and recovery state after success.
+- [x] Confirm both cross-platform directions, native → web and web → native, on actual runtime builds. Run targeted tests and existing checks. Gate: restored sets and PRs match the source and a failed import changes nothing.
 
 ## Task 7: Expose settings and correct history-derived behavior
 

@@ -3,6 +3,7 @@ import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
+import { buildDefaultRoutines } from './seedData';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
@@ -93,35 +94,33 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function seedDefaultRoutines(): Promise<void> {
-    // Basic PPL seed templates with exact IDs from library
-    const pushExs = ['barbell-bench-press', 'incline-dumbbell-press', 'standing-military-press', 'triceps-pushdown'];
-    const pullExs = ['barbell-deadlift', 'wide-grip-lat-pulldown', 'bent-over-barbell-row', 'dumbbell-bicep-curl'];
-    const legsExs = ['barbell-full-squat', 'leg-press', 'lying-leg-curls', 'standing-calf-raises'];
-
-    const seeds = [
-      { id: 'routine-push-template', name: 'Push Day (Chest/Shoulders/Triceps)', folder: 'PPL Split', exs: pushExs },
-      { id: 'routine-pull-template', name: 'Pull Day (Back/Biceps)', folder: 'PPL Split', exs: pullExs },
-      { id: 'routine-legs-template', name: 'Leg Day (Quads/Hamstrings/Calves)', folder: 'PPL Split', exs: legsExs },
-    ];
+    const defaults = buildDefaultRoutines();
 
     await driver.withTransactionAsync(async () => {
-      for (const s of seeds) {
+      for (const r of defaults) {
         await driver.runAsync(
           'INSERT OR IGNORE INTO routines (id, name, folder_name, notes, created_at) VALUES (?, ?, ?, ?, ?)',
-          s.id, s.name, s.folder, 'Sample starter routine', new Date().toISOString()
+          r.id,
+          r.name,
+          r.folderName || null,
+          r.notes || null,
+          r.createdAt || new Date().toISOString()
         );
 
         let order = 0;
-        for (const exId of s.exs) {
-          const exExists = await driver.getFirstAsync<{ id: string }>('SELECT id FROM exercises WHERE id = ?', exId);
-          if (exExists) {
-            await driver.runAsync(
-              `INSERT OR IGNORE INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
-               VALUES (?, ?, ?, ?, 3, '8-12', 90)`,
-              `re-${s.id}-${order}`, s.id, exId, order
-            );
-            order++;
-          }
+        for (const re of r.exercises) {
+          await driver.runAsync(
+            `INSERT OR IGNORE INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            re.id || `re-${r.id}-${order}`,
+            r.id,
+            re.exerciseId,
+            order,
+            re.targetSets,
+            re.targetReps,
+            re.restTimerSeconds
+          );
+          order++;
         }
       }
 

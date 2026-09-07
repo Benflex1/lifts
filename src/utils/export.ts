@@ -1,4 +1,5 @@
 import type { WorkoutHistorySummary, Routine, Exercise } from '../types';
+import { buildBackupJson as buildV2BackupJson } from './backup';
 
 export interface BackupData {
   version: number;
@@ -26,12 +27,7 @@ export function shapeBackup(
 }
 
 export async function buildBackupJson(): Promise<string> {
-  const { getWorkoutHistory, getRoutines, getAllExercises, getSetting } = await import('../database/db');
-  const workouts = await getWorkoutHistory();
-  const routines = await getRoutines();
-  const exercises = await getAllExercises();
-  const unit = (await getSetting('unit')) || 'kg';
-  return shapeBackup(workouts, routines, exercises.filter(e => e.isCustom), { unit });
+  return buildV2BackupJson();
 }
 
 export async function exportBackup(): Promise<void> {
