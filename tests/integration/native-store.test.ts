@@ -1,0 +1,275 @@
+import { describe, it } from 'node:test';
+import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { NodeSqliteDriver } from '../helpers/storeFixture';
+import { createNativeStore } from '../../src/database/nativeStore';
+import { applyMigrations } from '../../src/database/migrations';
+
+describe('nativeStore and migration safety', () => {
+  it('migrates an old-schema database with completed workouts and in-progress drafts without data loss', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-old-schema-${Date.now()}.db`);
+    const rawDriver = new NodeSqliteDriver(tempFile);
+
+    // 1. Setup old-schema database directly
+    await rawDriver.execAsync(`
+      PRAGMA foreign_keys = ON;
+
+      CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT);
+      CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE exercises (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL,
+        equipment TEXT NOT NULL, primary_muscles TEXT NOT NULL,
+        secondary_muscles TEXT, instructions TEXT, is_custom INTEGER DEFAULT 0
+      );
+      CREATE TABLE routines (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, folder_name TEXT,
+        notes TEXT, created_at TEXT DEFAULT (datetime('now')), last_performed_at TEXT
+      );
+      CREATE TABLE routine_exercises (
+        id TEXT PRIMARY KEY, routine_id TEXT NOT NULL, exercise_id TEXT NOT NULL,
+        order_index INTEGER NOT NULL, target_sets INTEGER DEFAULT 3,
+        target_reps TEXT DEFAULT '8-12', rest_timer_seconds INTEGER DEFAULT 90,
+        FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
+        FOREIGN KEY (exercise_id) REFERENCES exercises(id)
+      );
+      CREATE TABLE workouts (
+        id TEXT PRIMARY KEY, routine_id TEXT, name TEXT NOT NULL,
+        start_time TEXT NOT NULL, end_time TEXT, duration_seconds INTEGER DEFAULT 0,
+        total_volume_kg REAL DEFAULT 0, notes TEXT, in_progress INTEGER DEFAULT 0
+      );
+      CREATE TABLE workout_exercises (
+        id TEXT PRIMARY KEY, workout_id TEXT NOT NULL, exercise_id TEXT NOT NULL,
+        order_index INTEGER NOT NULL, notes TEXT, rest_timer_seconds INTEGER DEFAULT 90,
+        FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
+        FOREIGN KEY (exercise_id) REFERENCES exercises(id)
+      );
+      CREATE TABLE exercise_sets (
+        id TEXT PRIMARY KEY, workout_exercise_id TEXT NOT NULL,
+        set_number INTEGER NOT NULL, set_type TEXT NOT NULL DEFAULT 'normal',
+        weight_kg REAL NOT NULL DEFAULT 0, reps INTEGER NOT NULL DEFAULT 0,
+        rpe REAL, is_completed INTEGER DEFAULT 0, completed_at TEXT,
+        FOREIGN KEY (workout_exercise_id) REFERENCES workout_exercises(id) ON DELETE CASCADE
+      );
+    `);
+
+    // Insert custom exercise
+    await rawDriver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles, is_custom)
+       VALUES (?, ?, ?, ?, ?, 1)`,
+      'custom-ex-1', 'My Custom Exercise', 'Chest', 'Barbell', JSON.stringify(['Chest'])
+    );
+
+    // Insert setting
+    await rawDriver.runAsync(`INSERT INTO settings (key, value) VALUES (?, ?)`, 'weight_unit', 'lb');
+
+    // Insert routine with metadata
+    await rawDriver.runAsync(
+      `INSERT INTO routines (id, name, folder_name, notes, created_at, last_performed_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      'routine-1', 'Heavy Chest', 'Chest Splits', 'Push hard', '2026-09-01T08:00:00.000Z', '2026-09-05T10:00:00.000Z'
+    );
+    await rawDriver.runAsync(
+      `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      're-1', 'routine-1', 'custom-ex-1', 0, 4, '6-8', 120
+    );
+
+    // Insert completed workout
+    await rawDriver.runAsync(
+      `INSERT INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      'workout-completed-1', 'routine-1', 'Heavy Chest Session', '2026-09-05T09:00:00.000Z', '2026-09-05T10:00:00.000Z', 3600, 1000, 'Felt great', 0
+    );
+    await rawDriver.runAsync(
+      `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes)
+       VALUES (?, ?, ?, ?, ?)`,
+      'we-comp-1', 'workout-completed-1', 'custom-ex-1', 0, 'Used belt'
+    );
+    await rawDriver.runAsync(
+      `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, rpe, is_completed, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+      'set-comp-1', 'we-comp-1', 1, 'normal', 100, 10, 8.5, '2026-09-05T09:15:00.000Z'
+    );
+
+    // Insert two in-progress drafts
+    await rawDriver.runAsync(
+      `INSERT INTO workouts (id, routine_id, name, start_time, duration_seconds, total_volume_kg, in_progress)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      'draft-old-1', 'routine-1', 'In Progress Chest', '2026-09-07T08:00:00.000Z', 600, 200
+    );
+    await rawDriver.runAsync(
+      `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index)
+       VALUES (?, ?, ?, ?)`,
+      'we-draft-1', 'draft-old-1', 'custom-ex-1', 0
+    );
+    await rawDriver.runAsync(
+      `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, is_completed)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      'set-draft-1', 'we-draft-1', 1, 'normal', 100, 2, 1
+    );
+
+    await rawDriver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, duration_seconds, in_progress)
+       VALUES (?, ?, ?, ?, 1)`,
+      'draft-old-2', 'Empty Workout Draft', '2026-09-07T09:00:00.000Z', 300
+    );
+
+    rawDriver.close();
+
+    // 2. Open with NativeStore (which applies migrations automatically)
+    const storeDriver1 = new NodeSqliteDriver(tempFile);
+    const store1 = createNativeStore(storeDriver1);
+    await store1.init();
+
+    // Verify custom exercise survived
+    const customEx = await store1.getExerciseById('custom-ex-1');
+    assert.ok(customEx, 'Custom exercise must survive migration');
+    assert.equal(customEx.name, 'My Custom Exercise');
+
+    // Verify setting survived
+    const unit = await store1.getSetting('weight_unit');
+    assert.equal(unit, 'lb');
+
+    // Verify routine survived with metadata intact
+    const routine = await store1.getRoutineById('routine-1');
+    assert.ok(routine, 'Routine must survive migration');
+    assert.equal(routine.createdAt, '2026-09-01T08:00:00.000Z');
+    assert.equal(routine.lastPerformedAt, '2026-09-05T10:00:00.000Z');
+    assert.equal(routine.exercises.length, 1);
+
+    // Verify completed workout survived intact
+    const history = await store1.getWorkoutHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].id, 'workout-completed-1');
+    assert.equal(history[0].totalVolumeKg, 1000);
+
+    const workoutDetail = await store1.getWorkoutDetail('workout-completed-1');
+    assert.ok(workoutDetail);
+    assert.equal(workoutDetail.exercises[0].sets[0].weightKg, 100);
+    assert.equal(workoutDetail.exercises[0].sets[0].rpe, 8.5);
+
+    // Verify drafts migrated to dedicated drafts store
+    const drafts = await store1.getWorkoutDrafts();
+    assert.equal(drafts.length, 2, 'Both old in-progress workouts must be migrated to workout_drafts');
+
+    const draft1 = drafts.find(d => d.workout.id === 'draft-old-1');
+    assert.ok(draft1);
+    assert.equal(draft1.workout.startTime, '2026-09-07T08:00:00.000Z');
+    assert.equal(draft1.workout.exercises.length, 1);
+    assert.equal(draft1.workout.exercises[0].sets.length, 1);
+
+    const draft2 = drafts.find(d => d.workout.id === 'draft-old-2');
+    assert.ok(draft2);
+    assert.equal(draft2.workout.name, 'Empty Workout Draft');
+
+    // Verify old in_progress workouts were removed from workouts table
+    const rawOldRows = await storeDriver1.getAllAsync<any>(
+      'SELECT * FROM workouts WHERE in_progress = 1'
+    );
+    assert.equal(rawOldRows.length, 0, 'No in_progress workouts should remain in workouts table');
+
+    storeDriver1.close();
+
+    // 3. Reopen / migrate second time — assert idempotence (no changes)
+    const storeDriver2 = new NodeSqliteDriver(tempFile);
+    const store2 = createNativeStore(storeDriver2);
+    await store2.init();
+
+    const snapshot2 = await store2.readSnapshot();
+    assert.equal(snapshot2.workouts.length, 1);
+    assert.equal(snapshot2.drafts.length, 2);
+    assert.equal(snapshot2.routines.length >= 1, true);
+    assert.equal(snapshot2.settings['weight_unit'], 'lb');
+
+    storeDriver2.close();
+    fs.unlinkSync(tempFile);
+  });
+
+  it('rolls back completely if a migration failure is injected', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-fail-migration-${Date.now()}.db`);
+    const rawDriver = new NodeSqliteDriver(tempFile);
+
+    // Apply base schema (version 1)
+    await applyMigrations(rawDriver, { maxVersion: 1 });
+
+    // Insert test data
+    await rawDriver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, in_progress) VALUES (?, ?, ?, 1)`,
+      'draft-to-keep', 'Important Draft', '2026-09-07T10:00:00.000Z'
+    );
+
+    // Try applying migration 2 with an injected failure
+    await assert.rejects(async () => {
+      await applyMigrations(rawDriver, { failAtVersion: 2 });
+    }, /Injected migration failure at version 2/);
+
+    // Verify old record remains intact and workout_drafts was not committed
+    const row = await rawDriver.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ?', 'draft-to-keep');
+    assert.ok(row, 'Row in workouts must still exist after rollback');
+    assert.equal(row.name, 'Important Draft');
+
+    const draftsTable = await rawDriver.getFirstAsync<any>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='workout_drafts'"
+    );
+    assert.equal(draftsTable, null, 'workout_drafts table should not exist after rollback');
+
+    rawDriver.close();
+    fs.unlinkSync(tempFile);
+  });
+
+  it('recovers write queue after a failed write and executes subsequent writes', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-queue-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    const store = createNativeStore(driver);
+    await store.init();
+
+    // Cause a write failure (violating foreign key constraint)
+    await assert.rejects(async () => {
+      await store.saveRoutine('Broken Routine', 'Folder', [
+        { exerciseId: 'non-existent-exercise-id', targetSets: 3, targetReps: '10', restTimerSeconds: 60 },
+      ]);
+    });
+
+    // Verify write queue is NOT stalled and subsequent write succeeds
+    const routineId = await store.saveRoutine('Valid Routine', 'Folder', []);
+    assert.ok(routineId);
+
+    const routine = await store.getRoutineById(routineId);
+    assert.ok(routine);
+    assert.equal(routine.name, 'Valid Routine');
+
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
+
+  it('preserves routine createdAt and lastPerformedAt when editing routines', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-routine-meta-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    const store = createNativeStore(driver);
+    await store.init();
+
+    const routineId = await store.saveRoutine('Original Name', 'Old Folder', [], 'Note 1');
+    const original = await store.getRoutineById(routineId);
+    assert.ok(original);
+    const originalCreatedAt = original.createdAt;
+
+    // Simulate routine being performed
+    await driver.runAsync('UPDATE routines SET last_performed_at = ? WHERE id = ?', '2026-09-07T12:00:00.000Z', routineId);
+
+    // Edit routine
+    await store.saveRoutine('Updated Name', 'New Folder', [], 'Note 2', routineId);
+
+    const updated = await store.getRoutineById(routineId);
+    assert.ok(updated);
+    assert.equal(updated.name, 'Updated Name');
+    assert.equal(updated.folderName, 'New Folder');
+    assert.equal(updated.notes, 'Note 2');
+    assert.equal(updated.createdAt, originalCreatedAt, 'createdAt must not be overwritten when editing');
+    assert.equal(updated.lastPerformedAt, '2026-09-07T12:00:00.000Z', 'lastPerformedAt must not be wiped when editing');
+
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
+});

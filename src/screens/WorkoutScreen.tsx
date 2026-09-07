@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
   FlatList,
 } from 'react-native';
 import {
@@ -25,12 +24,16 @@ import { Routine } from '../types';
 import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
+import { SettingsModal } from '../components/SettingsModal';
+import { useDialog } from '../context/DialogContext';
 
 export const WorkoutScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
+  const { confirm, notify } = useDialog();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('All');
   const [showEditor, setShowEditor] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [routineToEdit, setRoutineToEdit] = useState<Routine | null>(null);
   const [showFolderManage, setShowFolderManage] = useState(false);
 
@@ -47,7 +50,7 @@ export const WorkoutScreen: React.FC = () => {
     try {
       await startWorkout(undefined, 'Empty Workout');
     } catch (e) {
-      Alert.alert('Error', 'Failed to start workout.');
+      await notify({ title: 'Error', message: 'Failed to start workout.' });
     }
   };
 
@@ -55,7 +58,7 @@ export const WorkoutScreen: React.FC = () => {
     try {
       await startWorkout(routine);
     } catch (e) {
-      Alert.alert('Error', `Failed to start "${routine.name}".`);
+      await notify({ title: 'Error', message: `Failed to start "${routine.name}".` });
     }
   };
 
@@ -64,30 +67,25 @@ export const WorkoutScreen: React.FC = () => {
       await duplicateRoutine(routine.id);
       loadRoutines();
     } catch (e) {
-      Alert.alert('Error', 'Failed to duplicate routine.');
+      await notify({ title: 'Error', message: 'Failed to duplicate routine.' });
     }
   };
 
-  const handleDeleteRoutine = (routine: Routine) => {
-    Alert.alert(
-      'Delete Routine',
-      `Are you sure you want to delete "${routine.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteRoutine(routine.id);
-              loadRoutines();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete routine.');
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteRoutine = async (routine: Routine) => {
+    const shouldDelete = await confirm({
+      title: 'Delete Routine',
+      message: `Are you sure you want to delete "${routine.name}"?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!shouldDelete) return;
+
+    try {
+      await deleteRoutine(routine.id);
+      loadRoutines();
+    } catch (e) {
+      await notify({ title: 'Error', message: 'Failed to delete routine.' });
+    }
   };
 
   // Collect unique folders
@@ -95,6 +93,13 @@ export const WorkoutScreen: React.FC = () => {
     'All',
     ...Array.from(new Set(routines.map(r => r.folderName).filter(Boolean) as string[])),
   ];
+
+  // Auto-reset selected folder if deleted or renamed
+  useEffect(() => {
+    if (selectedFolder !== 'All' && !folders.includes(selectedFolder)) {
+      setSelectedFolder('All');
+    }
+  }, [folders, selectedFolder]);
 
   const filteredRoutines =
     selectedFolder === 'All'
@@ -109,16 +114,28 @@ export const WorkoutScreen: React.FC = () => {
           <Text style={styles.appTitle}>LIFTS</Text>
           <Text style={styles.appSubtitle}>Think Less. Lift More.</Text>
         </View>
-        <TouchableOpacity
-          style={styles.newRoutineHeaderBtn}
-          onPress={() => {
-            setRoutineToEdit(null);
-            setShowEditor(true);
-          }}
-        >
-          <Plus size={18} color="#FFFFFF" />
-          <Text style={styles.newRoutineHeaderBtnText}>New Routine</Text>
-        </TouchableOpacity>
+        <View style={styles.appHeaderActions}>
+          <TouchableOpacity
+            style={styles.settingsHeaderBtn}
+            onPress={() => setShowSettings(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+          >
+            <Settings2 size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.newRoutineHeaderBtn}
+            onPress={() => {
+              setRoutineToEdit(null);
+              setShowEditor(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="New routine"
+          >
+            <Plus size={18} color="#FFFFFF" />
+            <Text style={styles.newRoutineHeaderBtnText}>New Routine</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -282,6 +299,11 @@ export const WorkoutScreen: React.FC = () => {
           loadRoutines();
         }}
       />
+
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </View>
   );
 };
@@ -321,6 +343,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 12,
+  },
+  appHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  settingsHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   newRoutineHeaderBtnText: {
     color: '#FFFFFF',

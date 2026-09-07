@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
   Modal,
   BackHandler,
 } from 'react-native';
@@ -18,7 +17,6 @@ import {
   Trash2,
   Calculator,
   X,
-  Trophy,
   Award,
   ChevronDown,
   FileText,
@@ -35,8 +33,9 @@ import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { WeightInput } from '../components/WeightInput';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
+import { useDialog } from '../context/DialogContext';
 
-export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
+export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
 
   const {
@@ -64,8 +63,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     setId: string;
   } | null>(null);
 
-  // Completed workout celebration modal
-  const [completedSummary, setCompletedSummary] = useState<Workout | null>(null);
+  const { confirm, notify } = useDialog();
+  const [isFinishing, setIsFinishing] = useState(false);
 
   // Handle hardware back press on Android to minimize instead of exiting
   useEffect(() => {
@@ -97,39 +96,51 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
   }
 
   const handleFinish = async () => {
+    if (isFinishing) return;
+
     if (completedSetsCount === 0) {
-      Alert.alert(
-        'Finish Workout?',
-        'You have not completed any sets. Do you still want to finish?',
-        [
-          { text: 'Keep Lifting', style: 'cancel' },
-          {
-            text: 'Finish',
-            onPress: async () => {
-              const summary = await finishWorkout();
-              if (summary) setCompletedSummary(summary);
-            },
-          },
-        ]
-      );
-      return;
+      const shouldFinish = await confirm({
+        title: 'Finish Workout?',
+        message: 'You have not completed any sets. Do you still want to finish?',
+        confirmLabel: 'Finish',
+        cancelLabel: 'Keep Lifting',
+      });
+      if (!shouldFinish) return;
     }
 
-    const summary = await finishWorkout();
-    if (summary) {
-      setCompletedSummary(summary);
+    setIsFinishing(true);
+    try {
+      const summary = await finishWorkout();
+      if (summary) {
+        onFinish(summary);
+      } else {
+        await notify({
+          title: 'Save Failed',
+          message: 'Could not save the workout session. Your session remains open.',
+        });
+      }
+    } catch (e: any) {
+      await notify({
+        title: 'Save Error',
+        message: e?.message || 'An unexpected error occurred while saving.',
+      });
+    } finally {
+      setIsFinishing(false);
     }
   };
 
-  const handleCancel = () => {
-    Alert.alert(
-      'Discard Workout?',
-      'Are you sure you want to discard this session? All logged sets will be lost.',
-      [
-        { text: 'Keep Lifting', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: cancelWorkout },
-      ]
-    );
+  const handleCancel = async () => {
+    if (isFinishing) return;
+    const shouldDiscard = await confirm({
+      title: 'Discard Workout?',
+      message: 'Are you sure you want to discard this session? All logged sets will be lost.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep Lifting',
+      destructive: true,
+    });
+    if (shouldDiscard) {
+      cancelWorkout();
+    }
   };
 
   const cycleSetType = (activeExerciseId: string, set: WorkoutSet) => {
@@ -174,11 +185,25 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
         </View>
 
         <View style={styles.topRightActions}>
-          <TouchableOpacity onPress={handleCancel} style={styles.discardBtn}>
+          <TouchableOpacity
+            onPress={handleCancel}
+            style={[styles.discardBtn, isFinishing && { opacity: 0.5 }]}
+            disabled={isFinishing}
+            accessibilityRole="button"
+            accessibilityLabel="Discard workout"
+            accessibilityState={{ disabled: isFinishing }}
+          >
             <Text style={styles.discardBtnText}>Discard</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleFinish} style={styles.finishBtn}>
-            <Text style={styles.finishBtnText}>Finish</Text>
+          <TouchableOpacity
+            onPress={handleFinish}
+            style={[styles.finishBtn, isFinishing && { opacity: 0.5 }]}
+            disabled={isFinishing}
+            accessibilityRole="button"
+            accessibilityLabel="Finish workout"
+            accessibilityState={{ busy: isFinishing, disabled: isFinishing }}
+          >
+            <Text style={styles.finishBtnText}>{isFinishing ? 'Saving...' : 'Finish'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -216,12 +241,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
               {/* Exercise Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.exerciseTitleGroup}>
-                  <Text style={styles.exerciseName}>{activeEx.exercise.name}</Text>
+                  <Text style={styles.exerciseName}>{activeEx.exercise?.name || 'Exercise'}</Text>
                   <View style={styles.badgeRow}>
                     <Text style={styles.muscleBadge}>
-                      {activeEx.exercise.primaryMuscles.join(', ')}
+                      {(Array.isArray(activeEx.exercise?.primaryMuscles) ? activeEx.exercise.primaryMuscles : []).join(', ')}
                     </Text>
-                    <Text style={styles.equipmentBadge}>{activeEx.exercise.equipment}</Text>
+                    <Text style={styles.equipmentBadge}>{activeEx.exercise?.equipment || ''}</Text>
+                    {activeEx.targetReps ? (
+                      <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
+                    ) : null}
                   </View>
                 </View>
 
@@ -332,13 +360,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                       <TextInput
                         style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
                         keyboardType="number-pad"
-                        value={set.reps > 0 ? set.reps.toString() : ''}
+                        value={set.reps.toString()}
                         placeholder={set.previousReps ? set.previousReps.toString() : '10'}
                         placeholderTextColor="#6B7280"
                         selectTextOnFocus={true}
                         onChangeText={txt => {
-                          const val = parseInt(txt, 10) || 0;
-                          updateSet(activeEx.id, set.id, { reps: val });
+                          const cleaned = txt.trim();
+                          const val = cleaned === '' ? 0 : parseInt(cleaned, 10);
+                          if (!isNaN(val)) {
+                            updateSet(activeEx.id, set.id, { reps: val });
+                          }
                         }}
                       />
                     </View>
@@ -444,7 +475,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
       <RestTimeWheelModal
         visible={restWheelActiveExercise !== null}
         initialSeconds={restWheelActiveExercise?.restTimerSeconds ?? 0}
-        exerciseName={restWheelActiveExercise?.exercise.name}
+        exerciseName={restWheelActiveExercise?.exercise?.name}
         onClose={() => setRestWheelActiveExercise(null)}
         onSave={seconds => {
           if (restWheelActiveExercise) {
@@ -452,70 +483,6 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
           }
         }}
       />
-
-      {/* Finished Summary Celebration Modal */}
-      <Modal
-        visible={completedSummary !== null}
-        animationType="fade"
-        onRequestClose={() => {
-          setCompletedSummary(null);
-          onFinish();
-        }}
-      >
-        <View style={styles.celebrationOverlay}>
-          <View style={styles.celebrationCard}>
-            <View style={styles.trophyCircle}>
-              <Trophy size={48} color="#10B981" />
-            </View>
-
-            <Text style={styles.celebrationTitle}>Workout Complete!</Text>
-            <Text style={styles.celebrationSubhead}>{completedSummary?.name}</Text>
-
-            <View style={styles.summaryStatsGrid}>
-              <View style={styles.statBox}>
-                <Text style={styles.statBoxLabel}>DURATION</Text>
-                <Text style={styles.statBoxValue}>
-                  {formatDuration(completedSummary?.durationSeconds || 0)}
-                </Text>
-              </View>
-
-              <View style={styles.statBox}>
-                <Text style={styles.statBoxLabel}>TOTAL VOLUME</Text>
-                <Text style={styles.statBoxValue}>
-                  {formatWeight(completedSummary?.totalVolumeKg || 0, unit)}
-                </Text>
-              </View>
-
-              <View style={styles.statBox}>
-                <Text style={styles.statBoxLabel}>EXERCISES</Text>
-                <Text style={styles.statBoxValue}>
-                  {completedSummary?.exercises.length || 0}
-                </Text>
-              </View>
-
-              <View style={styles.statBox}>
-                <Text style={styles.statBoxLabel}>SETS COMPLETED</Text>
-                <Text style={styles.statBoxValue}>
-                  {completedSummary?.exercises.reduce(
-                    (sum, e) => sum + e.sets.filter(s => s.isCompleted).length,
-                    0
-                  )}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.doneBtn}
-              onPress={() => {
-                setCompletedSummary(null);
-                onFinish();
-              }}
-            >
-              <Text style={styles.doneBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -662,6 +629,15 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 11,
     textTransform: 'capitalize',
+  },
+  targetBadge: {
+    color: '#38BDF8',
+    backgroundColor: '#0C4A6E',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   headerActions: {
     flexDirection: 'row',

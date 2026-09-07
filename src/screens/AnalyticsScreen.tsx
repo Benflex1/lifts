@@ -6,18 +6,24 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
 } from 'react-native';
-import { Calculator, Award, Dumbbell, ShieldCheck, Download } from 'lucide-react-native';
+import { Calculator, Award, Dumbbell, ShieldCheck, Download, Upload } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
-import { getWorkoutHistory } from '../database/db';
+import { getWorkoutHistory, getStore } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
+import { useWorkout } from '../context/WorkoutContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
 import { exportBackup } from '../utils/export';
+import { pickBackupJson } from '../utils/pickBackup';
+import { parseBackup } from '../utils/backup';
+import { computeRestorePlan } from '../utils/restore';
+import { useDialog } from '../context/DialogContext';
 
 export const AnalyticsScreen: React.FC = () => {
   const { unit } = useSettings();
+  const { isWorkingOut } = useWorkout();
+  const { confirm, notify } = useDialog();
   // 1RM calculator state
   const [weight, setWeight] = useState('100');
   const [reps, setReps] = useState('5');
@@ -39,9 +45,57 @@ export const AnalyticsScreen: React.FC = () => {
   const handleExportData = async () => {
     try {
       await exportBackup();
-      Alert.alert('Export Complete', 'Your workout data has been exported.');
+      await notify({ title: 'Export Complete', message: 'Your workout data has been exported.' });
     } catch (e) {
-      Alert.alert('Export Error', 'Failed to export data. Please try again.');
+      await notify({ title: 'Export Error', message: 'Failed to export data. Please try again.' });
+    }
+  };
+
+  const handleImportData = async () => {
+    if (isWorkingOut) {
+      await notify({
+        title: 'Session In Progress',
+        message: 'Cannot restore backup while a workout session is active. Please finish or discard your current workout first.',
+      });
+      return;
+    }
+
+    try {
+      const json = await pickBackupJson();
+      if (!json) return;
+
+      const backup = parseBackup(json);
+      const store = await getStore();
+      const { preview, snapshotToMerge } = await computeRestorePlan(backup, store);
+
+      const message =
+        `Backup Summary:\n` +
+        `• ${preview.workoutsCount} workouts to import (${preview.skippedWorkoutsCount} identical skipped)\n` +
+        `• ${preview.routinesCount} routines to import (${preview.skippedRoutinesCount} identical skipped)\n` +
+        `• ${preview.customExercisesCount} custom exercises to import\n` +
+        `• ${preview.draftsCount} drafts to import\n` +
+        `• ${preview.newSettingsCount} new settings keys (existing settings preserved)\n\n` +
+        `Proceed with merging this backup?`;
+
+      const proceed = await confirm({
+        title: 'Restore Backup',
+        message,
+        confirmLabel: 'Restore',
+        cancelLabel: 'Cancel',
+      });
+
+      if (!proceed) return;
+
+      await store.mergeSnapshot(snapshotToMerge);
+      await notify({
+        title: 'Restore Complete',
+        message: 'Your backup data has been successfully merged.',
+      });
+    } catch (err: any) {
+      await notify({
+        title: 'Restore Failed',
+        message: err?.message || 'An error occurred during restore. No data was changed.',
+      });
     }
   };
 
@@ -179,9 +233,24 @@ export const AnalyticsScreen: React.FC = () => {
         </View>
 
         {/* Data Ownership */}
-        <TouchableOpacity style={styles.exportCard} onPress={handleExportData}>
+        <TouchableOpacity
+          style={styles.exportCard}
+          onPress={handleExportData}
+          accessibilityRole="button"
+          accessibilityLabel="Backup & Export Workout Data"
+        >
           <Download size={20} color="#9CA3AF" />
-          <Text style={styles.exportCardText}>Backup & Export Workout Data</Text>
+          <Text style={styles.exportCardText}>Backup & Export (v2)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.exportCard, { marginTop: 10 }]}
+          onPress={handleImportData}
+          accessibilityRole="button"
+          accessibilityLabel="Restore & Import Backup Data"
+        >
+          <Upload size={20} color="#3B82F6" />
+          <Text style={[styles.exportCardText, { color: '#3B82F6' }]}>Restore & Import Backup</Text>
         </TouchableOpacity>
       </ScrollView>
 

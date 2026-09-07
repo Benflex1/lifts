@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import {
   Calendar as CalendarIcon,
@@ -18,16 +17,19 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react-native';
-import { Workout, WorkoutHistorySummary, Routine } from '../types';
+import * as Crypto from 'expo-crypto';
+import { Workout, WorkoutHistorySummary, Routine, ActiveExercise } from '../types';
 import { getWorkoutHistory, getWorkoutDetail, deleteWorkout, getRoutineById } from '../database/db';
 import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
+import { useDialog } from '../context/DialogContext';
 
 export const HistoryScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
   const { unit } = useSettings();
+  const { confirm, notify } = useDialog();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -72,33 +74,58 @@ export const HistoryScreen: React.FC = () => {
     }
   };
 
-  const handleDelete = (item: WorkoutHistorySummary) => {
-    Alert.alert(
-      'Delete Workout',
-      `Are you sure you want to delete "${item.name}" from your history? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteWorkout(item.id);
-              setExpandedId(null);
-              loadHistory();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete workout.');
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = async (item: WorkoutHistorySummary) => {
+    const shouldDelete = await confirm({
+      title: 'Delete Workout',
+      message: `Are you sure you want to delete "${item.name}" from your history? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!shouldDelete) return;
+
+    try {
+      await deleteWorkout(item.id);
+      setExpandedId(null);
+      loadHistory();
+    } catch (e) {
+      await notify({ title: 'Error', message: 'Failed to delete workout.' });
+    }
   };
 
   const handlePerformAgain = async (item: WorkoutHistorySummary) => {
     try {
-      let routine: Routine | undefined;
+      const detail = await getWorkoutDetail(item.id);
+      if (!detail || !detail.exercises || detail.exercises.length === 0) {
+        await notify({ title: 'Workout Unavailable', message: 'Could not load details for this workout.' });
+        return;
+      }
 
+      const newWorkoutPrefix = `wo-again-${Crypto.randomUUID().slice(0, 8)}`;
+      const initialExercises: ActiveExercise[] = detail.exercises.map((ex, exIdx) => {
+        const activeExId = `ae-${newWorkoutPrefix}-${ex.exerciseId}-occ${exIdx}-${Crypto.randomUUID().slice(0, 6)}`;
+        return {
+          id: activeExId,
+          exerciseId: ex.exerciseId,
+          exercise: ex.exercise,
+          notes: '',
+          targetReps: ex.sets[0]?.targetReps || '10',
+          restTimerSeconds: ex.restTimerSeconds ?? 90,
+          sets: ex.sets.map((s, sIdx) => ({
+            id: `set-${activeExId}-${sIdx + 1}-${Crypto.randomUUID().slice(0, 6)}`,
+            setNumber: sIdx + 1,
+            type: s.type || 'normal',
+            weightKg: s.weightKg,
+            reps: s.reps,
+            targetReps: s.targetReps || '10',
+            rpe: s.rpe ?? 8,
+            isCompleted: false,
+            previousWeightKg: s.weightKg,
+            previousReps: s.reps,
+          })),
+        };
+      });
+
+      let routine: Routine | undefined;
       if (item.routineId) {
         const found = await getRoutineById(item.routineId);
         if (found) {
@@ -106,29 +133,9 @@ export const HistoryScreen: React.FC = () => {
         }
       }
 
-      if (!routine) {
-        const detail = await getWorkoutDetail(item.id);
-        if (detail && detail.exercises.length > 0) {
-          routine = {
-            id: '',
-            name: item.name,
-            createdAt: new Date().toISOString(),
-            exercises: detail.exercises.map((ex, idx) => ({
-              id: `synth-${idx}`,
-              exerciseId: ex.exerciseId,
-              exercise: ex.exercise,
-              orderIndex: idx,
-              targetSets: ex.sets.length || 3,
-              targetReps: String(ex.sets[0]?.reps || 10),
-              restTimerSeconds: ex.restTimerSeconds ?? 90,
-            })),
-          };
-        }
-      }
-
-      await startWorkout(routine, item.name);
+      await startWorkout(routine, item.name, initialExercises);
     } catch (e) {
-      Alert.alert('Error', 'Failed to start workout.');
+      await notify({ title: 'Error', message: 'Failed to start workout.' });
     }
   };
 

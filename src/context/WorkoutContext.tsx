@@ -1,10 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { Platform, AppState, AppStateStatus } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../types';
-import { saveCompletedWorkout, getPreviousSetsForExercise, saveWorkoutDraft, getWorkoutDraft, discardWorkoutDraft } from '../database/db';
-import { computeElapsedSeconds, computeRemaining, rebaseStartTime } from '../utils/timer';
+import { getStore, getPreviousSetsForExercise } from '../database/db';
+import { WorkoutDraft } from '../database/contract';
+import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
+import { createSessionController, SessionController, SessionState } from '../workout/session';
+import { initialReps, validateCompletedSet } from '../workout/sets';
+import { useDialog } from './DialogContext';
 
 interface RestTimerState {
   isActive: boolean;
@@ -20,9 +24,13 @@ interface WorkoutContextType {
   elapsedSeconds: number;
   restTimer: RestTimerState;
   draftAvailable: Workout | null;
-  resumeDraft: () => void;
-  discardDraft: () => void;
-  startWorkout: (routine?: Routine, customName?: string) => Promise<void>;
+  availableDrafts: WorkoutDraft[];
+  isDraftModalOpen: boolean;
+  openDraftModal: () => void;
+  closeDraftModal: () => void;
+  resumeDraft: (draft?: WorkoutDraft) => void;
+  discardDraft: (draftId?: string) => Promise<void>;
+  startWorkout: (routine?: Routine, customName?: string, initialExercises?: ActiveExercise[]) => Promise<void>;
   minimizeWorkout: () => void;
   maximizeWorkout: () => void;
   addExerciseToWorkout: (exercise: Exercise) => Promise<void>;
@@ -43,11 +51,21 @@ interface WorkoutContextType {
 const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
 
 export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeWorkout, setActiveWorkout] = useState<Workout | null>(null);
+  const controllerRef = useRef<SessionController | null>(null);
+  const [sessionState, setSessionState] = useState<SessionState>({
+    phase: 'idle',
+    workout: null,
+    restTimer: null,
+    persistenceError: null,
+    revision: 0,
+  });
+
+  const [availableDrafts, setAvailableDrafts] = useState<WorkoutDraft[]>([]);
+  const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [draftAvailable, setDraftAvailable] = useState<Workout | null>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { confirm, notify } = useDialog();
+
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
     remainingSeconds: 0,
@@ -55,105 +73,94 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     endsAt: null,
   });
 
-  const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const startTimeRef = useRef<string | null>(null);
+  const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const minimizeWorkout = () => setIsMinimized(true);
-  const maximizeWorkout = () => setIsMinimized(false);
+  const refreshDrafts = useCallback(async () => {
+    try {
+      const store = await getStore();
+      const drafts = await store.getWorkoutDrafts();
+      setAvailableDrafts(drafts);
+    } catch (e) {
+      console.error('Failed to load workout drafts:', e);
+    }
+  }, []);
 
-  // Workout duration timer
+  // Initialize controller and subscribe
   useEffect(() => {
-    if (activeWorkout) {
-      if (!startTimeRef.current) {
-        startTimeRef.current = activeWorkout.startTime;
+    let isMounted = true;
+    let unsubscribe: (() => void) | null = null;
+
+    (async () => {
+      try {
+        const store = await getStore();
+        const ctrl = createSessionController(store, () => Date.now(), { maxDirtyTimeMs: 3000 });
+        controllerRef.current = ctrl;
+
+        unsubscribe = ctrl.subscribe((newState) => {
+          if (isMounted) {
+            setSessionState(newState);
+          }
+        });
+
+        await refreshDrafts();
+      } catch (err) {
+        console.error('Failed to initialize session controller:', err);
       }
+    })();
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [refreshDrafts]);
+
+  // Elapsed workout time ticker
+  useEffect(() => {
+    if (sessionState.phase === 'active' && sessionState.workout) {
+      const startTime = sessionState.workout.startTime;
+      setElapsedSeconds(computeElapsedSeconds(startTime, Date.now()));
+
       workoutTimerRef.current = setInterval(() => {
-        setElapsedSeconds(computeElapsedSeconds(startTimeRef.current!, Date.now()));
+        setElapsedSeconds(computeElapsedSeconds(startTime, Date.now()));
       }, 1000);
     } else {
-      startTimeRef.current = null;
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
       setElapsedSeconds(0);
     }
+
     return () => {
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
     };
-  }, [activeWorkout !== null]);
+  }, [sessionState.phase, sessionState.workout?.startTime]);
 
-  // Load initial draft on mount
-  useEffect(() => {
-    (async () => {
-      const draft = await getWorkoutDraft();
-      setDraftAvailable(draft);
-    })();
-  }, []);
-
-  // Autosave activeWorkout to draft (debounced 3s)
-  useEffect(() => {
-    if (activeWorkout) {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          await saveWorkoutDraft(activeWorkout);
-        } catch (e) {
-          console.error('Draft autosave failed:', e);
-        }
-      }, 3000);
-    }
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, [activeWorkout]);
-
-  // Immediately save draft when app goes to background
+  // AppState background flush
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
-      if (state === 'background' && activeWorkout) {
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveWorkoutDraft(activeWorkout).catch(console.error);
+      if (state === 'background' && controllerRef.current && sessionState.phase === 'active') {
+        controllerRef.current.flush().catch(console.error);
       }
     };
     const sub = AppState.addEventListener('change', handler);
     return () => sub.remove();
-  }, [activeWorkout]);
+  }, [sessionState.phase]);
 
-  const resumeDraft = () => {
-    if (!draftAvailable) return;
-    const now = Date.now();
-    const rebased = {
-      ...draftAvailable,
-      startTime: rebaseStartTime(now, draftAvailable.durationSeconds),
-    };
-    startTimeRef.current = rebased.startTime;
-    setActiveWorkout(rebased);
-    setElapsedSeconds(draftAvailable.durationSeconds);
-    setDraftAvailable(null);
-  };
-
-  const discardDraft = async () => {
-    if (!draftAvailable) return;
-    try {
-      await discardWorkoutDraft(draftAvailable.id);
-    } catch (e) {
-      console.error('Draft discard failed:', e);
-    }
-    setDraftAvailable(null);
-  };
-
-  // Rest countdown timer
+  // Rest countdown ticker
   useEffect(() => {
     if (restTimer.isActive && restTimer.endsAt !== null) {
       const tick = () => {
         const now = Date.now();
         const remaining = computeRemaining(restTimer.endsAt!, now);
         if (remaining <= 0) {
-          setRestTimer(prev => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
+          setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
+          if (controllerRef.current && sessionState.phase === 'active' && sessionState.workout) {
+            controllerRef.current.update(sessionState.workout, null);
+          }
           if (Platform.OS !== 'web') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
         } else {
-          setRestTimer(prev => {
+          setRestTimer((prev) => {
             if (prev.remainingSeconds === remaining) return prev;
             return { ...prev, remainingSeconds: remaining };
           });
@@ -164,32 +171,44 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } else {
       if (restTimerRef.current) clearInterval(restTimerRef.current);
     }
+
     return () => {
       if (restTimerRef.current) clearInterval(restTimerRef.current);
     };
-  }, [restTimer.isActive, restTimer.endsAt]);
+  }, [restTimer.isActive, restTimer.endsAt, sessionState.phase, sessionState.workout]);
 
   const startRestTimer = (seconds: number) => {
     if (seconds <= 0) return;
+    const endsAt = Date.now() + seconds * 1000;
     setRestTimer({
       isActive: true,
       remainingSeconds: seconds,
       totalSeconds: seconds,
-      endsAt: Date.now() + seconds * 1000,
+      endsAt,
     });
+    if (controllerRef.current && sessionState.phase === 'active' && sessionState.workout) {
+      controllerRef.current.update(sessionState.workout, { endsAt, totalSeconds: seconds });
+    }
   };
 
   const adjustRestTimer = (deltaSeconds: number) => {
-    setRestTimer(prev => {
+    setRestTimer((prev) => {
       if (!prev.endsAt) return prev;
       const newEndsAt = prev.endsAt + deltaSeconds * 1000;
       const remaining = computeRemaining(newEndsAt, Date.now());
-      return {
+      const updatedTimer = {
         ...prev,
         endsAt: newEndsAt,
         remainingSeconds: remaining,
         isActive: remaining > 0,
       };
+      if (controllerRef.current && sessionState.phase === 'active' && sessionState.workout) {
+        controllerRef.current.update(
+          sessionState.workout,
+          remaining > 0 ? { endsAt: newEndsAt, totalSeconds: prev.totalSeconds } : null
+        );
+      }
+      return updatedTimer;
     });
   };
 
@@ -200,303 +219,449 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       totalSeconds: 0,
       endsAt: null,
     });
+    if (controllerRef.current && sessionState.phase === 'active' && sessionState.workout) {
+      controllerRef.current.update(sessionState.workout, null);
+    }
   };
 
-  const startWorkout = async (routine?: Routine, customName?: string) => {
-    try {
-      const workoutId = `wo-${Date.now()}`;
-      const name = customName || (routine ? routine.name : 'Quick Workout');
+  const minimizeWorkout = () => setIsMinimized(true);
+  const maximizeWorkout = () => setIsMinimized(false);
 
-      let exercises: ActiveExercise[] = [];
+  const executeStartWorkout = async (
+    routine?: Routine,
+    customName?: string,
+    initialExercises?: ActiveExercise[]
+  ) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) {
+      throw new Error('Controller not initialized');
+    }
 
-      if (routine && routine.exercises.length > 0) {
-        for (const item of routine.exercises) {
-          const prevSets = await getPreviousSetsForExercise(item.exerciseId);
-          const sets: WorkoutSet[] = [];
-          const count = item.targetSets || 3;
+    const workoutId = `wo-${Crypto.randomUUID()}`;
+    const name = customName || (routine ? routine.name : 'Quick Workout');
 
-          for (let i = 1; i <= count; i++) {
-            const ghost = prevSets[i - 1];
-            sets.push({
-              id: `set-${item.exerciseId}-${i}-${Date.now()}`,
-              setNumber: i,
-              type: 'normal',
-              weightKg: ghost ? ghost.weightKg : 0,
-              reps: ghost ? ghost.reps : 10,
-              isCompleted: false,
-              previousWeightKg: ghost ? ghost.weightKg : undefined,
-              previousReps: ghost ? ghost.reps : undefined,
-            });
-          }
+    let exercises: ActiveExercise[] = [];
 
-          exercises.push({
-            id: `ae-${workoutId}-${item.exerciseId}-${Date.now()}`,
-            exerciseId: item.exerciseId,
-            exercise: item.exercise,
-            sets,
-            restTimerSeconds: item.restTimerSeconds ?? 0,
+    if (initialExercises && initialExercises.length > 0) {
+      exercises = initialExercises;
+    } else if (routine && routine.exercises.length > 0) {
+      const occurrenceCounts: Record<string, number> = {};
+      for (let ord = 0; ord < routine.exercises.length; ord++) {
+        const item = routine.exercises[ord];
+        const occ = occurrenceCounts[item.exerciseId] || 0;
+        occurrenceCounts[item.exerciseId] = occ + 1;
+        const prevSets = await getPreviousSetsForExercise(item.exerciseId, occ);
+        const count = item.targetSets || 3;
+        const activeExId = `ae-${workoutId}-${item.exerciseId}-occ${occ}-${Crypto.randomUUID().slice(0, 6)}`;
+        const sets: WorkoutSet[] = [];
+
+        for (let i = 1; i <= count; i++) {
+          const ghost = prevSets[i - 1];
+          const defaultReps = initialReps(item.targetReps, i - 1, ghost?.reps);
+          const suggestedWeight = ghost ? ghost.weightKg : 0;
+          sets.push({
+            id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+            setNumber: i,
+            type: 'normal',
+            weightKg: suggestedWeight,
+            reps: defaultReps,
+            targetReps: item.targetReps,
+            rpe: 8,
+            isCompleted: false,
+            previousWeightKg: ghost ? ghost.weightKg : undefined,
+            previousReps: ghost ? ghost.reps : undefined,
           });
         }
-      }
 
-      setActiveWorkout({
-        id: workoutId,
-        name,
-        routineId: routine ? routine.id : undefined,
-        startTime: new Date().toISOString(),
-        durationSeconds: 0,
-        totalVolumeKg: 0,
-        exercises,
+        exercises.push({
+          id: activeExId,
+          exerciseId: item.exerciseId,
+          exercise: item.exercise,
+          sets,
+          notes: '',
+          targetReps: item.targetReps,
+          restTimerSeconds: item.restTimerSeconds || 90,
+        });
+      }
+    }
+
+    const newWorkout: Workout = {
+      id: workoutId,
+      name,
+      routineId: routine?.id,
+      startTime: new Date().toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises,
+    };
+
+    await ctrl.start(newWorkout);
+    setIsMinimized(false);
+    await refreshDrafts();
+  };
+
+  const startWorkout = async (
+    routine?: Routine,
+    customName?: string,
+    initialExercises?: ActiveExercise[]
+  ) => {
+    if (sessionState.phase === 'active' && sessionState.workout) {
+      const shouldResume = await confirm({
+        title: 'Workout In Progress',
+        message: 'You already have an active workout in progress. Would you like to resume it?',
+        confirmLabel: 'Resume',
+        cancelLabel: 'Cancel',
       });
-      setElapsedSeconds(0);
-    } catch (e) {
-      Alert.alert('Error', 'Failed to start workout. Please try again.');
+      if (shouldResume) {
+        maximizeWorkout();
+      }
+      return;
+    }
+
+    if (availableDrafts.length > 0) {
+      const shouldResume = await confirm({
+        title: 'Unfinished Workout Found',
+        message: 'You have an unfinished workout saved. Would you like to resume it?',
+        confirmLabel: 'Resume Saved',
+        cancelLabel: 'Cancel',
+      });
+      if (shouldResume) {
+        if (availableDrafts.length === 1) {
+          resumeDraft(availableDrafts[0]);
+        } else {
+          setIsDraftModalOpen(true);
+        }
+      }
+      return;
+    }
+
+    await executeStartWorkout(routine, customName, initialExercises);
+  };
+
+  const resumeDraft = (draft?: WorkoutDraft) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+
+    const targetDraft = draft || (availableDrafts.length > 0 ? availableDrafts[0] : null);
+    if (!targetDraft) return;
+
+    ctrl.resume(targetDraft);
+    setIsMinimized(false);
+    setIsDraftModalOpen(false);
+
+    if (targetDraft.restTimer && targetDraft.restTimer.endsAt > Date.now()) {
+      setRestTimer({
+        isActive: true,
+        endsAt: targetDraft.restTimer.endsAt,
+        totalSeconds: targetDraft.restTimer.totalSeconds,
+        remainingSeconds: computeRemaining(targetDraft.restTimer.endsAt, Date.now()),
+      });
+    } else {
+      stopRestTimer();
+    }
+
+    refreshDrafts().catch(console.error);
+  };
+
+  const discardDraft = async (draftId?: string) => {
+    const ctrl = controllerRef.current;
+    if (draftId) {
+      const store = await getStore();
+      await store.discardDraft(draftId);
+      await refreshDrafts();
+      return;
+    }
+
+    if (ctrl && sessionState.phase === 'active') {
+      await ctrl.discard();
+      setIsMinimized(false);
+      stopRestTimer();
+      await refreshDrafts();
+    } else if (availableDrafts.length > 0) {
+      const store = await getStore();
+      await store.discardDraft(availableDrafts[0].workout.id);
+      await refreshDrafts();
+    }
+  };
+
+  const cancelWorkout = () => {
+    discardDraft().catch(console.error);
+  };
+
+  const finishWorkout = async (): Promise<Workout | null> => {
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) {
+      return null;
+    }
+
+    try {
+      const finished = await ctrl.finish();
+      setIsMinimized(false);
+      stopRestTimer();
+      await refreshDrafts();
+      return finished;
+    } catch (e: any) {
+      console.error('Failed to finish workout:', e);
+      notify({
+        title: 'Save Error',
+        message: 'Failed to save workout. Please try again.',
+      });
+      return null;
     }
   };
 
   const addExerciseToWorkout = async (exercise: Exercise) => {
-    if (!activeWorkout) return;
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
 
-    const prevSets = await getPreviousSetsForExercise(exercise.id);
-    const sets: WorkoutSet[] = [];
+    const occurrenceIndex = sessionState.workout.exercises.filter(
+      (e) => e.exerciseId === exercise.id
+    ).length;
+    const activeExId = `ae-${sessionState.workout.id}-${exercise.id}-occ${occurrenceIndex}-${Crypto.randomUUID().slice(0, 6)}`;
+    const prevSets = await getPreviousSetsForExercise(exercise.id, occurrenceIndex);
+    const initialSets: WorkoutSet[] = [];
+    const count = 3;
 
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= count; i++) {
       const ghost = prevSets[i - 1];
-      sets.push({
-        id: `set-${exercise.id}-${i}-${Date.now()}`,
+      const defaultReps = initialReps('10', i - 1, ghost?.reps);
+      const suggestedWeight = ghost ? ghost.weightKg : 0;
+      initialSets.push({
+        id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
         setNumber: i,
         type: 'normal',
-        weightKg: ghost ? ghost.weightKg : 0,
-        reps: ghost ? ghost.reps : 10,
+        weightKg: suggestedWeight,
+        reps: defaultReps,
+        targetReps: '10',
+        rpe: 8,
         isCompleted: false,
         previousWeightKg: ghost ? ghost.weightKg : undefined,
         previousReps: ghost ? ghost.reps : undefined,
       });
     }
 
-    const newActiveExercise: ActiveExercise = {
-      id: `ae-${activeWorkout.id}-${exercise.id}-${Date.now()}`,
+    const newExercise: ActiveExercise = {
+      id: activeExId,
       exerciseId: exercise.id,
       exercise,
-      sets,
-      restTimerSeconds: 0,
+      sets: initialSets,
+      notes: '',
+      targetReps: '10',
+      restTimerSeconds: 90,
     };
 
-    setActiveWorkout(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        exercises: [...prev.exercises, newActiveExercise],
-      };
-    });
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: [...sessionState.workout.exercises, newExercise],
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
   const removeExerciseFromWorkout = (activeExerciseId: string) => {
-    setActiveWorkout(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        exercises: prev.exercises.filter(e => e.id !== activeExerciseId),
-      };
-    });
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
+
+    const updatedExercises = sessionState.workout.exercises.filter((e) => e.id !== activeExerciseId);
+    const totalVol = calculateTotalVolume(updatedExercises);
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: totalVol,
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
   const addSet = (activeExerciseId: string, setType: SetType = 'normal') => {
-    setActiveWorkout(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        exercises: prev.exercises.map(e => {
-          if (e.id !== activeExerciseId) return e;
-          const nextSetNumber = e.sets.length + 1;
-          const lastSet = e.sets[e.sets.length - 1];
-          const newSet: WorkoutSet = {
-            id: `set-${e.exerciseId}-${nextSetNumber}-${Date.now()}`,
-            setNumber: nextSetNumber,
-            type: setType,
-            weightKg: lastSet ? lastSet.weightKg : 0,
-            reps: lastSet ? lastSet.reps : 10,
-            isCompleted: false,
-            previousWeightKg: lastSet?.previousWeightKg,
-            previousReps: lastSet?.previousReps,
-          };
-          return { ...e, sets: [...e.sets, newSet] };
-        }),
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
+
+    const updatedExercises = sessionState.workout.exercises.map((ex) => {
+      if (ex.id !== activeExerciseId) return ex;
+      const nextNum = ex.sets.length + 1;
+      const lastSet = ex.sets[ex.sets.length - 1];
+      const ghostReps = lastSet?.previousReps;
+      const reps = initialReps(ex.targetReps, nextNum - 1, lastSet ? lastSet.reps : ghostReps);
+      const weightKg = lastSet ? lastSet.weightKg : 0;
+      const newSet: WorkoutSet = {
+        id: `set-${ex.id}-${nextNum}-${Crypto.randomUUID().slice(0, 6)}`,
+        setNumber: nextNum,
+        type: setType,
+        weightKg,
+        reps,
+        targetReps: ex.targetReps,
+        rpe: 8,
+        isCompleted: false,
+        previousWeightKg: lastSet?.previousWeightKg,
+        previousReps: lastSet?.previousReps,
       };
+      return { ...ex, sets: [...ex.sets, newSet] };
     });
+
+    const totalVol = calculateTotalVolume(updatedExercises);
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: totalVol,
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
   const removeSet = (activeExerciseId: string, setId: string) => {
-    setActiveWorkout(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        exercises: prev.exercises.map(e => {
-          if (e.id !== activeExerciseId) return e;
-          const filtered = e.sets.filter(s => s.id !== setId);
-          // Renumber sets
-          const renumbered = filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
-          return { ...e, sets: renumbered };
-        }),
-      };
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
+
+    const updatedExercises = sessionState.workout.exercises.map((ex) => {
+      if (ex.id !== activeExerciseId) return ex;
+      const filtered = ex.sets.filter((s) => s.id !== setId);
+      const renumbered = filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+      return { ...ex, sets: renumbered };
     });
+
+    const totalVol = calculateTotalVolume(updatedExercises);
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: totalVol,
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
   const updateSet = (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => {
-    setActiveWorkout(prev => {
-      if (!prev) return null;
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
+
+    const updatedExercises = sessionState.workout.exercises.map((ex) => {
+      if (ex.id !== activeExerciseId) return ex;
       return {
-        ...prev,
-        exercises: prev.exercises.map(e => {
-          if (e.id !== activeExerciseId) return e;
-          return {
-            ...e,
-            sets: e.sets.map(s => (s.id === setId ? { ...s, ...updates } : s)),
-          };
-        }),
+        ...ex,
+        sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...updates } : s)),
       };
     });
+
+    const totalVol = calculateTotalVolume(updatedExercises);
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: totalVol,
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
   const updateExerciseNotes = (activeExerciseId: string, notes: string) => {
-    setActiveWorkout(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        exercises: prev.exercises.map(e => (e.id === activeExerciseId ? { ...e, notes } : e)),
-      };
-    });
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
+
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: sessionState.workout.exercises.map((ex) =>
+        ex.id === activeExerciseId ? { ...ex, notes } : ex
+      ),
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
   const updateExerciseRestTimer = (activeExerciseId: string, seconds: number) => {
-    setActiveWorkout(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        exercises: prev.exercises.map(e => (e.id === activeExerciseId ? { ...e, restTimerSeconds: seconds } : e)),
-      };
-    });
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
+
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: sessionState.workout.exercises.map((ex) =>
+        ex.id === activeExerciseId ? { ...ex, restTimerSeconds: seconds } : ex
+      ),
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
-    const currentExercise = activeWorkout?.exercises.find(e => e.id === activeExerciseId);
-    if (!currentExercise) return;
+    const ctrl = controllerRef.current;
+    if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
 
-    const currentSet = currentExercise.sets.find(s => s.id === setId);
-    if (!currentSet) return;
+    const targetEx = sessionState.workout.exercises.find((e) => e.id === activeExerciseId);
+    const targetSet = targetEx?.sets.find((s) => s.id === setId);
+    if (!targetSet) return;
 
-    const willBeCompleted = !currentSet.isCompleted;
-
-    if (willBeCompleted) {
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      if ((currentExercise.restTimerSeconds ?? 0) > 0) {
-        startRestTimer(currentExercise.restTimerSeconds);
+    if (!targetSet.isCompleted) {
+      const validationError = validateCompletedSet(targetSet);
+      if (validationError) {
+        notify({
+          title: 'Invalid Set',
+          message: validationError,
+        });
+        return;
       }
     }
 
-    const prevSetInSession = currentExercise.sets.length > 0
-      ? (() => {
-          const idx = currentExercise.sets.findIndex(s => s.id === setId);
-          return idx > 0 ? currentExercise.sets[idx - 1] : null;
-        })()
-      : null;
+    let targetRestSeconds: number | null = null;
+    let justCompleted = false;
 
-    const finalWeight =
-      currentSet.weightKg > 0
-        ? currentSet.weightKg
-        : (prevSetInSession?.weightKg || currentSet.previousWeightKg || 20);
-
-    const finalReps =
-      currentSet.reps > 0
-        ? currentSet.reps
-        : (prevSetInSession?.reps || currentSet.previousReps || 10);
-
-    setActiveWorkout(prev => {
-      if (!prev) return null;
+    const updatedExercises = sessionState.workout.exercises.map((ex) => {
+      if (ex.id !== activeExerciseId) return ex;
       return {
-        ...prev,
-        exercises: prev.exercises.map(e => {
-          if (e.id !== activeExerciseId) return e;
+        ...ex,
+        sets: ex.sets.map((s) => {
+          if (s.id !== setId) return s;
+          const nextCompleted = !s.isCompleted;
+          if (nextCompleted) {
+            justCompleted = true;
+            targetRestSeconds = ex.restTimerSeconds || 90;
+          }
           return {
-            ...e,
-            sets: e.sets.map(s => {
-              if (s.id !== setId) return s;
-              return {
-                ...s,
-                weightKg: willBeCompleted ? finalWeight : s.weightKg,
-                reps: willBeCompleted ? finalReps : s.reps,
-                isCompleted: willBeCompleted,
-                completedAt: willBeCompleted ? new Date().toISOString() : undefined,
-              };
-            }),
+            ...s,
+            isCompleted: nextCompleted,
+            completedAt: nextCompleted ? new Date().toISOString() : undefined,
           };
         }),
       };
     });
-  };
 
-  const finishWorkout = async (): Promise<Workout | null> => {
-    if (!activeWorkout) return null;
+    const totalVol = calculateTotalVolume(updatedExercises);
+    const updated: Workout = {
+      ...sessionState.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: totalVol,
+    };
 
-    try {
-      // Calculate total lifted volume (sum of weight * reps for completed sets)
-      let totalVolume = 0;
-      for (const e of activeWorkout.exercises) {
-        for (const s of e.sets) {
-          if (s.isCompleted) {
-            totalVolume += s.weightKg * s.reps;
-          }
-        }
-      }
-
-      const finished: Workout = {
-        ...activeWorkout,
-        durationSeconds: startTimeRef.current
-          ? Math.floor((Date.now() - new Date(startTimeRef.current).getTime()) / 1000)
-          : elapsedSeconds,
-        totalVolumeKg: Math.round(totalVolume),
-        endTime: new Date().toISOString(),
-      };
-
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      await saveCompletedWorkout(finished);
-      setDraftAvailable(null);
-
+    let timerMeta: { endsAt: number; totalSeconds: number } | null = null;
+    if (justCompleted && targetRestSeconds) {
       if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
-
-      setActiveWorkout(null);
-      setIsMinimized(false);
-      stopRestTimer();
-      return finished;
-    } catch (e) {
-      Alert.alert('Error', 'Failed to save workout. Your data may not have been saved.');
-      return null;
+      startRestTimer(targetRestSeconds);
+      timerMeta = { endsAt: Date.now() + targetRestSeconds * 1000, totalSeconds: targetRestSeconds };
+    } else {
+      timerMeta = restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null;
     }
+
+    ctrl.update(updated, timerMeta);
+    // Flush immediately on completed-set changes as required by spec
+    ctrl.flush().catch(console.error);
   };
 
-  const cancelWorkout = () => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    if (activeWorkout) {
-      discardWorkoutDraft(activeWorkout.id).catch(console.error);
-    }
-    setActiveWorkout(null);
-    setIsMinimized(false);
-    stopRestTimer();
+  const calculateTotalVolume = (exercises: ActiveExercise[]): number => {
+    return exercises.reduce((sum, ex) => {
+      return (
+        sum +
+        ex.sets
+          .filter((s) => s.isCompleted)
+          .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0)
+      );
+    }, 0);
   };
 
   return (
     <WorkoutContext.Provider
       value={{
-        activeWorkout,
-        isWorkingOut: activeWorkout !== null,
+        activeWorkout: sessionState.workout,
+        isWorkingOut: sessionState.phase === 'active' && sessionState.workout !== null,
         isMinimized,
         elapsedSeconds,
         restTimer,
-        draftAvailable,
+        draftAvailable: availableDrafts.length > 0 ? availableDrafts[0].workout : null,
+        availableDrafts,
+        isDraftModalOpen,
+        openDraftModal: () => setIsDraftModalOpen(true),
+        closeDraftModal: () => setIsDraftModalOpen(false),
         resumeDraft,
         discardDraft,
         startWorkout,

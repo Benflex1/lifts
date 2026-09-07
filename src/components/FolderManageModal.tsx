@@ -5,11 +5,11 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   TextInput,
 } from 'react-native';
 import { X, Edit2, Trash2, Check } from 'lucide-react-native';
 import { renameFolder, deleteFolder } from '../database/db';
+import { useDialog } from '../context/DialogContext';
 
 interface Props {
   visible: boolean;
@@ -24,6 +24,7 @@ export const FolderManageModal: React.FC<Props> = ({
   onClose,
   onFoldersChanged,
 }) => {
+  const { confirm, notify } = useDialog();
   const [editingFolder, setEditingFolder] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
 
@@ -36,32 +37,27 @@ export const FolderManageModal: React.FC<Props> = ({
       await renameFolder(oldName, newName.trim());
       onFoldersChanged();
     } catch (e) {
-      Alert.alert('Error', 'Failed to rename folder.');
+      await notify({ title: 'Error', message: 'Failed to rename folder.' });
     }
     setEditingFolder(null);
     setNewName('');
   };
 
-  const handleDelete = (name: string) => {
-    Alert.alert(
-      'Delete Folder',
-      `Delete "${name}"? Routines will move to "No folder".`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteFolder(name);
-              onFoldersChanged();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete folder.');
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = async (name: string) => {
+    const shouldDelete = await confirm({
+      title: 'Delete Folder',
+      message: `Delete "${name}"? Routines will move to "No folder".`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!shouldDelete) return;
+
+    try {
+      await deleteFolder(name);
+      onFoldersChanged();
+    } catch (e) {
+      await notify({ title: 'Error', message: 'Failed to delete folder.' });
+    }
   };
 
   return (
