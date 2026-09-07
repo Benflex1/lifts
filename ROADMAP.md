@@ -1,4 +1,4 @@
-# Lifts — Product Roadmap & Lyfta Comparison
+# Lifts — Product Roadmap
 
 > **The 100% Free & Open-Source Gym Workout Tracker.**  
 > *Zero paywalls. Unlimited workouts, routines, folders, and analytics. Forever.*
@@ -7,15 +7,15 @@
 
 ## 🎯 Vision & Core Philosophy
 
-1. **No Paywalls Ever**: Lyfta restricts free users to 4 custom workouts and locks analytics behind a monthly subscription. **Lifts** will always provide unlimited routines, folders, history, 1RM analytics, and plate calculations completely free.
+1. **No Paywalls Ever**: Most proprietary gym trackers restrict free users to 3–4 custom workouts and lock analytics behind monthly subscriptions. **Lifts** will always provide unlimited routines, folders, history, 1RM analytics, and plate calculations completely free.
 2. **Local-First & Offline**: Gyms frequently have poor cellular reception in basements. All workout data, routine templates, and exercise instructions live locally on the device via native SQLite.
 3. **Gym-Floor Ergonomics**: High-contrast dark theme, large touch targets (minimum 44×44 pt), haptic feedback, 1-tap straight-set auto-filling, and non-blocking background rest timers.
 
 ---
 
-## 🔍 Feature & UI/UX Comparison: Lyfta vs. Lifts
+## 🔍 Feature Breakdown: Proprietary Trackers vs. Lifts
 
-| Feature | Lyfta (Proprietary / Freemium) | Lifts (Open Source / Free) | Current Status & Planned Enhancement |
+| Feature | Proprietary Trackers (Freemium) | Lifts (Open Source / Free) | Current Status & Planned Enhancement |
 | :--- | :--- | :--- | :--- |
 | **Workout Creation Limit** | 🔒 Capped at 4 routines on free tier | 🔓 **Unlimited routines & folders** | ✅ Completed |
 | **Active Session Minimization** | Minimizes to bottom bar while browsing | ✅ **Spotify-style floating mini-bar** | ✅ Completed with Android BackHandler support |

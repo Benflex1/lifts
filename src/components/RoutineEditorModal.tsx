@@ -645,7 +645,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   </View>
                 </View>
 
-                {/* Rest Timer Row with Lyfta Wheel Trigger */}
+                {/* Rest Timer Row with Precision Wheel Trigger */}
                 <View style={styles.configRow}>
                   <Text style={styles.configLabel}>REST TIMER</Text>
                   <TouchableOpacity
