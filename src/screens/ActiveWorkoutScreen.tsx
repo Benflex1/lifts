@@ -26,11 +26,14 @@ import {
 } from 'lucide-react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
+import { useSettings } from '../context/SettingsContext';
+import { kgToDisplay } from '../utils/units';
 import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
+import { WeightInput } from '../components/WeightInput';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
@@ -51,6 +54,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     finishWorkout,
     cancelWorkout,
   } = useWorkout();
+  const { unit } = useSettings();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
@@ -301,19 +305,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
 
                     {/* Weight Input */}
                     <View style={styles.inputWrap}>
-                      <TextInput
-                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
-                        keyboardType="decimal-pad"
-                        value={set.weightKg > 0 ? set.weightKg.toString() : ''}
+                      <WeightInput
+                        value={set.weightKg}
+                        onCommit={(w) => updateSet(activeEx.id, set.id, { weightKg: w })}
                         placeholder={
-                          set.previousWeightKg ? set.previousWeightKg.toString() : '0'
+                          set.previousWeightKg
+                            ? kgToDisplay(set.previousWeightKg, unit).toString()
+                            : '0'
                         }
-                        placeholderTextColor="#6B7280"
-                        selectTextOnFocus={true}
-                        onChangeText={txt => {
-                          const val = parseFloat(txt) || 0;
-                          updateSet(activeEx.id, set.id, { weightKg: val });
-                        }}
+                        completed={set.isCompleted}
+                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
                       />
                     </View>
 

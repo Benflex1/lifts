@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -26,6 +26,13 @@ export const PlateCalculatorModal: React.FC<Props> = ({
 }) => {
   const [targetWeight, setTargetWeight] = useState(initialWeight.toString());
   const [barWeight, setBarWeight] = useState(20);
+
+  useEffect(() => {
+    if (visible) {
+      setTargetWeight(initialWeight.toString());
+      setBarWeight(20);
+    }
+  }, [visible, initialWeight]);
 
   const numWeight = parseFloat(targetWeight) || 0;
   const calc = calculatePlates(numWeight, barWeight);
