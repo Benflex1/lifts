@@ -11,16 +11,19 @@ import {
 } from 'react-native';
 import {
   Clock,
-  Flame,
   Check,
   Plus,
   Trash2,
   Calculator,
   X,
-  Award,
   ChevronDown,
+  ChevronUp,
+  ChevronLeft,
   FileText,
   Timer,
+  MoreVertical,
+  Dumbbell,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
@@ -34,6 +37,8 @@ import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { WeightInput } from '../components/WeightInput';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 import { useDialog } from '../context/DialogContext';
+
+const RPE_CHIPS: (number | null)[] = [null, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -54,6 +59,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     cancelWorkout,
   } = useWorkout();
   const { unit } = useSettings();
+  const { confirm, notify } = useDialog();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
@@ -63,8 +69,60 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     setId: string;
   } | null>(null);
 
-  const { confirm, notify } = useDialog();
   const [isFinishing, setIsFinishing] = useState(false);
+  const [showWorkoutMenu, setShowWorkoutMenu] = useState(false);
+  const [menuActiveExercise, setMenuActiveExercise] = useState<ActiveExercise | null>(null);
+  const [showRpeColumn, setShowRpeColumn] = useState(false);
+  const [editingNoteExId, setEditingNoteExId] = useState<string | null>(null);
+
+  // Set Options / Fast 1-Tap RPE Modal
+  const [setOptionsModal, setSetOptionsModal] = useState<{
+    activeExerciseId: string;
+    exerciseName: string;
+    set: WorkoutSet;
+  } | null>(null);
+
+  // Accordion state: which exercises are expanded
+  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
+
+  // Initialize accordion state on load: first incomplete exercise is expanded, others collapsed
+  useEffect(() => {
+    if (!activeWorkout || activeWorkout.exercises.length === 0) return;
+
+    setExpandedExercises((prev) => {
+      // If already initialized, preserve existing toggles
+      if (Object.keys(prev).length > 0) {
+        // Ensure any newly added exercises are expanded
+        const next = { ...prev };
+        let hasMissing = false;
+        for (const ex of activeWorkout.exercises) {
+          if (next[ex.id] === undefined) {
+            next[ex.id] = true;
+            hasMissing = true;
+          }
+        }
+        return hasMissing ? next : prev;
+      }
+
+      // Initial layout: expand first exercise (or first incomplete exercise)
+      const initial: Record<string, boolean> = {};
+      let firstIncompleteFound = false;
+
+      activeWorkout.exercises.forEach((ex, idx) => {
+        const isComplete = ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted);
+        if (!firstIncompleteFound && !isComplete) {
+          initial[ex.id] = true;
+          firstIncompleteFound = true;
+        } else if (!firstIncompleteFound && idx === 0) {
+          initial[ex.id] = true;
+        } else {
+          initial[ex.id] = false;
+        }
+      });
+
+      return initial;
+    });
+  }, [activeWorkout?.exercises.length]);
 
   // Handle hardware back press on Android to minimize instead of exiting
   useEffect(() => {
@@ -94,6 +152,31 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       }
     }
   }
+
+  const toggleExerciseExpanded = (id: string) => {
+    setExpandedExercises((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const expandAll = () => {
+    const all: Record<string, boolean> = {};
+    activeWorkout.exercises.forEach((e) => {
+      all[e.id] = true;
+    });
+    setExpandedExercises(all);
+    setShowWorkoutMenu(false);
+  };
+
+  const collapseAll = () => {
+    const all: Record<string, boolean> = {};
+    activeWorkout.exercises.forEach((e) => {
+      all[e.id] = false;
+    });
+    setExpandedExercises(all);
+    setShowWorkoutMenu(false);
+  };
 
   const handleFinish = async () => {
     if (isFinishing) return;
@@ -129,7 +212,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     }
   };
 
-  const handleCancel = async () => {
+  const handleDiscard = async () => {
+    setShowWorkoutMenu(false);
     if (isFinishing) return;
     const shouldDiscard = await confirm({
       title: 'Discard Workout?',
@@ -143,61 +227,66 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     }
   };
 
-  const cycleSetType = (activeExerciseId: string, set: WorkoutSet) => {
-    const types: SetType[] = ['normal', 'warmup', 'drop', 'failure'];
-    const nextIdx = (types.indexOf(set.type) + 1) % types.length;
-    updateSet(activeExerciseId, set.id, { type: types[nextIdx] });
-  };
-
   const getSetBadgeStyle = (type: SetType) => {
     switch (type) {
       case 'warmup':
-        return { bg: '#372B10', text: '#F59E0B', label: 'W' };
+        return { bg: '#372B10', border: '#78350F', text: '#F59E0B', label: 'W' };
       case 'drop':
-        return { bg: '#291845', text: '#A855F7', label: 'D' };
+        return { bg: '#291845', border: '#581C87', text: '#C084FC', label: 'D' };
       case 'failure':
-        return { bg: '#3B1219', text: '#EF4444', label: 'F' };
+        return { bg: '#3B1219', border: '#7F1D1D', text: '#EF4444', label: 'F' };
       default:
-        return { bg: '#20242E', text: '#9CA3AF', label: '' };
+        return { bg: '#20242E', border: '#2D3342', text: '#38BDF8', label: '' };
     }
   };
 
-  const RPE_OPTIONS: (number | null)[] = [null, 5, 6, 7, 8, 9, 10];
+  // Open the instant Set Options / 1-Tap RPE modal
+  const openSetOptions = (activeExerciseId: string, exerciseName: string, set: WorkoutSet) => {
+    setSetOptionsModal({
+      activeExerciseId,
+      exerciseName,
+      set,
+    });
+  };
 
-  const cycleRpe = (activeExerciseId: string, set: WorkoutSet) => {
-    const currentIdx = RPE_OPTIONS.indexOf(set.rpe ?? null);
-    const nextIdx = (currentIdx + 1) % RPE_OPTIONS.length;
-    updateSet(activeExerciseId, set.id, { rpe: RPE_OPTIONS[nextIdx] ?? undefined });
+  const handleSelectSetType = (type: SetType) => {
+    if (!setOptionsModal) return;
+    updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, { type });
+    setSetOptionsModal((prev) => (prev ? { ...prev, set: { ...prev.set, type } } : null));
+  };
+
+  const handleSelectRpe = (rpe: number | null) => {
+    if (!setOptionsModal) return;
+    const updatedRpe = rpe ?? undefined;
+    updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, { rpe: updatedRpe });
+    setSetOptionsModal((prev) => (prev ? { ...prev, set: { ...prev.set, rpe: updatedRpe } } : null));
   };
 
   return (
     <View style={styles.screenContainer}>
-      {/* Top App Bar */}
+      {/* Top App Bar - Lyfta Inspired */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={minimizeWorkout} style={styles.minimizeBtn}>
-          <ChevronDown size={20} color="#FFFFFF" />
-          <Text style={styles.minimizeBtnText}>Back</Text>
+        <TouchableOpacity
+          onPress={minimizeWorkout}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Minimize workout"
+          accessibilityRole="button"
+        >
+          <ChevronLeft size={24} color="#38BDF8" />
         </TouchableOpacity>
 
+        {/* Centered Timer */}
         <View style={styles.timerWrap}>
-          <Clock size={15} color="#10B981" />
+          <Clock size={16} color="#38BDF8" />
           <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
         </View>
 
-        <View style={styles.topRightActions}>
-          <TouchableOpacity
-            onPress={handleCancel}
-            style={[styles.discardBtn, isFinishing && { opacity: 0.5 }]}
-            disabled={isFinishing}
-            accessibilityRole="button"
-            accessibilityLabel="Discard workout"
-            accessibilityState={{ disabled: isFinishing }}
-          >
-            <Text style={styles.discardBtnText}>Discard</Text>
-          </TouchableOpacity>
+        {/* Top Right Actions */}
+        <View style={styles.topRightWrap}>
           <TouchableOpacity
             onPress={handleFinish}
-            style={[styles.finishBtn, isFinishing && { opacity: 0.5 }]}
+            style={[styles.finishBtn, isFinishing && styles.btnDisabled]}
             disabled={isFinishing}
             accessibilityRole="button"
             accessibilityLabel="Finish workout"
@@ -205,48 +294,123 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           >
             <Text style={styles.finishBtnText}>{isFinishing ? 'Saving...' : 'Finish'}</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setShowWorkoutMenu(true)}
+            style={styles.moreBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+            accessibilityLabel="Workout menu"
+            accessibilityRole="button"
+          >
+            <MoreVertical size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Metrics Strip */}
-      <View style={styles.metricsStrip}>
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>WORKOUT</Text>
-          <Text style={styles.metricTitle} numberOfLines={1}>
-            {activeWorkout.name}
-          </Text>
-        </View>
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>VOLUME</Text>
-          <Text style={styles.metricValue}>{formatWeight(liveVolume, unit)}</Text>
-        </View>
-        <View style={styles.metricItem}>
-          <Text style={styles.metricLabel}>SETS</Text>
-          <Text style={styles.metricValue}>
-            {completedSetsCount} / {totalSetsCount}
-          </Text>
+      {/* Top Metrics Card - Lyfta Screenshot 2 Style */}
+      <View style={styles.metricsContainer}>
+        <View style={styles.metricsCard}>
+          <View style={styles.metricColumn}>
+            <Text style={styles.metricColLabel}>DURATION</Text>
+            <Text style={[styles.metricColValue, { color: '#38BDF8' }]}>
+              {formatTimer(elapsedSeconds)}
+            </Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricColumn}>
+            <Text style={styles.metricColLabel}>VOLUME</Text>
+            <Text style={styles.metricColValue}>{formatWeight(liveVolume, unit)}</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricColumn}>
+            <Text style={styles.metricColLabel}>SETS</Text>
+            <Text style={styles.metricColValue}>
+              {completedSetsCount} / {totalSetsCount}
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* Exercise Cards Stream */}
+      {/* Exercises Stream */}
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {activeWorkout.exercises.map(activeEx => {
+        {activeWorkout.exercises.map((activeEx) => {
+          const isExpanded = expandedExercises[activeEx.id] ?? false;
+          const completedCount = activeEx.sets.filter((s) => s.isCompleted).length;
+          const totalCount = activeEx.sets.length;
+          const isAllCompleted = totalCount > 0 && completedCount === totalCount;
+
+          if (!isExpanded) {
+            // Collapsed Accordion Row - Lyfta Screenshot 1
+            return (
+              <TouchableOpacity
+                key={activeEx.id}
+                style={styles.collapsedCard}
+                onPress={() => toggleExerciseExpanded(activeEx.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.exerciseAvatar}>
+                  <Dumbbell size={20} color="#38BDF8" />
+                </View>
+
+                <View style={styles.collapsedContent}>
+                  <Text style={styles.collapsedTitle} numberOfLines={1}>
+                    {activeEx.exercise?.name || 'Exercise'}
+                  </Text>
+                  <View style={styles.collapsedMetaRow}>
+                    <Text
+                      style={[
+                        styles.collapsedSubtitle,
+                        isAllCompleted && styles.completedSubtitleText,
+                      ]}
+                    >
+                      {completedCount}/{totalCount} done
+                    </Text>
+                    {isAllCompleted && (
+                      <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.collapsedActions}>
+                  <TouchableOpacity
+                    style={styles.iconBtn}
+                    onPress={() => setMenuActiveExercise(activeEx)}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <MoreVertical size={18} color="#9CA3AF" />
+                  </TouchableOpacity>
+                  <ChevronDown size={18} color="#6B7280" />
+                </View>
+              </TouchableOpacity>
+            );
+          }
+
+          // Expanded Full Exercise Card
           return (
             <View key={activeEx.id} style={styles.exerciseCard}>
               {/* Exercise Header */}
               <View style={styles.cardHeader}>
+                <View style={styles.exerciseAvatar}>
+                  <Dumbbell size={20} color="#38BDF8" />
+                </View>
+
                 <View style={styles.exerciseTitleGroup}>
                   <Text style={styles.exerciseName}>{activeEx.exercise?.name || 'Exercise'}</Text>
                   <View style={styles.badgeRow}>
                     <Text style={styles.muscleBadge}>
-                      {(Array.isArray(activeEx.exercise?.primaryMuscles) ? activeEx.exercise.primaryMuscles : []).join(', ')}
+                      {(Array.isArray(activeEx.exercise?.primaryMuscles)
+                        ? activeEx.exercise.primaryMuscles
+                        : []
+                      ).join(', ')}
                     </Text>
-                    <Text style={styles.equipmentBadge}>{activeEx.exercise?.equipment || ''}</Text>
+                    {activeEx.exercise?.equipment ? (
+                      <Text style={styles.equipmentBadge}>{activeEx.exercise.equipment}</Text>
+                    ) : null}
                     {activeEx.targetReps ? (
                       <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
                     ) : null}
@@ -255,62 +419,73 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
                 <View style={styles.headerActions}>
                   <TouchableOpacity
-                    style={styles.iconAction}
-                    onPress={() => setRestWheelActiveExercise(activeEx)}
+                    style={styles.iconBtn}
+                    onPress={() => setMenuActiveExercise(activeEx)}
                     hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
-                    <Timer size={18} color="#10B981" />
+                    <MoreVertical size={18} color="#9CA3AF" />
                   </TouchableOpacity>
-
                   <TouchableOpacity
-                    style={styles.iconAction}
-                    onPress={() => {
-                      const firstSet = activeEx.sets[0];
-                      setPlateCalcWeight(firstSet?.weightKg || 60);
-                      setActiveSetForPlateCalc({
-                        exerciseId: activeEx.id,
-                        setId: firstSet?.id || '',
-                      });
-                    }}
+                    style={styles.iconBtn}
+                    onPress={() => toggleExerciseExpanded(activeEx.id)}
                     hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
-                    <Calculator size={18} color="#9CA3AF" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.iconAction}
-                    onPress={() => removeExerciseFromWorkout(activeEx.id)}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  >
-                    <Trash2 size={18} color="#EF4444" />
+                    <ChevronUp size={18} color="#9CA3AF" />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Optional Exercise Note */}
-              <View style={styles.exerciseNoteRow}>
-                <FileText size={13} color="#9CA3AF" />
-                <TextInput
-                  style={styles.exerciseNoteInput}
-                  placeholder="Add note (e.g. seat pin 4, slow tempo)..."
-                  placeholderTextColor="#6B7280"
-                  value={activeEx.notes || ''}
-                  onChangeText={txt => updateExerciseNotes(activeEx.id, txt)}
-                />
-              </View>
+              {/* Note Row - Lyfta Style */}
+              {editingNoteExId === activeEx.id || (activeEx.notes && activeEx.notes.length > 0) ? (
+                <View style={styles.exerciseNoteRow}>
+                  <FileText size={13} color="#9CA3AF" />
+                  <TextInput
+                    style={styles.exerciseNoteInput}
+                    placeholder="Add note (e.g. seat pin 4, slow tempo)..."
+                    placeholderTextColor="#6B7280"
+                    value={activeEx.notes || ''}
+                    onChangeText={(txt) => updateExerciseNotes(activeEx.id, txt)}
+                    autoFocus={editingNoteExId === activeEx.id && (!activeEx.notes || activeEx.notes.length === 0)}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addNotePrompt}
+                  onPress={() => setEditingNoteExId(activeEx.id)}
+                >
+                  <FileText size={13} color="#6B7280" />
+                  <Text style={styles.addNotePromptText}>Add note...</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Rest Timer Row - Lyfta Style */}
+              <TouchableOpacity
+                style={styles.restTimerRow}
+                onPress={() => setRestWheelActiveExercise(activeEx)}
+              >
+                <Timer size={14} color="#38BDF8" />
+                <Text style={styles.restTimerRowText}>
+                  Rest Timer:{' '}
+                  {activeEx.restTimerSeconds ? formatDuration(activeEx.restTimerSeconds) : 'Off'}
+                </Text>
+              </TouchableOpacity>
 
               {/* Table Column Labels */}
               <View style={styles.tableHeader}>
-                <Text style={[styles.colHeader, { width: 42, textAlign: 'center' }]}>SET</Text>
-                <Text style={[styles.colHeader, { flex: 1, paddingLeft: 6 }]}>PREVIOUS</Text>
-                <Text style={[styles.colHeader, { width: 84, textAlign: 'center' }]}>{unit.toUpperCase()}</Text>
-                <Text style={[styles.colHeader, { width: 72, textAlign: 'center' }]}>REPS</Text>
-                <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>RPE</Text>
-                <Text style={[styles.colHeader, { width: 48, textAlign: 'center' }]}>✓</Text>
+                <Text style={[styles.colHeader, { width: 38, textAlign: 'center' }]}>SET</Text>
+                <Text style={[styles.colHeader, { flex: 1, paddingLeft: 8 }]}>PREVIOUS</Text>
+                <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>
+                  {unit.toUpperCase()}
+                </Text>
+                <Text style={[styles.colHeader, { width: 70, textAlign: 'center' }]}>REPS</Text>
+                {showRpeColumn && (
+                  <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>RPE</Text>
+                )}
+                <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>✓</Text>
               </View>
 
               {/* Set Rows */}
-              {activeEx.sets.map(set => {
+              {activeEx.sets.map((set) => {
                 const badge = getSetBadgeStyle(set.type);
 
                 return (
@@ -318,10 +493,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     key={set.id}
                     style={[styles.setRow, set.isCompleted && styles.setRowCompleted]}
                   >
-                    {/* Set Type Toggle Badge */}
+                    {/* Set Number / Type Toggle Badge */}
                     <TouchableOpacity
-                      style={[styles.setBadge, { backgroundColor: badge.bg }]}
-                      onPress={() => cycleSetType(activeEx.id, set)}
+                      style={[
+                        styles.setBadge,
+                        { backgroundColor: badge.bg, borderColor: badge.border },
+                      ]}
+                      onPress={() =>
+                        openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
+                      }
                       hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     >
                       <Text style={[styles.setBadgeText, { color: badge.text }]}>
@@ -329,7 +509,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Previous Ghost Comparison */}
+                    {/* Previous Performance Comparison */}
                     <View style={styles.previousCell}>
                       {set.previousWeightKg !== undefined ? (
                         <Text style={styles.previousText}>
@@ -341,7 +521,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     </View>
 
                     {/* Weight Input */}
-                    <View style={styles.inputWrap}>
+                    <View style={styles.inputWrapWeight}>
                       <WeightInput
                         value={set.weightKg}
                         onCommit={(w) => updateSet(activeEx.id, set.id, { weightKg: w })}
@@ -361,10 +541,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                         style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
                         keyboardType="number-pad"
                         value={set.reps.toString()}
-                        placeholder={set.previousReps ? set.previousReps.toString() : '10'}
+                        placeholder={
+                          activeEx.targetReps || (set.previousReps ? set.previousReps.toString() : '10')
+                        }
                         placeholderTextColor="#6B7280"
                         selectTextOnFocus={true}
-                        onChangeText={txt => {
+                        onChangeText={(txt) => {
                           const cleaned = txt.trim();
                           const val = cleaned === '' ? 0 : parseInt(cleaned, 10);
                           if (!isNaN(val)) {
@@ -372,18 +554,33 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                           }
                         }}
                       />
+                      {/* Compact RPE badge if defined and inline column is hidden */}
+                      {!showRpeColumn && set.rpe != null && (
+                        <TouchableOpacity
+                          style={styles.compactRpeBadge}
+                          onPress={() =>
+                            openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
+                          }
+                        >
+                          <Text style={styles.compactRpeText}>@{set.rpe}</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
 
-                    {/* RPE Cycle Badge */}
-                    <TouchableOpacity
-                      style={styles.rpeBadge}
-                      onPress={() => cycleRpe(activeEx.id, set)}
-                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                    >
-                      <Text style={styles.rpeBadgeText}>
-                        {set.rpe != null ? set.rpe.toString() : '–'}
-                      </Text>
-                    </TouchableOpacity>
+                    {/* Optional Inline RPE Column */}
+                    {showRpeColumn && (
+                      <TouchableOpacity
+                        style={styles.rpeColCell}
+                        onPress={() =>
+                          openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
+                        }
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      >
+                        <Text style={styles.rpeColCellText}>
+                          {set.rpe != null ? set.rpe.toString() : '–'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
                     {/* Completion Checkbox */}
                     <TouchableOpacity
@@ -395,37 +592,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     >
                       <Check
-                        size={22}
+                        size={20}
                         color={set.isCompleted ? '#000000' : '#4B5563'}
-                        strokeWidth={3}
+                        strokeWidth={2.8}
                       />
                     </TouchableOpacity>
                   </View>
                 );
               })}
 
-              {/* Bottom of Card Actions */}
-              <View style={styles.cardFooter}>
-                <TouchableOpacity
-                  style={styles.addSetBtn}
-                  onPress={() => addSet(activeEx.id, 'normal')}
-                >
-                  <Plus size={16} color="#3B82F6" />
-                  <Text style={styles.addSetBtnText}>Add Set</Text>
-                </TouchableOpacity>
-
-                {activeEx.sets.length > 1 && (
-                  <TouchableOpacity
-                    style={styles.removeSetBtn}
-                    onPress={() => {
-                      const lastSet = activeEx.sets[activeEx.sets.length - 1];
-                      removeSet(activeEx.id, lastSet.id);
-                    }}
-                  >
-                    <Text style={styles.removeSetBtnText}>Delete Last Set</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              {/* Bottom of Card Actions - Wide Add Set Button (Lyfta Style) */}
+              <TouchableOpacity
+                style={styles.addSetBtnWide}
+                onPress={() => addSet(activeEx.id, 'normal')}
+              >
+                <Plus size={16} color="#FFFFFF" />
+                <Text style={styles.addSetBtnWideText}>Add Set</Text>
+              </TouchableOpacity>
             </View>
           );
         })}
@@ -440,7 +623,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Floating Rest Timer */}
+      {/* Floating Rest Timer Overlay */}
       <RestTimerOverlay />
 
       {/* Exercise Picker Modal */}
@@ -450,7 +633,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         onClose={() => setShowExercisePicker(false)}
         onSelectExercise={(ex: Exercise) => addExerciseToWorkout(ex)}
         onSelectMultiple={(exs: Exercise[]) => {
-          exs.forEach(ex => addExerciseToWorkout(ex));
+          exs.forEach((ex) => addExerciseToWorkout(ex));
         }}
       />
 
@@ -477,12 +660,304 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         initialSeconds={restWheelActiveExercise?.restTimerSeconds ?? 0}
         exerciseName={restWheelActiveExercise?.exercise?.name}
         onClose={() => setRestWheelActiveExercise(null)}
-        onSave={seconds => {
+        onSave={(seconds) => {
           if (restWheelActiveExercise) {
             updateExerciseRestTimer(restWheelActiveExercise.id, seconds);
           }
         }}
       />
+
+      {/* Set Options & Fast 1-Tap RPE Modal */}
+      <Modal
+        visible={setOptionsModal !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSetOptionsModal(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.setOptionsSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalHeaderTitle}>
+                  Set {setOptionsModal?.set.setNumber} Details
+                </Text>
+                <Text style={styles.modalHeaderSubtitle}>
+                  {setOptionsModal?.exerciseName}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSetOptionsModal(null)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Set Type Selector */}
+            <View style={styles.optionsSection}>
+              <Text style={styles.sectionLabel}>SET TYPE</Text>
+              <View style={styles.typeChipsRow}>
+                {(
+                  [
+                    { type: 'normal', label: 'Normal' },
+                    { type: 'warmup', label: 'Warmup (W)' },
+                    { type: 'drop', label: 'Drop (D)' },
+                    { type: 'failure', label: 'Failure (F)' },
+                  ] as const
+                ).map((t) => {
+                  const isSelected = setOptionsModal?.set.type === t.type;
+                  return (
+                    <TouchableOpacity
+                      key={t.type}
+                      style={[styles.typeChip, isSelected && styles.typeChipActive]}
+                      onPress={() => handleSelectSetType(t.type)}
+                    >
+                      <Text
+                        style={[styles.typeChipText, isSelected && styles.typeChipTextActive]}
+                      >
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Fast 1-Tap RPE / Effort Grid */}
+            <View style={styles.optionsSection}>
+              <View style={styles.rpeSectionHeader}>
+                <Text style={styles.sectionLabel}>RPE / EFFORT</Text>
+                <Text style={styles.rpeSublabel}>(1-tap selection)</Text>
+              </View>
+
+              <View style={styles.rpeChipsGrid}>
+                {RPE_CHIPS.map((val) => {
+                  const isSelected =
+                    val === null
+                      ? setOptionsModal?.set.rpe == null
+                      : setOptionsModal?.set.rpe === val;
+                  return (
+                    <TouchableOpacity
+                      key={val === null ? 'none' : val.toString()}
+                      style={[styles.rpeChip, isSelected && styles.rpeChipActive]}
+                      onPress={() => handleSelectRpe(val)}
+                    >
+                      <Text style={[styles.rpeChipText, isSelected && styles.rpeChipTextActive]}>
+                        {val === null ? 'None' : val.toString()}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* RPE Helper Legend */}
+              <View style={styles.rpeLegend}>
+                <Text style={styles.rpeLegendItem}>• RPE 10: Max Effort (0 RIR)</Text>
+                <Text style={styles.rpeLegendItem}>• RPE 9: 1 Rep in Reserve</Text>
+                <Text style={styles.rpeLegendItem}>• RPE 8: 2 Reps in Reserve</Text>
+                <Text style={styles.rpeLegendItem}>• RPE 7: 3 Reps in Reserve</Text>
+              </View>
+            </View>
+
+            {/* Quick Action Shortcuts */}
+            <View style={styles.setOptionsActions}>
+              <TouchableOpacity
+                style={styles.shortcutBtn}
+                onPress={() => {
+                  if (setOptionsModal) {
+                    setPlateCalcWeight(setOptionsModal.set.weightKg || 60);
+                    setActiveSetForPlateCalc({
+                      exerciseId: setOptionsModal.activeExerciseId,
+                      setId: setOptionsModal.set.id,
+                    });
+                    setSetOptionsModal(null);
+                  }
+                }}
+              >
+                <Calculator size={16} color="#38BDF8" />
+                <Text style={styles.shortcutBtnText}>Plate Calculator</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.shortcutDeleteBtn}
+                onPress={() => {
+                  if (setOptionsModal) {
+                    removeSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id);
+                    setSetOptionsModal(null);
+                  }
+                }}
+              >
+                <Trash2 size={16} color="#EF4444" />
+                <Text style={styles.shortcutDeleteText}>Delete Set</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.doneModalBtn}
+              onPress={() => setSetOptionsModal(null)}
+            >
+              <Text style={styles.doneModalBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Exercise Options Menu Modal */}
+      <Modal
+        visible={menuActiveExercise !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMenuActiveExercise(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setMenuActiveExercise(null)}
+        >
+          <View style={styles.sheetContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+                {menuActiveExercise?.exercise?.name}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setMenuActiveExercise(null)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  const ex = menuActiveExercise;
+                  setMenuActiveExercise(null);
+                  setRestWheelActiveExercise(ex);
+                }
+              }}
+            >
+              <Timer size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Set Rest Timer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  const firstSet = menuActiveExercise.sets[0];
+                  setPlateCalcWeight(firstSet?.weightKg || 60);
+                  setActiveSetForPlateCalc({
+                    exerciseId: menuActiveExercise.id,
+                    setId: firstSet?.id || '',
+                  });
+                  setMenuActiveExercise(null);
+                }
+              }}
+            >
+              <Calculator size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Plate Calculator</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  setEditingNoteExId(menuActiveExercise.id);
+                  setExpandedExercises((prev) => ({ ...prev, [menuActiveExercise.id]: true }));
+                  setMenuActiveExercise(null);
+                }
+              }}
+            >
+              <FileText size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Add / Edit Note</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemDestructive]}
+              onPress={async () => {
+                if (menuActiveExercise) {
+                  const targetId = menuActiveExercise.id;
+                  setMenuActiveExercise(null);
+                  const shouldRemove = await confirm({
+                    title: 'Remove Exercise?',
+                    message: 'Are you sure you want to remove this exercise from the workout?',
+                    confirmLabel: 'Remove',
+                    cancelLabel: 'Keep',
+                    destructive: true,
+                  });
+                  if (shouldRemove) {
+                    removeExerciseFromWorkout(targetId);
+                  }
+                }
+              }}
+            >
+              <Trash2 size={18} color="#EF4444" />
+              <Text style={styles.menuItemTextDestructive}>Remove Exercise</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Workout Options Menu Modal (Top Bar ⋮) */}
+      <Modal
+        visible={showWorkoutMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowWorkoutMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowWorkoutMenu(false)}
+        >
+          <View style={styles.sheetContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+                {activeWorkout.name}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowWorkoutMenu(false)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.menuItem} onPress={expandAll}>
+              <ChevronDown size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Expand All Exercises</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={collapseAll}>
+              <ChevronUp size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Collapse All Exercises</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowRpeColumn((prev) => !prev);
+                setShowWorkoutMenu(false);
+              }}
+            >
+              <Clock size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>
+                {showRpeColumn ? 'Hide RPE Column' : 'Show RPE Column'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemDestructive]}
+              onPress={handleDiscard}
+            >
+              <Trash2 size={18} color="#EF4444" />
+              <Text style={styles.menuItemTextDestructive}>Discard Workout</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -492,51 +967,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0D0E12',
   },
+  // Top App Bar
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 50,
-    paddingBottom: 14,
+    paddingBottom: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#181A20',
+    backgroundColor: '#14171F',
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: '#20242E',
   },
-  minimizeBtn: {
-    flexDirection: 'row',
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    gap: 2,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-  },
-  minimizeBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  topRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  discardBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  discardBtnText: {
-    color: '#EF4444',
-    fontSize: 13,
-    fontWeight: '600',
+    justifyContent: 'center',
+    backgroundColor: '#1E232E',
   },
   timerWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E232E',
+    backgroundColor: '#1A202C',
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#2D3748',
   },
   timerText: {
     color: '#FFFFFF',
@@ -544,83 +1004,160 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  topRightWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   finishBtn: {
-    backgroundColor: '#10B981',
-    paddingVertical: 6,
+    backgroundColor: '#2563EB',
+    paddingVertical: 7,
     paddingHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 18,
   },
   finishBtnText: {
-    color: '#000000',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  metricsStrip: {
-    flexDirection: 'row',
-    backgroundColor: '#13151B',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#20242E',
-  },
-  metricItem: {
-    flex: 1,
-  },
-  metricLabel: {
-    color: '#6B7280',
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  metricTitle: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  metricValue: {
-    color: '#3B82F6',
     fontSize: 14,
     fontWeight: '700',
   },
+  moreBtn: {
+    padding: 6,
+  },
+  btnDisabled: {
+    opacity: 0.5,
+  },
+
+  // Metrics Strip (Lyfta Screenshot 2)
+  metricsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  metricsCard: {
+    flexDirection: 'row',
+    backgroundColor: '#181A20',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+  },
+  metricColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  metricColLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginBottom: 3,
+  },
+  metricColValue: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  metricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#262A34',
+  },
+
+  // Scroll Content
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 120,
+    paddingBottom: 130,
   },
+
+  // Collapsed Card (Lyfta Screenshot 1)
+  collapsedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#181A20',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    padding: 12,
+    marginBottom: 10,
+  },
+  exerciseAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: '#20242E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2C3240',
+  },
+  collapsedContent: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  collapsedTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  collapsedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  collapsedSubtitle: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  completedSubtitleText: {
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  collapsedActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  // Expanded Exercise Card
   exerciseCard: {
     backgroundColor: '#181A20',
     borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#262A34',
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 10,
   },
   exerciseTitleGroup: {
     flex: 1,
-    marginRight: 8,
+    marginLeft: 12,
+    marginRight: 6,
   },
   exerciseName: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     marginBottom: 4,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
   },
   muscleBadge: {
-    color: '#3B82F6',
+    color: '#38BDF8',
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'capitalize',
@@ -633,8 +1170,8 @@ const styles = StyleSheet.create({
   targetBadge: {
     color: '#38BDF8',
     backgroundColor: '#0C4A6E',
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -642,45 +1179,75 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  iconAction: {
-    padding: 8,
+  iconBtn: {
+    padding: 6,
     borderRadius: 8,
-    backgroundColor: '#20242E',
   },
+
+  // Note Row (Lyfta style)
   exerciseNoteRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#13161F',
+    backgroundColor: '#14171F',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    marginBottom: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#222734',
   },
   exerciseNoteInput: {
     flex: 1,
     color: '#D1D5DB',
-    fontSize: 12,
+    fontSize: 13,
     padding: 0,
   },
+  addNotePrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  addNotePromptText: {
+    color: '#6B7280',
+    fontSize: 13,
+  },
+
+  // Rest Timer Row (Lyfta style)
+  restTimerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    marginBottom: 12,
+  },
+  restTimerRowText: {
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Table Header
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#2B3140',
-    marginBottom: 6,
+    borderBottomColor: '#262A34',
+    marginBottom: 8,
   },
   colHeader: {
-    color: '#9CA3AF',
-    fontSize: 12,
+    color: '#6B7280',
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
   },
+
+  // Set Rows
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -688,16 +1255,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   setRowCompleted: {
-    backgroundColor: '#142621',
+    backgroundColor: '#12241E',
   },
   setBadge: {
-    width: 38,
+    width: 36,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 6,
-    marginLeft: 2,
+    borderWidth: 1,
   },
   setBadgeText: {
     fontSize: 14,
@@ -705,108 +1272,111 @@ const styles = StyleSheet.create({
   },
   previousCell: {
     flex: 1,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
   },
   previousText: {
-    color: '#D1D5DB',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '500',
   },
   previousPlaceholder: {
     color: '#4B5563',
     fontSize: 14,
   },
-  inputWrap: {
-    width: 84,
+  inputWrapWeight: {
+    width: 78,
     paddingHorizontal: 3,
   },
   inputWrapReps: {
-    width: 72,
+    width: 70,
     paddingHorizontal: 3,
+    position: 'relative',
   },
   cellInput: {
-    backgroundColor: '#262A34',
-    borderRadius: 10,
-    height: 44,
+    backgroundColor: '#20242E',
+    borderRadius: 8,
+    height: 40,
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#2D3342',
   },
   inputCompleted: {
     backgroundColor: '#133529',
     borderColor: '#10B981',
     color: '#FFFFFF',
   },
-  rpeBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+  compactRpeBadge: {
+    position: 'absolute',
+    top: -6,
+    right: 0,
+    backgroundColor: '#2D1E4A',
+    borderColor: '#581C87',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  compactRpeText: {
+    color: '#C084FC',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  rpeColCell: {
+    width: 44,
+    height: 40,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E232E',
+    backgroundColor: '#20242E',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#2D3342',
     marginRight: 4,
   },
-  rpeBadgeText: {
+  rpeColCellText: {
     color: '#9CA3AF',
     fontSize: 12,
     fontWeight: '700',
   },
   checkBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 2,
     marginLeft: 4,
   },
   checkBtnInactive: {
-    backgroundColor: '#262A34',
+    backgroundColor: '#20242E',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#2D3342',
   },
   checkBtnActive: {
     backgroundColor: '#10B981',
   },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#20242E',
-  },
-  addSetBtn: {
+
+  // Wide Add Set Button (Lyfta Style)
+  addSetBtnWide: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
+    backgroundColor: '#20242E',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#2A303F',
   },
-  addSetBtnText: {
-    color: '#3B82F6',
-    fontSize: 13,
+  addSetBtnWideText: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '700',
   },
-  removeSetBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#2A1A1E',
-  },
-  removeSetBtnText: {
-    color: '#EF4444',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+
+  // Add Exercise Main Button
   addExerciseMainBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -822,77 +1392,210 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  celebrationOverlay: {
+
+  // Modals & Sheets
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: '#0D0E12',
-    justifyContent: 'center',
-    padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
   },
-  celebrationCard: {
+  sheetContainer: {
     backgroundColor: '#181A20',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
     borderWidth: 1,
-    borderColor: '#2F3442',
+    borderColor: '#262A34',
   },
-  trophyCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#132E27',
-    alignItems: 'center',
-    justifyContent: 'center',
+  setOptionsSheet: {
+    backgroundColor: '#181A20',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
-  celebrationTitle: {
+  modalHeaderTitle: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '800',
-    marginBottom: 4,
   },
-  celebrationSubhead: {
+  modalHeaderSubtitle: {
     color: '#9CA3AF',
-    fontSize: 16,
-    marginBottom: 24,
+    fontSize: 13,
+    marginTop: 2,
   },
-  summaryStatsGrid: {
+  modalCloseBtn: {
+    padding: 4,
+  },
+  optionsSection: {
+    marginBottom: 18,
+  },
+  sectionLabel: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  typeChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  typeChip: {
+    flex: 1,
+    backgroundColor: '#20242E',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2D3342',
+  },
+  typeChipActive: {
+    backgroundColor: '#1E3A8A',
+    borderColor: '#3B82F6',
+  },
+  typeChipText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  typeChipTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // 1-Tap RPE Grid
+  rpeSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  rpeSublabel: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  rpeChipsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    width: '100%',
-    marginBottom: 24,
+    gap: 6,
   },
-  statBox: {
-    flex: 1,
-    minWidth: '45%',
+  rpeChip: {
+    width: '18%',
+    aspectRatio: 1.3,
     backgroundColor: '#20242E',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2D3342',
   },
-  statBoxLabel: {
-    color: '#6B7280',
-    fontSize: 10,
+  rpeChipActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#38BDF8',
+  },
+  rpeChipText: {
+    color: '#9CA3AF',
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
   },
-  statBoxValue: {
+  rpeChipTextActive: {
     color: '#FFFFFF',
-    fontSize: 16,
+  },
+  rpeLegend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+    backgroundColor: '#14171F',
+    padding: 8,
+    borderRadius: 8,
+  },
+  rpeLegendItem: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    marginRight: 6,
+  },
+
+  setOptionsActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  shortcutBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#20242E',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2D3342',
+  },
+  shortcutBtnText: {
+    color: '#38BDF8',
+    fontSize: 13,
     fontWeight: '700',
   },
-  doneBtn: {
-    backgroundColor: '#10B981',
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 14,
+  shortcutDeleteBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2A181C',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#581C23',
+  },
+  shortcutDeleteText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  doneModalBtn: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 13,
+    borderRadius: 12,
     alignItems: 'center',
   },
-  doneBtnText: {
-    color: '#000000',
-    fontSize: 16,
+  doneModalBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
+  },
+
+  // Menu items
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#20242E',
+  },
+  menuItemText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  menuItemDestructive: {
+    borderBottomWidth: 0,
+    marginTop: 4,
+  },
+  menuItemTextDestructive: {
+    color: '#EF4444',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

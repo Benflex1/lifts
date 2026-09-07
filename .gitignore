@@ -44,3 +44,6 @@ yarn-error.*
 .claude/
 CLAUDE.md
 AGENTS.md
+
+# Temporary user assets
+temp-screenshots/
