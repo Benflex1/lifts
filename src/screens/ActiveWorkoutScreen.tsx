@@ -27,7 +27,7 @@ import {
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
-import { kgToDisplay } from '../utils/units';
+import { formatWeight, kgToDisplay } from '../utils/units';
 import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
@@ -185,7 +185,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
         </View>
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>VOLUME</Text>
-          <Text style={styles.metricValue}>{liveVolume.toLocaleString()} kg</Text>
+          <Text style={styles.metricValue}>{formatWeight(liveVolume, unit)}</Text>
         </View>
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>SETS</Text>
@@ -267,7 +267,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
               <View style={styles.tableHeader}>
                 <Text style={[styles.colHeader, { width: 42, textAlign: 'center' }]}>SET</Text>
                 <Text style={[styles.colHeader, { flex: 1, paddingLeft: 6 }]}>PREVIOUS</Text>
-                <Text style={[styles.colHeader, { width: 84, textAlign: 'center' }]}>KG</Text>
+                <Text style={[styles.colHeader, { width: 84, textAlign: 'center' }]}>{unit.toUpperCase()}</Text>
                 <Text style={[styles.colHeader, { width: 72, textAlign: 'center' }]}>REPS</Text>
                 <Text style={[styles.colHeader, { width: 48, textAlign: 'center' }]}>✓</Text>
               </View>
@@ -296,7 +296,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                     <View style={styles.previousCell}>
                       {set.previousWeightKg !== undefined ? (
                         <Text style={styles.previousText}>
-                          {set.previousWeightKg} kg × {set.previousReps}
+                          {kgToDisplay(set.previousWeightKg, unit)} {unit} × {set.previousReps}
                         </Text>
                       ) : (
                         <Text style={styles.previousPlaceholder}>—</Text>
@@ -462,7 +462,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
               <View style={styles.statBox}>
                 <Text style={styles.statBoxLabel}>TOTAL VOLUME</Text>
                 <Text style={styles.statBoxValue}>
-                  {completedSummary?.totalVolumeKg.toLocaleString()} kg
+                  {formatWeight(completedSummary?.totalVolumeKg || 0, unit)}
                 </Text>
               </View>
 

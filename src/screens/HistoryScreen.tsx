@@ -22,11 +22,14 @@ import { Workout, WorkoutHistorySummary } from '../types';
 import { getWorkoutHistory, getWorkoutDetail, deleteWorkout } from '../database/db';
 import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
+import { useSettings } from '../context/SettingsContext';
+import { formatWeight } from '../utils/units';
 
 export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   onStartActiveWorkout,
 }) => {
   const { startWorkout } = useWorkout();
+  const { unit } = useSettings();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -136,7 +139,7 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>ALL-TIME VOLUME</Text>
-          <Text style={styles.summaryValue}>{totalVolume.toLocaleString()} kg</Text>
+          <Text style={styles.summaryValue}>{formatWeight(totalVolume, unit)}</Text>
         </View>
       </View>
 
@@ -197,7 +200,7 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
                   <View style={styles.metric}>
                     <Dumbbell size={15} color="#9CA3AF" />
                     <Text style={styles.metricText}>
-                      {item.totalVolumeKg.toLocaleString()} kg
+                      {formatWeight(item.totalVolumeKg, unit)}
                     </Text>
                   </View>
 
@@ -244,7 +247,7 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
                                 <View key={sIdx} style={styles.detailSetPill}>
                                   <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
                                   <Text style={styles.detailSetWeight}>
-                                    {s.weightKg} kg × {s.reps}
+                                    {formatWeight(s.weightKg, unit)} × {s.reps}
                                   </Text>
                                   {s.type !== 'normal' && (
                                     <Text style={styles.detailSetType}>{s.type.toUpperCase()}</Text>

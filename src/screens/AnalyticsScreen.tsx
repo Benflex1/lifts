@@ -12,14 +12,17 @@ import { Calculator, Award, Dumbbell, ShieldCheck, Download } from 'lucide-react
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { getWorkoutHistory } from '../database/db';
+import { useSettings } from '../context/SettingsContext';
+import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
 
 export const AnalyticsScreen: React.FC = () => {
+  const { unit } = useSettings();
   // 1RM calculator state
   const [weight, setWeight] = useState('100');
   const [reps, setReps] = useState('5');
   const [showPlateCalc, setShowPlateCalc] = useState(false);
 
-  const numWeight = parseFloat(weight) || 0;
+  const numWeight = displayToKg(parseFloat(weight) || 0, unit);
   const numReps = parseInt(reps, 10) || 1;
   const oneRM = calculate1RM(numWeight, numReps);
 
@@ -78,7 +81,7 @@ export const AnalyticsScreen: React.FC = () => {
 
           <View style={styles.inputsRow}>
             <View style={styles.inputCol}>
-              <Text style={styles.inputLabel}>LIFTED WEIGHT (KG)</Text>
+              <Text style={styles.inputLabel}>LIFTED WEIGHT ({unit.toUpperCase()})</Text>
               <TextInput
                 style={styles.textInput}
                 keyboardType="decimal-pad"
@@ -103,9 +106,9 @@ export const AnalyticsScreen: React.FC = () => {
           {/* 1RM Output Big Display */}
           <View style={styles.resultBox}>
             <Text style={styles.resultLabel}>ESTIMATED 1RM</Text>
-            <Text style={styles.resultValue}>{oneRM.average} kg</Text>
+            <Text style={styles.resultValue}>{formatWeight(oneRM.average, unit)}</Text>
             <Text style={styles.resultFormula}>
-              Epley: {oneRM.epley} kg • Brzycki: {oneRM.brzycki} kg
+              Epley: {kgToDisplay(oneRM.epley, unit)} {unit} • Brzycki: {kgToDisplay(oneRM.brzycki, unit)} {unit}
             </Text>
           </View>
 
@@ -116,7 +119,7 @@ export const AnalyticsScreen: React.FC = () => {
               <View key={idx} style={styles.pctRow}>
                 <Text style={styles.pctLabel}>{p.pct}%</Text>
                 <Text style={styles.pctReps}>({p.reps})</Text>
-                <Text style={styles.pctValue}>{p.load} kg</Text>
+                <Text style={styles.pctValue}>{kgToDisplay(p.load, unit)} {unit}</Text>
               </View>
             ))}
           </View>
@@ -153,19 +156,27 @@ export const AnalyticsScreen: React.FC = () => {
 
           <View style={styles.standardRow}>
             <Text style={styles.standardLift}>Bench Press</Text>
-            <Text style={styles.standardValues}>Beg: 60kg • Int: 100kg • Adv: 135kg</Text>
+            <Text style={styles.standardValues}>
+              Beg: {kgToDisplay(60, unit)} {unit} • Int: {kgToDisplay(100, unit)} {unit} • Adv: {kgToDisplay(135, unit)} {unit}
+            </Text>
           </View>
           <View style={styles.standardRow}>
             <Text style={styles.standardLift}>Barbell Squat</Text>
-            <Text style={styles.standardValues}>Beg: 80kg • Int: 130kg • Adv: 175kg</Text>
+            <Text style={styles.standardValues}>
+              Beg: {kgToDisplay(80, unit)} {unit} • Int: {kgToDisplay(130, unit)} {unit} • Adv: {kgToDisplay(175, unit)} {unit}
+            </Text>
           </View>
           <View style={styles.standardRow}>
             <Text style={styles.standardLift}>Deadlift</Text>
-            <Text style={styles.standardValues}>Beg: 95kg • Int: 155kg • Adv: 210kg</Text>
+            <Text style={styles.standardValues}>
+              Beg: {kgToDisplay(95, unit)} {unit} • Int: {kgToDisplay(155, unit)} {unit} • Adv: {kgToDisplay(210, unit)} {unit}
+            </Text>
           </View>
           <View style={styles.standardRow}>
             <Text style={styles.standardLift}>Overhead Press</Text>
-            <Text style={styles.standardValues}>Beg: 40kg • Int: 65kg • Adv: 90kg</Text>
+            <Text style={styles.standardValues}>
+              Beg: {kgToDisplay(40, unit)} {unit} • Int: {kgToDisplay(65, unit)} {unit} • Adv: {kgToDisplay(90, unit)} {unit}
+            </Text>
           </View>
         </View>
 
