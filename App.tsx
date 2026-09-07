@@ -9,9 +9,9 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Dumbbell, History, BookOpen, BarChart3 } from 'lucide-react-native';
+import { StorageProvider, useStorage } from './src/context/StorageContext';
 import { WorkoutProvider, useWorkout } from './src/context/WorkoutContext';
 import { SettingsProvider } from './src/context/SettingsContext';
-import { initDatabase } from './src/database/db';
 import { WorkoutScreen } from './src/screens/WorkoutScreen';
 import { ActiveWorkoutScreen } from './src/screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
@@ -20,6 +20,7 @@ import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 
 import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
 import { DraftResumeBanner } from './src/components/DraftResumeBanner';
+import { ReadOnlyBanner } from './src/components/ReadOnlyBanner';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
@@ -32,6 +33,7 @@ function MainAppContent() {
     return (
       <View style={styles.appWrapper}>
         <StatusBar style="light" />
+        <ReadOnlyBanner />
         <ActiveWorkoutScreen onFinish={() => setCurrentTab('history')} />
       </View>
     );
@@ -43,6 +45,7 @@ function MainAppContent() {
 
       {/* Screen Views */}
       <View style={styles.screenContent}>
+        <ReadOnlyBanner />
         <DraftResumeBanner />
         {currentTab === 'workout' && <WorkoutScreen />}
         {currentTab === 'history' && <HistoryScreen />}
@@ -135,28 +138,10 @@ function MainAppContent() {
   );
 }
 
-export default function App() {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+function AppRoot() {
+  const { isReady, error, retry } = useStorage();
 
-  const prepare = async () => {
-    setStatus('loading');
-    setErrorMessage(null);
-    try {
-      await initDatabase();
-      setStatus('ready');
-    } catch (err: any) {
-      console.error('Failed to initialize database:', err);
-      setErrorMessage(err?.message || 'Failed to initialize local database');
-      setStatus('error');
-    }
-  };
-
-  useEffect(() => {
-    prepare();
-  }, []);
-
-  if (status === 'loading') {
+  if (!isReady && !error) {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar style="light" />
@@ -167,14 +152,14 @@ export default function App() {
     );
   }
 
-  if (status === 'error') {
+  if (error) {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar style="light" />
         <Dumbbell size={48} color="#EF4444" />
         <Text style={styles.loadingTitle}>Storage Error</Text>
         <Text style={{ color: '#9CA3AF', textAlign: 'center', marginTop: 10, marginHorizontal: 30 }}>
-          {errorMessage || 'Unable to open or migrate database.'}
+          {error || 'Unable to open or migrate database.'}
         </Text>
         <TouchableOpacity
           style={{
@@ -184,7 +169,7 @@ export default function App() {
             paddingHorizontal: 24,
             borderRadius: 8,
           }}
-          onPress={prepare}
+          onPress={retry}
         >
           <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Retry</Text>
         </TouchableOpacity>
@@ -198,6 +183,14 @@ export default function App() {
         <MainAppContent />
       </WorkoutProvider>
     </SettingsProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <StorageProvider>
+      <AppRoot />
+    </StorageProvider>
   );
 }
 

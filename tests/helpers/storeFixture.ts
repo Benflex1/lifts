@@ -99,5 +99,42 @@ export async function createStoreFixture(platform: 'native' | 'web'): Promise<St
     };
   }
 
+  if (platform === 'web') {
+    const { indexedDB } = require('fake-indexeddb');
+    const { createWebStore } = require('../../src/database/webStore');
+    const dbName = `lifts-test-web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const openStores: any[] = [];
+    let store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    openStores.push(store);
+
+    return {
+      store,
+      reopen: async () => {
+        if (store.close) {
+          await store.close();
+        }
+        store = await createWebStore(dbName, { idbFactory: indexedDB });
+        await store.init();
+        openStores.push(store);
+        return store;
+      },
+      dispose: async () => {
+        for (const s of openStores) {
+          if (s.close) {
+            await s.close();
+          }
+        }
+        await new Promise<void>((resolve, reject) => {
+          const req = indexedDB.deleteDatabase(dbName);
+          req.onsuccess = () => resolve();
+          req.onblocked = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+      },
+    };
+  }
+
   throw new Error(`Platform ${platform} not yet implemented in fixture`);
 }

@@ -18,6 +18,8 @@ export interface DataSnapshot {
 
 export interface Store {
   init(): Promise<void>;
+  isReadOnly?(): boolean;
+  tryAcquireLease?(): Promise<boolean>;
   readSnapshot(): Promise<DataSnapshot>;
   saveDraft(draft: WorkoutDraft): Promise<void>;
   getWorkoutDrafts(): Promise<WorkoutDraft[]>;

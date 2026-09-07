@@ -831,6 +831,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   return {
     init,
+    isReadOnly: () => false,
+    tryAcquireLease: async () => true,
     readSnapshot,
     saveDraft,
     getWorkoutDrafts,

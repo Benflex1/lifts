@@ -76,7 +76,7 @@ export function createWriteQueue() {
 **Consumes:** `Store`, `DataSnapshot`, and `WorkoutDraft` from Task 1.
 **Produces:** `createWebStore(name: string): Promise<Store>`; shared `DEFAULT_ROUTINES` with exact exercise IDs; `StorageContext` exposes ready/error/read-only state to mutation controls.
 
-- [ ] Add fake-indexeddb as a test-only dependency after checking current documentation. Extend `createStoreFixture('web')` to reopen the production adapter against the same named database. Test every user record type across adapter recreation, including settings and drafts; test transaction abort without partial writes.
+- [x] Add fake-indexeddb as a test-only dependency after checking current documentation. Extend `createStoreFixture('web')` to reopen the production adapter against the same named database. Test every user record type across adapter recreation, including settings and drafts; test transaction abort without partial writes.
 
 ```ts
 const fixture = await createStoreFixture('web');
@@ -86,12 +86,12 @@ assert.deepEqual(await reopened.readSnapshot(), before);
 await fixture.dispose();
 ```
 
-- [ ] Add seed tests asserting 876 unique exercise IDs and exact ID equality for each routine's embedded exercise. Run `npx tsx --test tests/integration/web-store.test.ts tests/unit/seed-data.test.ts` before implementation.
-- [ ] Implement IndexedDB stores for exercises, routines, workouts, drafts, settings, and metadata with explicit schema versioning. Resolve mutations only on transaction completion, not individual request success. Update an optional read cache only after commit; initialization must load saved data rather than replace it.
-- [ ] Extract the native PPL templates into shared `seedData.ts`; use them on both platforms. Load the full bundled library. Resolve by exact ID and throw on missing references. Seed only absent built-in records on first initialization; later launches must not overwrite edits.
-- [ ] Add a single-writer browser lease in an IndexedDB metadata transaction, with heartbeat/expiry and owner checks inside each write transaction. A second tab becomes visibly read-only. A tab that loses the lease retains pending edits and offers export/retry rather than overwriting another tab's data. Test lease expiry, takeover, and stale-writer rejection with an injected clock.
-- [ ] If storage is denied or full, show a persistent error with retry/export options and keep unsaved state. Do not substitute module-memory storage. Verify actual browser reload, tab close/reopen, second-tab behavior, and storage denial. Explain that data already lost by the old preview cannot be recovered.
-- [ ] Run targeted tests, `npm test`, `npx tsc --noEmit`, and a web bundle build. Gate: all saved records survive reload and seed identities match on both platforms.
+- [x] Add seed tests asserting 876 unique exercise IDs and exact ID equality for each routine's embedded exercise. Run `npx tsx --test tests/integration/web-store.test.ts tests/unit/seed-data.test.ts` before implementation.
+- [x] Implement IndexedDB stores for exercises, routines, workouts, drafts, settings, and metadata with explicit schema versioning. Resolve mutations only on transaction completion, not individual request success. Update an optional read cache only after commit; initialization must load saved data rather than replace it.
+- [x] Extract the native PPL templates into shared `seedData.ts`; use them on both platforms. Load the full bundled library. Resolve by exact ID and throw on missing references. Seed only absent built-in records on first initialization; later launches must not overwrite edits.
+- [x] Add a single-writer browser lease in an IndexedDB metadata transaction, with heartbeat/expiry and owner checks inside each write transaction. A second tab becomes visibly read-only. A tab that loses the lease retains pending edits and offers export/retry rather than overwriting another tab's data. Test lease expiry, takeover, and stale-writer rejection with an injected clock.
+- [x] If storage is denied or full, show a persistent error with retry/export options and keep unsaved state. Do not substitute module-memory storage. Verify actual browser reload, tab close/reopen, second-tab behavior, and storage denial. Explain that data already lost by the old preview cannot be recovered.
+- [x] Run targeted tests, `npm test`, `npx tsc --noEmit`, and a web bundle build. Gate: all saved records survive reload and seed identities match on both platforms.
 
 ## Task 3: Make the workout lifecycle durable
 
