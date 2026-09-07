@@ -136,28 +136,58 @@ function MainAppContent() {
 }
 
 export default function App() {
-  const [dbReady, setDbReady] = useState(false);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const prepare = async () => {
+    setStatus('loading');
+    setErrorMessage(null);
+    try {
+      await initDatabase();
+      setStatus('ready');
+    } catch (err: any) {
+      console.error('Failed to initialize database:', err);
+      setErrorMessage(err?.message || 'Failed to initialize local database');
+      setStatus('error');
+    }
+  };
 
   useEffect(() => {
-    async function prepare() {
-      try {
-        await initDatabase();
-      } catch (err) {
-        console.error('Failed to initialize database:', err);
-      } finally {
-        setDbReady(true);
-      }
-    }
     prepare();
   }, []);
 
-  if (!dbReady) {
+  if (status === 'loading') {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar style="light" />
         <Dumbbell size={48} color="#3B82F6" />
         <Text style={styles.loadingTitle}>LIFTS</Text>
         <ActivityIndicator size="small" color="#10B981" style={{ marginTop: 20 }} />
+      </View>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar style="light" />
+        <Dumbbell size={48} color="#EF4444" />
+        <Text style={styles.loadingTitle}>Storage Error</Text>
+        <Text style={{ color: '#9CA3AF', textAlign: 'center', marginTop: 10, marginHorizontal: 30 }}>
+          {errorMessage || 'Unable to open or migrate database.'}
+        </Text>
+        <TouchableOpacity
+          style={{
+            marginTop: 24,
+            backgroundColor: '#3B82F6',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 8,
+          }}
+          onPress={prepare}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }

@@ -32,7 +32,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "tsx --test tests/unit/*.test.ts"
+    "test": "tsx --test tests/unit/*.test.ts",
+    "test:integration": "tsx --test tests/integration/*.test.ts"
   },
   "private": true
 }
