@@ -14,6 +14,7 @@ import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { getWorkoutHistory } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
+import { exportBackup } from '../utils/export';
 
 export const AnalyticsScreen: React.FC = () => {
   const { unit } = useSettings();
@@ -37,13 +38,10 @@ export const AnalyticsScreen: React.FC = () => {
 
   const handleExportData = async () => {
     try {
-      const history = await getWorkoutHistory();
-      Alert.alert(
-        'Data Export',
-        `Successfully retrieved ${history.length} logged workouts. Your data is stored 100% locally on your device with no paywalls or external tracking.`
-      );
+      await exportBackup();
+      Alert.alert('Export Complete', 'Your workout data has been exported.');
     } catch (e) {
-      Alert.alert('Export Error', 'Could not export data.');
+      Alert.alert('Export Error', 'Failed to export data. Please try again.');
     }
   };
 

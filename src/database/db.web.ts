@@ -297,3 +297,8 @@ export async function deleteFolder(name: string): Promise<void> {
     if (r.folderName === name) r.folderName = undefined;
   }
 }
+
+export async function getAllExercises(): Promise<Exercise[]> {
+  return webStorage.exercises;
+}
+

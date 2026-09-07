@@ -866,3 +866,20 @@ export async function deleteFolder(name: string): Promise<void> {
   if (!db) return;
   await db.runAsync('UPDATE routines SET folder_name = NULL WHERE folder_name = ?', name);
 }
+
+export async function getAllExercises(): Promise<Exercise[]> {
+  const db = await getDatabase();
+  if (!db) return [];
+  const rows = await db.getAllAsync<any>('SELECT * FROM exercises ORDER BY name ASC');
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    equipment: r.equipment,
+    primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
+    secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
+    instructions: JSON.parse(r.instructions || '[]'),
+    isCustom: Boolean(r.is_custom),
+  }));
+}
+
