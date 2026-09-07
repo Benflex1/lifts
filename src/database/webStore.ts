@@ -2,6 +2,7 @@ import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '.
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
+import { calculate1RM } from '../utils/calculator';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -428,7 +429,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
-  async function getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]> {
+  async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
     const database = await openDb();
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
@@ -438,13 +439,21 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime));
 
         for (const w of workouts) {
-          const ex = w.exercises.find(e => e.exerciseId === exerciseId);
-          if (ex) {
-            const completedSets = ex.sets.filter(s => s.isCompleted);
-            if (completedSets.length > 0) {
-              return resolve(completedSets);
+          const occurrences = (w.exercises || []).filter(e => e.exerciseId === exerciseId);
+          if (occurrences.length === 0) continue;
+
+          const hasAnyCompleted = occurrences.some(occ => (occ.sets || []).some(s => s.isCompleted));
+          if (!hasAnyCompleted) continue;
+
+          const targetOcc = occurrences[occurrenceIndex] || occurrences[0];
+          let completedSets = (targetOcc.sets || []).filter(s => s.isCompleted);
+          if (completedSets.length === 0) {
+            for (const occ of occurrences) {
+              completedSets = (occ.sets || []).filter(s => s.isCompleted);
+              if (completedSets.length > 0) break;
             }
           }
+          return resolve(completedSets);
         }
         resolve([]);
       };
@@ -470,18 +479,24 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         let sessionCount = 0;
 
         for (const w of workouts) {
-          const ex = w.exercises.find(e => e.exerciseId === exerciseId);
-          if (ex) {
-            const completed = ex.sets.filter(s => s.isCompleted);
+          const occurrences = (w.exercises || []).filter(e => e.exerciseId === exerciseId);
+          if (occurrences.length === 0) continue;
+
+          let hadCompletedInThisWorkout = false;
+          for (const occ of occurrences) {
+            const completed = (occ.sets || []).filter(s => s.isCompleted);
             if (completed.length > 0) {
-              sessionCount++;
+              hadCompletedInThisWorkout = true;
               for (const s of completed) {
                 if (s.weightKg > maxWeightKg) maxWeightKg = s.weightKg;
                 if (s.reps > maxReps) maxReps = s.reps;
-                const epley = Math.round(s.weightKg * (1 + s.reps / 30));
-                if (epley > estimated1RM) estimated1RM = epley;
+                const oneRM = calculate1RM(s.weightKg, s.reps).average;
+                if (oneRM > estimated1RM) estimated1RM = oneRM;
               }
             }
+          }
+          if (hadCompletedInThisWorkout) {
+            sessionCount++;
           }
         }
 

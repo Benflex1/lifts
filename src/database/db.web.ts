@@ -77,9 +77,9 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   return store.deleteWorkout(workoutId);
 }
 
-export async function getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]> {
+export async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
   const store = await getStore();
-  return store.getPreviousSetsForExercise(exerciseId);
+  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
 }
 
 export async function getExerciseStats(exerciseId: string): Promise<{

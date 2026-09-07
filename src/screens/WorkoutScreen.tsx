@@ -24,6 +24,7 @@ import { Routine } from '../types';
 import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
+import { SettingsModal } from '../components/SettingsModal';
 import { useDialog } from '../context/DialogContext';
 
 export const WorkoutScreen: React.FC = () => {
@@ -32,6 +33,7 @@ export const WorkoutScreen: React.FC = () => {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('All');
   const [showEditor, setShowEditor] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [routineToEdit, setRoutineToEdit] = useState<Routine | null>(null);
   const [showFolderManage, setShowFolderManage] = useState(false);
 
@@ -92,6 +94,13 @@ export const WorkoutScreen: React.FC = () => {
     ...Array.from(new Set(routines.map(r => r.folderName).filter(Boolean) as string[])),
   ];
 
+  // Auto-reset selected folder if deleted or renamed
+  useEffect(() => {
+    if (selectedFolder !== 'All' && !folders.includes(selectedFolder)) {
+      setSelectedFolder('All');
+    }
+  }, [folders, selectedFolder]);
+
   const filteredRoutines =
     selectedFolder === 'All'
       ? routines
@@ -105,16 +114,28 @@ export const WorkoutScreen: React.FC = () => {
           <Text style={styles.appTitle}>LIFTS</Text>
           <Text style={styles.appSubtitle}>Think Less. Lift More.</Text>
         </View>
-        <TouchableOpacity
-          style={styles.newRoutineHeaderBtn}
-          onPress={() => {
-            setRoutineToEdit(null);
-            setShowEditor(true);
-          }}
-        >
-          <Plus size={18} color="#FFFFFF" />
-          <Text style={styles.newRoutineHeaderBtnText}>New Routine</Text>
-        </TouchableOpacity>
+        <View style={styles.appHeaderActions}>
+          <TouchableOpacity
+            style={styles.settingsHeaderBtn}
+            onPress={() => setShowSettings(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+          >
+            <Settings2 size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.newRoutineHeaderBtn}
+            onPress={() => {
+              setRoutineToEdit(null);
+              setShowEditor(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="New routine"
+          >
+            <Plus size={18} color="#FFFFFF" />
+            <Text style={styles.newRoutineHeaderBtnText}>New Routine</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -278,6 +299,11 @@ export const WorkoutScreen: React.FC = () => {
           loadRoutines();
         }}
       />
+
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </View>
   );
 };
@@ -317,6 +343,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 12,
+  },
+  appHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  settingsHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   newRoutineHeaderBtnText: {
     color: '#FFFFFF',

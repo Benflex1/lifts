@@ -44,7 +44,7 @@ export interface Store {
   getWorkoutHistory(): Promise<WorkoutHistorySummary[]>;
   getWorkoutDetail(workoutId: string): Promise<Workout | null>;
   deleteWorkout(workoutId: string): Promise<void>;
-  getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]>;
+  getPreviousSetsForExercise(exerciseId: string, occurrenceIndex?: number): Promise<WorkoutSet[]>;
   getExerciseStats(exerciseId: string): Promise<{
     maxWeightKg: number;
     maxReps: number;

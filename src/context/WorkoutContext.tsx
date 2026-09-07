@@ -30,7 +30,7 @@ interface WorkoutContextType {
   closeDraftModal: () => void;
   resumeDraft: (draft?: WorkoutDraft) => void;
   discardDraft: (draftId?: string) => Promise<void>;
-  startWorkout: (routine?: Routine, customName?: string) => Promise<void>;
+  startWorkout: (routine?: Routine, customName?: string, initialExercises?: ActiveExercise[]) => Promise<void>;
   minimizeWorkout: () => void;
   maximizeWorkout: () => void;
   addExerciseToWorkout: (exercise: Exercise) => Promise<void>;
@@ -227,7 +227,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const minimizeWorkout = () => setIsMinimized(true);
   const maximizeWorkout = () => setIsMinimized(false);
 
-  const executeStartWorkout = async (routine?: Routine, customName?: string) => {
+  const executeStartWorkout = async (
+    routine?: Routine,
+    customName?: string,
+    initialExercises?: ActiveExercise[]
+  ) => {
     const ctrl = controllerRef.current;
     if (!ctrl) {
       throw new Error('Controller not initialized');
@@ -238,12 +242,17 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     let exercises: ActiveExercise[] = [];
 
-    if (routine && routine.exercises.length > 0) {
+    if (initialExercises && initialExercises.length > 0) {
+      exercises = initialExercises;
+    } else if (routine && routine.exercises.length > 0) {
+      const occurrenceCounts: Record<string, number> = {};
       for (let ord = 0; ord < routine.exercises.length; ord++) {
         const item = routine.exercises[ord];
-        const prevSets = await getPreviousSetsForExercise(item.exerciseId);
+        const occ = occurrenceCounts[item.exerciseId] || 0;
+        occurrenceCounts[item.exerciseId] = occ + 1;
+        const prevSets = await getPreviousSetsForExercise(item.exerciseId, occ);
         const count = item.targetSets || 3;
-        const activeExId = `ae-${workoutId}-${item.exerciseId}-occ${ord}-${Crypto.randomUUID().slice(0, 6)}`;
+        const activeExId = `ae-${workoutId}-${item.exerciseId}-occ${occ}-${Crypto.randomUUID().slice(0, 6)}`;
         const sets: WorkoutSet[] = [];
 
         for (let i = 1; i <= count; i++) {
@@ -291,7 +300,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await refreshDrafts();
   };
 
-  const startWorkout = async (routine?: Routine, customName?: string) => {
+  const startWorkout = async (
+    routine?: Routine,
+    customName?: string,
+    initialExercises?: ActiveExercise[]
+  ) => {
     if (sessionState.phase === 'active' && sessionState.workout) {
       const shouldResume = await confirm({
         title: 'Workout In Progress',
@@ -322,7 +335,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    await executeStartWorkout(routine, customName);
+    await executeStartWorkout(routine, customName, initialExercises);
   };
 
   const resumeDraft = (draft?: WorkoutDraft) => {
@@ -405,7 +418,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       (e) => e.exerciseId === exercise.id
     ).length;
     const activeExId = `ae-${sessionState.workout.id}-${exercise.id}-occ${occurrenceIndex}-${Crypto.randomUUID().slice(0, 6)}`;
-    const prevSets = await getPreviousSetsForExercise(exercise.id);
+    const prevSets = await getPreviousSetsForExercise(exercise.id, occurrenceIndex);
     const initialSets: WorkoutSet[] = [];
     const count = 3;
 

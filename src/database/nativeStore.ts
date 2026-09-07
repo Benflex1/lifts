@@ -4,6 +4,7 @@ import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
 import { buildDefaultRoutines } from './seedData';
+import { calculate1RM } from '../utils/calculator';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
@@ -528,25 +529,48 @@ export function createNativeStore(driver: SqliteDriver): Store {
     });
   }
 
-  async function getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]> {
-    const rows = await driver.getAllAsync<any>(
-      `SELECT s.*
-       FROM exercise_sets s
-       JOIN workout_exercises we ON s.workout_exercise_id = we.id
-       JOIN workouts w ON we.workout_id = w.id
-       WHERE we.exercise_id = ?
-         AND s.is_completed = 1
-         AND w.id = (
-           SELECT w2.id FROM workouts w2
-           JOIN workout_exercises we2 ON we2.workout_id = w2.id
-           WHERE we2.exercise_id = ? AND w2.in_progress = 0
-           ORDER BY w2.start_time DESC
-           LIMIT 1
-         )
-       ORDER BY s.set_number ASC`,
-      exerciseId,
+  async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
+    const latestWorkout = await driver.getFirstAsync<{ id: string }>(
+      `SELECT w.id FROM workouts w
+       JOIN workout_exercises we ON we.workout_id = w.id
+       JOIN exercise_sets s ON s.workout_exercise_id = we.id
+       WHERE we.exercise_id = ? AND w.in_progress = 0 AND s.is_completed = 1
+       ORDER BY w.start_time DESC
+       LIMIT 1`,
       exerciseId
     );
+
+    if (!latestWorkout) return [];
+
+    const occurrences = await driver.getAllAsync<{ id: string }>(
+      `SELECT id FROM workout_exercises
+       WHERE workout_id = ? AND exercise_id = ?
+       ORDER BY order_index ASC`,
+      latestWorkout.id,
+      exerciseId
+    );
+
+    if (occurrences.length === 0) return [];
+
+    const targetWeId = occurrences[occurrenceIndex]?.id || occurrences[0].id;
+    let rows = await driver.getAllAsync<any>(
+      `SELECT * FROM exercise_sets
+       WHERE workout_exercise_id = ? AND is_completed = 1
+       ORDER BY set_number ASC`,
+      targetWeId
+    );
+
+    if (rows.length === 0) {
+      for (const occ of occurrences) {
+        rows = await driver.getAllAsync<any>(
+          `SELECT * FROM exercise_sets
+           WHERE workout_exercise_id = ? AND is_completed = 1
+           ORDER BY set_number ASC`,
+          occ.id
+        );
+        if (rows.length > 0) break;
+      }
+    }
 
     return rows.map(mapSetRow);
   }
@@ -561,7 +585,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
       `SELECT COUNT(DISTINCT we.workout_id) as count
        FROM workout_exercises we
        JOIN workouts w ON we.workout_id = w.id
-       WHERE we.exercise_id = ? AND w.in_progress = 0`,
+       JOIN exercise_sets s ON s.workout_exercise_id = we.id
+       WHERE we.exercise_id = ? AND w.in_progress = 0 AND s.is_completed = 1`,
       exerciseId
     );
 
@@ -581,8 +606,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
     for (const s of setsRows) {
       if (s.weight_kg > maxWeightKg) maxWeightKg = s.weight_kg;
       if (s.reps > maxReps) maxReps = s.reps;
-      const epley = Math.round(s.weight_kg * (1 + s.reps / 30));
-      if (epley > estimated1RM) estimated1RM = epley;
+      const oneRM = calculate1RM(s.weight_kg, s.reps).average;
+      if (oneRM > estimated1RM) estimated1RM = oneRM;
     }
 
     return {
