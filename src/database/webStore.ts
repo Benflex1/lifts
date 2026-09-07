@@ -685,7 +685,27 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     cachedExercises = null;
   }
 
+  async function releaseLease(): Promise<void> {
+    if (!db || readOnlyMode) return;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db!.transaction('metadata', 'readwrite');
+        const store = tx.objectStore('metadata');
+        const getReq = store.get('writer_lease');
+        getReq.onsuccess = () => {
+          const lease = getReq.result;
+          if (lease && lease.ownerId === tabOwnerId) {
+            store.delete('writer_lease');
+          }
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (_) {}
+  }
+
   async function close(): Promise<void> {
+    await releaseLease();
     if (db) {
       db.close();
       db = null;

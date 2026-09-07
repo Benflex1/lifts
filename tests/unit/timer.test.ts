@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeElapsedSeconds, computeRemaining, rebaseStartTime } from '../../src/utils/timer';
+import { computeElapsedSeconds, computeRemaining } from '../../src/utils/timer';
 
 describe('computeElapsedSeconds', () => {
   it('returns 0 when now equals startTime', () => {
@@ -37,13 +37,5 @@ describe('computeRemaining', () => {
     const now = Date.now();
     assert.equal(computeRemaining(now, now), 0);
     assert.equal(computeRemaining(now - 1000, now), 0);
-  });
-});
-
-describe('rebaseStartTime', () => {
-  it('returns ISO string that is durationSeconds before now', () => {
-    const now = new Date('2026-09-07T10:05:00Z').getTime();
-    const rebased = rebaseStartTime(now, 300);
-    assert.equal(new Date(rebased).getTime(), now - 300_000);
   });
 });

@@ -101,8 +101,8 @@ await fixture.dispose();
 **Consumes:** queued `Store` operations and `WorkoutDraft`.
 **Produces:** `createSessionController(store: Store, now: () => number)` returning `start(workout: Workout): Promise<void>`, `update(workout: Workout): void`, `flush(): Promise<void>`, `resume(draft: WorkoutDraft): void`, `finish(): Promise<Workout>`, `discard(): Promise<void>`, and `getState()`. State contains `phase: 'idle' | 'starting' | 'active' | 'finishing' | 'discarding'`, active workout, and persistence error. Context owns rendering, haptics, and subscription cleanup; the controller owns lifecycle ordering.
 
-- [ ] Write deterministic controller tests using an injected clock and deferred storage promises. Cover start/start, draft/finish, draft/discard, finish/finish, failed finish/retry, background flush, and active-session replacement. A request arriving during a transition must not create a second session.
-- [ ] Create a 20-minute draft and assert recovery leaves `startTime` unchanged. Finish at a known clock value and assert exact elapsed seconds. Add old zero-duration draft recovery using its original timestamp. Test expired and unexpired rest deadlines.
+- [x] Write deterministic controller tests using an injected clock and deferred storage promises. Cover start/start, draft/finish, draft/discard, finish/finish, failed finish/retry, background flush, and active-session replacement. A request arriving during a transition must not create a second session.
+- [x] Create a 20-minute draft and assert recovery leaves `startTime` unchanged. Finish at a known clock value and assert exact elapsed seconds. Add old zero-duration draft recovery using its original timestamp. Test expired and unexpired rest deadlines.
 
 ```ts
 const started = '2026-09-07T10:00:00.000Z';
@@ -111,12 +111,12 @@ assert.equal(computeElapsedSeconds(started,
 // Controller test also asserts resumed.workout.startTime === started.
 ```
 
-- [ ] Run `npx tsx --test tests/unit/session.test.ts tests/integration/draft-lifecycle.test.ts` before implementation.
-- [ ] Implement synchronous transition guards before awaits. Start should await its first durable draft write before reporting success. Persist dirty snapshots at least every three seconds during continued editing; flush after completed-set changes and background transitions. Debounce alone must not indefinitely postpone saves.
-- [ ] Capture a snapshot revision/generation on scheduling. Finish/discard invalidates pending callbacks, drains any in-flight write, and makes the final durable operation. Completed-workout insertion/update and matching draft removal must share one transaction. A failed finish/discard restores an editable active phase with the data retained.
-- [ ] Remove timestamp rebasing; recompute duration when saving/recovering/finishing. Save rest-deadline metadata with draft snapshots. Clear interval listeners on unmount and avoid relying on asynchronous page-unload writes for web durability.
-- [ ] Guard Start Empty, routine start, and Repeat at the controller boundary as well as in the UI. Existing sessions offer Resume/Cancel. Render all migrated drafts in a recovery selector; resuming one must not delete the others. Keep durable draft state in sync after finish/discard.
-- [ ] Run lifecycle tests plus existing checks. Gate: no completed workout becomes a draft again, no discarded draft reappears, and failed writes never clear the active workout.
+- [x] Run `npx tsx --test tests/unit/session.test.ts tests/integration/draft-lifecycle.test.ts` before implementation.
+- [x] Implement synchronous transition guards before awaits. Start should await its first durable draft write before reporting success. Persist dirty snapshots at least every three seconds during continued editing; flush after completed-set changes and background transitions. Debounce alone must not indefinitely postpone saves.
+- [x] Capture a snapshot revision/generation on scheduling. Finish/discard invalidates pending callbacks, drains any in-flight write, and makes the final durable operation. Completed-workout insertion/update and matching draft removal must share one transaction. A failed finish/discard restores an editable active phase with the data retained.
+- [x] Remove timestamp rebasing; recompute duration when saving/recovering/finishing. Save rest-deadline metadata with draft snapshots. Clear interval listeners on unmount and avoid relying on asynchronous page-unload writes for web durability.
+- [x] Guard Start Empty, routine start, and Repeat at the controller boundary as well as in the UI. Existing sessions offer Resume/Cancel. Render all migrated drafts in a recovery selector; resuming one must not delete the others. Keep durable draft state in sync after finish/discard.
+- [x] Run lifecycle tests plus existing checks. Gate: no completed workout becomes a draft again, no discarded draft reappears, and failed writes never clear the active workout.
 
 ## Task 4: Correct set logging, targets, and identity
 
