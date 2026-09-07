@@ -10,6 +10,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Dumbbell, History, BookOpen, BarChart3 } from 'lucide-react-native';
 import { WorkoutProvider, useWorkout } from './src/context/WorkoutContext';
+import { SettingsProvider } from './src/context/SettingsContext';
 import { initDatabase } from './src/database/db';
 import { WorkoutScreen } from './src/screens/WorkoutScreen';
 import { ActiveWorkoutScreen } from './src/screens/ActiveWorkoutScreen';
@@ -18,6 +19,7 @@ import { ExercisesScreen } from './src/screens/ExercisesScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 
 import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
+import { DraftResumeBanner } from './src/components/DraftResumeBanner';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
@@ -41,12 +43,9 @@ function MainAppContent() {
 
       {/* Screen Views */}
       <View style={styles.screenContent}>
-        {currentTab === 'workout' && (
-          <WorkoutScreen onStartActiveWorkout={() => {}} />
-        )}
-        {currentTab === 'history' && (
-          <HistoryScreen onStartActiveWorkout={() => {}} />
-        )}
+        <DraftResumeBanner />
+        {currentTab === 'workout' && <WorkoutScreen />}
+        {currentTab === 'history' && <HistoryScreen />}
         {currentTab === 'exercises' && <ExercisesScreen />}
         {currentTab === 'analytics' && <AnalyticsScreen />}
       </View>
@@ -164,9 +163,11 @@ export default function App() {
   }
 
   return (
-    <WorkoutProvider>
-      <MainAppContent />
-    </WorkoutProvider>
+    <SettingsProvider>
+      <WorkoutProvider>
+        <MainAppContent />
+      </WorkoutProvider>
+    </SettingsProvider>
   );
 }
 

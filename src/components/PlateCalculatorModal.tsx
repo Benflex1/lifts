@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -9,7 +9,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { X, Check } from 'lucide-react-native';
-import { calculatePlates } from '../utils/calculator';
+import { calculatePlates, KG_PLATES, LB_PLATES } from '../utils/calculator';
+import { useSettings } from '../context/SettingsContext';
+import { kgToDisplay, displayToKg } from '../utils/units';
 
 interface Props {
   visible: boolean;
@@ -24,13 +26,45 @@ export const PlateCalculatorModal: React.FC<Props> = ({
   onClose,
   onApply,
 }) => {
-  const [targetWeight, setTargetWeight] = useState(initialWeight.toString());
-  const [barWeight, setBarWeight] = useState(20);
+  const { unit } = useSettings();
+  const [targetWeight, setTargetWeight] = useState(
+    unit === 'lb' ? kgToDisplay(initialWeight, 'lb').toString() : initialWeight.toString()
+  );
+  const [barWeight, setBarWeight] = useState(unit === 'lb' ? 45 : 20);
+
+  useEffect(() => {
+    if (visible) {
+      const displayInit = unit === 'lb' ? kgToDisplay(initialWeight, 'lb') : initialWeight;
+      setTargetWeight(displayInit.toString());
+      setBarWeight(unit === 'lb' ? 45 : 20);
+    }
+  }, [visible, initialWeight, unit]);
+
+  const KG_BARS = [20, 15, 10];
+  const LB_BARS = [45, 35, 15];
+  const bars = unit === 'kg' ? KG_BARS : LB_BARS;
+  const plates = unit === 'kg' ? KG_PLATES : LB_PLATES;
 
   const numWeight = parseFloat(targetWeight) || 0;
-  const calc = calculatePlates(numWeight, barWeight);
+  const calc = calculatePlates(numWeight, barWeight, plates);
 
   const getPlateColor = (weight: number) => {
+    if (unit === 'lb') {
+      switch (weight) {
+        case 45:
+          return '#DC2626'; // Red
+        case 25:
+          return '#2563EB'; // Blue
+        case 10:
+          return '#16A34A'; // Green
+        case 5:
+          return '#FFFFFF'; // White
+        case 2.5:
+          return '#4B5563'; // Gray
+        default:
+          return '#9333EA'; // Purple
+      }
+    }
     switch (weight) {
       case 25:
         return '#DC2626'; // Red
@@ -75,7 +109,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                   placeholder="e.g. 100"
                   placeholderTextColor="#6B7280"
                 />
-                <Text style={styles.unitText}>KG</Text>
+                <Text style={styles.unitText}>{unit.toUpperCase()}</Text>
               </View>
             </View>
 
@@ -83,14 +117,14 @@ export const PlateCalculatorModal: React.FC<Props> = ({
             <View style={styles.barSelectorGroup}>
               <Text style={styles.label}>Barbell Weight</Text>
               <View style={styles.pillRow}>
-                {[20, 15, 10].map(w => (
+                {bars.map(w => (
                   <TouchableOpacity
                     key={w}
                     style={[styles.pill, barWeight === w && styles.pillActive]}
                     onPress={() => setBarWeight(w)}
                   >
                     <Text style={[styles.pillText, barWeight === w && styles.pillTextActive]}>
-                      {w} kg {w === 20 ? '(Olympic)' : ''}
+                      {w} {unit} {unit === 'kg' && w === 20 ? '(Olympic)' : unit === 'lb' && w === 45 ? '(Olympic)' : ''}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -100,7 +134,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
             {/* Results Display */}
             <View style={styles.resultBox}>
               <Text style={styles.resultSummary}>
-                Weight per side: <Text style={styles.highlightText}>{calc.weightPerSide} kg</Text>
+                Weight per side: <Text style={styles.highlightText}>{calc.weightPerSide} {unit}</Text>
               </Text>
 
               {calc.plates.length === 0 ? (
@@ -122,7 +156,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                           style={[styles.plateColorDot, { backgroundColor: getPlateColor(p.weight) }]}
                         />
                         <Text style={styles.plateText}>
-                          {p.count} × {p.weight} kg
+                          {p.count} × {p.weight} {unit}
                         </Text>
                       </View>
                     ))}
@@ -132,7 +166,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
 
               {calc.remainder > 0 && (
                 <Text style={styles.remainderText}>
-                  ⚠️ Remainder: {calc.remainder.toFixed(2)} kg cannot be loaded with standard plates.
+                  ⚠️ Remainder: {calc.remainder.toFixed(2)} {unit} cannot be loaded with standard plates.
                 </Text>
               )}
             </View>
@@ -143,7 +177,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
             <TouchableOpacity
               style={styles.applyButton}
               onPress={() => {
-                onApply(numWeight);
+                onApply(displayToKg(numWeight, unit));
                 onClose();
               }}
             >

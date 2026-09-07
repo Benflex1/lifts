@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { ActiveExercise, Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
 
@@ -6,17 +5,33 @@ const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 
-// In-memory fallback for web preview
-const webStorage = {
-  exercises: [] as Exercise[],
-  routines: [] as Routine[],
-  workouts: [] as Workout[],
-};
+function mapExerciseRow(r: any): Exercise {
+  return {
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    equipment: r.equipment,
+    primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
+    secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
+    instructions: JSON.parse(r.instructions || '[]'),
+    isCustom: Boolean(r.is_custom),
+  };
+}
+
+function mapSetRow(s: any): WorkoutSet {
+  return {
+    id: s.id,
+    setNumber: s.set_number,
+    type: s.set_type as any,
+    weightKg: s.weight_kg,
+    reps: s.reps,
+    rpe: s.rpe,
+    isCompleted: Boolean(s.is_completed),
+    completedAt: s.completed_at,
+  };
+}
 
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase | null> {
-  if (Platform.OS === 'web') {
-    return null;
-  }
   if (!dbInstance) {
     dbInstance = await SQLite.openDatabaseAsync('lifts.db');
   }
@@ -24,20 +39,21 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase | null> {
 }
 
 export async function initDatabase(): Promise<void> {
-  if (Platform.OS === 'web') {
-    initWebStorage();
-    return;
-  }
-
   const db = await getDatabase();
   if (!db) return;
 
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
+    PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS app_meta (
       key TEXT PRIMARY KEY,
       value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS exercises (
@@ -80,7 +96,8 @@ export async function initDatabase(): Promise<void> {
       end_time TEXT,
       duration_seconds INTEGER DEFAULT 0,
       total_volume_kg REAL DEFAULT 0,
-      notes TEXT
+      notes TEXT,
+      in_progress INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS workout_exercises (
@@ -107,6 +124,12 @@ export async function initDatabase(): Promise<void> {
       FOREIGN KEY (workout_exercise_id) REFERENCES workout_exercises(id) ON DELETE CASCADE
     );
   `);
+
+  try {
+    await db.execAsync('ALTER TABLE workouts ADD COLUMN in_progress INTEGER DEFAULT 0');
+  } catch (_) {
+    // Column already exists — safe to ignore
+  }
 
   // Check if exercises need seeding
   const seeded = await db.getFirstAsync<{ value: string }>(
@@ -246,62 +269,6 @@ async function seedDefaultData(db: SQLite.SQLiteDatabase) {
   });
 }
 
-function initWebStorage() {
-  webStorage.exercises = (defaultExercisesData as Exercise[]).slice(0, 300);
-  webStorage.routines = [
-    {
-      id: 'routine-push',
-      name: 'Push Day (Chest / Shoulders / Triceps)',
-      folderName: 'Push Pull Legs',
-      notes: 'Focus on progressive overload on bench press.',
-      createdAt: new Date().toISOString(),
-      exercises: [
-        {
-          id: 're-1',
-          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
-          exercise: webStorage.exercises.find(e => e.id.includes('Bench')) || webStorage.exercises[0],
-          orderIndex: 0,
-          targetSets: 4,
-          targetReps: '6-8',
-          restTimerSeconds: 120,
-        },
-      ],
-    },
-    {
-      id: 'routine-pull',
-      name: 'Pull Day (Back & Biceps)',
-      folderName: 'Push Pull Legs',
-      notes: 'Focus on controlled back contraction.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-    {
-      id: 'routine-legs',
-      name: 'Leg Day (Quads, Hamstrings & Calves)',
-      folderName: 'Push Pull Legs',
-      notes: 'Keep core braced throughout squats.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-    {
-      id: 'routine-upper',
-      name: 'Upper Body Power',
-      folderName: 'Upper / Lower',
-      notes: 'Heavy compounds for upper torso.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-    {
-      id: 'routine-lower',
-      name: 'Lower Body Strength',
-      folderName: 'Upper / Lower',
-      notes: 'Squats and hip hinges.',
-      createdAt: new Date().toISOString(),
-      exercises: [],
-    },
-  ];
-}
-
 import { smartSearchExercises } from '../utils/search';
 
 let cachedExercises: Exercise[] = [];
@@ -312,16 +279,7 @@ export async function searchExercises(query: string, muscle?: string, equipment?
     const db = await getDatabase();
     if (db) {
       const rows = await db.getAllAsync<any>('SELECT * FROM exercises ORDER BY name ASC');
-      cachedExercises = rows.map(r => ({
-        id: r.id,
-        name: r.name,
-        category: r.category,
-        equipment: r.equipment,
-        primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
-        secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
-        instructions: JSON.parse(r.instructions || '[]'),
-        isCustom: Boolean(r.is_custom),
-      }));
+      cachedExercises = rows.map(mapExerciseRow);
     }
     if (cachedExercises.length === 0) {
       cachedExercises = defaultExercisesData;
@@ -332,25 +290,13 @@ export async function searchExercises(query: string, muscle?: string, equipment?
 }
 
 export async function getExerciseById(id: string): Promise<Exercise | null> {
-  if (Platform.OS === 'web') {
-    return webStorage.exercises.find(e => e.id === id) || null;
-  }
   const db = await getDatabase();
   if (!db) return null;
 
   const r = await db.getFirstAsync<any>('SELECT * FROM exercises WHERE id = ?', id);
   if (!r) return null;
 
-  return {
-    id: r.id,
-    name: r.name,
-    category: r.category,
-    equipment: r.equipment,
-    primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
-    secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
-    instructions: JSON.parse(r.instructions || '[]'),
-    isCustom: Boolean(r.is_custom),
-  };
+  return mapExerciseRow(r);
 }
 
 export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
@@ -360,11 +306,6 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
     id: newId,
     isCustom: true,
   };
-
-  if (Platform.OS === 'web') {
-    webStorage.exercises.unshift(customExercise);
-    return customExercise;
-  }
 
   const db = await getDatabase();
   if (db) {
@@ -384,15 +325,12 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
   return customExercise;
 }
 
+
 // ==========================================
 // ROUTINE QUERIES (UNLIMITED ROUTINES)
 // ==========================================
 
 export async function getRoutines(): Promise<Routine[]> {
-  if (Platform.OS === 'web') {
-    return webStorage.routines;
-  }
-
   const db = await getDatabase();
   if (!db) return [];
 
@@ -449,33 +387,6 @@ export async function saveRoutine(
 ): Promise<string> {
   const routineId = existingId || `routine-${Date.now()}`;
 
-  if (Platform.OS === 'web') {
-    const routine: Routine = {
-      id: routineId,
-      name,
-      folderName,
-      notes,
-      createdAt: new Date().toISOString(),
-      exercises: exercises.map((item, idx) => ({
-        id: `re-${routineId}-${idx}`,
-        exerciseId: item.exerciseId,
-        exercise: webStorage.exercises.find(e => e.id === item.exerciseId) || webStorage.exercises[0],
-        orderIndex: idx,
-        targetSets: item.targetSets,
-        targetReps: item.targetReps,
-        restTimerSeconds: item.restTimerSeconds,
-      })),
-    };
-    if (existingId) {
-      const idx = webStorage.routines.findIndex(r => r.id === existingId);
-      if (idx >= 0) webStorage.routines[idx] = routine;
-      else webStorage.routines.unshift(routine);
-    } else {
-      webStorage.routines.unshift(routine);
-    }
-    return routineId;
-  }
-
   const db = await getDatabase();
   if (!db) return routineId;
 
@@ -512,10 +423,6 @@ export async function saveRoutine(
 }
 
 export async function deleteRoutine(id: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    webStorage.routines = webStorage.routines.filter(r => r.id !== id);
-    return;
-  }
   const db = await getDatabase();
   if (!db) return;
   await db.runAsync('DELETE FROM routines WHERE id = ?', id);
@@ -526,22 +433,13 @@ export async function deleteRoutine(id: string): Promise<void> {
 // ==========================================
 
 export async function saveCompletedWorkout(workout: Workout): Promise<void> {
-  if (Platform.OS === 'web') {
-    webStorage.workouts.unshift(workout);
-    if (workout.routineId) {
-      const r = webStorage.routines.find(rt => rt.id === workout.routineId);
-      if (r) r.lastPerformedAt = workout.endTime || workout.startTime;
-    }
-    return;
-  }
-
   const db = await getDatabase();
   if (!db) return;
 
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       workout.id,
       workout.routineId || null,
       workout.name,
@@ -551,6 +449,8 @@ export async function saveCompletedWorkout(workout: Workout): Promise<void> {
       workout.totalVolumeKg,
       workout.notes || null
     );
+
+    await db.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workout.id);
 
     if (workout.routineId) {
       await db.runAsync(
@@ -596,21 +496,6 @@ export async function saveCompletedWorkout(workout: Workout): Promise<void> {
 }
 
 export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
-  if (Platform.OS === 'web') {
-    return webStorage.workouts.map(w => ({
-      id: w.id,
-      name: w.name,
-      routineId: w.routineId,
-      startTime: w.startTime,
-      endTime: w.endTime,
-      durationSeconds: w.durationSeconds,
-      totalVolumeKg: w.totalVolumeKg,
-      totalSets: w.exercises.reduce((acc, e) => acc + e.sets.filter(s => s.isCompleted).length, 0),
-      exerciseNames: w.exercises.map(e => e.exercise.name),
-      notes: w.notes,
-    }));
-  }
-
   const db = await getDatabase();
   if (!db) return [];
 
@@ -622,6 +507,7 @@ export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
      LEFT JOIN workout_exercises we ON w.id = we.workout_id
      LEFT JOIN exercises e ON we.exercise_id = e.id
      LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
+     WHERE w.in_progress = 0
      GROUP BY w.id
      ORDER BY w.start_time DESC`
   );
@@ -641,16 +527,6 @@ export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
 }
 
 export async function getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]> {
-  if (Platform.OS === 'web') {
-    for (const w of webStorage.workouts) {
-      const found = w.exercises.find(e => e.exerciseId === exerciseId);
-      if (found) {
-        return found.sets.filter(s => s.isCompleted);
-      }
-    }
-    return [];
-  }
-
   const db = await getDatabase();
   if (!db) return [];
 
@@ -659,45 +535,34 @@ export async function getPreviousSetsForExercise(exerciseId: string): Promise<Wo
      FROM exercise_sets s
      JOIN workout_exercises we ON s.workout_exercise_id = we.id
      JOIN workouts w ON we.workout_id = w.id
-     WHERE we.exercise_id = ? AND s.is_completed = 1
-     ORDER BY w.start_time DESC, s.set_number ASC
-     LIMIT 10`,
+     WHERE we.exercise_id = ?
+       AND s.is_completed = 1
+       AND w.id = (
+         SELECT w2.id FROM workouts w2
+         JOIN workout_exercises we2 ON we2.workout_id = w2.id
+         WHERE we2.exercise_id = ? AND w2.in_progress = 0
+         ORDER BY w2.start_time DESC
+         LIMIT 1
+       )
+     ORDER BY s.set_number ASC`,
+    exerciseId,
     exerciseId
   );
 
-  return rows.map(r => ({
-    id: r.id,
-    setNumber: r.set_number,
-    type: r.set_type as any,
-    weightKg: r.weight_kg,
-    reps: r.reps,
-    rpe: r.rpe,
-    isCompleted: true,
-  }));
+  return rows.map(mapSetRow);
 }
 
 export async function deleteWorkout(workoutId: string): Promise<void> {
   const db = await getDatabase();
   if (!db) return;
-
-  await db.withTransactionAsync(async () => {
-    const weRows = await db.getAllAsync<{ id: string }>(
-      'SELECT id FROM workout_exercises WHERE workout_id = ?',
-      workoutId
-    );
-    for (const we of weRows) {
-      await db.runAsync('DELETE FROM exercise_sets WHERE workout_exercise_id = ?', we.id);
-    }
-    await db.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workoutId);
-    await db.runAsync('DELETE FROM workouts WHERE id = ?', workoutId);
-  });
+  await db.runAsync('DELETE FROM workouts WHERE id = ?', workoutId);
 }
 
 export async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {
   const db = await getDatabase();
   if (!db) return null;
 
-  const w = await db.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ?', workoutId);
+  const w = await db.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ? AND in_progress = 0', workoutId);
   if (!w) return null;
 
   const weRows = await db.getAllAsync<any>(
@@ -731,16 +596,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<Workout | nul
         secondaryMuscles: JSON.parse(we.ex_sm || '[]'),
         instructions: JSON.parse(we.ex_inst || '[]'),
       },
-      sets: sRows.map(s => ({
-        id: s.id,
-        setNumber: s.set_number,
-        type: s.set_type as any,
-        weightKg: s.weight_kg,
-        reps: s.reps,
-        rpe: s.rpe,
-        isCompleted: Boolean(s.is_completed),
-        completedAt: s.completed_at,
-      })),
+      sets: sRows.map(mapSetRow),
     });
   }
 
@@ -840,4 +696,185 @@ export async function getExerciseStats(exerciseId: string): Promise<{
     estimated1RM,
     sessionCount: countRow?.count || 0,
   };
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    key
+  );
+  return row?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync(
+    'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+    key,
+    value
+  );
+}
+
+export async function renameFolder(oldName: string, newName: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync('UPDATE routines SET folder_name = ? WHERE folder_name = ?', newName, oldName);
+}
+
+export async function deleteFolder(name: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync('UPDATE routines SET folder_name = NULL WHERE folder_name = ?', name);
+}
+
+export async function getAllExercises(): Promise<Exercise[]> {
+  const db = await getDatabase();
+  if (!db) return [];
+  const rows = await db.getAllAsync<any>('SELECT * FROM exercises ORDER BY name ASC');
+  return rows.map(mapExerciseRow);
+}
+
+export async function getRoutineById(id: string): Promise<Routine | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+  const r = await db.getFirstAsync<any>('SELECT * FROM routines WHERE id = ?', id);
+  if (!r) return null;
+  const reRows = await db.getAllAsync<any>(
+    `SELECT re.*, e.name as ex_name, e.category as ex_category, e.equipment as ex_equipment,
+            e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst
+     FROM routine_exercises re
+     JOIN exercises e ON re.exercise_id = e.id
+     WHERE re.routine_id = ?
+     ORDER BY re.order_index ASC`,
+    r.id
+  );
+  return {
+    id: r.id,
+    name: r.name,
+    folderName: r.folder_name,
+    notes: r.notes,
+    createdAt: r.created_at,
+    lastPerformedAt: r.last_performed_at,
+    exercises: reRows.map(row => ({
+      id: row.id,
+      exerciseId: row.exercise_id,
+      exercise: {
+        id: row.exercise_id,
+        name: row.ex_name,
+        category: row.ex_category,
+        equipment: row.ex_equipment,
+        primaryMuscles: JSON.parse(row.ex_primary || '[]'),
+        secondaryMuscles: JSON.parse(row.ex_secondary || '[]'),
+        instructions: JSON.parse(row.ex_inst || '[]'),
+      },
+      orderIndex: row.order_index,
+      targetSets: row.target_sets,
+      targetReps: row.target_reps,
+      restTimerSeconds: row.rest_timer_seconds,
+    })),
+  };
+}
+
+export async function saveWorkoutDraft(workout: Workout): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, duration_seconds, total_volume_kg, notes, in_progress)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      workout.id,
+      workout.routineId || null,
+      workout.name,
+      workout.startTime,
+      workout.durationSeconds,
+      workout.totalVolumeKg,
+      workout.notes || null
+    );
+
+    await db.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workout.id);
+
+    let exOrder = 0;
+    for (const ex of workout.exercises) {
+      const weId = `we-${workout.id}-${exOrder}`;
+      await db.runAsync(
+        `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        weId, workout.id, ex.exerciseId, exOrder, ex.notes || null, ex.restTimerSeconds ?? 0
+      );
+
+      for (const s of ex.sets) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, rpe, is_completed, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          s.id || `set-${weId}-${s.setNumber}`,
+          weId, s.setNumber, s.type, s.weightKg, s.reps, s.rpe || null,
+          s.isCompleted ? 1 : 0,
+          s.completedAt || null
+        );
+      }
+      exOrder++;
+    }
+  });
+}
+
+export async function getWorkoutDraft(): Promise<Workout | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+  const w = await db.getFirstAsync<any>('SELECT * FROM workouts WHERE in_progress = 1 ORDER BY start_time DESC LIMIT 1');
+  if (!w) return null;
+
+  const weRows = await db.getAllAsync<any>(
+    `SELECT we.*, e.name as ex_name, e.category as ex_cat, e.equipment as ex_equip,
+            e.primary_muscles as ex_pm, e.secondary_muscles as ex_sm, e.instructions as ex_inst
+     FROM workout_exercises we
+     JOIN exercises e ON we.exercise_id = e.id
+     WHERE we.workout_id = ?
+     ORDER BY we.order_index ASC`,
+    w.id
+  );
+
+  const exercises: ActiveExercise[] = [];
+  for (const we of weRows) {
+    const sRows = await db.getAllAsync<any>(
+      'SELECT * FROM exercise_sets WHERE workout_exercise_id = ? ORDER BY set_number ASC',
+      we.id
+    );
+    exercises.push({
+      id: we.id,
+      exerciseId: we.exercise_id,
+      notes: we.notes,
+      restTimerSeconds: we.rest_timer_seconds ?? 0,
+      exercise: {
+        id: we.exercise_id,
+        name: we.ex_name,
+        category: we.ex_cat,
+        equipment: we.ex_equip,
+        primaryMuscles: JSON.parse(we.ex_pm || '[]'),
+        secondaryMuscles: JSON.parse(we.ex_sm || '[]'),
+        instructions: JSON.parse(we.ex_inst || '[]'),
+      },
+      sets: sRows.map(mapSetRow),
+    });
+  }
+
+  return {
+    id: w.id,
+    name: w.name,
+    routineId: w.routine_id,
+    startTime: w.start_time,
+    durationSeconds: w.duration_seconds || 0,
+    totalVolumeKg: w.total_volume_kg || 0,
+    exercises,
+    notes: w.notes,
+  };
+}
+
+export async function discardWorkoutDraft(id: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync('DELETE FROM workouts WHERE id = ?', id);
 }

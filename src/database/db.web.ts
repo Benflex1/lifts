@@ -8,6 +8,8 @@ const webStorage = {
   workouts: [] as Workout[],
 };
 
+const webSettings = new Map<string, string>();
+
 export async function initDatabase(): Promise<void> {
   // Load initial 300 exercises for snappy web preview
   webStorage.exercises = (defaultExercisesData as Exercise[]).slice(0, 300);
@@ -203,10 +205,13 @@ export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
 }
 
 export async function getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]> {
-  for (const w of webStorage.workouts) {
+  const sorted = [...webStorage.workouts].sort(
+    (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+  );
+  for (const w of sorted) {
     const found = w.exercises.find(e => e.exerciseId === exerciseId);
     if (found) {
-      return found.sets.filter(s => s.isCompleted);
+      return found.sets.filter(s => s.isCompleted).sort((a, b) => a.setNumber - b.setNumber);
     }
   }
   return [];
@@ -272,3 +277,48 @@ export async function getExerciseStats(exerciseId: string): Promise<{
 
   return { maxWeightKg, maxReps, estimated1RM, sessionCount };
 }
+
+export async function getSetting(key: string): Promise<string | null> {
+  return webSettings.get(key) ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  webSettings.set(key, value);
+}
+
+export async function renameFolder(oldName: string, newName: string): Promise<void> {
+  for (const r of webStorage.routines) {
+    if (r.folderName === oldName) r.folderName = newName;
+  }
+}
+
+export async function deleteFolder(name: string): Promise<void> {
+  for (const r of webStorage.routines) {
+    if (r.folderName === name) r.folderName = undefined;
+  }
+}
+
+export async function getAllExercises(): Promise<Exercise[]> {
+  return webStorage.exercises;
+}
+
+export async function getRoutineById(id: string): Promise<Routine | null> {
+  return webStorage.routines.find(r => r.id === id) || null;
+}
+
+let webDraft: Workout | null = null;
+
+export async function saveWorkoutDraft(workout: Workout): Promise<void> {
+  webDraft = workout;
+}
+
+export async function getWorkoutDraft(): Promise<Workout | null> {
+  return webDraft;
+}
+
+export async function discardWorkoutDraft(id: string): Promise<void> {
+  if (webDraft?.id === id) webDraft = null;
+}
+
+
+

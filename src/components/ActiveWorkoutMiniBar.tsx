@@ -2,10 +2,13 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronUp, Play, Clock, Dumbbell } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
+import { useSettings } from '../context/SettingsContext';
+import { formatWeight } from '../utils/units';
 import { formatTimer } from '../utils/calculator';
 
 export const ActiveWorkoutMiniBar: React.FC = () => {
   const { isWorkingOut, isMinimized, activeWorkout, elapsedSeconds, maximizeWorkout } = useWorkout();
+  const { unit } = useSettings();
 
   if (!isWorkingOut || !isMinimized || !activeWorkout) {
     return null;
@@ -41,7 +44,7 @@ export const ActiveWorkoutMiniBar: React.FC = () => {
             <Text style={styles.dot}>•</Text>
             <View style={styles.metricItem}>
               <Dumbbell size={11} color="#9CA3AF" />
-              <Text style={styles.metricText}>{volume.toLocaleString()} kg</Text>
+              <Text style={styles.metricText}>{formatWeight(volume, unit)}</Text>
             </View>
           </View>
         </View>

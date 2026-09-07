@@ -26,11 +26,14 @@ import {
 } from 'lucide-react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
+import { useSettings } from '../context/SettingsContext';
+import { formatWeight, kgToDisplay } from '../utils/units';
 import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
+import { WeightInput } from '../components/WeightInput';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
@@ -51,6 +54,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     finishWorkout,
     cancelWorkout,
   } = useWorkout();
+  const { unit } = useSettings();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
@@ -147,6 +151,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     }
   };
 
+  const RPE_OPTIONS: (number | null)[] = [null, 5, 6, 7, 8, 9, 10];
+
+  const cycleRpe = (activeExerciseId: string, set: WorkoutSet) => {
+    const currentIdx = RPE_OPTIONS.indexOf(set.rpe ?? null);
+    const nextIdx = (currentIdx + 1) % RPE_OPTIONS.length;
+    updateSet(activeExerciseId, set.id, { rpe: RPE_OPTIONS[nextIdx] ?? undefined });
+  };
+
   return (
     <View style={styles.screenContainer}>
       {/* Top App Bar */}
@@ -181,7 +193,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
         </View>
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>VOLUME</Text>
-          <Text style={styles.metricValue}>{liveVolume.toLocaleString()} kg</Text>
+          <Text style={styles.metricValue}>{formatWeight(liveVolume, unit)}</Text>
         </View>
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>SETS</Text>
@@ -263,8 +275,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
               <View style={styles.tableHeader}>
                 <Text style={[styles.colHeader, { width: 42, textAlign: 'center' }]}>SET</Text>
                 <Text style={[styles.colHeader, { flex: 1, paddingLeft: 6 }]}>PREVIOUS</Text>
-                <Text style={[styles.colHeader, { width: 84, textAlign: 'center' }]}>KG</Text>
+                <Text style={[styles.colHeader, { width: 84, textAlign: 'center' }]}>{unit.toUpperCase()}</Text>
                 <Text style={[styles.colHeader, { width: 72, textAlign: 'center' }]}>REPS</Text>
+                <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>RPE</Text>
                 <Text style={[styles.colHeader, { width: 48, textAlign: 'center' }]}>✓</Text>
               </View>
 
@@ -292,7 +305,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                     <View style={styles.previousCell}>
                       {set.previousWeightKg !== undefined ? (
                         <Text style={styles.previousText}>
-                          {set.previousWeightKg} kg × {set.previousReps}
+                          {kgToDisplay(set.previousWeightKg, unit)} {unit} × {set.previousReps}
                         </Text>
                       ) : (
                         <Text style={styles.previousPlaceholder}>—</Text>
@@ -301,19 +314,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
 
                     {/* Weight Input */}
                     <View style={styles.inputWrap}>
-                      <TextInput
-                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
-                        keyboardType="decimal-pad"
-                        value={set.weightKg > 0 ? set.weightKg.toString() : ''}
+                      <WeightInput
+                        value={set.weightKg}
+                        onCommit={(w) => updateSet(activeEx.id, set.id, { weightKg: w })}
                         placeholder={
-                          set.previousWeightKg ? set.previousWeightKg.toString() : '0'
+                          set.previousWeightKg
+                            ? kgToDisplay(set.previousWeightKg, unit).toString()
+                            : '0'
                         }
-                        placeholderTextColor="#6B7280"
-                        selectTextOnFocus={true}
-                        onChangeText={txt => {
-                          const val = parseFloat(txt) || 0;
-                          updateSet(activeEx.id, set.id, { weightKg: val });
-                        }}
+                        completed={set.isCompleted}
+                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
                       />
                     </View>
 
@@ -332,6 +342,17 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                         }}
                       />
                     </View>
+
+                    {/* RPE Cycle Badge */}
+                    <TouchableOpacity
+                      style={styles.rpeBadge}
+                      onPress={() => cycleRpe(activeEx.id, set)}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    >
+                      <Text style={styles.rpeBadgeText}>
+                        {set.rpe != null ? set.rpe.toString() : '–'}
+                      </Text>
+                    </TouchableOpacity>
 
                     {/* Completion Checkbox */}
                     <TouchableOpacity
@@ -461,7 +482,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
               <View style={styles.statBox}>
                 <Text style={styles.statBoxLabel}>TOTAL VOLUME</Text>
                 <Text style={styles.statBoxValue}>
-                  {completedSummary?.totalVolumeKg.toLocaleString()} kg
+                  {formatWeight(completedSummary?.totalVolumeKg || 0, unit)}
                 </Text>
               </View>
 
@@ -742,6 +763,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#133529',
     borderColor: '#10B981',
     color: '#FFFFFF',
+  },
+  rpeBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E232E',
+    borderWidth: 1,
+    borderColor: '#374151',
+    marginRight: 4,
+  },
+  rpeBadgeText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   checkBtn: {
     width: 44,

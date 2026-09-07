@@ -13,6 +13,8 @@ import {
 import { Search, X, Dumbbell, Plus, ChevronRight, Info, Trophy, TrendingUp } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { searchExercises, createCustomExercise, getExerciseStats } from '../database/db';
+import { useSettings } from '../context/SettingsContext';
+import { formatWeight } from '../utils/units';
 
 const MUSCLE_GROUPS = [
   'All',
@@ -52,6 +54,7 @@ const QUICK_SUGGESTIONS = [
 ];
 
 export const ExercisesScreen: React.FC = () => {
+  const { unit } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
@@ -331,13 +334,13 @@ export const ExercisesScreen: React.FC = () => {
                     <View style={styles.statBox}>
                       <Text style={styles.statBoxLabel}>HEAVIEST LIFT</Text>
                       <Text style={styles.statBoxValue}>
-                        {exerciseStats.maxWeightKg > 0 ? `${exerciseStats.maxWeightKg} kg` : '—'}
+                        {exerciseStats.maxWeightKg > 0 ? formatWeight(exerciseStats.maxWeightKg, unit) : '—'}
                       </Text>
                     </View>
                     <View style={styles.statBox}>
                       <Text style={styles.statBoxLabel}>ESTIMATED 1RM</Text>
                       <Text style={styles.statBoxValue}>
-                        {exerciseStats.estimated1RM > 0 ? `${exerciseStats.estimated1RM} kg` : '—'}
+                        {exerciseStats.estimated1RM > 0 ? formatWeight(exerciseStats.estimated1RM, unit) : '—'}
                       </Text>
                     </View>
                     <View style={styles.statBox}>

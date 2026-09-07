@@ -18,15 +18,16 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react-native';
-import { Workout, WorkoutHistorySummary } from '../types';
-import { getWorkoutHistory, getWorkoutDetail, deleteWorkout } from '../database/db';
+import { Workout, WorkoutHistorySummary, Routine } from '../types';
+import { getWorkoutHistory, getWorkoutDetail, deleteWorkout, getRoutineById } from '../database/db';
 import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
+import { useSettings } from '../context/SettingsContext';
+import { formatWeight } from '../utils/units';
 
-export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
-  onStartActiveWorkout,
-}) => {
+export const HistoryScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
+  const { unit } = useSettings();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -81,9 +82,13 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteWorkout(item.id);
-            setExpandedId(null);
-            loadHistory();
+            try {
+              await deleteWorkout(item.id);
+              setExpandedId(null);
+              loadHistory();
+            } catch (e) {
+              Alert.alert('Error', 'Failed to delete workout.');
+            }
           },
         },
       ]
@@ -91,8 +96,40 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   };
 
   const handlePerformAgain = async (item: WorkoutHistorySummary) => {
-    await startWorkout(undefined, `${item.name}`);
-    onStartActiveWorkout();
+    try {
+      let routine: Routine | undefined;
+
+      if (item.routineId) {
+        const found = await getRoutineById(item.routineId);
+        if (found) {
+          routine = found;
+        }
+      }
+
+      if (!routine) {
+        const detail = await getWorkoutDetail(item.id);
+        if (detail && detail.exercises.length > 0) {
+          routine = {
+            id: '',
+            name: item.name,
+            createdAt: new Date().toISOString(),
+            exercises: detail.exercises.map((ex, idx) => ({
+              id: `synth-${idx}`,
+              exerciseId: ex.exerciseId,
+              exercise: ex.exercise,
+              orderIndex: idx,
+              targetSets: ex.sets.length || 3,
+              targetReps: String(ex.sets[0]?.reps || 10),
+              restTimerSeconds: ex.restTimerSeconds ?? 90,
+            })),
+          };
+        }
+      }
+
+      await startWorkout(routine, item.name);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to start workout.');
+    }
   };
 
   // Calculate totals
@@ -128,7 +165,7 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>ALL-TIME VOLUME</Text>
-          <Text style={styles.summaryValue}>{totalVolume.toLocaleString()} kg</Text>
+          <Text style={styles.summaryValue}>{formatWeight(totalVolume, unit)}</Text>
         </View>
       </View>
 
@@ -189,7 +226,7 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
                   <View style={styles.metric}>
                     <Dumbbell size={15} color="#9CA3AF" />
                     <Text style={styles.metricText}>
-                      {item.totalVolumeKg.toLocaleString()} kg
+                      {formatWeight(item.totalVolumeKg, unit)}
                     </Text>
                   </View>
 
@@ -236,10 +273,13 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
                                 <View key={sIdx} style={styles.detailSetPill}>
                                   <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
                                   <Text style={styles.detailSetWeight}>
-                                    {s.weightKg} kg × {s.reps}
+                                    {formatWeight(s.weightKg, unit)} × {s.reps}
                                   </Text>
                                   {s.type !== 'normal' && (
                                     <Text style={styles.detailSetType}>{s.type.toUpperCase()}</Text>
+                                  )}
+                                  {s.rpe != null && (
+                                    <Text style={styles.detailRpe}>RPE {s.rpe}</Text>
                                   )}
                                 </View>
                               ))}
@@ -470,6 +510,11 @@ const styles = StyleSheet.create({
   },
   detailSetType: {
     color: '#F59E0B',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  detailRpe: {
+    color: '#A855F7',
     fontSize: 10,
     fontWeight: '700',
   },
