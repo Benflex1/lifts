@@ -4,12 +4,13 @@ import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../types';
 import { saveCompletedWorkout, getPreviousSetsForExercise } from '../database/db';
-import { computeElapsedSeconds } from '../utils/timer';
+import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 
 interface RestTimerState {
   isActive: boolean;
   remainingSeconds: number;
   totalSeconds: number;
+  endsAt: number | null;
 }
 
 interface WorkoutContextType {
@@ -46,6 +47,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     isActive: false,
     remainingSeconds: 0,
     totalSeconds: 0,
+    endsAt: null,
   });
 
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -76,42 +78,52 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Rest countdown timer
   useEffect(() => {
-    if (restTimer.isActive && restTimer.remainingSeconds > 0) {
-      restTimerRef.current = setInterval(() => {
-        setRestTimer(prev => {
-          if (prev.remainingSeconds <= 1) {
-            // Timer finished! Trigger haptic pattern
-            if (Platform.OS !== 'web') {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            }
-            return { ...prev, isActive: false, remainingSeconds: 0 };
+    if (restTimer.isActive && restTimer.endsAt !== null) {
+      const tick = () => {
+        const now = Date.now();
+        const remaining = computeRemaining(restTimer.endsAt!, now);
+        if (remaining <= 0) {
+          setRestTimer(prev => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
-          return { ...prev, remainingSeconds: prev.remainingSeconds - 1 };
-        });
-      }, 1000);
+        } else {
+          setRestTimer(prev => {
+            if (prev.remainingSeconds === remaining) return prev;
+            return { ...prev, remainingSeconds: remaining };
+          });
+        }
+      };
+      restTimerRef.current = setInterval(tick, 250);
+      tick();
     } else {
       if (restTimerRef.current) clearInterval(restTimerRef.current);
     }
     return () => {
       if (restTimerRef.current) clearInterval(restTimerRef.current);
     };
-  }, [restTimer.isActive, restTimer.remainingSeconds]);
+  }, [restTimer.isActive, restTimer.endsAt]);
 
   const startRestTimer = (seconds: number) => {
+    if (seconds <= 0) return;
     setRestTimer({
       isActive: true,
       remainingSeconds: seconds,
       totalSeconds: seconds,
+      endsAt: Date.now() + seconds * 1000,
     });
   };
 
   const adjustRestTimer = (deltaSeconds: number) => {
     setRestTimer(prev => {
-      const nextRemaining = Math.max(0, prev.remainingSeconds + deltaSeconds);
+      if (!prev.endsAt) return prev;
+      const newEndsAt = prev.endsAt + deltaSeconds * 1000;
+      const remaining = computeRemaining(newEndsAt, Date.now());
       return {
         ...prev,
-        remainingSeconds: nextRemaining,
-        isActive: nextRemaining > 0,
+        endsAt: newEndsAt,
+        remainingSeconds: remaining,
+        isActive: remaining > 0,
       };
     });
   };
@@ -121,6 +133,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isActive: false,
       remainingSeconds: 0,
       totalSeconds: 0,
+      endsAt: null,
     });
   };
 
@@ -297,60 +310,60 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
+    const currentExercise = activeWorkout?.exercises.find(e => e.id === activeExerciseId);
+    if (!currentExercise) return;
+
+    const currentSet = currentExercise.sets.find(s => s.id === setId);
+    if (!currentSet) return;
+
+    const willBeCompleted = !currentSet.isCompleted;
+
+    if (willBeCompleted) {
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      if ((currentExercise.restTimerSeconds ?? 0) > 0) {
+        startRestTimer(currentExercise.restTimerSeconds);
+      }
+    }
+
+    const prevSetInSession = currentExercise.sets.length > 0
+      ? (() => {
+          const idx = currentExercise.sets.findIndex(s => s.id === setId);
+          return idx > 0 ? currentExercise.sets[idx - 1] : null;
+        })()
+      : null;
+
+    const finalWeight =
+      currentSet.weightKg > 0
+        ? currentSet.weightKg
+        : (prevSetInSession?.weightKg || currentSet.previousWeightKg || 20);
+
+    const finalReps =
+      currentSet.reps > 0
+        ? currentSet.reps
+        : (prevSetInSession?.reps || currentSet.previousReps || 10);
+
     setActiveWorkout(prev => {
       if (!prev) return null;
-      let targetRestSeconds = 0;
-
-      const nextExercises = prev.exercises.map(e => {
-        if (e.id !== activeExerciseId) return e;
-        targetRestSeconds = e.restTimerSeconds ?? 0;
-
-        return {
-          ...e,
-          sets: e.sets.map((s, idx) => {
-            if (s.id !== setId) return s;
-            const willBeCompleted = !s.isCompleted;
-
-            // Physical haptic trigger
-            if (willBeCompleted && Platform.OS !== 'web') {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            }
-
-            // Prior set in this session for seamless straight sets
-            const prevSetInSession = idx > 0 ? e.sets[idx - 1] : null;
-
-            // Auto-fill defaults if zero when completing
-            const finalWeight =
-              s.weightKg > 0
-                ? s.weightKg
-                : (prevSetInSession?.weightKg || s.previousWeightKg || 20);
-
-            const finalReps =
-              s.reps > 0
-                ? s.reps
-                : (prevSetInSession?.reps || s.previousReps || 10);
-
-            return {
-              ...s,
-              weightKg: willBeCompleted ? finalWeight : s.weightKg,
-              reps: willBeCompleted ? finalReps : s.reps,
-              isCompleted: willBeCompleted,
-              completedAt: willBeCompleted ? new Date().toISOString() : undefined,
-            };
-          }),
-        };
-      });
-
-      // If set was just marked completed, start rest timer if enabled
-      const targetExercise = prev.exercises.find(e => e.id === activeExerciseId);
-      const targetSet = targetExercise?.sets.find(s => s.id === setId);
-      if (targetSet && !targetSet.isCompleted && targetRestSeconds > 0) {
-        startRestTimer(targetRestSeconds);
-      }
-
       return {
         ...prev,
-        exercises: nextExercises,
+        exercises: prev.exercises.map(e => {
+          if (e.id !== activeExerciseId) return e;
+          return {
+            ...e,
+            sets: e.sets.map(s => {
+              if (s.id !== setId) return s;
+              return {
+                ...s,
+                weightKg: willBeCompleted ? finalWeight : s.weightKg,
+                reps: willBeCompleted ? finalReps : s.reps,
+                isCompleted: willBeCompleted,
+                completedAt: willBeCompleted ? new Date().toISOString() : undefined,
+              };
+            }),
+          };
+        }),
       };
     });
   };
