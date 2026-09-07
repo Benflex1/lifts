@@ -400,16 +400,17 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
         let exOrder = 0;
         for (const ex of workout.exercises) {
-          const weId = `we-${workout.id}-${exOrder}`;
+          const weId = ex.id || `we-${workout.id}-${exOrder}`;
           await driver.runAsync(
-            `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds)
-             VALUES (?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
             weId,
             workout.id,
             ex.exerciseId,
             exOrder,
             ex.notes || null,
-            ex.restTimerSeconds ?? 0
+            ex.restTimerSeconds ?? 0,
+            ex.targetReps || null
           );
 
           for (const s of ex.sets) {
@@ -494,6 +495,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         id: we.id,
         exerciseId: we.exercise_id,
         notes: we.notes,
+        targetReps: we.target_reps || undefined,
         restTimerSeconds: we.rest_timer_seconds ?? 0,
         exercise: {
           id: we.exercise_id,
@@ -774,14 +776,15 @@ export function createNativeStore(driver: SqliteDriver): Store {
           for (const we of w.exercises) {
             const weId = we.id || `we-${w.id}-${ord}`;
             await driver.runAsync(
-              `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds)
-               VALUES (?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
               weId,
               w.id,
               we.exerciseId,
               ord,
               we.notes || null,
-              we.restTimerSeconds ?? 0
+              we.restTimerSeconds ?? 0,
+              we.targetReps || null
             );
             for (const s of we.sets) {
               await driver.runAsync(

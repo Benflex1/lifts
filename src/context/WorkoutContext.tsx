@@ -7,6 +7,7 @@ import { getStore, getPreviousSetsForExercise } from '../database/db';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
+import { initialReps, validateCompletedSet } from '../workout/sets';
 
 interface RestTimerState {
   isActive: boolean;
@@ -236,19 +237,24 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let exercises: ActiveExercise[] = [];
 
     if (routine && routine.exercises.length > 0) {
-      for (const item of routine.exercises) {
+      for (let ord = 0; ord < routine.exercises.length; ord++) {
+        const item = routine.exercises[ord];
         const prevSets = await getPreviousSetsForExercise(item.exerciseId);
-        const sets: WorkoutSet[] = [];
         const count = item.targetSets || 3;
+        const activeExId = `ae-${workoutId}-${item.exerciseId}-occ${ord}-${Crypto.randomUUID().slice(0, 6)}`;
+        const sets: WorkoutSet[] = [];
 
         for (let i = 1; i <= count; i++) {
           const ghost = prevSets[i - 1];
+          const defaultReps = initialReps(item.targetReps, i - 1, ghost?.reps);
+          const suggestedWeight = ghost ? ghost.weightKg : 0;
           sets.push({
-            id: `set-${workoutId}-${item.exerciseId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+            id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
             setNumber: i,
             type: 'normal',
-            weightKg: 0,
-            reps: 0,
+            weightKg: suggestedWeight,
+            reps: defaultReps,
+            targetReps: item.targetReps,
             rpe: 8,
             isCompleted: false,
             previousWeightKg: ghost ? ghost.weightKg : undefined,
@@ -257,11 +263,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         exercises.push({
-          id: `ae-${workoutId}-${item.exerciseId}-${Crypto.randomUUID().slice(0, 6)}`,
+          id: activeExId,
           exerciseId: item.exerciseId,
           exercise: item.exercise,
           sets,
           notes: '',
+          targetReps: item.targetReps,
           restTimerSeconds: item.restTimerSeconds || 90,
         });
       }
@@ -398,18 +405,25 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const ctrl = controllerRef.current;
     if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
 
+    const occurrenceIndex = sessionState.workout.exercises.filter(
+      (e) => e.exerciseId === exercise.id
+    ).length;
+    const activeExId = `ae-${sessionState.workout.id}-${exercise.id}-occ${occurrenceIndex}-${Crypto.randomUUID().slice(0, 6)}`;
     const prevSets = await getPreviousSetsForExercise(exercise.id);
     const initialSets: WorkoutSet[] = [];
     const count = 3;
 
     for (let i = 1; i <= count; i++) {
       const ghost = prevSets[i - 1];
+      const defaultReps = initialReps('10', i - 1, ghost?.reps);
+      const suggestedWeight = ghost ? ghost.weightKg : 0;
       initialSets.push({
-        id: `set-${sessionState.workout.id}-${exercise.id}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+        id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
         setNumber: i,
         type: 'normal',
-        weightKg: 0,
-        reps: 0,
+        weightKg: suggestedWeight,
+        reps: defaultReps,
+        targetReps: '10',
         rpe: 8,
         isCompleted: false,
         previousWeightKg: ghost ? ghost.weightKg : undefined,
@@ -418,11 +432,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const newExercise: ActiveExercise = {
-      id: `ae-${sessionState.workout.id}-${exercise.id}-${Crypto.randomUUID().slice(0, 6)}`,
+      id: activeExId,
       exerciseId: exercise.id,
       exercise,
       sets: initialSets,
       notes: '',
+      targetReps: '10',
       restTimerSeconds: 90,
     };
 
@@ -455,12 +470,16 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (ex.id !== activeExerciseId) return ex;
       const nextNum = ex.sets.length + 1;
       const lastSet = ex.sets[ex.sets.length - 1];
+      const ghostReps = lastSet?.previousReps;
+      const reps = initialReps(ex.targetReps, nextNum - 1, lastSet ? lastSet.reps : ghostReps);
+      const weightKg = lastSet ? lastSet.weightKg : 0;
       const newSet: WorkoutSet = {
-        id: `set-${sessionState.workout!.id}-${ex.exerciseId}-${nextNum}-${Crypto.randomUUID().slice(0, 6)}`,
+        id: `set-${ex.id}-${nextNum}-${Crypto.randomUUID().slice(0, 6)}`,
         setNumber: nextNum,
         type: setType,
-        weightKg: lastSet ? lastSet.weightKg : 0,
-        reps: lastSet ? lastSet.reps : 0,
+        weightKg,
+        reps,
+        targetReps: ex.targetReps,
         rpe: 8,
         isCompleted: false,
         previousWeightKg: lastSet?.previousWeightKg,
@@ -548,6 +567,18 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
     const ctrl = controllerRef.current;
     if (!ctrl || sessionState.phase !== 'active' || !sessionState.workout) return;
+
+    const targetEx = sessionState.workout.exercises.find((e) => e.id === activeExerciseId);
+    const targetSet = targetEx?.sets.find((s) => s.id === setId);
+    if (!targetSet) return;
+
+    if (!targetSet.isCompleted) {
+      const validationError = validateCompletedSet(targetSet);
+      if (validationError) {
+        Alert.alert('Invalid Set', validationError);
+        return;
+      }
+    }
 
     let targetRestSeconds: number | null = null;
     let justCompleted = false;

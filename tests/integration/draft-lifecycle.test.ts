@@ -160,5 +160,83 @@ describe('Draft Lifecycle Integration', () => {
 
       await fixture.dispose();
     });
+
+    it(`[${platform}] preserves 0 kg weight, target labels, and repeated exercise occurrences`, async () => {
+      const fixture = await createStoreFixture(platform);
+
+      const workout: Workout = {
+        id: `workout-zero-${platform}`,
+        name: 'Zero Kg and Repeated Occurrences',
+        startTime: '2026-09-07T11:00:00.000Z',
+        endTime: '2026-09-07T11:30:00.000Z',
+        durationSeconds: 1800,
+        totalVolumeKg: 640,
+        exercises: [
+          {
+            id: `ae-occ-0-${platform}`,
+            exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+            targetReps: '6-8',
+            restTimerSeconds: 120,
+            exercise: {
+              id: 'Barbell_Bench_Press_-_Medium_Grip',
+              name: 'Barbell Bench Press',
+              category: 'Chest',
+              equipment: 'Barbell',
+              primaryMuscles: ['Chest'],
+            },
+            sets: [
+              {
+                id: `s-zero-1-${platform}`,
+                setNumber: 1,
+                type: 'normal',
+                weightKg: 0,
+                reps: 8,
+                targetReps: '6-8',
+                isCompleted: true,
+                completedAt: '2026-09-07T11:05:00.000Z',
+              },
+            ],
+          },
+          {
+            id: `ae-occ-1-${platform}`,
+            exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+            targetReps: 'AMRAP',
+            restTimerSeconds: 90,
+            exercise: {
+              id: 'Barbell_Bench_Press_-_Medium_Grip',
+              name: 'Barbell Bench Press',
+              category: 'Chest',
+              equipment: 'Barbell',
+              primaryMuscles: ['Chest'],
+            },
+            sets: [
+              {
+                id: `s-amrap-1-${platform}`,
+                setNumber: 1,
+                type: 'normal',
+                weightKg: 80,
+                reps: 8,
+                targetReps: 'AMRAP',
+                isCompleted: true,
+                completedAt: '2026-09-07T11:20:00.000Z',
+              },
+            ],
+          },
+        ],
+      };
+
+      await fixture.store.saveCompletedWorkout(workout);
+
+      const reopened = await fixture.reopen();
+      const detail = await reopened.getWorkoutDetail(workout.id);
+      assert.ok(detail);
+      assert.equal(detail?.exercises.length, 2, 'Both occurrences of same exercise must be preserved');
+      assert.equal(detail?.exercises[0].targetReps, '6-8');
+      assert.equal(detail?.exercises[0].sets[0].weightKg, 0, '0 kg must be preserved as 0, not null/empty/default');
+      assert.equal(detail?.exercises[1].targetReps, 'AMRAP');
+      assert.equal(detail?.exercises[1].sets[0].weightKg, 80);
+
+      await fixture.dispose();
+    });
   }
 });

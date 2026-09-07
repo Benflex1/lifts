@@ -222,6 +222,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                       {activeEx.exercise.primaryMuscles.join(', ')}
                     </Text>
                     <Text style={styles.equipmentBadge}>{activeEx.exercise.equipment}</Text>
+                    {activeEx.targetReps ? (
+                      <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
+                    ) : null}
                   </View>
                 </View>
 
@@ -332,13 +335,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                       <TextInput
                         style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
                         keyboardType="number-pad"
-                        value={set.reps > 0 ? set.reps.toString() : ''}
+                        value={set.reps.toString()}
                         placeholder={set.previousReps ? set.previousReps.toString() : '10'}
                         placeholderTextColor="#6B7280"
                         selectTextOnFocus={true}
                         onChangeText={txt => {
-                          const val = parseInt(txt, 10) || 0;
-                          updateSet(activeEx.id, set.id, { reps: val });
+                          const cleaned = txt.trim();
+                          const val = cleaned === '' ? 0 : parseInt(cleaned, 10);
+                          if (!isNaN(val)) {
+                            updateSet(activeEx.id, set.id, { reps: val });
+                          }
                         }}
                       />
                     </View>
@@ -662,6 +668,15 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 11,
     textTransform: 'capitalize',
+  },
+  targetBadge: {
+    color: '#38BDF8',
+    backgroundColor: '#0C4A6E',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   headerActions: {
     flexDirection: 'row',

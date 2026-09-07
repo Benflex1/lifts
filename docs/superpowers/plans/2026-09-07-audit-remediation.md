@@ -125,7 +125,7 @@ assert.equal(computeElapsedSeconds(started,
 
 **Interfaces:** `initialReps(target: string, setIndex: number, previousReps?: number): number`; `validateCompletedSet(set: WorkoutSet): string | null`; `ActiveExercise.targetReps?: string`. Preserve these target labels in drafts and saved workouts using an additive nullable native column. The numeric `weightKg` field remains numeric; zero is a valid value rather than a missing-value sentinel.
 
-- [ ] Add failing behavior tests with the exact intended semantics:
+- [x] Add failing behavior tests with the exact intended semantics:
 
 ```ts
 assert.equal(initialReps('5', 0), 5);
@@ -135,11 +135,11 @@ assert.equal(initialReps('10, 8, 6', 4), 6);
 assert.equal(initialReps('AMRAP', 0, 12), 12);
 ```
 
-- [ ] Add completed-set tests for 0 kg, a previous 60 kg set followed by explicit 0 kg, fractional weights, negative/non-finite input, integer reps, and repeated occurrences of the same exercise. Run `npx tsx --test tests/unit/workout-sets.test.ts` and confirm the current behavior fails.
-- [ ] Initialize suggested weights and reps at set creation. Completion validates and toggles the current values; remove the fallback chain that manufactures 20 kg or replaces zero. Keep fixed/range/per-set/AMRAP targets visible. Unsupported free-form target text remains visible and falls back to previous reps or ten; do not silently reinterpret it as a numeric prescription.
-- [ ] Make weight entry commit before Complete and Finish consume the snapshot. Preserve raw decimal text while typing, accept decimal point/comma consistently, and display validation errors for invalid numeric input. A unit switch while editing must commit using the old unit or explicitly retain/cancel that edit before converting.
-- [ ] Replace timestamp-derived workout/exercise/set IDs with collision-resistant IDs generated at creation. Keep IDs stable through reorder, save, and recovery. Use occurrence IDs to distinguish repeated exercises and prevent set-primary-key collisions.
-- [ ] Test Finish while a weight input remains focused and fast Complete taps in the UI. Run all targeted and existing checks. Gate: zero stays zero, target five starts at five, and the last typed value reaches storage.
+- [x] Add completed-set tests for 0 kg, a previous 60 kg set followed by explicit 0 kg, fractional weights, negative/non-finite input, integer reps, and repeated occurrences of the same exercise. Run `npx tsx --test tests/unit/workout-sets.test.ts` and confirm the current behavior fails.
+- [x] Initialize suggested weights and reps at set creation. Completion validates and toggles the current values; remove the fallback chain that manufactures 20 kg or replaces zero. Keep fixed/range/per-set/AMRAP targets visible. Unsupported free-form target text remains visible and falls back to previous reps or ten; do not silently reinterpret it as a numeric prescription.
+- [x] Make weight entry commit before Complete and Finish consume the snapshot. Preserve raw decimal text while typing, accept decimal point/comma consistently, and display validation errors for invalid numeric input. A unit switch while editing must commit using the old unit or explicitly retain/cancel that edit before converting.
+- [x] Replace timestamp-derived workout/exercise/set IDs with collision-resistant IDs generated at creation. Keep IDs stable through reorder, save, and recovery. Use occurrence IDs to distinguish repeated exercises and prevent set-primary-key collisions.
+- [x] Test Finish while a weight input remains focused and fast Complete taps in the UI. Run all targeted and existing checks. Gate: zero stays zero, target five starts at five, and the last typed value reaches storage.
 
 ## Task 5: Repair completion and cross-platform dialogs
 

@@ -223,4 +223,24 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       );
     });
   }
+
+  // Migration 3: Add target_reps to workout_exercises
+  if (!applied.has(3) && (options?.maxVersion === undefined || options.maxVersion >= 3)) {
+    await driver.withTransactionAsync(async () => {
+      const tableInfo = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workout_exercises);');
+      const hasCol = tableInfo.some(c => c.name === 'target_reps');
+      if (!hasCol) {
+        await driver.execAsync('ALTER TABLE workout_exercises ADD COLUMN target_reps TEXT;');
+      }
+
+      if (options?.failAtVersion === 3) {
+        throw new Error('Injected migration failure at version 3');
+      }
+
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (3, ?)',
+        new Date().toISOString()
+      );
+    });
+  }
 }

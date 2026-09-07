@@ -17,6 +17,7 @@ export interface WorkoutSet {
   type: SetType;
   weightKg: number;
   reps: number;
+  targetReps?: string;
   rpe?: number;
   isCompleted: boolean;
   completedAt?: string;
@@ -30,6 +31,7 @@ export interface ActiveExercise {
   exercise: Exercise;
   sets: WorkoutSet[];
   notes?: string;
+  targetReps?: string;
   restTimerSeconds: number;
 }
 

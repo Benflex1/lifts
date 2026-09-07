@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TextInput, StyleProp, TextStyle } from 'react-native';
 import { useSettings } from '../context/SettingsContext';
 import { kgToDisplay, displayToKg } from '../utils/units';
@@ -20,33 +20,59 @@ export const WeightInput: React.FC<Props> = ({
 }) => {
   const { unit } = useSettings();
   const [rawText, setRawText] = useState<string | null>(null);
+  const prevUnitRef = useRef(unit);
 
-  const displayValue = value > 0 ? kgToDisplay(value, unit).toString() : '';
+  // When unit changes while an edit is uncommitted, commit using the old unit first
+  useEffect(() => {
+    if (prevUnitRef.current !== unit) {
+      if (rawText !== null) {
+        const cleaned = rawText.trim().replace(',', '.');
+        const parsed = parseFloat(cleaned);
+        if (!isNaN(parsed) && Number.isFinite(parsed) && parsed >= 0) {
+          onCommit(displayToKg(parsed, prevUnitRef.current));
+        }
+        setRawText(null);
+      }
+      prevUnitRef.current = unit;
+    }
+  }, [unit, rawText, onCommit]);
+
+  const displayValue = kgToDisplay(value, unit).toString();
   const shownText = rawText !== null ? rawText : displayValue;
 
-  useEffect(() => {
-    setRawText(null);
-  }, [value, unit]);
+  const handleTextChange = (text: string) => {
+    setRawText(text);
+    const cleaned = text.trim().replace(',', '.');
+    const parsed = parseFloat(cleaned);
+    if (!isNaN(parsed) && Number.isFinite(parsed) && parsed >= 0) {
+      onCommit(displayToKg(parsed, unit));
+    }
+  };
+
+  const handleCommit = () => {
+    if (rawText !== null) {
+      const cleaned = rawText.trim().replace(',', '.');
+      const parsed = parseFloat(cleaned);
+      if (!isNaN(parsed) && Number.isFinite(parsed) && parsed >= 0) {
+        onCommit(displayToKg(parsed, unit));
+      } else if (cleaned === '') {
+        onCommit(0);
+      }
+      setRawText(null);
+    }
+  };
 
   return (
     <TextInput
       style={style}
       keyboardType="decimal-pad"
       value={shownText}
-      placeholder={placeholder || (unit === 'kg' ? '0' : '0')}
+      placeholder={placeholder || '0'}
       placeholderTextColor="#6B7280"
       selectTextOnFocus
-      onChangeText={setRawText}
-      onBlur={() => {
-        const parsed = rawText !== null ? (parseFloat(rawText) || 0) : value > 0 ? kgToDisplay(value, unit) : 0;
-        onCommit(displayToKg(parsed, unit));
-        setRawText(null);
-      }}
-      onSubmitEditing={() => {
-        const parsed = rawText !== null ? (parseFloat(rawText) || 0) : value > 0 ? kgToDisplay(value, unit) : 0;
-        onCommit(displayToKg(parsed, unit));
-        setRawText(null);
-      }}
+      onChangeText={handleTextChange}
+      onBlur={handleCommit}
+      onSubmitEditing={handleCommit}
     />
   );
 };
