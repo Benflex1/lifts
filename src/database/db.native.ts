@@ -86,7 +86,8 @@ export async function initDatabase(): Promise<void> {
       end_time TEXT,
       duration_seconds INTEGER DEFAULT 0,
       total_volume_kg REAL DEFAULT 0,
-      notes TEXT
+      notes TEXT,
+      in_progress INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS workout_exercises (
@@ -113,6 +114,12 @@ export async function initDatabase(): Promise<void> {
       FOREIGN KEY (workout_exercise_id) REFERENCES workout_exercises(id) ON DELETE CASCADE
     );
   `);
+
+  try {
+    await db.execAsync('ALTER TABLE workouts ADD COLUMN in_progress INTEGER DEFAULT 0');
+  } catch (_) {
+    // Column already exists — safe to ignore
+  }
 
   // Check if exercises need seeding
   const seeded = await db.getFirstAsync<{ value: string }>(
@@ -546,8 +553,8 @@ export async function saveCompletedWorkout(workout: Workout): Promise<void> {
 
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       workout.id,
       workout.routineId || null,
       workout.name,
@@ -557,6 +564,8 @@ export async function saveCompletedWorkout(workout: Workout): Promise<void> {
       workout.totalVolumeKg,
       workout.notes || null
     );
+
+    await db.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workout.id);
 
     if (workout.routineId) {
       await db.runAsync(
@@ -628,6 +637,7 @@ export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
      LEFT JOIN workout_exercises we ON w.id = we.workout_id
      LEFT JOIN exercises e ON we.exercise_id = e.id
      LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
+     WHERE w.in_progress = 0
      GROUP BY w.id
      ORDER BY w.start_time DESC`
   );
@@ -660,7 +670,7 @@ export async function getPreviousSetsForExercise(exerciseId: string): Promise<Wo
        AND w.id = (
          SELECT w2.id FROM workouts w2
          JOIN workout_exercises we2 ON we2.workout_id = w2.id
-         WHERE we2.exercise_id = ?
+         WHERE we2.exercise_id = ? AND w2.in_progress = 0
          ORDER BY w2.start_time DESC
          LIMIT 1
        )
@@ -690,7 +700,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<Workout | nul
   const db = await getDatabase();
   if (!db) return null;
 
-  const w = await db.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ?', workoutId);
+  const w = await db.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ? AND in_progress = 0', workoutId);
   if (!w) return null;
 
   const weRows = await db.getAllAsync<any>(
@@ -923,5 +933,116 @@ export async function getRoutineById(id: string): Promise<Routine | null> {
     })),
   };
 }
+
+export async function saveWorkoutDraft(workout: Workout): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, duration_seconds, total_volume_kg, notes, in_progress)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      workout.id,
+      workout.routineId || null,
+      workout.name,
+      workout.startTime,
+      workout.durationSeconds,
+      workout.totalVolumeKg,
+      workout.notes || null
+    );
+
+    await db.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workout.id);
+
+    let exOrder = 0;
+    for (const ex of workout.exercises) {
+      const weId = `we-${workout.id}-${exOrder}`;
+      await db.runAsync(
+        `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        weId, workout.id, ex.exerciseId, exOrder, ex.notes || null, ex.restTimerSeconds ?? 0
+      );
+
+      for (const s of ex.sets) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, rpe, is_completed, completed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          s.id || `set-${weId}-${s.setNumber}`,
+          weId, s.setNumber, s.type, s.weightKg, s.reps, s.rpe || null,
+          s.isCompleted ? 1 : 0,
+          s.completedAt || null
+        );
+      }
+      exOrder++;
+    }
+  });
+}
+
+export async function getWorkoutDraft(): Promise<Workout | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+  const w = await db.getFirstAsync<any>('SELECT * FROM workouts WHERE in_progress = 1 ORDER BY start_time DESC LIMIT 1');
+  if (!w) return null;
+
+  const weRows = await db.getAllAsync<any>(
+    `SELECT we.*, e.name as ex_name, e.category as ex_cat, e.equipment as ex_equip,
+            e.primary_muscles as ex_pm, e.secondary_muscles as ex_sm, e.instructions as ex_inst
+     FROM workout_exercises we
+     JOIN exercises e ON we.exercise_id = e.id
+     WHERE we.workout_id = ?
+     ORDER BY we.order_index ASC`,
+    w.id
+  );
+
+  const exercises: ActiveExercise[] = [];
+  for (const we of weRows) {
+    const sRows = await db.getAllAsync<any>(
+      'SELECT * FROM exercise_sets WHERE workout_exercise_id = ? ORDER BY set_number ASC',
+      we.id
+    );
+    exercises.push({
+      id: we.id,
+      exerciseId: we.exercise_id,
+      notes: we.notes,
+      restTimerSeconds: we.rest_timer_seconds ?? 0,
+      exercise: {
+        id: we.exercise_id,
+        name: we.ex_name,
+        category: we.ex_cat,
+        equipment: we.ex_equip,
+        primaryMuscles: JSON.parse(we.ex_pm || '[]'),
+        secondaryMuscles: JSON.parse(we.ex_sm || '[]'),
+        instructions: JSON.parse(we.ex_inst || '[]'),
+      },
+      sets: sRows.map(s => ({
+        id: s.id,
+        setNumber: s.set_number,
+        type: s.set_type as any,
+        weightKg: s.weight_kg,
+        reps: s.reps,
+        rpe: s.rpe,
+        isCompleted: Boolean(s.is_completed),
+        completedAt: s.completed_at,
+      })),
+    });
+  }
+
+  return {
+    id: w.id,
+    name: w.name,
+    routineId: w.routine_id,
+    startTime: w.start_time,
+    durationSeconds: w.duration_seconds || 0,
+    totalVolumeKg: w.total_volume_kg || 0,
+    exercises,
+    notes: w.notes,
+  };
+}
+
+export async function discardWorkoutDraft(id: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync('DELETE FROM workouts WHERE id = ?', id);
+}
+
 
 

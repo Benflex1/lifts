@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../types';
-import { saveCompletedWorkout, getPreviousSetsForExercise } from '../database/db';
-import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
+import { saveCompletedWorkout, getPreviousSetsForExercise, saveWorkoutDraft, getWorkoutDraft, discardWorkoutDraft } from '../database/db';
+import { computeElapsedSeconds, computeRemaining, rebaseStartTime } from '../utils/timer';
 
 interface RestTimerState {
   isActive: boolean;
@@ -19,6 +19,9 @@ interface WorkoutContextType {
   isMinimized: boolean;
   elapsedSeconds: number;
   restTimer: RestTimerState;
+  draftAvailable: Workout | null;
+  resumeDraft: () => void;
+  discardDraft: () => void;
   startWorkout: (routine?: Routine, customName?: string) => Promise<void>;
   minimizeWorkout: () => void;
   maximizeWorkout: () => void;
@@ -43,6 +46,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeWorkout, setActiveWorkout] = useState<Workout | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [draftAvailable, setDraftAvailable] = useState<Workout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
     remainingSeconds: 0,
@@ -75,6 +80,66 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
     };
   }, [activeWorkout !== null]);
+
+  // Load initial draft on mount
+  useEffect(() => {
+    (async () => {
+      const draft = await getWorkoutDraft();
+      setDraftAvailable(draft);
+    })();
+  }, []);
+
+  // Autosave activeWorkout to draft (debounced 3s)
+  useEffect(() => {
+    if (activeWorkout) {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          await saveWorkoutDraft(activeWorkout);
+        } catch (e) {
+          console.error('Draft autosave failed:', e);
+        }
+      }, 3000);
+    }
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [activeWorkout]);
+
+  // Immediately save draft when app goes to background
+  useEffect(() => {
+    const handler = (state: AppStateStatus) => {
+      if (state === 'background' && activeWorkout) {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveWorkoutDraft(activeWorkout).catch(console.error);
+      }
+    };
+    const sub = AppState.addEventListener('change', handler);
+    return () => sub.remove();
+  }, [activeWorkout]);
+
+  const resumeDraft = () => {
+    if (!draftAvailable) return;
+    const now = Date.now();
+    const rebased = {
+      ...draftAvailable,
+      startTime: rebaseStartTime(now, draftAvailable.durationSeconds),
+    };
+    startTimeRef.current = rebased.startTime;
+    setActiveWorkout(rebased);
+    setElapsedSeconds(draftAvailable.durationSeconds);
+    setDraftAvailable(null);
+  };
+
+  const discardDraft = async () => {
+    if (!draftAvailable) return;
+    try {
+      await discardWorkoutDraft(draftAvailable.id);
+    } catch (e) {
+      console.error('Draft discard failed:', e);
+    }
+    setDraftAvailable(null);
+  };
 
   // Rest countdown timer
   useEffect(() => {
@@ -395,7 +460,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         endTime: new Date().toISOString(),
       };
 
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       await saveCompletedWorkout(finished);
+      setDraftAvailable(null);
 
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -412,6 +479,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const cancelWorkout = () => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    if (activeWorkout) {
+      discardWorkoutDraft(activeWorkout.id).catch(console.error);
+    }
     setActiveWorkout(null);
     setIsMinimized(false);
     stopRestTimer();
@@ -425,6 +496,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isMinimized,
         elapsedSeconds,
         restTimer,
+        draftAvailable,
+        resumeDraft,
+        discardDraft,
         startWorkout,
         minimizeWorkout,
         maximizeWorkout,

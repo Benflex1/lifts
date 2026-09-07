@@ -306,4 +306,19 @@ export async function getRoutineById(id: string): Promise<Routine | null> {
   return webStorage.routines.find(r => r.id === id) || null;
 }
 
+let webDraft: Workout | null = null;
+
+export async function saveWorkoutDraft(workout: Workout): Promise<void> {
+  webDraft = workout;
+}
+
+export async function getWorkoutDraft(): Promise<Workout | null> {
+  return webDraft;
+}
+
+export async function discardWorkoutDraft(id: string): Promise<void> {
+  if (webDraft?.id === id) webDraft = null;
+}
+
+
 

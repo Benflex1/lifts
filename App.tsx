@@ -19,6 +19,7 @@ import { ExercisesScreen } from './src/screens/ExercisesScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 
 import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
+import { DraftResumeBanner } from './src/components/DraftResumeBanner';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
@@ -42,6 +43,7 @@ function MainAppContent() {
 
       {/* Screen Views */}
       <View style={styles.screenContent}>
+        <DraftResumeBanner />
         {currentTab === 'workout' && (
           <WorkoutScreen onStartActiveWorkout={() => {}} />
         )}
