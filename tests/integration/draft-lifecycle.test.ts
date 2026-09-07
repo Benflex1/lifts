@@ -238,5 +238,71 @@ describe('Draft Lifecycle Integration', () => {
 
       await fixture.dispose();
     });
+
+    it(`[${platform}] restores draft with omitted embedded exercise, reconstructs it, and resumes safely`, async () => {
+      const fixture = await createStoreFixture(platform);
+
+      const backupWithOmittedExercise = JSON.stringify({
+        version: 2,
+        exportedAt: '2026-09-07T10:00:00.000Z',
+        workouts: [],
+        routines: [],
+        exercises: [],
+        drafts: [
+          {
+            version: 1,
+            savedAt: '2026-09-07T10:05:00.000Z',
+            revision: 1,
+            workout: {
+              id: `draft-reconstruct-${platform}`,
+              name: 'Draft With Omitted Exercise',
+              startTime: '2026-09-07T10:00:00.000Z',
+              durationSeconds: 300,
+              totalVolumeKg: 1000,
+              exercises: [
+                {
+                  id: `we-recon-1`,
+                  exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                  orderIndex: 0,
+                  sets: [
+                    { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 10, isCompleted: true },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+        settings: {},
+      });
+
+      const { restoreBackup } = await import('../../src/utils/restore');
+      await restoreBackup(backupWithOmittedExercise, fixture.store);
+
+      // Reopen store to simulate fresh launch
+      const reopened = await fixture.reopen();
+      const drafts = await reopened.getWorkoutDrafts();
+      assert.equal(drafts.length, 1);
+      const recoveredEx = drafts[0].workout.exercises[0];
+
+      // Embedded exercise must be present with valid name and primaryMuscles
+      assert.ok(recoveredEx.exercise, 'Exercise object must be reconstructed');
+      assert.equal(recoveredEx.exercise.name, 'Barbell Bench Press - Medium Grip');
+      assert.ok(Array.isArray(recoveredEx.exercise.primaryMuscles));
+      assert.ok(recoveredEx.exercise.primaryMuscles.length > 0);
+
+      // Resume draft in session controller and verify no crashes accessing exercise fields
+      const controller = createSessionController(reopened);
+      controller.resume(drafts[0]);
+      const state = controller.getState();
+      assert.equal(state.phase, 'active');
+
+      const activeEx = state.workout?.exercises[0];
+      assert.ok(activeEx);
+      assert.equal(activeEx.exercise.name, 'Barbell Bench Press - Medium Grip');
+      assert.equal(activeEx.exercise.primaryMuscles.join(', '), 'chest');
+      assert.equal(typeof activeEx.exercise.equipment, 'string');
+
+      await fixture.dispose();
+    });
   }
 });

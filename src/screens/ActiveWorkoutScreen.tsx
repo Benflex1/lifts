@@ -241,12 +241,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               {/* Exercise Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.exerciseTitleGroup}>
-                  <Text style={styles.exerciseName}>{activeEx.exercise.name}</Text>
+                  <Text style={styles.exerciseName}>{activeEx.exercise?.name || 'Exercise'}</Text>
                   <View style={styles.badgeRow}>
                     <Text style={styles.muscleBadge}>
-                      {activeEx.exercise.primaryMuscles.join(', ')}
+                      {(Array.isArray(activeEx.exercise?.primaryMuscles) ? activeEx.exercise.primaryMuscles : []).join(', ')}
                     </Text>
-                    <Text style={styles.equipmentBadge}>{activeEx.exercise.equipment}</Text>
+                    <Text style={styles.equipmentBadge}>{activeEx.exercise?.equipment || ''}</Text>
                     {activeEx.targetReps ? (
                       <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
                     ) : null}
@@ -475,7 +475,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       <RestTimeWheelModal
         visible={restWheelActiveExercise !== null}
         initialSeconds={restWheelActiveExercise?.restTimerSeconds ?? 0}
-        exerciseName={restWheelActiveExercise?.exercise.name}
+        exerciseName={restWheelActiveExercise?.exercise?.name}
         onClose={() => setRestWheelActiveExercise(null)}
         onSave={seconds => {
           if (restWheelActiveExercise) {

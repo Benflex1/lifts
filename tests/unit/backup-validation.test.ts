@@ -437,4 +437,141 @@ describe('Backup validation (parseBackup)', () => {
       parseBackup(JSON.stringify(badRpeDraft));
     }, /Invalid RPE/);
   });
+
+  it('reconstructs missing embedded exercise objects in draft from referenced definition', () => {
+    const backupWithOmittedExercise = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+          workout: {
+            id: 'draft-missing-ex',
+            name: 'Draft Without Embedded Exercise',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                orderIndex: 0,
+                sets: [
+                  { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const parsed = parseBackup(JSON.stringify(backupWithOmittedExercise));
+    const embeddedEx = parsed.drafts[0].workout.exercises[0].exercise;
+    assert.ok(embeddedEx, 'Embedded exercise object must be reconstructed');
+    assert.equal(embeddedEx.name, 'Bench Press (Barbell)');
+    assert.ok(Array.isArray(embeddedEx.primaryMuscles), 'primaryMuscles must be an array');
+    assert.ok(embeddedEx.primaryMuscles.length > 0);
+    assert.equal(typeof embeddedEx.equipment, 'string');
+  });
+
+  it('rejects draft containing invalid primaryMuscles in embedded exercise object', () => {
+    const stringMusclesDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+          workout: {
+            id: 'draft-bad-muscles',
+            name: 'Draft Bad Muscles',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                exercise: {
+                  id: 'Barbell_Bench_Press_-_Medium_Grip',
+                  name: 'Bench Press',
+                  category: 'chest',
+                  equipment: 'barbell',
+                  primaryMuscles: 'chest',
+                },
+                sets: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(stringMusclesDraft));
+    }, /Invalid primaryMuscles/);
+
+    const nullMusclesDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+          workout: {
+            id: 'draft-bad-muscles-null',
+            name: 'Draft Null Muscles',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                exercise: {
+                  id: 'Barbell_Bench_Press_-_Medium_Grip',
+                  name: 'Bench Press',
+                  category: 'chest',
+                  equipment: 'barbell',
+                  primaryMuscles: null,
+                },
+                sets: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(nullMusclesDraft));
+    }, /Invalid primaryMuscles/);
+
+    const nonStringElementDraft = {
+      ...validBaseBackup,
+      drafts: [
+        {
+          version: 1,
+          savedAt: '2026-09-07T11:00:00.000Z',
+          revision: 1,
+          workout: {
+            id: 'draft-bad-muscles-elem',
+            name: 'Draft Non-string Muscle Element',
+            startTime: '2026-09-07T11:00:00.000Z',
+            exercises: [
+              {
+                id: 'de1',
+                exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+                exercise: {
+                  id: 'Barbell_Bench_Press_-_Medium_Grip',
+                  name: 'Bench Press',
+                  category: 'chest',
+                  equipment: 'barbell',
+                  primaryMuscles: [123],
+                },
+                sets: [],
+              },
+            ],
+          },
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(nonStringElementDraft));
+    }, /Invalid primaryMuscles/);
+  });
 });
