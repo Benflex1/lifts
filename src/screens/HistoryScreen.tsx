@@ -18,8 +18,8 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react-native';
-import { Workout, WorkoutHistorySummary } from '../types';
-import { getWorkoutHistory, getWorkoutDetail, deleteWorkout } from '../database/db';
+import { Workout, WorkoutHistorySummary, Routine } from '../types';
+import { getWorkoutHistory, getWorkoutDetail, deleteWorkout, getRoutineById } from '../database/db';
 import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
@@ -99,7 +99,36 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
 
   const handlePerformAgain = async (item: WorkoutHistorySummary) => {
     try {
-      await startWorkout(undefined, `${item.name}`);
+      let routine: Routine | undefined;
+
+      if (item.routineId) {
+        const found = await getRoutineById(item.routineId);
+        if (found) {
+          routine = found;
+        }
+      }
+
+      if (!routine) {
+        const detail = await getWorkoutDetail(item.id);
+        if (detail && detail.exercises.length > 0) {
+          routine = {
+            id: '',
+            name: item.name,
+            createdAt: new Date().toISOString(),
+            exercises: detail.exercises.map((ex, idx) => ({
+              id: `synth-${idx}`,
+              exerciseId: ex.exerciseId,
+              exercise: ex.exercise,
+              orderIndex: idx,
+              targetSets: ex.sets.length || 3,
+              targetReps: String(ex.sets[0]?.reps || 10),
+              restTimerSeconds: ex.restTimerSeconds ?? 90,
+            })),
+          };
+        }
+      }
+
+      await startWorkout(routine, item.name);
       onStartActiveWorkout();
     } catch (e) {
       Alert.alert('Error', 'Failed to start workout.');

@@ -883,3 +883,45 @@ export async function getAllExercises(): Promise<Exercise[]> {
   }));
 }
 
+export async function getRoutineById(id: string): Promise<Routine | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+  const r = await db.getFirstAsync<any>('SELECT * FROM routines WHERE id = ?', id);
+  if (!r) return null;
+  const reRows = await db.getAllAsync<any>(
+    `SELECT re.*, e.name as ex_name, e.category as ex_category, e.equipment as ex_equipment,
+            e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst
+     FROM routine_exercises re
+     JOIN exercises e ON re.exercise_id = e.id
+     WHERE re.routine_id = ?
+     ORDER BY re.order_index ASC`,
+    r.id
+  );
+  return {
+    id: r.id,
+    name: r.name,
+    folderName: r.folder_name,
+    notes: r.notes,
+    createdAt: r.created_at,
+    lastPerformedAt: r.last_performed_at,
+    exercises: reRows.map(row => ({
+      id: row.id,
+      exerciseId: row.exercise_id,
+      exercise: {
+        id: row.exercise_id,
+        name: row.ex_name,
+        category: row.ex_category,
+        equipment: row.ex_equipment,
+        primaryMuscles: JSON.parse(row.ex_primary || '[]'),
+        secondaryMuscles: JSON.parse(row.ex_secondary || '[]'),
+        instructions: JSON.parse(row.ex_inst || '[]'),
+      },
+      orderIndex: row.order_index,
+      targetSets: row.target_sets,
+      targetReps: row.target_reps,
+      restTimerSeconds: row.rest_timer_seconds,
+    })),
+  };
+}
+
+

@@ -302,3 +302,8 @@ export async function getAllExercises(): Promise<Exercise[]> {
   return webStorage.exercises;
 }
 
+export async function getRoutineById(id: string): Promise<Routine | null> {
+  return webStorage.routines.find(r => r.id === id) || null;
+}
+
+
