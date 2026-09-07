@@ -272,4 +272,20 @@ describe('nativeStore and migration safety', () => {
     driver.close();
     fs.unlinkSync(tempFile);
   });
+
+  it('rejects saving a routine with malformed targetReps', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-routine-bad-reps-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    const store = createNativeStore(driver);
+    await store.init();
+
+    await assert.rejects(async () => {
+      await store.saveRoutine('Bad Reps Routine', 'Folder', [
+        { exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', targetSets: 3, targetReps: '7&x-9', restTimerSeconds: 60 },
+      ]);
+    }, /Invalid target reps/);
+
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
 });

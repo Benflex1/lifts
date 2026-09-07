@@ -324,4 +324,18 @@ describe('webStore persistence and lease handling', () => {
     if (store.close) await store.close();
     if (reopened.close) await reopened.close();
   });
+
+  it('rejects saving a routine with malformed targetReps in web store', async () => {
+    const dbName = `test-bad-reps-${Date.now()}`;
+    const store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    await assert.rejects(async () => {
+      await store.saveRoutine('Bad Reps Routine', 'Folder', [
+        { exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', targetSets: 3, targetReps: '7&x-9', restTimerSeconds: 60 },
+      ]);
+    }, /Invalid target reps/);
+
+    if (store.close) await store.close();
+  });
 });

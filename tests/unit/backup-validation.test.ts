@@ -574,4 +574,47 @@ describe('Backup validation (parseBackup)', () => {
       parseBackup(JSON.stringify(nonStringElementDraft));
     }, /Invalid primaryMuscles/);
   });
+
+  it('rejects backup with invalid targetReps in routine or workout exercise', () => {
+    const badRoutineReps = {
+      ...validBaseBackup,
+      routines: [
+        {
+          id: 'routine-bad-reps',
+          name: 'Bad Reps Routine',
+          exercises: [
+            {
+              id: 're-1',
+              exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+              orderIndex: 0,
+              targetSets: 3,
+              targetReps: '7&x-9',
+              restTimerSeconds: 90,
+            },
+          ],
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badRoutineReps));
+    }, /Invalid targetReps/);
+
+    const badWorkoutReps = {
+      ...validBaseBackup,
+      workouts: [
+        {
+          ...validBaseBackup.workouts[0],
+          exercises: [
+            {
+              ...validBaseBackup.workouts[0].exercises[0],
+              targetReps: '7&x-9',
+            },
+          ],
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badWorkoutReps));
+    }, /Invalid targetReps/);
+  });
 });
