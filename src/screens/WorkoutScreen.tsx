@@ -17,10 +17,11 @@ import {
   Dumbbell,
   Sparkles,
   Calendar,
+  Copy,
 } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { Routine } from '../types';
-import { getRoutines, deleteRoutine } from '../database/db';
+import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 
 export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
@@ -49,6 +50,15 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   const handleStartRoutine = async (routine: Routine) => {
     await startWorkout(routine);
     onStartActiveWorkout();
+  };
+
+  const handleDuplicateRoutine = async (routine: Routine) => {
+    try {
+      await duplicateRoutine(routine.id);
+      loadRoutines();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleDeleteRoutine = (routine: Routine) => {
@@ -180,10 +190,19 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
               <View style={styles.routineActions}>
                 <TouchableOpacity
                   style={styles.iconBtn}
+                  onPress={() => handleDuplicateRoutine(routine)}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Copy size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.iconBtn}
                   onPress={() => {
                     setRoutineToEdit(routine);
                     setShowEditor(true);
                   }}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                 >
                   <Edit2 size={16} color="#9CA3AF" />
                 </TouchableOpacity>
@@ -191,6 +210,7 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
                 <TouchableOpacity
                   style={styles.iconBtn}
                   onPress={() => handleDeleteRoutine(routine)}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                 >
                   <Trash2 size={16} color="#EF4444" />
                 </TouchableOpacity>
@@ -362,8 +382,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#181A20',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#262A34',
@@ -400,7 +420,7 @@ const styles = StyleSheet.create({
   },
   routineName: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     marginBottom: 4,
   },
@@ -417,10 +437,10 @@ const styles = StyleSheet.create({
   routineActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   iconBtn: {
-    padding: 6,
+    padding: 8,
     borderRadius: 8,
     backgroundColor: '#20242E',
   },
@@ -443,13 +463,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 12,
-    gap: 6,
+    gap: 8,
   },
   startRoutineBtnText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   emptyRoutinesBox: {

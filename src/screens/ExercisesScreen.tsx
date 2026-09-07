@@ -10,9 +10,9 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus, ChevronRight, Info } from 'lucide-react-native';
+import { Search, X, Dumbbell, Plus, ChevronRight, Info, Trophy, TrendingUp } from 'lucide-react-native';
 import { Exercise } from '../types';
-import { searchExercises, createCustomExercise } from '../database/db';
+import { searchExercises, createCustomExercise, getExerciseStats } from '../database/db';
 
 const MUSCLE_GROUPS = [
   'All',
@@ -67,6 +67,22 @@ export const ExercisesScreen: React.FC = () => {
   const [customName, setCustomName] = useState('');
   const [customMuscle, setCustomMuscle] = useState('Chest');
   const [customEquipment, setCustomEquipment] = useState('Barbell');
+
+  // Exercise personal stats
+  const [exerciseStats, setExerciseStats] = useState<{
+    maxWeightKg: number;
+    maxReps: number;
+    estimated1RM: number;
+    sessionCount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (activeDetail) {
+      getExerciseStats(activeDetail.id).then(stats => setExerciseStats(stats));
+    } else {
+      setExerciseStats(null);
+    }
+  }, [activeDetail]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -302,6 +318,34 @@ export const ExercisesScreen: React.FC = () => {
                 <Text style={styles.secondaryMusclesText}>
                   Secondary: {activeDetail.secondaryMuscles.join(', ')}
                 </Text>
+              )}
+
+              {/* Personal Bests & Stats Card */}
+              {exerciseStats && (
+                <View style={styles.statsCard}>
+                  <View style={styles.statsHeader}>
+                    <Trophy size={16} color="#F59E0B" />
+                    <Text style={styles.statsHeaderTitle}>PERSONAL BESTS & STATS</Text>
+                  </View>
+                  <View style={styles.statsGrid}>
+                    <View style={styles.statBox}>
+                      <Text style={styles.statBoxLabel}>HEAVIEST LIFT</Text>
+                      <Text style={styles.statBoxValue}>
+                        {exerciseStats.maxWeightKg > 0 ? `${exerciseStats.maxWeightKg} kg` : '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.statBox}>
+                      <Text style={styles.statBoxLabel}>ESTIMATED 1RM</Text>
+                      <Text style={styles.statBoxValue}>
+                        {exerciseStats.estimated1RM > 0 ? `${exerciseStats.estimated1RM} kg` : '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.statBox}>
+                      <Text style={styles.statBoxLabel}>SESSIONS</Text>
+                      <Text style={styles.statBoxValue}>{exerciseStats.sessionCount}</Text>
+                    </View>
+                  </View>
+                </View>
               )}
 
               {/* Instructions */}
@@ -644,13 +688,60 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textTransform: 'capitalize',
   },
+  statsCard: {
+    backgroundColor: '#181A20',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    marginBottom: 14,
+  },
+  statsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  statsHeaderTitle: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#13151B',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#20242E',
+  },
+  statBoxLabel: {
+    color: '#6B7280',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  statBoxValue: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
   instructionsBox: {
     backgroundColor: '#181A20',
     borderRadius: 16,
     padding: 18,
     borderWidth: 1,
     borderColor: '#262A34',
-    marginTop: 10,
+    marginTop: 6,
   },
   instructionHeadRow: {
     flexDirection: 'row',

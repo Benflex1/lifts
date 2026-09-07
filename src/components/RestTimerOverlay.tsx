@@ -39,27 +39,27 @@ export const RestTimerOverlay: React.FC = () => {
           <TouchableOpacity
             style={styles.adjustButton}
             onPress={() => adjustRestTimer(-30)}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Minus size={14} color="#D1D5DB" />
+            <Minus size={16} color="#D1D5DB" />
             <Text style={styles.adjustText}>30s</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.adjustButton}
             onPress={() => adjustRestTimer(30)}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Plus size={14} color="#D1D5DB" />
+            <Plus size={16} color="#D1D5DB" />
             <Text style={styles.adjustText}>30s</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.skipButton}
             onPress={stopRestTimer}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <X size={16} color="#9CA3AF" />
+            <X size={18} color="#D1D5DB" />
           </TouchableOpacity>
         </View>
       </View>
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   progressBarBackground: {
-    height: 3,
+    height: 4,
     backgroundColor: '#262A34',
     width: '100%',
   },
@@ -98,18 +98,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   leftInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   timerIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#132E27',
     alignItems: 'center',
     justifyContent: 'center',
@@ -117,36 +117,43 @@ const styles = StyleSheet.create({
   timerTitle: {
     fontSize: 11,
     color: '#9CA3AF',
-    fontWeight: '500',
+    fontWeight: '600',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   timerCountdown: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 22,
+    fontWeight: '800',
     color: '#10B981',
     letterSpacing: 0.5,
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   adjustButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#2A2E3B',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 2,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 4,
   },
   adjustText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E5E7EB',
   },
   skipButton: {
-    padding: 6,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2A2E3B',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 2,
   },
 });

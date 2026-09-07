@@ -211,3 +211,64 @@ export async function getPreviousSetsForExercise(exerciseId: string): Promise<Wo
   }
   return [];
 }
+
+export async function deleteWorkout(workoutId: string): Promise<void> {
+  webStorage.workouts = webStorage.workouts.filter(w => w.id !== workoutId);
+}
+
+export async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {
+  return webStorage.workouts.find(w => w.id === workoutId) || null;
+}
+
+export async function duplicateRoutine(routineId: string): Promise<string> {
+  const original = webStorage.routines.find(r => r.id === routineId);
+  if (!original) throw new Error('Routine not found');
+  const newId = `routine-${Date.now()}`;
+  const duplicated: Routine = {
+    ...original,
+    id: newId,
+    name: `${original.name} (Copy)`,
+    createdAt: new Date().toISOString(),
+    exercises: original.exercises.map((e, idx) => ({
+      ...e,
+      id: `re-${newId}-${idx}`,
+    })),
+  };
+  webStorage.routines.unshift(duplicated);
+  return newId;
+}
+
+export async function getExerciseStats(exerciseId: string): Promise<{
+  maxWeightKg: number;
+  maxReps: number;
+  estimated1RM: number;
+  sessionCount: number;
+}> {
+  let maxWeightKg = 0;
+  let maxReps = 0;
+  let estimated1RM = 0;
+  let sessionCount = 0;
+
+  for (const w of webStorage.workouts) {
+    const ex = w.exercises.find(e => e.exerciseId === exerciseId);
+    if (ex) {
+      sessionCount++;
+      for (const s of ex.sets) {
+        if (s.isCompleted) {
+          if (s.weightKg > maxWeightKg) {
+            maxWeightKg = s.weightKg;
+          }
+          if (s.reps > maxReps) {
+            maxReps = s.reps;
+          }
+          const epley = Math.round(s.weightKg * (1 + s.reps / 30));
+          if (epley > estimated1RM) {
+            estimated1RM = epley;
+          }
+        }
+      }
+    }
+  }
+
+  return { maxWeightKg, maxReps, estimated1RM, sessionCount };
+}

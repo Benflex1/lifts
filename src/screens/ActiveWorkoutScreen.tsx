@@ -21,7 +21,9 @@ import {
   Trophy,
   Award,
   ChevronDown,
+  FileText,
 } from 'lucide-react-native';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
@@ -30,6 +32,8 @@ import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { Exercise, SetType, Workout, WorkoutSet } from '../types';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
+  useKeepAwake();
+
   const {
     activeWorkout,
     elapsedSeconds,
@@ -39,6 +43,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     addSet,
     removeSet,
     updateSet,
+    updateExerciseNotes,
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
@@ -228,13 +233,25 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                 </View>
               </View>
 
+              {/* Optional Exercise Note */}
+              <View style={styles.exerciseNoteRow}>
+                <FileText size={13} color="#9CA3AF" />
+                <TextInput
+                  style={styles.exerciseNoteInput}
+                  placeholder="Add note (e.g. seat pin 4, slow tempo)..."
+                  placeholderTextColor="#6B7280"
+                  value={activeEx.notes || ''}
+                  onChangeText={txt => updateExerciseNotes(activeEx.id, txt)}
+                />
+              </View>
+
               {/* Table Column Labels */}
               <View style={styles.tableHeader}>
-                <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>SET</Text>
-                <Text style={[styles.colHeader, { flex: 1 }]}>PREVIOUS</Text>
-                <Text style={[styles.colHeader, { width: 76, textAlign: 'center' }]}>KG</Text>
-                <Text style={[styles.colHeader, { width: 64, textAlign: 'center' }]}>REPS</Text>
-                <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>✓</Text>
+                <Text style={[styles.colHeader, { width: 42, textAlign: 'center' }]}>SET</Text>
+                <Text style={[styles.colHeader, { flex: 1, paddingLeft: 6 }]}>PREVIOUS</Text>
+                <Text style={[styles.colHeader, { width: 84, textAlign: 'center' }]}>KG</Text>
+                <Text style={[styles.colHeader, { width: 72, textAlign: 'center' }]}>REPS</Text>
+                <Text style={[styles.colHeader, { width: 48, textAlign: 'center' }]}>✓</Text>
               </View>
 
               {/* Set Rows */}
@@ -250,6 +267,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                     <TouchableOpacity
                       style={[styles.setBadge, { backgroundColor: badge.bg }]}
                       onPress={() => cycleSetType(activeEx.id, set)}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     >
                       <Text style={[styles.setBadgeText, { color: badge.text }]}>
                         {badge.label || set.setNumber}
@@ -308,11 +326,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                         set.isCompleted ? styles.checkBtnActive : styles.checkBtnInactive,
                       ]}
                       onPress={() => toggleSetComplete(activeEx.id, set.id)}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     >
                       <Check
-                        size={18}
+                        size={22}
                         color={set.isCompleted ? '#000000' : '#4B5563'}
-                        strokeWidth={set.isCompleted ? 3 : 2}
+                        strokeWidth={3}
                       />
                     </TouchableOpacity>
                   </View>
@@ -572,8 +591,8 @@ const styles = StyleSheet.create({
   },
   exerciseName: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     marginBottom: 4,
   },
   badgeRow: {
@@ -598,90 +617,114 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconAction: {
-    padding: 6,
+    padding: 8,
     borderRadius: 8,
     backgroundColor: '#20242E',
+  },
+  exerciseNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#13161F',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#222734',
+  },
+  exerciseNoteInput: {
+    flex: 1,
+    color: '#D1D5DB',
+    fontSize: 12,
+    padding: 0,
   },
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 6,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: '#2B3140',
     marginBottom: 6,
   },
   colHeader: {
-    color: '#6B7280',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   setRowCompleted: {
     backgroundColor: '#142621',
   },
   setBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
-    marginLeft: 6,
+    marginRight: 6,
+    marginLeft: 2,
   },
   setBadgeText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   previousCell: {
     flex: 1,
     paddingHorizontal: 4,
   },
   previousText: {
-    color: '#9CA3AF',
-    fontSize: 13,
+    color: '#D1D5DB',
+    fontSize: 14,
+    fontWeight: '600',
   },
   previousPlaceholder: {
     color: '#4B5563',
-    fontSize: 13,
+    fontSize: 14,
   },
   inputWrap: {
-    width: 76,
-    paddingHorizontal: 4,
+    width: 84,
+    paddingHorizontal: 3,
   },
   inputWrapReps: {
-    width: 64,
-    paddingHorizontal: 4,
+    width: 72,
+    paddingHorizontal: 3,
   },
   cellInput: {
     backgroundColor: '#262A34',
-    borderRadius: 8,
-    height: 36,
+    borderRadius: 10,
+    height: 44,
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     textAlign: 'center',
+    borderWidth: 1,
+    borderColor: '#374151',
   },
   inputCompleted: {
-    backgroundColor: '#1E3830',
-    color: '#E5E7EB',
+    backgroundColor: '#133529',
+    borderColor: '#10B981',
+    color: '#FFFFFF',
   },
   checkBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
+    marginRight: 2,
     marginLeft: 4,
   },
   checkBtnInactive: {
     backgroundColor: '#262A34',
+    borderWidth: 1,
+    borderColor: '#374151',
   },
   checkBtnActive: {
     backgroundColor: '#10B981',
@@ -698,22 +741,27 @@ const styles = StyleSheet.create({
   addSetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#1E293B',
+    borderRadius: 8,
   },
   addSetBtnText: {
     color: '#3B82F6',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   removeSetBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#2A1A1E',
   },
   removeSetBtnText: {
-    color: '#6B7280',
+    color: '#EF4444',
     fontSize: 12,
+    fontWeight: '600',
   },
   addExerciseMainBtn: {
     flexDirection: 'row',

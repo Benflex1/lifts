@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {
   Calendar as CalendarIcon,
@@ -13,9 +14,12 @@ import {
   Dumbbell,
   Repeat,
   Trophy,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
-import { WorkoutHistorySummary } from '../types';
-import { getWorkoutHistory } from '../database/db';
+import { Workout, WorkoutHistorySummary } from '../types';
+import { getWorkoutHistory, getWorkoutDetail, deleteWorkout } from '../database/db';
 import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
 
@@ -25,6 +29,9 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   const { startWorkout } = useWorkout();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [workoutDetails, setWorkoutDetails] = useState<Record<string, Workout>>({});
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   useEffect(() => {
     loadHistory();
@@ -40,6 +47,47 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToggleExpand = async (workoutId: string) => {
+    if (expandedId === workoutId) {
+      setExpandedId(null);
+      return;
+    }
+
+    setExpandedId(workoutId);
+    if (!workoutDetails[workoutId]) {
+      setLoadingDetailId(workoutId);
+      try {
+        const detail = await getWorkoutDetail(workoutId);
+        if (detail) {
+          setWorkoutDetails(prev => ({ ...prev, [workoutId]: detail }));
+        }
+      } catch (e) {
+        console.error('Error fetching workout detail:', e);
+      } finally {
+        setLoadingDetailId(null);
+      }
+    }
+  };
+
+  const handleDelete = (item: WorkoutHistorySummary) => {
+    Alert.alert(
+      'Delete Workout',
+      `Are you sure you want to delete "${item.name}" from your history? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteWorkout(item.id);
+            setExpandedId(null);
+            loadHistory();
+          },
+        },
+      ]
+    );
   };
 
   const handlePerformAgain = async (item: WorkoutHistorySummary) => {
@@ -89,59 +137,137 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
       ) : (
-        <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
-          {history.map(item => (
-            <View key={item.id} style={styles.historyCard}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.workoutName}>{item.name}</Text>
-                  <View style={styles.dateRow}>
-                    <CalendarIcon size={12} color="#9CA3AF" />
-                    <Text style={styles.dateText}>{formatDate(item.startTime)}</Text>
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {history.map(item => {
+            const isExpanded = expandedId === item.id;
+            const detail = workoutDetails[item.id];
+
+            return (
+              <View key={item.id} style={styles.historyCard}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={styles.workoutName}>{item.name}</Text>
+                    <View style={styles.dateRow}>
+                      <CalendarIcon size={13} color="#9CA3AF" />
+                      <Text style={styles.dateText}>{formatDate(item.startTime)}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.headerRightActions}>
+                    <TouchableOpacity
+                      style={styles.repeatBtn}
+                      onPress={() => handlePerformAgain(item)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Repeat size={14} color="#10B981" />
+                      <Text style={styles.repeatBtnText}>Repeat</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.deleteBtn}
+                      onPress={() => handleDelete(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Trash2 size={16} color="#EF4444" />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
+                {/* Metrics Row */}
+                <View style={styles.metricsRow}>
+                  <View style={styles.metric}>
+                    <Clock size={15} color="#9CA3AF" />
+                    <Text style={styles.metricText}>
+                      {formatDuration(item.durationSeconds)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.metric}>
+                    <Dumbbell size={15} color="#9CA3AF" />
+                    <Text style={styles.metricText}>
+                      {item.totalVolumeKg.toLocaleString()} kg
+                    </Text>
+                  </View>
+
+                  <View style={styles.metric}>
+                    <Trophy size={15} color="#9CA3AF" />
+                    <Text style={styles.metricText}>{item.totalSets} sets</Text>
+                  </View>
+                </View>
+
+                {/* Toggle Detail Button */}
                 <TouchableOpacity
-                  style={styles.repeatBtn}
-                  onPress={() => handlePerformAgain(item)}
+                  style={styles.toggleDetailBar}
+                  onPress={() => handleToggleExpand(item.id)}
+                  activeOpacity={0.7}
                 >
-                  <Repeat size={14} color="#10B981" />
-                  <Text style={styles.repeatBtnText}>Repeat</Text>
+                  <Text style={styles.toggleDetailText}>
+                    {isExpanded ? 'Hide Details' : 'View Set Breakdown'}
+                  </Text>
+                  {isExpanded ? (
+                    <ChevronUp size={16} color="#3B82F6" />
+                  ) : (
+                    <ChevronDown size={16} color="#3B82F6" />
+                  )}
                 </TouchableOpacity>
+
+                {/* Expanded Set Details */}
+                {isExpanded && (
+                  <View style={styles.expandedSection}>
+                    {loadingDetailId === item.id ? (
+                      <ActivityIndicator size="small" color="#3B82F6" style={{ marginVertical: 12 }} />
+                    ) : detail && detail.exercises.length > 0 ? (
+                      detail.exercises.map((ex, exIdx) => {
+                        const completedSets = ex.sets.filter(s => s.isCompleted);
+                        if (completedSets.length === 0) return null;
+
+                        return (
+                          <View key={exIdx} style={styles.detailExBlock}>
+                            <Text style={styles.detailExTitle}>{ex.exercise.name}</Text>
+                            {ex.notes && (
+                              <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
+                            )}
+                            <View style={styles.detailSetsGrid}>
+                              {completedSets.map((s, sIdx) => (
+                                <View key={sIdx} style={styles.detailSetPill}>
+                                  <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
+                                  <Text style={styles.detailSetWeight}>
+                                    {s.weightKg} kg × {s.reps}
+                                  </Text>
+                                  {s.type !== 'normal' && (
+                                    <Text style={styles.detailSetType}>{s.type.toUpperCase()}</Text>
+                                  )}
+                                </View>
+                              ))}
+                            </View>
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <View style={styles.exerciseNamesBox}>
+                        <Text style={styles.exerciseNamesText}>
+                          {item.exerciseNames.join(' • ')}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Compact preview when collapsed */}
+                {!isExpanded && item.exerciseNames.length > 0 && (
+                  <View style={styles.exerciseNamesBox}>
+                    <Text style={styles.exerciseNamesText} numberOfLines={2}>
+                      {item.exerciseNames.join(' • ')}
+                    </Text>
+                  </View>
+                )}
               </View>
-
-              {/* Metrics Row */}
-              <View style={styles.metricsRow}>
-                <View style={styles.metric}>
-                  <Clock size={14} color="#9CA3AF" />
-                  <Text style={styles.metricText}>
-                    {formatDuration(item.durationSeconds)}
-                  </Text>
-                </View>
-
-                <View style={styles.metric}>
-                  <Dumbbell size={14} color="#9CA3AF" />
-                  <Text style={styles.metricText}>
-                    {item.totalVolumeKg.toLocaleString()} kg
-                  </Text>
-                </View>
-
-                <View style={styles.metric}>
-                  <Trophy size={14} color="#9CA3AF" />
-                  <Text style={styles.metricText}>{item.totalSets} sets</Text>
-                </View>
-              </View>
-
-              {/* Exercises List Summary */}
-              {item.exerciseNames.length > 0 && (
-                <View style={styles.exerciseNamesBox}>
-                  <Text style={styles.exerciseNamesText} numberOfLines={2}>
-                    {item.exerciseNames.join(' • ')}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ))}
+            );
+          })}
 
           {history.length === 0 && (
             <View style={styles.emptyBox}>
@@ -240,19 +366,29 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 12,
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   repeatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     backgroundColor: '#132E27',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
   },
   repeatBtnText: {
     color: '#10B981',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
+  },
+  deleteBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#2A171B',
   },
   metricsRow: {
     flexDirection: 'row',
@@ -268,6 +404,74 @@ const styles = StyleSheet.create({
     color: '#D1D5DB',
     fontSize: 13,
     fontWeight: '500',
+  },
+  toggleDetailBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#20242E',
+    marginTop: 4,
+  },
+  toggleDetailText: {
+    color: '#3B82F6',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  expandedSection: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#20242E',
+    gap: 10,
+  },
+  detailExBlock: {
+    backgroundColor: '#14161D',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#20242E',
+  },
+  detailExTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  detailExNotes: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 6,
+  },
+  detailSetsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  detailSetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E232E',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  detailSetNum: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  detailSetWeight: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  detailSetType: {
+    color: '#F59E0B',
+    fontSize: 10,
+    fontWeight: '700',
   },
   exerciseNamesBox: {
     paddingTop: 8,

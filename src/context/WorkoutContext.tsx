@@ -25,6 +25,7 @@ interface WorkoutContextType {
   addSet: (activeExerciseId: string, setType?: SetType) => void;
   removeSet: (activeExerciseId: string, setId: string) => void;
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
+  updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
   toggleSetComplete: (activeExerciseId: string, setId: string) => void;
   startRestTimer: (seconds: number) => void;
   adjustRestTimer: (deltaSeconds: number) => void;
@@ -268,6 +269,16 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   };
 
+  const updateExerciseNotes = (activeExerciseId: string, notes: string) => {
+    setActiveWorkout(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        exercises: prev.exercises.map(e => (e.id === activeExerciseId ? { ...e, notes } : e)),
+      };
+    });
+  };
+
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
     setActiveWorkout(prev => {
       if (!prev) return null;
@@ -381,6 +392,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addSet,
         removeSet,
         updateSet,
+        updateExerciseNotes,
         toggleSetComplete,
         startRestTimer,
         adjustRestTimer,

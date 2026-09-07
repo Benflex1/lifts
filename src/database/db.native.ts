@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
-import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { ActiveExercise, Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
@@ -674,4 +674,170 @@ export async function getPreviousSetsForExercise(exerciseId: string): Promise<Wo
     rpe: r.rpe,
     isCompleted: true,
   }));
+}
+
+export async function deleteWorkout(workoutId: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+
+  await db.withTransactionAsync(async () => {
+    const weRows = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM workout_exercises WHERE workout_id = ?',
+      workoutId
+    );
+    for (const we of weRows) {
+      await db.runAsync('DELETE FROM exercise_sets WHERE workout_exercise_id = ?', we.id);
+    }
+    await db.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workoutId);
+    await db.runAsync('DELETE FROM workouts WHERE id = ?', workoutId);
+  });
+}
+
+export async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+
+  const w = await db.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ?', workoutId);
+  if (!w) return null;
+
+  const weRows = await db.getAllAsync<any>(
+    `SELECT we.*, e.name as ex_name, e.category as ex_cat, e.equipment as ex_equip, 
+            e.primary_muscles as ex_pm, e.secondary_muscles as ex_sm, e.instructions as ex_inst
+     FROM workout_exercises we
+     JOIN exercises e ON we.exercise_id = e.id
+     WHERE we.workout_id = ?
+     ORDER BY we.order_index ASC`,
+    workoutId
+  );
+
+  const exercises: ActiveExercise[] = [];
+  for (const we of weRows) {
+    const sRows = await db.getAllAsync<any>(
+      `SELECT * FROM exercise_sets WHERE workout_exercise_id = ? ORDER BY set_number ASC`,
+      we.id
+    );
+
+    exercises.push({
+      id: we.id,
+      exerciseId: we.exercise_id,
+      notes: we.notes,
+      restTimerSeconds: we.rest_timer_seconds || 90,
+      exercise: {
+        id: we.exercise_id,
+        name: we.ex_name,
+        category: we.ex_cat,
+        equipment: we.ex_equip,
+        primaryMuscles: JSON.parse(we.ex_pm || '[]'),
+        secondaryMuscles: JSON.parse(we.ex_sm || '[]'),
+        instructions: JSON.parse(we.ex_inst || '[]'),
+      },
+      sets: sRows.map(s => ({
+        id: s.id,
+        setNumber: s.set_number,
+        type: s.set_type as any,
+        weightKg: s.weight_kg,
+        reps: s.reps,
+        rpe: s.rpe,
+        isCompleted: Boolean(s.is_completed),
+        completedAt: s.completed_at,
+      })),
+    });
+  }
+
+  return {
+    id: w.id,
+    name: w.name,
+    routineId: w.routine_id,
+    startTime: w.start_time,
+    endTime: w.end_time,
+    durationSeconds: w.duration_seconds || 0,
+    totalVolumeKg: w.total_volume_kg || 0,
+    exercises,
+    notes: w.notes,
+  };
+}
+
+export async function duplicateRoutine(routineId: string): Promise<string> {
+  const db = await getDatabase();
+  if (!db) throw new Error('Database not ready');
+
+  const original = await db.getFirstAsync<any>('SELECT * FROM routines WHERE id = ?', routineId);
+  if (!original) throw new Error('Routine not found');
+
+  const exRows = await db.getAllAsync<any>(
+    'SELECT * FROM routine_exercises WHERE routine_id = ? ORDER BY order_index ASC',
+    routineId
+  );
+
+  const newId = `routine-${Date.now()}`;
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'INSERT INTO routines (id, name, folder_name, notes, created_at) VALUES (?, ?, ?, ?, ?)',
+      newId,
+      `${original.name} (Copy)`,
+      original.folder_name,
+      original.notes,
+      new Date().toISOString()
+    );
+
+    for (let i = 0; i < exRows.length; i++) {
+      const e = exRows[i];
+      await db.runAsync(
+        `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `re-${newId}-${i}`,
+        newId,
+        e.exercise_id,
+        e.order_index,
+        e.target_sets,
+        e.target_reps,
+        e.rest_timer_seconds
+      );
+    }
+  });
+
+  return newId;
+}
+
+export async function getExerciseStats(exerciseId: string): Promise<{
+  maxWeightKg: number;
+  maxReps: number;
+  estimated1RM: number;
+  sessionCount: number;
+}> {
+  const db = await getDatabase();
+  if (!db) return { maxWeightKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 };
+
+  const countRow = await db.getFirstAsync<any>(
+    `SELECT COUNT(DISTINCT we.workout_id) as count
+     FROM workout_exercises we
+     WHERE we.exercise_id = ?`,
+    exerciseId
+  );
+
+  const setsRows = await db.getAllAsync<any>(
+    `SELECT s.weight_kg, s.reps
+     FROM exercise_sets s
+     JOIN workout_exercises we ON s.workout_exercise_id = we.id
+     WHERE we.exercise_id = ? AND s.is_completed = 1`,
+    exerciseId
+  );
+
+  let maxWeightKg = 0;
+  let maxReps = 0;
+  let estimated1RM = 0;
+
+  for (const s of setsRows) {
+    if (s.weight_kg > maxWeightKg) maxWeightKg = s.weight_kg;
+    if (s.reps > maxReps) maxReps = s.reps;
+    const epley = Math.round(s.weight_kg * (1 + s.reps / 30));
+    if (epley > estimated1RM) estimated1RM = epley;
+  }
+
+  return {
+    maxWeightKg,
+    maxReps,
+    estimated1RM,
+    sessionCount: countRow?.count || 0,
+  };
 }
