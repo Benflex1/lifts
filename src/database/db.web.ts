@@ -282,3 +282,15 @@ export async function getSetting(key: string): Promise<string | null> {
 export async function setSetting(key: string, value: string): Promise<void> {
   webSettings.set(key, value);
 }
+
+export async function renameFolder(oldName: string, newName: string): Promise<void> {
+  for (const r of webStorage.routines) {
+    if (r.folderName === oldName) r.folderName = newName;
+  }
+}
+
+export async function deleteFolder(name: string): Promise<void> {
+  for (const r of webStorage.routines) {
+    if (r.folderName === name) r.folderName = undefined;
+  }
+}

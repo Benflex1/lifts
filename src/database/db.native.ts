@@ -856,3 +856,15 @@ export async function setSetting(key: string, value: string): Promise<void> {
     value
   );
 }
+
+export async function renameFolder(oldName: string, newName: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync('UPDATE routines SET folder_name = ? WHERE folder_name = ?', newName, oldName);
+}
+
+export async function deleteFolder(name: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync('UPDATE routines SET folder_name = NULL WHERE folder_name = ?', name);
+}

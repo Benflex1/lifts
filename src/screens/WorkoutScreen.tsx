@@ -18,11 +18,13 @@ import {
   Sparkles,
   Calendar,
   Copy,
+  Settings2,
 } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { Routine } from '../types';
 import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
+import { FolderManageModal } from '../components/FolderManageModal';
 
 export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   onStartActiveWorkout,
@@ -32,6 +34,7 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   const [selectedFolder, setSelectedFolder] = useState('All');
   const [showEditor, setShowEditor] = useState(false);
   const [routineToEdit, setRoutineToEdit] = useState<Routine | null>(null);
+  const [showFolderManage, setShowFolderManage] = useState(false);
 
   useEffect(() => {
     loadRoutines();
@@ -154,35 +157,40 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
 
         {/* Folder Filter Horizontal Chips */}
         {folders.length > 1 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.folderChipsContainer}
-          >
-            {folders.map(f => (
-              <TouchableOpacity
-                key={f}
-                style={[styles.folderChip, selectedFolder === f && styles.folderChipActive]}
-                onPress={() => setSelectedFolder(f)}
-              >
-                {f !== 'All' && (
-                  <Folder
-                    size={13}
-                    color={selectedFolder === f ? '#FFFFFF' : '#9CA3AF'}
-                    style={{ marginRight: 4 }}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.folderChipText,
-                    selectedFolder === f && styles.folderChipTextActive,
-                  ]}
+          <View style={styles.folderChipsHeader}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.folderChipsContainer}
+            >
+              {folders.map(f => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.folderChip, selectedFolder === f && styles.folderChipActive]}
+                  onPress={() => setSelectedFolder(f)}
                 >
-                  {f}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                  {f !== 'All' && (
+                    <Folder
+                      size={13}
+                      color={selectedFolder === f ? '#FFFFFF' : '#9CA3AF'}
+                      style={{ marginRight: 4 }}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.folderChipText,
+                      selectedFolder === f && styles.folderChipTextActive,
+                    ]}
+                  >
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity onPress={() => setShowFolderManage(true)} style={styles.manageBtn}>
+              <Settings2 size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Routines List */}
@@ -267,6 +275,16 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
         existingFolders={folders.filter(f => f !== 'All')}
         onClose={() => setShowEditor(false)}
         onSaved={loadRoutines}
+      />
+
+      <FolderManageModal
+        visible={showFolderManage}
+        folders={folders.filter(f => f !== 'All')}
+        onClose={() => setShowFolderManage(false)}
+        onFoldersChanged={() => {
+          setShowFolderManage(false);
+          loadRoutines();
+        }}
       />
     </View>
   );
@@ -386,9 +404,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  folderChipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  manageBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#20242E',
+    marginLeft: 8,
+  },
   folderChipsContainer: {
     gap: 8,
-    marginBottom: 16,
   },
   folderChip: {
     flexDirection: 'row',
