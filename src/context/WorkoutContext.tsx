@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../types';
 import { saveCompletedWorkout, getPreviousSetsForExercise } from '../database/db';
+import { computeElapsedSeconds } from '../utils/timer';
 
 interface RestTimerState {
   isActive: boolean;
@@ -49,6 +50,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<string | null>(null);
 
   const minimizeWorkout = () => setIsMinimized(true);
   const maximizeWorkout = () => setIsMinimized(false);
@@ -56,17 +58,21 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Workout duration timer
   useEffect(() => {
     if (activeWorkout) {
+      if (!startTimeRef.current) {
+        startTimeRef.current = activeWorkout.startTime;
+      }
       workoutTimerRef.current = setInterval(() => {
-        setElapsedSeconds(prev => prev + 1);
+        setElapsedSeconds(computeElapsedSeconds(startTimeRef.current!, Date.now()));
       }, 1000);
     } else {
+      startTimeRef.current = null;
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
       setElapsedSeconds(0);
     }
     return () => {
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
     };
-  }, [activeWorkout]);
+  }, [activeWorkout !== null]);
 
   // Rest countdown timer
   useEffect(() => {
@@ -364,7 +370,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const finished: Workout = {
       ...activeWorkout,
-      durationSeconds: elapsedSeconds,
+      durationSeconds: startTimeRef.current
+        ? Math.floor((Date.now() - new Date(startTimeRef.current).getTime()) / 1000)
+        : elapsedSeconds,
       totalVolumeKg: Math.round(totalVolume),
       endTime: new Date().toISOString(),
     };
