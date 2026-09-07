@@ -117,7 +117,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
         exercise,
         targetSets: 3,
         targetReps: '8-12',
-        restTimerSeconds: 90,
+        restTimerSeconds: 0,
       },
     ]);
   };
@@ -149,7 +149,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
         exercise: ex,
         targetSets: 3,
         targetReps: '8-12',
-        restTimerSeconds: 90,
+        restTimerSeconds: 0,
       }));
       setDraftExercises(prev => [...prev, ...newItems]);
     }
@@ -575,42 +575,44 @@ export const RoutineEditorModal: React.FC<Props> = ({
                 {/* Target Sets Row: Clean Stepper without Presets */}
                 <View style={styles.configRow}>
                   <Text style={styles.configLabel}>TARGET SETS</Text>
-                  <View style={styles.cleanStepperContainer}>
-                    <TouchableOpacity
-                      style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
-                      onPress={() => handleUpdateSets(idx, -1)}
-                      disabled={item.targetSets <= 1}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Minus size={15} color={item.targetSets > 1 ? '#FFFFFF' : '#4B5563'} />
-                    </TouchableOpacity>
+                  <View style={styles.stepperRowContainer}>
+                    <View style={styles.cleanStepperContainer}>
+                      <TouchableOpacity
+                        style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
+                        onPress={() => handleUpdateSets(idx, -1)}
+                        disabled={item.targetSets <= 1}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Minus size={15} color={item.targetSets > 1 ? '#FFFFFF' : '#4B5563'} />
+                      </TouchableOpacity>
 
-                    <View style={styles.cleanStepValueWrap}>
-                      <TextInput
-                        style={styles.cleanStepInput}
-                        keyboardType="number-pad"
-                        value={String(item.targetSets)}
-                        onChangeText={text => {
-                          const num = parseInt(text.replace(/[^0-9]/g, ''), 10);
-                          if (!isNaN(num) && num > 0 && num <= 50) {
-                            handleSetTargetSets(idx, num);
-                          } else if (text === '') {
-                            handleSetTargetSets(idx, 1);
-                          }
-                        }}
-                        selectTextOnFocus={true}
-                        maxLength={2}
-                      />
-                      <Text style={styles.cleanStepUnit}>sets</Text>
+                      <View style={styles.cleanStepValueWrap}>
+                        <TextInput
+                          style={styles.cleanStepInput}
+                          keyboardType="number-pad"
+                          value={String(item.targetSets)}
+                          onChangeText={text => {
+                            const num = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                            if (!isNaN(num) && num > 0 && num <= 50) {
+                              handleSetTargetSets(idx, num);
+                            } else if (text === '') {
+                              handleSetTargetSets(idx, 1);
+                            }
+                          }}
+                          selectTextOnFocus={true}
+                          maxLength={2}
+                        />
+                        <Text style={styles.cleanStepUnit}>sets</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.cleanStepBtn}
+                        onPress={() => handleUpdateSets(idx, 1)}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Plus size={15} color="#FFFFFF" />
+                      </TouchableOpacity>
                     </View>
-
-                    <TouchableOpacity
-                      style={styles.cleanStepBtn}
-                      onPress={() => handleUpdateSets(idx, 1)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Plus size={15} color="#FFFFFF" />
-                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -724,7 +726,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
         <RestTimeWheelModal
           visible={restWheelIndex !== null}
           initialSeconds={
-            restWheelIndex !== null ? draftExercises[restWheelIndex]?.restTimerSeconds : 90
+            restWheelIndex !== null ? draftExercises[restWheelIndex]?.restTimerSeconds : 0
           }
           exerciseName={
             restWheelIndex !== null ? draftExercises[restWheelIndex]?.exercise.name : undefined
@@ -1145,6 +1147,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     width: 85,
+  },
+  stepperRowContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   cleanStepperContainer: {
     flexDirection: 'row',

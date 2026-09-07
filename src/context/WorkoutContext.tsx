@@ -149,7 +149,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           exerciseId: item.exerciseId,
           exercise: item.exercise,
           sets,
-          restTimerSeconds: item.restTimerSeconds || 90,
+          restTimerSeconds: item.restTimerSeconds ?? 0,
         });
       }
     }
@@ -191,7 +191,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exerciseId: exercise.id,
       exercise,
       sets,
-      restTimerSeconds: 90,
+      restTimerSeconds: 0,
     };
 
     setActiveWorkout(prev => {
@@ -293,11 +293,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
     setActiveWorkout(prev => {
       if (!prev) return null;
-      let targetRestSeconds = 90;
+      let targetRestSeconds = 0;
 
       const nextExercises = prev.exercises.map(e => {
         if (e.id !== activeExerciseId) return e;
-        targetRestSeconds = e.restTimerSeconds || 90;
+        targetRestSeconds = e.restTimerSeconds ?? 0;
 
         return {
           ...e,
@@ -335,10 +335,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       });
 
-      // If set was just marked completed, start rest timer
+      // If set was just marked completed, start rest timer if enabled
       const targetExercise = prev.exercises.find(e => e.id === activeExerciseId);
       const targetSet = targetExercise?.sets.find(s => s.id === setId);
-      if (targetSet && !targetSet.isCompleted) {
+      if (targetSet && !targetSet.isCompleted && targetRestSeconds > 0) {
         startRestTimer(targetRestSeconds);
       }
 

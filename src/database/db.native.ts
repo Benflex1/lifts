@@ -571,7 +571,7 @@ export async function saveCompletedWorkout(workout: Workout): Promise<void> {
         ex.exerciseId,
         exOrder,
         ex.notes || null,
-        ex.restTimerSeconds || 90
+        ex.restTimerSeconds ?? 0
       );
 
       for (const s of ex.sets) {
@@ -721,7 +721,7 @@ export async function getWorkoutDetail(workoutId: string): Promise<Workout | nul
       id: we.id,
       exerciseId: we.exercise_id,
       notes: we.notes,
-      restTimerSeconds: we.rest_timer_seconds || 90,
+      restTimerSeconds: we.rest_timer_seconds ?? 0,
       exercise: {
         id: we.exercise_id,
         name: we.ex_name,

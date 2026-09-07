@@ -42,7 +42,7 @@ const PRESET_TIMERS = [
 
 export const RestTimeWheelModal: React.FC<Props> = ({
   visible,
-  initialSeconds = 90,
+  initialSeconds = 0,
   exerciseName,
   showApplyToAll = false,
   onClose,

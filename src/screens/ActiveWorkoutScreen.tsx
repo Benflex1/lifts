@@ -422,7 +422,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
       {/* Rest Time Wheel Modal */}
       <RestTimeWheelModal
         visible={restWheelActiveExercise !== null}
-        initialSeconds={restWheelActiveExercise?.restTimerSeconds || 90}
+        initialSeconds={restWheelActiveExercise?.restTimerSeconds ?? 0}
         exerciseName={restWheelActiveExercise?.exercise.name}
         onClose={() => setRestWheelActiveExercise(null)}
         onSave={seconds => {
