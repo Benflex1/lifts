@@ -380,8 +380,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
       {/* Exercise Picker Modal */}
       <ExercisePickerModal
         visible={showExercisePicker}
+        multiSelect={true}
         onClose={() => setShowExercisePicker(false)}
         onSelectExercise={(ex: Exercise) => addExerciseToWorkout(ex)}
+        onSelectMultiple={(exs: Exercise[]) => {
+          exs.forEach(ex => addExerciseToWorkout(ex));
+        }}
       />
 
       {/* Plate Calculator Modal */}

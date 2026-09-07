@@ -21,6 +21,8 @@ import {
   Folder,
   Layers,
   Sparkles,
+  ArrowRightLeft,
+  Copy,
 } from 'lucide-react-native';
 import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
@@ -51,12 +53,16 @@ const PRESET_FOLDERS = [
   'Legs & Core',
 ];
 
-const REP_OPTIONS = ['5', '6-8', '8-10', '8-12', '12-15', 'AMRAP'];
+const SET_PRESETS = [2, 3, 4, 5, 6];
+const REP_OPTIONS = ['5', '6-8', '8-10', '8-12', '10-12', '12-15', 'AMRAP'];
 const REST_OPTIONS = [
+  { label: 'Off', val: 0 },
+  { label: '30s', val: 30 },
   { label: '60s', val: 60 },
   { label: '90s', val: 90 },
   { label: '2m', val: 120 },
   { label: '3m', val: 180 },
+  { label: '5m', val: 300 },
 ];
 
 export const RoutineEditorModal: React.FC<Props> = ({
@@ -71,6 +77,8 @@ export const RoutineEditorModal: React.FC<Props> = ({
   const [notes, setNotes] = useState('');
   const [draftExercises, setDraftExercises] = useState<RoutineDraftExercise[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [replacingIndex, setReplacingIndex] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'detailed' | 'compact'>('detailed');
 
   useEffect(() => {
     if (routineToEdit) {
@@ -105,6 +113,55 @@ export const RoutineEditorModal: React.FC<Props> = ({
     ]);
   };
 
+  const handleStartReplace = (index: number) => {
+    setReplacingIndex(index);
+    setShowPicker(true);
+  };
+
+  const handleExerciseSelected = (exercise: Exercise) => {
+    if (replacingIndex !== null) {
+      setDraftExercises(prev =>
+        prev.map((item, idx) => (idx === replacingIndex ? { ...item, exercise } : item))
+      );
+      setReplacingIndex(null);
+    } else {
+      handleAddExercise(exercise);
+    }
+  };
+
+  const handleAddMultipleExercises = (exercises: Exercise[]) => {
+    if (replacingIndex !== null && exercises.length > 0) {
+      setDraftExercises(prev =>
+        prev.map((item, idx) => (idx === replacingIndex ? { ...item, exercise: exercises[0] } : item))
+      );
+      setReplacingIndex(null);
+    } else {
+      const newItems: RoutineDraftExercise[] = exercises.map(ex => ({
+        exercise: ex,
+        targetSets: 3,
+        targetReps: '8-12',
+        restTimerSeconds: 90,
+      }));
+      setDraftExercises(prev => [...prev, ...newItems]);
+    }
+  };
+
+  const handleDuplicateExercise = (index: number) => {
+    setDraftExercises(prev => {
+      const item = prev[index];
+      if (!item) return prev;
+      const duplicate: RoutineDraftExercise = {
+        exercise: item.exercise,
+        targetSets: item.targetSets,
+        targetReps: item.targetReps,
+        restTimerSeconds: item.restTimerSeconds,
+      };
+      const next = [...prev];
+      next.splice(index + 1, 0, duplicate);
+      return next;
+    });
+  };
+
   const handleRemoveExercise = (index: number) => {
     setDraftExercises(prev => prev.filter((_, idx) => idx !== index));
   };
@@ -129,6 +186,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
       next[index + 1] = temp;
       return next;
     });
+  };
+
+  const handleSetTargetSets = (index: number, sets: number) => {
+    setDraftExercises(prev =>
+      prev.map((item, idx) => (idx === index ? { ...item, targetSets: sets } : item))
+    );
   };
 
   const handleUpdateSets = (index: number, delta: number) => {
@@ -302,145 +365,285 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
           {/* Exercises Section Header */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Exercises ({draftExercises.length})</Text>
-            <TouchableOpacity style={styles.addExBtn} onPress={() => setShowPicker(true)}>
+            <View style={styles.sectionHeaderLeft}>
+              <Text style={styles.sectionTitle}>Exercises ({draftExercises.length})</Text>
+              {draftExercises.length > 1 && (
+                <View style={styles.viewToggleGroup}>
+                  <TouchableOpacity
+                    style={[styles.viewToggleBtn, viewMode === 'detailed' && styles.viewToggleBtnActive]}
+                    onPress={() => setViewMode('detailed')}
+                  >
+                    <Text style={[styles.viewToggleText, viewMode === 'detailed' && styles.viewToggleTextActive]}>
+                      Detailed
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.viewToggleBtn, viewMode === 'compact' && styles.viewToggleBtnActive]}
+                    onPress={() => setViewMode('compact')}
+                  >
+                    <Text style={[styles.viewToggleText, viewMode === 'compact' && styles.viewToggleTextActive]}>
+                      Compact
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.addExBtn}
+              onPress={() => {
+                setReplacingIndex(null);
+                setShowPicker(true);
+              }}
+            >
               <Plus size={16} color="#3B82F6" />
-              <Text style={styles.addExBtnText}>Add Exercise</Text>
+              <Text style={styles.addExBtnText}>Add</Text>
             </TouchableOpacity>
           </View>
 
-          {draftExercises.map((item, idx) => (
-            <View key={`${item.exercise.id}-${idx}`} style={styles.exerciseCard}>
-              {/* Exercise Card Header */}
-              <View style={styles.cardTopRow}>
-                <View style={styles.orderBadge}>
-                  <Text style={styles.orderBadgeText}>#{idx + 1}</Text>
+          {/* Compact View Mode */}
+          {viewMode === 'compact' && draftExercises.length > 0 && (
+            <View style={styles.compactList}>
+              {draftExercises.map((item, idx) => (
+                <View key={`${item.exercise.id}-${idx}`} style={styles.compactRow}>
+                  <View style={styles.compactOrderBadge}>
+                    <Text style={styles.compactOrderText}>#{idx + 1}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.compactInfo}
+                    onPress={() => handleStartReplace(idx)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.compactName} numberOfLines={1}>
+                      {item.exercise.name}
+                    </Text>
+                    <Text style={styles.compactMeta}>
+                      {item.targetSets} sets × {item.targetReps} • {item.restTimerSeconds > 0 ? `${item.restTimerSeconds}s rest` : 'No rest'}
+                    </Text>
+                  </TouchableOpacity>
+                  <View style={styles.compactActions}>
+                    <TouchableOpacity
+                      style={styles.compactActionBtn}
+                      onPress={() => handleStartReplace(idx)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <ArrowRightLeft size={14} color="#3B82F6" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.compactActionBtn}
+                      onPress={() => handleDuplicateExercise(idx)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Copy size={14} color="#9CA3AF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.compactActionBtn, idx === 0 && styles.iconActionDisabled]}
+                      disabled={idx === 0}
+                      onPress={() => handleMoveUp(idx)}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    >
+                      <ChevronUp size={16} color={idx === 0 ? '#374151' : '#9CA3AF'} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.compactActionBtn,
+                        idx === draftExercises.length - 1 && styles.iconActionDisabled,
+                      ]}
+                      disabled={idx === draftExercises.length - 1}
+                      onPress={() => handleMoveDown(idx)}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    >
+                      <ChevronDown
+                        size={16}
+                        color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.compactDeleteBtn}
+                      onPress={() => handleRemoveExercise(idx)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Trash2 size={14} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-
-                <View style={styles.cardHeaderInfo}>
-                  <Text style={styles.cardExName}>{item.exercise.name}</Text>
-                  <Text style={styles.cardExMeta}>
-                    {item.exercise.primaryMuscles.join(', ')} • {item.exercise.equipment}
-                  </Text>
-                </View>
-
-                {/* Reorder and Delete Buttons */}
-                <View style={styles.reorderActions}>
-                  <TouchableOpacity
-                    style={[styles.iconActionBtn, idx === 0 && styles.iconActionDisabled]}
-                    disabled={idx === 0}
-                    onPress={() => handleMoveUp(idx)}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  >
-                    <ChevronUp size={18} color={idx === 0 ? '#374151' : '#9CA3AF'} />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.iconActionBtn,
-                      idx === draftExercises.length - 1 && styles.iconActionDisabled,
-                    ]}
-                    disabled={idx === draftExercises.length - 1}
-                    onPress={() => handleMoveDown(idx)}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  >
-                    <ChevronDown
-                      size={18}
-                      color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.deleteActionBtn}
-                    onPress={() => handleRemoveExercise(idx)}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  >
-                    <Trash2 size={17} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Set Stepper Row */}
-              <View style={styles.configRow}>
-                <Text style={styles.configLabel}>TARGET SETS</Text>
-                <View style={styles.stepperContainer}>
-                  <TouchableOpacity
-                    style={styles.stepBtn}
-                    onPress={() => handleUpdateSets(idx, -1)}
-                  >
-                    <Minus size={15} color="#FFFFFF" />
-                  </TouchableOpacity>
-                  <Text style={styles.stepperValue}>{item.targetSets} sets</Text>
-                  <TouchableOpacity
-                    style={styles.stepBtn}
-                    onPress={() => handleUpdateSets(idx, 1)}
-                  >
-                    <Plus size={15} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Target Reps Row */}
-              <View style={styles.configRow}>
-                <Text style={styles.configLabel}>TARGET REPS</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipsScroll}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {REP_OPTIONS.map(repOpt => {
-                    const isSelected = item.targetReps === repOpt;
-                    return (
-                      <TouchableOpacity
-                        key={repOpt}
-                        style={[styles.smallChip, isSelected && styles.smallChipActive]}
-                        onPress={() => handleUpdateReps(idx, repOpt)}
-                      >
-                        <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
-                          {repOpt}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {/* Custom Reps Input */}
-                  <TextInput
-                    style={styles.customRepInput}
-                    placeholder="Custom"
-                    placeholderTextColor="#6B7280"
-                    value={item.targetReps}
-                    onChangeText={txt => handleUpdateReps(idx, txt)}
-                  />
-                </ScrollView>
-              </View>
-
-              {/* Rest Timer Row */}
-              <View style={styles.configRow}>
-                <Text style={styles.configLabel}>REST TIMER</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipsScroll}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {REST_OPTIONS.map(restOpt => {
-                    const isSelected = item.restTimerSeconds === restOpt.val;
-                    return (
-                      <TouchableOpacity
-                        key={restOpt.val}
-                        style={[styles.smallChip, isSelected && styles.smallChipActive]}
-                        onPress={() => handleUpdateRest(idx, restOpt.val)}
-                      >
-                        <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
-                          {restOpt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
+              ))}
             </View>
-          ))}
+          )}
+
+          {/* Detailed View Mode */}
+          {viewMode === 'detailed' &&
+            draftExercises.map((item, idx) => (
+              <View key={`${item.exercise.id}-${idx}`} style={styles.exerciseCard}>
+                {/* Exercise Card Header */}
+                <View style={styles.cardTopRow}>
+                  <View style={styles.orderBadge}>
+                    <Text style={styles.orderBadgeText}>#{idx + 1}</Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.cardHeaderInfo}
+                    onPress={() => handleStartReplace(idx)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cardExName}>{item.exercise.name}</Text>
+                    <Text style={styles.cardExMeta}>
+                      {item.exercise.primaryMuscles.join(', ')} • {item.exercise.equipment}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Action Buttons: Swap, Duplicate, Up, Down, Trash */}
+                  <View style={styles.reorderActions}>
+                    <TouchableOpacity
+                      style={styles.actionPillBtn}
+                      onPress={() => handleStartReplace(idx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <ArrowRightLeft size={13} color="#3B82F6" />
+                      <Text style={styles.actionPillText}>Swap</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.iconActionBtn}
+                      onPress={() => handleDuplicateExercise(idx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <Copy size={15} color="#9CA3AF" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.iconActionBtn, idx === 0 && styles.iconActionDisabled]}
+                      disabled={idx === 0}
+                      onPress={() => handleMoveUp(idx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <ChevronUp size={18} color={idx === 0 ? '#374151' : '#9CA3AF'} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.iconActionBtn,
+                        idx === draftExercises.length - 1 && styles.iconActionDisabled,
+                      ]}
+                      disabled={idx === draftExercises.length - 1}
+                      onPress={() => handleMoveDown(idx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <ChevronDown
+                        size={18}
+                        color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
+                      />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.deleteActionBtn}
+                      onPress={() => handleRemoveExercise(idx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <Trash2 size={16} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Target Sets Row with Quick Pills & Stepper */}
+                <View style={styles.configRow}>
+                  <Text style={styles.configLabel}>TARGET SETS</Text>
+                  <View style={styles.setsPillsRow}>
+                    {SET_PRESETS.map(s => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[styles.setPresetPill, item.targetSets === s && styles.setPresetPillActive]}
+                        onPress={() => handleSetTargetSets(idx, s)}
+                      >
+                        <Text
+                          style={[
+                            styles.setPresetText,
+                            item.targetSets === s && styles.setPresetTextActive,
+                          ]}
+                        >
+                          {s}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    <View style={styles.stepperContainer}>
+                      <TouchableOpacity
+                        style={styles.stepBtn}
+                        onPress={() => handleUpdateSets(idx, -1)}
+                      >
+                        <Minus size={15} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <Text style={styles.stepperValue}>{item.targetSets}</Text>
+                      <TouchableOpacity
+                        style={styles.stepBtn}
+                        onPress={() => handleUpdateSets(idx, 1)}
+                      >
+                        <Plus size={15} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Target Reps Row */}
+                <View style={styles.configRow}>
+                  <Text style={styles.configLabel}>TARGET REPS</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.chipsScroll}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {REP_OPTIONS.map(repOpt => {
+                      const isSelected = item.targetReps === repOpt;
+                      return (
+                        <TouchableOpacity
+                          key={repOpt}
+                          style={[styles.smallChip, isSelected && styles.smallChipActive]}
+                          onPress={() => handleUpdateReps(idx, repOpt)}
+                        >
+                          <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
+                            {repOpt}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {/* Direct Custom Reps Input */}
+                    <TextInput
+                      style={styles.customRepInput}
+                      placeholder="Custom"
+                      placeholderTextColor="#6B7280"
+                      value={item.targetReps}
+                      onChangeText={txt => handleUpdateReps(idx, txt)}
+                      selectTextOnFocus={true}
+                    />
+                  </ScrollView>
+                </View>
+
+                {/* Rest Timer Row */}
+                <View style={styles.configRow}>
+                  <Text style={styles.configLabel}>REST TIMER</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.chipsScroll}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {REST_OPTIONS.map(restOpt => {
+                      const isSelected = item.restTimerSeconds === restOpt.val;
+                      return (
+                        <TouchableOpacity
+                          key={restOpt.val}
+                          style={[styles.smallChip, isSelected && styles.smallChipActive]}
+                          onPress={() => handleUpdateRest(idx, restOpt.val)}
+                        >
+                          <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
+                            {restOpt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+            ))}
 
           {draftExercises.length === 0 && (
             <View style={styles.emptyCard}>
@@ -453,7 +656,10 @@ export const RoutineEditorModal: React.FC<Props> = ({
               </Text>
               <TouchableOpacity
                 style={styles.emptyAddBtn}
-                onPress={() => setShowPicker(true)}
+                onPress={() => {
+                  setReplacingIndex(null);
+                  setShowPicker(true);
+                }}
               >
                 <Plus size={18} color="#FFFFFF" />
                 <Text style={styles.emptyAddBtnText}>Add Exercises</Text>
@@ -464,18 +670,31 @@ export const RoutineEditorModal: React.FC<Props> = ({
           {draftExercises.length > 0 && (
             <TouchableOpacity
               style={styles.bottomAddBtn}
-              onPress={() => setShowPicker(true)}
+              onPress={() => {
+                setReplacingIndex(null);
+                setShowPicker(true);
+              }}
             >
               <Plus size={18} color="#3B82F6" />
-              <Text style={styles.bottomAddBtnText}>Add Another Exercise</Text>
+              <Text style={styles.bottomAddBtnText}>Add Exercises</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
 
         <ExercisePickerModal
           visible={showPicker}
-          onClose={() => setShowPicker(false)}
-          onSelectExercise={handleAddExercise}
+          title={
+            replacingIndex !== null
+              ? `Replace "${draftExercises[replacingIndex]?.exercise.name}"`
+              : 'Add Exercises'
+          }
+          multiSelect={replacingIndex === null}
+          onClose={() => {
+            setShowPicker(false);
+            setReplacingIndex(null);
+          }}
+          onSelectExercise={handleExerciseSelected}
+          onSelectMultiple={handleAddMultipleExercises}
         />
       </View>
     </Modal>
@@ -603,10 +822,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   sectionTitle: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  viewToggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#14161D',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    padding: 2,
+  },
+  viewToggleBtn: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  viewToggleBtnActive: {
+    backgroundColor: '#262A34',
+  },
+  viewToggleText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  viewToggleTextActive: {
+    color: '#3B82F6',
+    fontWeight: '700',
+  },
+  compactList: {
+    marginBottom: 12,
+    gap: 8,
+  },
+  compactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#181A20',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    gap: 10,
+  },
+  compactOrderBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactOrderText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  compactInfo: {
+    flex: 1,
+  },
+  compactName: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  compactMeta: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  compactActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  compactActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactDeleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#2B191D',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addExBtn: {
     flexDirection: 'row',
@@ -666,7 +976,23 @@ const styles = StyleSheet.create({
   reorderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
+  },
+  actionPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#1E293B',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  actionPillText: {
+    color: '#3B82F6',
+    fontSize: 12,
+    fontWeight: '700',
   },
   iconActionBtn: {
     width: 36,
@@ -686,7 +1012,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2B191D',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 4,
+    marginLeft: 2,
   },
   configRow: {
     flexDirection: 'row',
@@ -703,6 +1029,34 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
     width: 85,
+  },
+  setsPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  setPresetPill: {
+    width: 32,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  setPresetPillActive: {
+    backgroundColor: '#1D4ED8',
+    borderColor: '#3B82F6',
+  },
+  setPresetText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  setPresetTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   stepperContainer: {
     flexDirection: 'row',

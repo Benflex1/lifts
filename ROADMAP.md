@@ -51,8 +51,7 @@
 - [x] **Workout Minimization**: Floating mini-bar to freely navigate tabs during training.
 - [x] **Hardware Back Handling**: Android hardware/gesture back press minimizes session instead of trapping or exiting.
 - [x] **Smart Search Engine**: Slang & abbreviation resolution (`bench`, `ohp`, `rdl`, `db`, `bb`, `tri`, `bi`).
-- [x] **Quick Search Chips**: One-tap jump pills for common compound lifts.
-- [x] **Revamped Routine Creator**: Reordering (`▲` `▼`), set steppers (`[-]` `[+]`), rep pills, rest timer presets, and folder split chips.
+- [x] **Revamped Routine Creator**: 1-tap in-place Exercise Swapping (`⇄`), Multi-Select Batch Adding (`Add 3 Exercises`), Compact Reorder vs Detailed view toggle, 1-tap Set Presets (`2, 3, 4, 5, 6`), Direct Custom Reps Input, Rest timer presets (`Off, 30s, 60s, 90s, 2m, 3m, 5m`), and 1-tap Exercise Duplication (`⎘`).
 - [x] **Gym-First Touch Targets**: Upgrade table cell inputs, set number badges, checkmark buttons, and action icons to generous 44–54px touch targets.
 - [x] **Detailed Exercise History Modal**: Show past sessions, max weight, and estimated 1RM when tapping an exercise.
 - [x] **Workout History Drill-Down**: Expand past workout cards to review completed sets, weights, and reps.

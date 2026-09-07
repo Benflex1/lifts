@@ -10,14 +10,17 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus } from 'lucide-react-native';
+import { Search, X, Dumbbell, Plus, Check } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { searchExercises, createCustomExercise } from '../database/db';
 
 interface Props {
   visible: boolean;
+  title?: string;
+  multiSelect?: boolean;
   onClose: () => void;
   onSelectExercise: (exercise: Exercise) => void;
+  onSelectMultiple?: (exercises: Exercise[]) => void;
 }
 
 const MUSCLE_GROUPS = [
@@ -59,8 +62,11 @@ const QUICK_SUGGESTIONS = [
 
 export const ExercisePickerModal: React.FC<Props> = ({
   visible,
+  title,
+  multiSelect = false,
   onClose,
   onSelectExercise,
+  onSelectMultiple,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -68,6 +74,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
   const [selectedEquipment, setSelectedEquipment] = useState('All');
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [selectedExercises, setSelectedExercises] = useState<Map<string, Exercise>>(new Map());
 
   // Custom exercise modal state
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -85,6 +92,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
   useEffect(() => {
     if (visible) {
       loadExercises();
+      setSelectedExercises(new Map());
     }
   }, [visible, debouncedQuery, selectedMuscle, selectedEquipment]);
 
@@ -107,6 +115,23 @@ export const ExercisePickerModal: React.FC<Props> = ({
     }
   };
 
+  const handleItemPress = (item: Exercise) => {
+    if (multiSelect) {
+      setSelectedExercises(prev => {
+        const next = new Map(prev);
+        if (next.has(item.id)) {
+          next.delete(item.id);
+        } else {
+          next.set(item.id, item);
+        }
+        return next;
+      });
+    } else {
+      onSelectExercise(item);
+      onClose();
+    }
+  };
+
   const handleCreateCustom = async () => {
     if (!customName.trim()) return;
     const created = await createCustomExercise({
@@ -117,8 +142,12 @@ export const ExercisePickerModal: React.FC<Props> = ({
     });
     setShowCustomModal(false);
     setCustomName('');
-    onSelectExercise(created);
-    onClose();
+    if (multiSelect) {
+      setSelectedExercises(prev => new Map(prev).set(created.id, created));
+    } else {
+      onSelectExercise(created);
+      onClose();
+    }
   };
 
   return (
@@ -126,7 +155,16 @@ export const ExercisePickerModal: React.FC<Props> = ({
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Select Exercise</Text>
+          <View>
+            <Text style={styles.headerTitle}>{title || 'Select Exercise'}</Text>
+            {multiSelect && (
+              <Text style={styles.headerSubtitle}>
+                {selectedExercises.size === 0
+                  ? 'Tap exercises to select multiple'
+                  : `${selectedExercises.size} exercise${selectedExercises.size > 1 ? 's' : ''} selected`}
+              </Text>
+            )}
+          </View>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <X color="#9CA3AF" size={24} />
           </TouchableOpacity>
@@ -243,35 +281,63 @@ export const ExercisePickerModal: React.FC<Props> = ({
           <FlatList
             data={exercises}
             keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 }]}
             keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.exerciseItem}
-                onPress={() => {
-                  onSelectExercise(item);
-                  onClose();
-                }}
-              >
-                <View style={styles.iconThumb}>
-                  <Dumbbell size={20} color="#3B82F6" />
-                </View>
-                <View style={styles.itemInfo}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <View style={styles.tagRow}>
-                    <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
-                    <Text style={styles.tagDot}>•</Text>
-                    <Text style={styles.tagEquipment}>{item.equipment}</Text>
+            renderItem={({ item }) => {
+              const isSelected = selectedExercises.has(item.id);
+              return (
+                <TouchableOpacity
+                  style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}
+                  onPress={() => handleItemPress(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.iconThumb, isSelected && styles.iconThumbSelected]}>
+                    <Dumbbell size={20} color={isSelected ? '#10B981' : '#3B82F6'} />
                   </View>
-                </View>
-              </TouchableOpacity>
-            )}
+                  <View style={styles.itemInfo}>
+                    <Text style={[styles.itemName, isSelected && styles.itemNameSelected]}>{item.name}</Text>
+                    <View style={styles.tagRow}>
+                      <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
+                      <Text style={styles.tagDot}>•</Text>
+                      <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                    </View>
+                  </View>
+                  {multiSelect && (
+                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+                      {isSelected && <Check size={16} color="#000000" strokeWidth={3} />}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No exercises found.</Text>
               </View>
             }
           />
+        )}
+
+        {/* Floating Batch Add Bar */}
+        {multiSelect && selectedExercises.size > 0 && (
+          <View style={styles.floatingBarWrap}>
+            <TouchableOpacity
+              style={styles.floatingAddBtn}
+              onPress={() => {
+                if (onSelectMultiple) {
+                  onSelectMultiple(Array.from(selectedExercises.values()));
+                } else {
+                  selectedExercises.forEach(ex => onSelectExercise(ex));
+                }
+                onClose();
+              }}
+            >
+              <Check size={20} color="#000000" strokeWidth={2.5} />
+              <Text style={styles.floatingAddBtnText}>
+                Add {selectedExercises.size} Exercise{selectedExercises.size > 1 ? 's' : ''} to Routine
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Custom Exercise Modal */}
@@ -357,6 +423,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  headerSubtitle: {
+    color: '#10B981',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   closeBtn: {
     padding: 4,
@@ -492,6 +564,10 @@ const styles = StyleSheet.create({
     borderColor: '#20242E',
     gap: 14,
   },
+  exerciseItemSelected: {
+    borderColor: '#10B981',
+    backgroundColor: '#132822',
+  },
   iconThumb: {
     width: 42,
     height: 42,
@@ -499,6 +575,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E2638',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconThumbSelected: {
+    backgroundColor: '#10382E',
   },
   itemInfo: {
     flex: 1,
@@ -508,6 +587,50 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     marginBottom: 4,
+  },
+  itemNameSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  checkCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#4B5563',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#181A20',
+  },
+  checkCircleSelected: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  floatingBarWrap: {
+    position: 'absolute',
+    bottom: 24,
+    left: 16,
+    right: 16,
+    zIndex: 99,
+  },
+  floatingAddBtn: {
+    backgroundColor: '#10B981',
+    minHeight: 52,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingAddBtnText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '800',
   },
   tagRow: {
     flexDirection: 'row',
