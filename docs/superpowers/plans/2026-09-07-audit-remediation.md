@@ -197,12 +197,12 @@ assert.deepEqual(await destination.readSnapshot(), await source.readSnapshot());
 **Modify:** `README.md`, `ROADMAP.md`, `LICENSE` only where ownership is established.
 **Create:** `CONTRIBUTING.md`, `THIRD_PARTY_NOTICES.md`, `docs/data-provenance.md`.
 
-- [ ] Trace the bundled exercise JSON and shipped image/icon assets to upstream sources using repository history and verifiable upstream content. Record source URL, revision/hash, transformations, license text, and redistribution requirements. Do not infer public-domain status from naming or resemblance. If the provenance cannot be established, document it as a distribution blocker for those assets rather than fabricate attribution.
-- [ ] Preserve the Expo notice for inherited material. Add a Lifts authorship notice only where supported by repository authorship/ownership; do not assign third-party work to the current maintainer. Document dependency and data licenses separately.
-- [ ] Rewrite README feature claims from the acceptance results. State native offline support, persistent browser storage limitations, backup version/import behavior, available analytics, actual seed routines, and release status. Remove claims of complete Lyfta parity and unsupported exercise-history/video/percentage features.
-- [ ] Reopen inaccurate completion checkboxes in ROADMAP. Separate remediation completion from future supersets, charts, video, sharing, and health integration. Record the intentional change from web preview to persistent web support.
-- [ ] Write CONTRIBUTING with the verified toolchain, clean install, tests, platform checks, data-migration expectations, and issue/review workflow. Verify README links and prerequisites against installed package engines. No application tests are required for prose-only edits; review links and factual claims directly.
-- [ ] Gate: every bundled data/asset claim is evidenced or explicitly unresolved, and no promised feature exceeds the verified implementation.
+- [x] Trace the bundled exercise JSON and shipped image/icon assets to upstream sources using repository history and verifiable upstream content. Record source URL, revision/hash, transformations, license text, and redistribution requirements. Do not infer public-domain status from naming or resemblance. If the provenance cannot be established, document it as a distribution blocker for those assets rather than fabricate attribution.
+- [x] Preserve the Expo notice for inherited material. Add a Lifts authorship notice only where supported by repository authorship/ownership; do not assign third-party work to the current maintainer. Document dependency and data licenses separately.
+- [x] Rewrite README feature claims from the acceptance results. State native offline support, persistent browser storage limitations, backup version/import behavior, available analytics, actual seed routines, and release status. Remove claims of complete Lyfta parity and unsupported exercise-history/video/percentage features.
+- [x] Reopen inaccurate completion checkboxes in ROADMAP. Separate remediation completion from future supersets, charts, video, sharing, and health integration. Record the intentional change from web preview to persistent web support.
+- [x] Write CONTRIBUTING with the verified toolchain, clean install, tests, platform checks, data-migration expectations, and issue/review workflow. Verify README links and prerequisites against installed package engines. No application tests are required for prose-only edits; review links and factual claims directly.
+- [x] Gate: every bundled data/asset claim is evidenced or explicitly unresolved, and no promised feature exceeds the verified implementation.
 
 ## Task 9: Enforce regression checks and document a reproducible release
 
