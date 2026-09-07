@@ -148,11 +148,11 @@ assert.equal(initialReps('AMRAP', 0, 12), 12);
 
 **Interfaces:** `useDialog()` supplies `confirm(options: { title: string; message: string; confirmLabel: string; destructive?: boolean }): Promise<boolean>` and `notify(options: { title: string; message: string }): Promise<void>`. Put the provider above all screens. The App owns `completedWorkout: Workout | null`; the logger reports successful completion via `onCompleted(workout: Workout)`.
 
-- [ ] Introduce the browser test harness with a fresh storage context per test and a real served app. Test Complete → persisted history → visible summary → dismiss → History; test cancel/confirm deletion and discard, including keyboard focus and Escape/back behavior. Add a failed-save case that keeps the workout editable.
-- [ ] Run `npx playwright test tests/e2e/workout-lifecycle.spec.ts` before wiring the fixes. The summary and web confirmation assertions should fail on the current implementation.
-- [ ] Render the summary above the conditional logger/tab switch in `App.tsx`. Navigate and refresh History when the summary is dismissed. Disable Finish during its in-flight operation; do not treat optional haptic failures as database-save failures.
-- [ ] Replace `Alert.alert` dependencies with the application dialog provider. Cancel resolves false and changes no data; only explicit confirm starts a destructive mutation. Errors remain visible through `notify` or inline error state. Add accessibility labels, dialog roles where supported, focus management, and busy states to affected controls.
-- [ ] Verify native Android back and iOS dismissal, plus browser keyboard/mouse behavior. Run targeted tests, `npm test`, and `npx tsc --noEmit`. Gate: successful completion has a reachable summary and History; every web confirmation path works.
+- [x] Introduce the browser test harness with a fresh storage context per test and a real served app. Test Complete → persisted history → visible summary → dismiss → History; test cancel/confirm deletion and discard, including keyboard focus and Escape/back behavior. Add a failed-save case that keeps the workout editable.
+- [x] Run `npx playwright test tests/e2e/workout-lifecycle.spec.ts` before wiring the fixes. The summary and web confirmation assertions should fail on the current implementation.
+- [x] Render the summary above the conditional logger/tab switch in `App.tsx`. Navigate and refresh History when the summary is dismissed. Disable Finish during its in-flight operation; do not treat optional haptic failures as database-save failures.
+- [x] Replace `Alert.alert` dependencies with the application dialog provider. Cancel resolves false and changes no data; only explicit confirm starts a destructive mutation. Errors remain visible through `notify` or inline error state. Add accessibility labels, dialog roles where supported, focus management, and busy states to affected controls.
+- [x] Verify native Android back and iOS dismissal, plus browser keyboard/mouse behavior. Run targeted tests, `npm test`, and `npx tsc --noEmit`. Gate: successful completion has a reachable summary and History; every web confirmation path works.
 
 ## Task 6: Ship complete, restorable backups
 

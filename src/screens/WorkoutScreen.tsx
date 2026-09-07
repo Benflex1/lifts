@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
   FlatList,
 } from 'react-native';
 import {
@@ -25,9 +24,11 @@ import { Routine } from '../types';
 import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
+import { useDialog } from '../context/DialogContext';
 
 export const WorkoutScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
+  const { confirm, notify } = useDialog();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('All');
   const [showEditor, setShowEditor] = useState(false);
@@ -47,7 +48,7 @@ export const WorkoutScreen: React.FC = () => {
     try {
       await startWorkout(undefined, 'Empty Workout');
     } catch (e) {
-      Alert.alert('Error', 'Failed to start workout.');
+      await notify({ title: 'Error', message: 'Failed to start workout.' });
     }
   };
 
@@ -55,7 +56,7 @@ export const WorkoutScreen: React.FC = () => {
     try {
       await startWorkout(routine);
     } catch (e) {
-      Alert.alert('Error', `Failed to start "${routine.name}".`);
+      await notify({ title: 'Error', message: `Failed to start "${routine.name}".` });
     }
   };
 
@@ -64,30 +65,25 @@ export const WorkoutScreen: React.FC = () => {
       await duplicateRoutine(routine.id);
       loadRoutines();
     } catch (e) {
-      Alert.alert('Error', 'Failed to duplicate routine.');
+      await notify({ title: 'Error', message: 'Failed to duplicate routine.' });
     }
   };
 
-  const handleDeleteRoutine = (routine: Routine) => {
-    Alert.alert(
-      'Delete Routine',
-      `Are you sure you want to delete "${routine.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteRoutine(routine.id);
-              loadRoutines();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete routine.');
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteRoutine = async (routine: Routine) => {
+    const shouldDelete = await confirm({
+      title: 'Delete Routine',
+      message: `Are you sure you want to delete "${routine.name}"?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!shouldDelete) return;
+
+    try {
+      await deleteRoutine(routine.id);
+      loadRoutines();
+    } catch (e) {
+      await notify({ title: 'Error', message: 'Failed to delete routine.' });
+    }
   };
 
   // Collect unique folders

@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
 } from 'react-native';
 import { Calculator, Award, Dumbbell, ShieldCheck, Download } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
@@ -15,9 +14,11 @@ import { getWorkoutHistory } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
 import { exportBackup } from '../utils/export';
+import { useDialog } from '../context/DialogContext';
 
 export const AnalyticsScreen: React.FC = () => {
   const { unit } = useSettings();
+  const { notify } = useDialog();
   // 1RM calculator state
   const [weight, setWeight] = useState('100');
   const [reps, setReps] = useState('5');
@@ -39,9 +40,9 @@ export const AnalyticsScreen: React.FC = () => {
   const handleExportData = async () => {
     try {
       await exportBackup();
-      Alert.alert('Export Complete', 'Your workout data has been exported.');
+      await notify({ title: 'Export Complete', message: 'Your workout data has been exported.' });
     } catch (e) {
-      Alert.alert('Export Error', 'Failed to export data. Please try again.');
+      await notify({ title: 'Export Error', message: 'Failed to export data. Please try again.' });
     }
   };
 

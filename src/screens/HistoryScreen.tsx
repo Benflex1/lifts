@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import {
   Calendar as CalendarIcon,
@@ -24,10 +23,12 @@ import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
+import { useDialog } from '../context/DialogContext';
 
 export const HistoryScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
   const { unit } = useSettings();
+  const { confirm, notify } = useDialog();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -72,27 +73,22 @@ export const HistoryScreen: React.FC = () => {
     }
   };
 
-  const handleDelete = (item: WorkoutHistorySummary) => {
-    Alert.alert(
-      'Delete Workout',
-      `Are you sure you want to delete "${item.name}" from your history? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteWorkout(item.id);
-              setExpandedId(null);
-              loadHistory();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete workout.');
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = async (item: WorkoutHistorySummary) => {
+    const shouldDelete = await confirm({
+      title: 'Delete Workout',
+      message: `Are you sure you want to delete "${item.name}" from your history? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!shouldDelete) return;
+
+    try {
+      await deleteWorkout(item.id);
+      setExpandedId(null);
+      loadHistory();
+    } catch (e) {
+      await notify({ title: 'Error', message: 'Failed to delete workout.' });
+    }
   };
 
   const handlePerformAgain = async (item: WorkoutHistorySummary) => {
@@ -128,7 +124,7 @@ export const HistoryScreen: React.FC = () => {
 
       await startWorkout(routine, item.name);
     } catch (e) {
-      Alert.alert('Error', 'Failed to start workout.');
+      await notify({ title: 'Error', message: 'Failed to start workout.' });
     }
   };
 

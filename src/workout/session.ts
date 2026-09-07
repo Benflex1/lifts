@@ -249,11 +249,20 @@ export function createSessionController(
 
     const finalNow = getNow();
     const finalDuration = Math.max(0, Math.floor((finalNow - new Date(state.workout.startTime).getTime()) / 1000));
+    const calculatedVolume = (state.workout.exercises || []).reduce(
+      (sum, ex) =>
+        sum +
+        (ex.sets || [])
+          .filter((s) => s.isCompleted)
+          .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0),
+      0
+    );
 
     const completedWorkout: Workout = {
       ...state.workout,
       endTime: new Date(finalNow).toISOString(),
       durationSeconds: finalDuration,
+      totalVolumeKg: state.workout.totalVolumeKg || calculatedVolume,
     };
 
     try {

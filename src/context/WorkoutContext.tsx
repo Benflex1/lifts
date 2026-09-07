@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { Platform, Alert, AppState, AppStateStatus } from 'react-native';
+import { Platform, AppState, AppStateStatus } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../types';
@@ -8,6 +8,7 @@ import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
 import { initialReps, validateCompletedSet } from '../workout/sets';
+import { useDialog } from './DialogContext';
 
 interface RestTimerState {
   isActive: boolean;
@@ -63,6 +64,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
+  const { confirm, notify } = useDialog();
 
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
@@ -291,41 +293,32 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const startWorkout = async (routine?: Routine, customName?: string) => {
     if (sessionState.phase === 'active' && sessionState.workout) {
-      Alert.alert(
-        'Workout In Progress',
-        'You already have an active workout in progress. Would you like to resume it?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Resume', onPress: () => maximizeWorkout() },
-        ]
-      );
+      const shouldResume = await confirm({
+        title: 'Workout In Progress',
+        message: 'You already have an active workout in progress. Would you like to resume it?',
+        confirmLabel: 'Resume',
+        cancelLabel: 'Cancel',
+      });
+      if (shouldResume) {
+        maximizeWorkout();
+      }
       return;
     }
 
     if (availableDrafts.length > 0) {
-      Alert.alert(
-        'Unfinished Workout Found',
-        'You have an unfinished workout saved. Would you like to resume it or start a new one?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Resume Saved',
-            onPress: () => {
-              if (availableDrafts.length === 1) {
-                resumeDraft(availableDrafts[0]);
-              } else {
-                setIsDraftModalOpen(true);
-              }
-            },
-          },
-          {
-            text: 'Start New Anyway',
-            onPress: () => {
-              executeStartWorkout(routine, customName).catch(console.error);
-            },
-          },
-        ]
-      );
+      const shouldResume = await confirm({
+        title: 'Unfinished Workout Found',
+        message: 'You have an unfinished workout saved. Would you like to resume it?',
+        confirmLabel: 'Resume Saved',
+        cancelLabel: 'Cancel',
+      });
+      if (shouldResume) {
+        if (availableDrafts.length === 1) {
+          resumeDraft(availableDrafts[0]);
+        } else {
+          setIsDraftModalOpen(true);
+        }
+      }
       return;
     }
 
@@ -396,7 +389,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return finished;
     } catch (e: any) {
       console.error('Failed to finish workout:', e);
-      Alert.alert('Save Error', 'Failed to save workout. Please try again.');
+      notify({
+        title: 'Save Error',
+        message: 'Failed to save workout. Please try again.',
+      });
       return null;
     }
   };
@@ -575,7 +571,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!targetSet.isCompleted) {
       const validationError = validateCompletedSet(targetSet);
       if (validationError) {
-        Alert.alert('Invalid Set', validationError);
+        notify({
+          title: 'Invalid Set',
+          message: validationError,
+        });
         return;
       }
     }

@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
 } from 'react-native';
+import { useDialog } from '../context/DialogContext';
 import {
   X,
   Plus,
@@ -79,6 +79,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
   onClose,
   onSaved,
 }) => {
+  const { notify } = useDialog();
   const [name, setName] = useState('');
   const [folderName, setFolderName] = useState('');
   const [notes, setNotes] = useState('');
@@ -240,11 +241,11 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
   const handleSave = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a routine name.');
+      notify({ title: 'Error', message: 'Please enter a routine name.' });
       return;
     }
     if (draftExercises.length === 0) {
-      Alert.alert('Error', 'Please add at least one exercise.');
+      notify({ title: 'Error', message: 'Please add at least one exercise.' });
       return;
     }
 

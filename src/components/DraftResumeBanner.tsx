@@ -4,8 +4,10 @@ import { Play, Trash2, List } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatDuration } from '../utils/calculator';
 import { DraftRecoveryModal } from './DraftRecoveryModal';
+import { useDialog } from '../context/DialogContext';
 
 export const DraftResumeBanner: React.FC = () => {
+  const { confirm } = useDialog();
   const {
     availableDrafts,
     resumeDraft,
@@ -19,6 +21,18 @@ export const DraftResumeBanner: React.FC = () => {
   if (availableDrafts.length === 0 || isWorkingOut) return null;
 
   const firstDraft = availableDrafts[0];
+
+  const handleDiscard = async (id: string) => {
+    const shouldDiscard = await confirm({
+      title: 'Discard Draft?',
+      message: 'Are you sure you want to discard this unfinished workout? Logged sets will be deleted.',
+      confirmLabel: 'Discard',
+      destructive: true,
+    });
+    if (shouldDiscard) {
+      await discardDraft(id);
+    }
+  };
 
   return (
     <>
@@ -43,8 +57,10 @@ export const DraftResumeBanner: React.FC = () => {
             <>
               <TouchableOpacity
                 style={styles.discardBtn}
-                onPress={() => discardDraft(firstDraft.workout.id)}
+                onPress={() => handleDiscard(firstDraft.workout.id)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Discard unfinished workout"
               >
                 <Trash2 size={14} color="#EF4444" />
               </TouchableOpacity>
@@ -52,6 +68,8 @@ export const DraftResumeBanner: React.FC = () => {
                 style={styles.resumeBtn}
                 onPress={() => resumeDraft(firstDraft)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Resume unfinished workout"
               >
                 <Play size={14} color="#000000" fill="#000000" />
                 <Text style={styles.resumeBtnText}>Resume</Text>
@@ -65,7 +83,7 @@ export const DraftResumeBanner: React.FC = () => {
         visible={isDraftModalOpen}
         drafts={availableDrafts}
         onResume={(d) => resumeDraft(d)}
-        onDiscard={(id) => discardDraft(id)}
+        onDiscard={handleDiscard}
         onClose={closeDraftModal}
       />
     </>

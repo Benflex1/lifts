@@ -21,119 +21,138 @@ import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
 import { DraftResumeBanner } from './src/components/DraftResumeBanner';
 import { ReadOnlyBanner } from './src/components/ReadOnlyBanner';
+import { DialogProvider } from './src/context/DialogContext';
+import { WorkoutSummaryModal } from './src/components/WorkoutSummaryModal';
+import { Workout } from './src/types';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
 function MainAppContent() {
   const { isWorkingOut, isMinimized } = useWorkout();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
+  const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
 
-  // If in an active gym session and NOT minimized, show gym floor logger directly
-  if (isWorkingOut && !isMinimized) {
-    return (
-      <View style={styles.appWrapper}>
-        <StatusBar style="light" />
-        <ReadOnlyBanner />
-        <ActiveWorkoutScreen onFinish={() => setCurrentTab('history')} />
-      </View>
-    );
-  }
+  const handleWorkoutCompleted = (workout: Workout) => {
+    setCompletedWorkout(workout);
+    setCurrentTab('history');
+  };
+
+  const handleSummaryDismissed = () => {
+    setCompletedWorkout(null);
+    setCurrentTab('history');
+  };
 
   return (
     <View style={styles.appWrapper}>
       <StatusBar style="light" />
 
-      {/* Screen Views */}
-      <View style={styles.screenContent}>
-        <ReadOnlyBanner />
-        <DraftResumeBanner />
-        {currentTab === 'workout' && <WorkoutScreen />}
-        {currentTab === 'history' && <HistoryScreen />}
-        {currentTab === 'exercises' && <ExercisesScreen />}
-        {currentTab === 'analytics' && <AnalyticsScreen />}
-      </View>
+      {/* Completion summary modal surviving logger unmount */}
+      <WorkoutSummaryModal
+        workout={completedWorkout}
+        visible={completedWorkout !== null}
+        onDismiss={handleSummaryDismissed}
+      />
 
-      {/* Persistent Mini Bar when workout is active in background */}
-      <ActiveWorkoutMiniBar />
+      {isWorkingOut && !isMinimized ? (
+        <View style={styles.appWrapper}>
+          <ReadOnlyBanner />
+          <ActiveWorkoutScreen onFinish={handleWorkoutCompleted} />
+        </View>
+      ) : (
+        <>
+          {/* Screen Views */}
+          <View style={styles.screenContent}>
+            <ReadOnlyBanner />
+            <DraftResumeBanner />
+            {currentTab === 'workout' && <WorkoutScreen />}
+            {currentTab === 'history' && <HistoryScreen />}
+            {currentTab === 'exercises' && <ExercisesScreen />}
+            {currentTab === 'analytics' && <AnalyticsScreen />}
+          </View>
 
-      {/* Modern Bottom Navigation Bar */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navTab}
-          onPress={() => setCurrentTab('workout')}
-          activeOpacity={0.7}
-        >
-          <Dumbbell
-            size={22}
-            color={currentTab === 'workout' ? '#3B82F6' : '#6B7280'}
-          />
-          <Text
-            style={[
-              styles.navLabel,
-              currentTab === 'workout' && styles.navLabelActive,
-            ]}
-          >
-            Workout
-          </Text>
-        </TouchableOpacity>
+          {/* Persistent Mini Bar when workout is active in background */}
+          <ActiveWorkoutMiniBar />
 
-        <TouchableOpacity
-          style={styles.navTab}
-          onPress={() => setCurrentTab('history')}
-          activeOpacity={0.7}
-        >
-          <History
-            size={22}
-            color={currentTab === 'history' ? '#3B82F6' : '#6B7280'}
-          />
-          <Text
-            style={[
-              styles.navLabel,
-              currentTab === 'history' && styles.navLabelActive,
-            ]}
-          >
-            History
-          </Text>
-        </TouchableOpacity>
+          {/* Modern Bottom Navigation Bar */}
+          <View style={styles.bottomNav}>
+            <TouchableOpacity
+              style={styles.navTab}
+              onPress={() => setCurrentTab('workout')}
+              activeOpacity={0.7}
+            >
+              <Dumbbell
+                size={22}
+                color={currentTab === 'workout' ? '#3B82F6' : '#6B7280'}
+              />
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentTab === 'workout' && styles.navLabelActive,
+                ]}
+              >
+                Workout
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navTab}
-          onPress={() => setCurrentTab('exercises')}
-          activeOpacity={0.7}
-        >
-          <BookOpen
-            size={22}
-            color={currentTab === 'exercises' ? '#3B82F6' : '#6B7280'}
-          />
-          <Text
-            style={[
-              styles.navLabel,
-              currentTab === 'exercises' && styles.navLabelActive,
-            ]}
-          >
-            Exercises
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.navTab}
+              onPress={() => setCurrentTab('history')}
+              activeOpacity={0.7}
+            >
+              <History
+                size={22}
+                color={currentTab === 'history' ? '#3B82F6' : '#6B7280'}
+              />
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentTab === 'history' && styles.navLabelActive,
+                ]}
+              >
+                History
+              </Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.navTab}
-          onPress={() => setCurrentTab('analytics')}
-          activeOpacity={0.7}
-        >
-          <BarChart3
-            size={22}
-            color={currentTab === 'analytics' ? '#3B82F6' : '#6B7280'}
-          />
-          <Text
-            style={[
-              styles.navLabel,
-              currentTab === 'analytics' && styles.navLabelActive,
-            ]}
-          >
-            Analytics
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity
+              style={styles.navTab}
+              onPress={() => setCurrentTab('exercises')}
+              activeOpacity={0.7}
+            >
+              <BookOpen
+                size={22}
+                color={currentTab === 'exercises' ? '#3B82F6' : '#6B7280'}
+              />
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentTab === 'exercises' && styles.navLabelActive,
+                ]}
+              >
+                Exercises
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.navTab}
+              onPress={() => setCurrentTab('analytics')}
+              activeOpacity={0.7}
+            >
+              <BarChart3
+                size={22}
+                color={currentTab === 'analytics' ? '#3B82F6' : '#6B7280'}
+              />
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentTab === 'analytics' && styles.navLabelActive,
+                ]}
+              >
+                Analytics
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -189,7 +208,9 @@ function AppRoot() {
 export default function App() {
   return (
     <StorageProvider>
-      <AppRoot />
+      <DialogProvider>
+        <AppRoot />
+      </DialogProvider>
     </StorageProvider>
   );
 }
