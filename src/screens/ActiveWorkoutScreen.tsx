@@ -151,6 +151,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     }
   };
 
+  const RPE_OPTIONS: (number | null)[] = [null, 5, 6, 7, 8, 9, 10];
+
+  const cycleRpe = (activeExerciseId: string, set: WorkoutSet) => {
+    const currentIdx = RPE_OPTIONS.indexOf(set.rpe ?? null);
+    const nextIdx = (currentIdx + 1) % RPE_OPTIONS.length;
+    updateSet(activeExerciseId, set.id, { rpe: RPE_OPTIONS[nextIdx] ?? undefined });
+  };
+
   return (
     <View style={styles.screenContainer}>
       {/* Top App Bar */}
@@ -269,6 +277,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                 <Text style={[styles.colHeader, { flex: 1, paddingLeft: 6 }]}>PREVIOUS</Text>
                 <Text style={[styles.colHeader, { width: 84, textAlign: 'center' }]}>{unit.toUpperCase()}</Text>
                 <Text style={[styles.colHeader, { width: 72, textAlign: 'center' }]}>REPS</Text>
+                <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>RPE</Text>
                 <Text style={[styles.colHeader, { width: 48, textAlign: 'center' }]}>✓</Text>
               </View>
 
@@ -333,6 +342,17 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                         }}
                       />
                     </View>
+
+                    {/* RPE Cycle Badge */}
+                    <TouchableOpacity
+                      style={styles.rpeBadge}
+                      onPress={() => cycleRpe(activeEx.id, set)}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    >
+                      <Text style={styles.rpeBadgeText}>
+                        {set.rpe != null ? set.rpe.toString() : '–'}
+                      </Text>
+                    </TouchableOpacity>
 
                     {/* Completion Checkbox */}
                     <TouchableOpacity
@@ -743,6 +763,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#133529',
     borderColor: '#10B981',
     color: '#FFFFFF',
+  },
+  rpeBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E232E',
+    borderWidth: 1,
+    borderColor: '#374151',
+    marginRight: 4,
+  },
+  rpeBadgeText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   checkBtn: {
     width: 44,

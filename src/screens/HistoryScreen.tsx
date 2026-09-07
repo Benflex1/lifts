@@ -252,6 +252,9 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
                                   {s.type !== 'normal' && (
                                     <Text style={styles.detailSetType}>{s.type.toUpperCase()}</Text>
                                   )}
+                                  {s.rpe != null && (
+                                    <Text style={styles.detailRpe}>RPE {s.rpe}</Text>
+                                  )}
                                 </View>
                               ))}
                             </View>
@@ -481,6 +484,11 @@ const styles = StyleSheet.create({
   },
   detailSetType: {
     color: '#F59E0B',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  detailRpe: {
+    color: '#A855F7',
     fontSize: 10,
     fontWeight: '700',
   },
