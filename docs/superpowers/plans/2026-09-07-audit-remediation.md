@@ -209,7 +209,7 @@ assert.deepEqual(await destination.readSnapshot(), await source.readSnapshot());
 **Modify:** `package.json`, `package-lock.json` only for justified compatible changes, `tsconfig.json` if required.
 **Create:** `.github/workflows/ci.yml`, `playwright.config.ts`, `docs/release-checklist.md`, `docs/audit-remediation-results.md`.
 
-- [ ] Add separate `test:integration` and `test:e2e` scripts while retaining the fast unit suite. Include test code in a dedicated TypeScript check if the application tsconfig continues excluding tests. Configure browser tests to serve a real build on localhost with isolated per-test data.
+- [x] Add separate `test:integration` and `test:e2e` scripts while retaining the fast unit suite. Include test code in a dedicated TypeScript check if the application tsconfig continues excluding tests. Configure browser tests to serve a real build on localhost with isolated per-test data.
 
 Required checks:
 
@@ -223,12 +223,12 @@ npx playwright test
 npm audit --json
 ```
 
-- [ ] Run these checks in CI on pull requests using a Node version verified against installed dependency engines. Cache downloads, not mutable app databases. Install the browser needed by the browser tests. Include Android/iOS JS bundle smoke checks without presenting them as native installation tests.
-- [ ] Triage the reported uuid advisory through its actual xcode/ngrok paths. Prefer compatible upstream updates with lockfile review and regression checks. Do not apply `npm audit fix --force` or downgrade Expo to satisfy the scanner. Record remaining advisory IDs, dependency paths, affected usage, and review date; fail on new high/critical findings and unreviewed changes to the accepted baseline.
-- [ ] Document and execute a clean local Android debug APK build using verified Expo/native tooling in an isolated checkout. Record JDK/Android SDK/Node requirements and build commands in the release checklist. Development builds may use debug signing; do not invent production package identifiers or claim store readiness. Document the iOS simulator/device build workflow on macOS and mark unexecuted checks accurately.
-- [ ] Run the device acceptance matrix: fresh install; upgrade fixture; offline native logging; background/lock; force-stop/recovery; zero-weight set; repeated exercise; routine targets; unit change; focused input/Finish; export/restore; failed storage; delete/discard; completion/History; Android back; iOS safe-area/dialog usability. Record platform, build, steps, and result for each.
-- [ ] Add `docs/audit-remediation-results.md` with links from each original finding to its regression test and verification evidence. Any unavailable native environment remains an explicit unverified gate, not a passing result.
-- [ ] Gate: tasks 1–8 pass, migrations/backup round trips pass, web workflows pass, and native runtime checks are recorded before calling the app release-ready. Store publishing remains outside this plan.
+- [x] Run these checks in CI on pull requests using a Node version verified against installed dependency engines. Cache downloads, not mutable app databases. Install the browser needed by the browser tests. Include Android/iOS JS bundle smoke checks without presenting them as native installation tests.
+- [x] Triage the reported uuid advisory through its actual xcode/ngrok paths. Prefer compatible upstream updates with lockfile review and regression checks. Do not apply `npm audit fix --force` or downgrade Expo to satisfy the scanner. Record remaining advisory IDs, dependency paths, affected usage, and review date; fail on new high/critical findings and unreviewed changes to the accepted baseline.
+- [x] Document and execute a clean local Android debug APK build using verified Expo/native tooling in an isolated checkout. Record JDK/Android SDK/Node requirements and build commands in the release checklist. Development builds may use debug signing; do not invent production package identifiers or claim store readiness. Document the iOS simulator/device build workflow on macOS and mark unexecuted checks accurately.
+- [x] Run the device acceptance matrix: fresh install; upgrade fixture; offline native logging; background/lock; force-stop/recovery; zero-weight set; repeated exercise; routine targets; unit change; focused input/Finish; export/restore; failed storage; delete/discard; completion/History; Android back; iOS safe-area/dialog usability. Record platform, build, steps, and result for each.
+- [x] Add `docs/audit-remediation-results.md` with links from each original finding to its regression test and verification evidence. Any unavailable native environment remains an explicit unverified gate, not a passing result.
+- [x] Gate: tasks 1–8 pass, migrations/backup round trips pass, web workflows pass, and native runtime checks are recorded before calling the app release-ready. Store publishing remains outside this plan.
 
 ## Acceptance mapping
 
