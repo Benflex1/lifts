@@ -24,6 +24,7 @@ import {
   ArrowRightLeft,
   Copy,
   Timer,
+  Check,
 } from 'lucide-react-native';
 import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
@@ -55,16 +56,20 @@ const PRESET_FOLDERS = [
   'Legs & Core',
 ];
 
-const SET_PRESETS = [2, 3, 4, 5, 6];
-const REP_OPTIONS = ['5', '6-8', '8-10', '8-12', '10-12', '12-15', 'AMRAP'];
-const REST_OPTIONS = [
-  { label: 'Off', val: 0 },
-  { label: '30s', val: 30 },
-  { label: '60s', val: 60 },
-  { label: '90s', val: 90 },
-  { label: '2m', val: 120 },
-  { label: '3m', val: 180 },
-  { label: '5m', val: 300 },
+interface RepPresetOption {
+  label: string;
+  description: string;
+}
+
+const REP_PRESET_OPTIONS: RepPresetOption[] = [
+  { label: '5', description: 'Heavy Strength (e.g. 5x5)' },
+  { label: '6-8', description: 'Strength & Hypertrophy' },
+  { label: '8-10', description: 'Hypertrophy / Mass' },
+  { label: '8-12', description: 'Standard Hypertrophy' },
+  { label: '10-12', description: 'High Volume Hypertrophy' },
+  { label: '12-15', description: 'Endurance & Muscle Pump' },
+  { label: '15-20', description: 'High Rep Conditioning' },
+  { label: 'AMRAP', description: 'As Many Reps As Possible' },
 ];
 
 export const RoutineEditorModal: React.FC<Props> = ({
@@ -82,6 +87,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
   const [replacingIndex, setReplacingIndex] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'detailed' | 'compact'>('detailed');
   const [restWheelIndex, setRestWheelIndex] = useState<number | null>(null);
+  const [repDropdownIndex, setRepDropdownIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (routineToEdit) {
@@ -223,11 +229,6 @@ export const RoutineEditorModal: React.FC<Props> = ({
     );
   };
 
-  const handleUpdateRest = (index: number, seconds: number) => {
-    setDraftExercises(prev =>
-      prev.map((item, idx) => (idx === index ? { ...item, restTimerSeconds: seconds } : item))
-    );
-  };
 
   const handleSelectFolder = (f: string) => {
     if (folderName.toLowerCase() === f.toLowerCase()) {
@@ -571,119 +572,98 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   </View>
                 </View>
 
-                {/* Target Sets Row with Quick Pills & Stepper */}
+                {/* Target Sets Row: Clean Stepper without Presets */}
                 <View style={styles.configRow}>
                   <Text style={styles.configLabel}>TARGET SETS</Text>
-                  <View style={styles.setsPillsRow}>
-                    {SET_PRESETS.map(s => (
-                      <TouchableOpacity
-                        key={s}
-                        style={[styles.setPresetPill, item.targetSets === s && styles.setPresetPillActive]}
-                        onPress={() => handleSetTargetSets(idx, s)}
-                      >
-                        <Text
-                          style={[
-                            styles.setPresetText,
-                            item.targetSets === s && styles.setPresetTextActive,
-                          ]}
-                        >
-                          {s}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                    <View style={styles.stepperContainer}>
-                      <TouchableOpacity
-                        style={styles.stepBtn}
-                        onPress={() => handleUpdateSets(idx, -1)}
-                      >
-                        <Minus size={15} color="#FFFFFF" />
-                      </TouchableOpacity>
-                      <Text style={styles.stepperValue}>{item.targetSets}</Text>
-                      <TouchableOpacity
-                        style={styles.stepBtn}
-                        onPress={() => handleUpdateSets(idx, 1)}
-                      >
-                        <Plus size={15} color="#FFFFFF" />
-                      </TouchableOpacity>
+                  <View style={styles.cleanStepperContainer}>
+                    <TouchableOpacity
+                      style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
+                      onPress={() => handleUpdateSets(idx, -1)}
+                      disabled={item.targetSets <= 1}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Minus size={15} color={item.targetSets > 1 ? '#FFFFFF' : '#4B5563'} />
+                    </TouchableOpacity>
+
+                    <View style={styles.cleanStepValueWrap}>
+                      <TextInput
+                        style={styles.cleanStepInput}
+                        keyboardType="number-pad"
+                        value={String(item.targetSets)}
+                        onChangeText={text => {
+                          const num = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                          if (!isNaN(num) && num > 0 && num <= 50) {
+                            handleSetTargetSets(idx, num);
+                          } else if (text === '') {
+                            handleSetTargetSets(idx, 1);
+                          }
+                        }}
+                        selectTextOnFocus={true}
+                        maxLength={2}
+                      />
+                      <Text style={styles.cleanStepUnit}>sets</Text>
                     </View>
+
+                    <TouchableOpacity
+                      style={styles.cleanStepBtn}
+                      onPress={() => handleUpdateSets(idx, 1)}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Plus size={15} color="#FFFFFF" />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Target Reps Row */}
+                {/* Target Reps Row: Custom Main Input with Presets Dropdown */}
                 <View style={styles.configRow}>
                   <Text style={styles.configLabel}>TARGET REPS</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.chipsScroll}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    {REP_OPTIONS.map(repOpt => {
-                      const isSelected = item.targetReps === repOpt;
-                      return (
-                        <TouchableOpacity
-                          key={repOpt}
-                          style={[styles.smallChip, isSelected && styles.smallChipActive]}
-                          onPress={() => handleUpdateReps(idx, repOpt)}
-                        >
-                          <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
-                            {repOpt}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                    {/* Direct Custom Reps Input */}
-                    <TextInput
-                      style={styles.customRepInput}
-                      placeholder="Custom"
-                      placeholderTextColor="#6B7280"
-                      value={item.targetReps}
-                      onChangeText={txt => handleUpdateReps(idx, txt)}
-                      selectTextOnFocus={true}
-                    />
-                  </ScrollView>
+                  <View style={styles.repsRowContainer}>
+                    <View style={styles.customRepInputWrapper}>
+                      <TextInput
+                        style={styles.primaryRepInput}
+                        placeholder="e.g. 8-12"
+                        placeholderTextColor="#6B7280"
+                        value={item.targetReps}
+                        onChangeText={txt => handleUpdateReps(idx, txt)}
+                        selectTextOnFocus={true}
+                      />
+                      <Text style={styles.repInputSuffix}>reps</Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.presetDropdownBtn}
+                      onPress={() => setRepDropdownIndex(idx)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Sparkles size={13} color="#60A5FA" />
+                      <Text style={styles.presetDropdownBtnText}>Presets</Text>
+                      <ChevronDown size={13} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
-                {/* Rest Timer Row with Wheel Trigger */}
+                {/* Rest Timer Row with Lyfta Wheel Trigger */}
                 <View style={styles.configRow}>
                   <Text style={styles.configLabel}>REST TIMER</Text>
-                  <View style={styles.restRowContainer}>
-                    <TouchableOpacity
-                      style={styles.restWheelTriggerBtn}
-                      onPress={() => setRestWheelIndex(idx)}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                    >
+                  <TouchableOpacity
+                    style={styles.restWheelTriggerBtn}
+                    onPress={() => setRestWheelIndex(idx)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.restWheelTriggerLeft}>
                       <Timer size={14} color="#10B981" />
                       <Text style={styles.restWheelTriggerText}>
                         {item.restTimerSeconds > 0
-                          ? `${Math.floor(item.restTimerSeconds / 60)}m ${item.restTimerSeconds % 60}s`
-                          : 'Off'}
+                          ? `${Math.floor(item.restTimerSeconds / 60)}m ${String(item.restTimerSeconds % 60).padStart(2, '0')}s`
+                          : 'Timer Off'}
                       </Text>
-                      <ChevronDown size={14} color="#9CA3AF" />
-                    </TouchableOpacity>
-
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.chipsScroll}
-                      keyboardShouldPersistTaps="handled"
-                    >
-                      {REST_OPTIONS.map(restOpt => {
-                        const isSelected = item.restTimerSeconds === restOpt.val;
-                        return (
-                          <TouchableOpacity
-                            key={restOpt.val}
-                            style={[styles.smallChip, isSelected && styles.smallChipActive]}
-                            onPress={() => handleUpdateRest(idx, restOpt.val)}
-                          >
-                            <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
-                              {restOpt.label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    </View>
+                    <View style={styles.restWheelTriggerRight}>
+                      <Text style={styles.restWheelTriggerHint}>Change</Text>
+                      <ChevronDown size={13} color="#10B981" />
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </View>
             ))}
@@ -753,6 +733,85 @@ export const RoutineEditorModal: React.FC<Props> = ({
           onClose={() => setRestWheelIndex(null)}
           onSave={handleSaveRestWheel}
         />
+
+        {/* Rep Target Presets Dropdown Modal */}
+        <Modal
+          visible={repDropdownIndex !== null}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setRepDropdownIndex(null)}
+        >
+          <TouchableOpacity
+            style={styles.dropdownModalOverlay}
+            activeOpacity={1}
+            onPress={() => setRepDropdownIndex(null)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              style={styles.dropdownModalCard}
+              onPress={e => e.stopPropagation?.()}
+            >
+              <View style={styles.dropdownHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dropdownTitle}>Rep Target Presets</Text>
+                  {repDropdownIndex !== null && draftExercises[repDropdownIndex] && (
+                    <Text style={styles.dropdownSubtitle} numberOfLines={1}>
+                      {draftExercises[repDropdownIndex].exercise.name}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={styles.dropdownCloseBtn}
+                  onPress={() => setRepDropdownIndex(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <X size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.dropdownList} bounces={false}>
+                {REP_PRESET_OPTIONS.map(preset => {
+                  const isSelected =
+                    repDropdownIndex !== null &&
+                    draftExercises[repDropdownIndex]?.targetReps === preset.label;
+                  return (
+                    <TouchableOpacity
+                      key={preset.label}
+                      style={[styles.dropdownOptionRow, isSelected && styles.dropdownOptionRowActive]}
+                      onPress={() => {
+                        if (repDropdownIndex !== null) {
+                          handleUpdateReps(repDropdownIndex, preset.label);
+                          setRepDropdownIndex(null);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.dropdownPill, isSelected && styles.dropdownPillActive]}>
+                        <Text style={[styles.dropdownPillText, isSelected && styles.dropdownPillTextActive]}>
+                          {preset.label}
+                        </Text>
+                      </View>
+                      <Text style={[styles.dropdownDesc, isSelected && styles.dropdownDescActive]}>
+                        {preset.description}
+                      </Text>
+                      {isSelected ? (
+                        <Check size={18} color="#10B981" />
+                      ) : (
+                        <View style={{ width: 18 }} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={styles.dropdownFooter}>
+                <Text style={styles.dropdownFooterText}>
+                  💡 Tip: You can also type any custom target (e.g. "12, 10, 8" or "To failure") directly into the exercise card.
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
       </View>
     </Modal>
   );
@@ -1087,96 +1146,126 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     width: 85,
   },
-  setsPillsRow: {
+  cleanStepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-  },
-  setPresetPill: {
-    width: 32,
-    height: 38,
-    borderRadius: 8,
     backgroundColor: '#262A34',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#374151',
+    padding: 2,
   },
-  setPresetPillActive: {
-    backgroundColor: '#1D4ED8',
-    borderColor: '#3B82F6',
-  },
-  setPresetText: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  setPresetTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  stepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#262A34',
-    borderRadius: 10,
-    padding: 3,
-  },
-  stepBtn: {
-    width: 40,
-    height: 38,
+  cleanStepBtn: {
+    width: 36,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#323745',
-    borderRadius: 8,
+    borderRadius: 6,
   },
-  stepperValue: {
+  cleanStepBtnDisabled: {
+    opacity: 0.35,
+    backgroundColor: '#222631',
+  },
+  cleanStepValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    minWidth: 68,
+  },
+  cleanStepInput: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-    paddingHorizontal: 12,
-    minWidth: 68,
     textAlign: 'center',
+    minWidth: 24,
+    padding: 0,
   },
-  chipsScroll: {
-    gap: 8,
+  cleanStepUnit: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 3,
+  },
+  repsRowContainer: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  smallChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    minHeight: 38,
-    justifyContent: 'center',
+  customRepInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#262A34',
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#374151',
+    paddingHorizontal: 10,
+    height: 38,
   },
-  smallChipActive: {
-    backgroundColor: '#1D4ED8',
-    borderColor: '#3B82F6',
-  },
-  smallChipText: {
-    color: '#9CA3AF',
+  primaryRepInput: {
+    flex: 1,
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
+    paddingVertical: 0,
   },
-  smallChipTextActive: {
-    color: '#FFFFFF',
+  repInputSuffix: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '500',
+    marginLeft: 3,
+  },
+  presetDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 9,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F655',
+    gap: 5,
+  },
+  presetDropdownBtnText: {
+    color: '#60A5FA',
+    fontSize: 12,
     fontWeight: '700',
   },
-  customRepInput: {
-    backgroundColor: '#262A34',
+  restWheelTriggerBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#132822',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 8,
-    color: '#FFFFFF',
-    fontSize: 13,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minHeight: 38,
-    minWidth: 64,
-    textAlign: 'center',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#1C4A3F',
+    height: 38,
+  },
+  restWheelTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  restWheelTriggerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  restWheelTriggerText: {
+    color: '#10B981',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  restWheelTriggerHint: {
+    color: '#10B981CC',
+    fontSize: 11,
+    fontWeight: '600',
   },
   compactMetaRow: {
     flexDirection: 'row',
@@ -1200,27 +1289,110 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  restRowContainer: {
+  dropdownModalOverlay: {
     flex: 1,
-    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    padding: 20,
   },
-  restWheelTriggerBtn: {
+  dropdownModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '80%',
+    backgroundColor: '#181A20',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#2D3442',
+    overflow: 'hidden',
+  },
+  dropdownHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E232E',
-    paddingVertical: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#262A34',
+  },
+  dropdownTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  dropdownSubtitle: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  dropdownCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownList: {
+    maxHeight: 340,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#10B981',
-    gap: 5,
+    paddingVertical: 8,
   },
-  restWheelTriggerText: {
-    color: '#10B981',
+  dropdownOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginVertical: 3,
+    backgroundColor: 'transparent',
+  },
+  dropdownOptionRowActive: {
+    backgroundColor: '#1E293B',
+  },
+  dropdownPill: {
+    minWidth: 56,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#262A34',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  dropdownPillActive: {
+    backgroundColor: '#2563EB',
+  },
+  dropdownPillText: {
+    color: '#CBD5E1',
     fontSize: 13,
     fontWeight: '700',
+  },
+  dropdownPillTextActive: {
+    color: '#FFFFFF',
+  },
+  dropdownDesc: {
+    flex: 1,
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  dropdownDescActive: {
+    color: '#F3F4F6',
+    fontWeight: '600',
+  },
+  dropdownFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#13151B',
+    borderTopWidth: 1,
+    borderTopColor: '#262A34',
+  },
+  dropdownFooterText: {
+    color: '#6B7280',
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
   },
   emptyCard: {
     backgroundColor: '#181A20',
