@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,7 @@ import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { WeightInput } from '../components/WeightInput';
+import { RepsInput } from '../components/RepsInput';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 import { useDialog } from '../context/DialogContext';
 
@@ -138,20 +139,24 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     return null;
   }
 
-  // Calculate live volume and completed sets
-  let liveVolume = 0;
-  let completedSetsCount = 0;
-  let totalSetsCount = 0;
+  // Memoize live volume and completed sets counts to prevent recomputation on 1-second clock ticks
+  const { liveVolume, completedSetsCount, totalSetsCount } = useMemo(() => {
+    let volume = 0;
+    let completed = 0;
+    let total = 0;
 
-  for (const ex of activeWorkout.exercises) {
-    for (const s of ex.sets) {
-      totalSetsCount++;
-      if (s.isCompleted) {
-        liveVolume += s.weightKg * s.reps;
-        completedSetsCount++;
+    for (const ex of activeWorkout.exercises) {
+      for (const s of ex.sets) {
+        total++;
+        if (s.isCompleted) {
+          volume += s.weightKg * s.reps;
+          completed++;
+        }
       }
     }
-  }
+
+    return { liveVolume: volume, completedSetsCount: completed, totalSetsCount: total };
+  }, [activeWorkout.exercises]);
 
   const toggleExerciseExpanded = (id: string) => {
     setExpandedExercises((prev) => ({
@@ -537,22 +542,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
                     {/* Reps Input */}
                     <View style={styles.inputWrapReps}>
-                      <TextInput
-                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
-                        keyboardType="number-pad"
-                        value={set.reps.toString()}
+                      <RepsInput
+                        value={set.reps}
+                        onCommit={(r) => updateSet(activeEx.id, set.id, { reps: r })}
                         placeholder={
                           activeEx.targetReps || (set.previousReps ? set.previousReps.toString() : '10')
                         }
-                        placeholderTextColor="#6B7280"
-                        selectTextOnFocus={true}
-                        onChangeText={(txt) => {
-                          const cleaned = txt.trim();
-                          const val = cleaned === '' ? 0 : parseInt(cleaned, 10);
-                          if (!isNaN(val)) {
-                            updateSet(activeEx.id, set.id, { reps: val });
-                          }
-                        }}
+                        completed={set.isCompleted}
+                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
                       />
                       {/* Compact RPE badge if defined and inline column is hidden */}
                       {!showRpeColumn && set.rpe != null && (

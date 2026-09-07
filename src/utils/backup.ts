@@ -156,11 +156,11 @@ export function parseBackup(json: string): BackupV2 {
           re.exercise.equipment = re.exercise.equipment || def.equipment || bundled?.equipment || 'other';
         }
 
-        if (re.targetReps !== undefined) {
-          const repVal = validateTargetReps(re.targetReps);
-          if (!repVal.isValid) {
+        if (re.targetReps !== undefined && re.targetReps !== null) {
+          if (typeof re.targetReps !== 'string') {
             throw new Error(`Invalid targetReps in routine exercise: ${re.exerciseId}`);
           }
+          // Preserve legacy target reps text (e.g. "8 each side") during restore
         }
       }
     }
@@ -270,11 +270,11 @@ export function parseBackup(json: string): BackupV2 {
         we.exercise.isCustom = we.exercise.isCustom !== undefined ? Boolean(we.exercise.isCustom) : Boolean(def.isCustom);
       }
 
-      if (we.targetReps !== undefined && we.targetReps !== null && typeof we.targetReps === 'string' && we.targetReps.trim()) {
-        const repVal = validateTargetReps(we.targetReps);
-        if (!repVal.isValid) {
+      if (we.targetReps !== undefined && we.targetReps !== null) {
+        if (typeof we.targetReps !== 'string') {
           throw new Error(`Invalid targetReps in ${entityLabel} exercise: ${we.exerciseId}`);
         }
+        // Preserve legacy target reps text (e.g. "8 each side") during restore
       }
 
       if (!Array.isArray(we.sets)) {

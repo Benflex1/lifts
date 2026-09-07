@@ -338,4 +338,177 @@ describe('webStore persistence and lease handling', () => {
 
     if (store.close) await store.close();
   });
+
+  it('browser regression: rapid number entry publishes distinct session-state objects and flushes cleanly without lag or stale values', async () => {
+    const dbName = `test-browser-rapid-entry-${Date.now()}`;
+    const store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    let currentTime = new Date('2026-09-07T12:00:00.000Z').getTime();
+    const controller = createSessionController(store, () => currentTime, { maxDirtyTimeMs: 1000 });
+
+    const publishedStates: any[] = [];
+    controller.subscribe((state) => {
+      publishedStates.push(state);
+    });
+
+    const initialWorkout = {
+      id: 'w-browser-rapid-1',
+      name: 'Rapid Typing Session',
+      startTime: new Date(currentTime).toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: [
+        {
+          id: 'ae-b1',
+          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+          exercise: {
+            id: 'Barbell_Bench_Press_-_Medium_Grip',
+            name: 'Barbell Bench Press',
+            category: 'chest',
+            equipment: 'barbell',
+            primaryMuscles: ['chest'],
+          },
+          restTimerSeconds: 90,
+          sets: [
+            {
+              id: 'set-b1',
+              setNumber: 1,
+              type: 'normal' as const,
+              weightKg: 80,
+              reps: 20,
+              isCompleted: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    await controller.start(initialWorkout);
+
+    // Rapid number typing sequence: selecting 20, typing 1, then 12
+    const baseCount = publishedStates.length;
+    const typedRepsSequence = [1, 12];
+
+    for (const repsVal of typedRepsSequence) {
+      const activeW = controller.getState().workout!;
+      const updated = {
+        ...activeW,
+        exercises: [
+          {
+            ...activeW.exercises[0],
+            sets: [
+              {
+                ...activeW.exercises[0].sets[0],
+                reps: repsVal,
+              },
+            ],
+          },
+        ],
+      };
+      controller.update(updated);
+    }
+
+    assert.equal(publishedStates.length, baseCount + 2, 'Every rapid update must notify subscribers');
+    const firstTypedState = publishedStates[publishedStates.length - 2];
+    const secondTypedState = publishedStates[publishedStates.length - 1];
+
+    // Verify object reference identity changes immediately (satisfies React state identity)
+    assert.notEqual(firstTypedState, secondTypedState);
+    assert.equal(firstTypedState.workout.exercises[0].sets[0].reps, 1);
+    assert.equal(secondTypedState.workout.exercises[0].sets[0].reps, 12);
+
+    // Flush and verify IndexedDB draft storage has the latest value 12
+    await controller.flush();
+    const draft = await store.getWorkoutDraft('w-browser-rapid-1');
+    assert.ok(draft);
+    assert.equal(draft.workout.exercises[0].sets[0].reps, 12);
+
+    if (store.close) await store.close();
+  });
+
+  it('browser regression: restores legacy backup with custom targetReps (e.g. 8 each side) into IndexedDB successfully', async () => {
+    const dbName = `test-browser-legacy-restore-${Date.now()}`;
+    const store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    const legacyBackupJson = JSON.stringify({
+      version: 2,
+      exportedAt: '2026-09-07T12:00:00.000Z',
+      workouts: [
+        {
+          id: 'w-legacy-browser-1',
+          name: 'Legacy Workout',
+          startTime: '2026-09-07T08:00:00.000Z',
+          endTime: '2026-09-07T09:00:00.000Z',
+          durationSeconds: 3600,
+          totalVolumeKg: 1000,
+          exercises: [
+            {
+              id: 'we-legacy-1',
+              exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+              exercise: {
+                id: 'Barbell_Bench_Press_-_Medium_Grip',
+                name: 'Barbell Bench Press',
+                category: 'chest',
+                equipment: 'barbell',
+                primaryMuscles: ['chest'],
+              },
+              targetReps: '8 each side',
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: 's-leg-1',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 50,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      routines: [
+        {
+          id: 'routine-legacy-browser-1',
+          name: 'Legacy Upper Routine',
+          folderName: 'Strength',
+          notes: 'Legacy exported notes',
+          exercises: [
+            {
+              id: 're-leg-b1',
+              exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+              orderIndex: 0,
+              targetSets: 3,
+              targetReps: '8 each side',
+              restTimerSeconds: 90,
+            },
+          ],
+        },
+      ],
+      exercises: [],
+      drafts: [],
+      settings: { weight_unit: 'kg' },
+    });
+
+    // Should successfully restore without rejecting legacy targetReps
+    await restoreBackup(legacyBackupJson, store);
+
+    // Verify routine in IndexedDB
+    const routines = await store.getRoutines();
+    const legacyRoutine = routines.find((r) => r.id === 'routine-legacy-browser-1');
+    assert.ok(legacyRoutine, 'Legacy routine should exist in IndexedDB');
+    assert.equal(legacyRoutine.exercises[0].targetReps, '8 each side');
+
+    // Verify workout history and workout detail in IndexedDB
+    const history = await store.getWorkoutHistory();
+    assert.equal(history.length, 1);
+    const workoutDetail = await store.getWorkoutDetail('w-legacy-browser-1');
+    assert.ok(workoutDetail, 'Legacy workout should exist in IndexedDB');
+    assert.equal(workoutDetail.exercises[0].targetReps, '8 each side');
+
+    if (store.close) await store.close();
+  });
 });
