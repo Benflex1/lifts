@@ -8,6 +8,8 @@ const webStorage = {
   workouts: [] as Workout[],
 };
 
+const webSettings = new Map<string, string>();
+
 export async function initDatabase(): Promise<void> {
   // Load initial 300 exercises for snappy web preview
   webStorage.exercises = (defaultExercisesData as Exercise[]).slice(0, 300);
@@ -271,4 +273,12 @@ export async function getExerciseStats(exerciseId: string): Promise<{
   }
 
   return { maxWeightKg, maxReps, estimated1RM, sessionCount };
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  return webSettings.get(key) ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  webSettings.set(key, value);
 }

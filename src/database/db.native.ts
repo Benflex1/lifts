@@ -41,6 +41,11 @@ export async function initDatabase(): Promise<void> {
       value TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS exercises (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -830,4 +835,24 @@ export async function getExerciseStats(exerciseId: string): Promise<{
     estimated1RM,
     sessionCount: countRow?.count || 0,
   };
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  const db = await getDatabase();
+  if (!db) return null;
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    key
+  );
+  return row?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+  await db.runAsync(
+    'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+    key,
+    value
+  );
 }
