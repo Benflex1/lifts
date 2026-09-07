@@ -22,6 +22,7 @@ import {
   Award,
   ChevronDown,
   FileText,
+  Timer,
 } from 'lucide-react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
@@ -29,7 +30,8 @@ import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
-import { Exercise, SetType, Workout, WorkoutSet } from '../types';
+import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
+import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -44,12 +46,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
     removeSet,
     updateSet,
     updateExerciseNotes,
+    updateExerciseRestTimer,
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
   } = useWorkout();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
   const [plateCalcWeight, setPlateCalcWeight] = useState<number | null>(null);
   const [activeSetForPlateCalc, setActiveSetForPlateCalc] = useState<{
     exerciseId: string;
@@ -212,6 +216,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                 <View style={styles.headerActions}>
                   <TouchableOpacity
                     style={styles.iconAction}
+                    onPress={() => setRestWheelActiveExercise(activeEx)}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Timer size={18} color="#10B981" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.iconAction}
                     onPress={() => {
                       const firstSet = activeEx.sets[0];
                       setPlateCalcWeight(firstSet?.weightKg || 60);
@@ -220,6 +232,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                         setId: firstSet?.id || '',
                       });
                     }}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
                     <Calculator size={18} color="#9CA3AF" />
                   </TouchableOpacity>
@@ -227,6 +240,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
                   <TouchableOpacity
                     style={styles.iconAction}
                     onPress={() => removeExerciseFromWorkout(activeEx.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
                     <Trash2 size={18} color="#EF4444" />
                   </TouchableOpacity>
@@ -401,6 +415,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: () => void }> = ({ onFini
             updateSet(activeSetForPlateCalc.exerciseId, activeSetForPlateCalc.setId, {
               weightKg: w,
             });
+          }
+        }}
+      />
+
+      {/* Rest Time Wheel Modal */}
+      <RestTimeWheelModal
+        visible={restWheelActiveExercise !== null}
+        initialSeconds={restWheelActiveExercise?.restTimerSeconds || 90}
+        exerciseName={restWheelActiveExercise?.exercise.name}
+        onClose={() => setRestWheelActiveExercise(null)}
+        onSave={seconds => {
+          if (restWheelActiveExercise) {
+            updateExerciseRestTimer(restWheelActiveExercise.id, seconds);
           }
         }}
       />

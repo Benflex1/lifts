@@ -23,9 +23,11 @@ import {
   Sparkles,
   ArrowRightLeft,
   Copy,
+  Timer,
 } from 'lucide-react-native';
 import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
+import { RestTimeWheelModal } from './RestTimeWheelModal';
 import { saveRoutine } from '../database/db';
 
 interface Props {
@@ -79,6 +81,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
   const [showPicker, setShowPicker] = useState(false);
   const [replacingIndex, setReplacingIndex] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'detailed' | 'compact'>('detailed');
+  const [restWheelIndex, setRestWheelIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (routineToEdit) {
@@ -160,6 +163,16 @@ export const RoutineEditorModal: React.FC<Props> = ({
       next.splice(index + 1, 0, duplicate);
       return next;
     });
+  };
+
+  const handleSaveRestWheel = (seconds: number, applyToAll?: boolean) => {
+    if (applyToAll) {
+      setDraftExercises(prev => prev.map(item => ({ ...item, restTimerSeconds: seconds })));
+    } else if (restWheelIndex !== null) {
+      setDraftExercises(prev =>
+        prev.map((item, idx) => (idx === restWheelIndex ? { ...item, restTimerSeconds: seconds } : item))
+      );
+    }
   };
 
   const handleRemoveExercise = (index: number) => {
@@ -416,9 +429,23 @@ export const RoutineEditorModal: React.FC<Props> = ({
                     <Text style={styles.compactName} numberOfLines={1}>
                       {item.exercise.name}
                     </Text>
-                    <Text style={styles.compactMeta}>
-                      {item.targetSets} sets × {item.targetReps} • {item.restTimerSeconds > 0 ? `${item.restTimerSeconds}s rest` : 'No rest'}
-                    </Text>
+                    <View style={styles.compactMetaRow}>
+                      <Text style={styles.compactMeta}>
+                        {item.targetSets} sets × {item.targetReps} •
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.compactRestBadge}
+                        onPress={() => setRestWheelIndex(idx)}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Timer size={11} color="#10B981" />
+                        <Text style={styles.compactRestText}>
+                          {item.restTimerSeconds > 0
+                            ? `${Math.floor(item.restTimerSeconds / 60)}m ${item.restTimerSeconds % 60}s`
+                            : 'Off'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </TouchableOpacity>
                   <View style={styles.compactActions}>
                     <TouchableOpacity
@@ -617,30 +644,46 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   </ScrollView>
                 </View>
 
-                {/* Rest Timer Row */}
+                {/* Rest Timer Row with Wheel Trigger */}
                 <View style={styles.configRow}>
                   <Text style={styles.configLabel}>REST TIMER</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.chipsScroll}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    {REST_OPTIONS.map(restOpt => {
-                      const isSelected = item.restTimerSeconds === restOpt.val;
-                      return (
-                        <TouchableOpacity
-                          key={restOpt.val}
-                          style={[styles.smallChip, isSelected && styles.smallChipActive]}
-                          onPress={() => handleUpdateRest(idx, restOpt.val)}
-                        >
-                          <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
-                            {restOpt.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                  <View style={styles.restRowContainer}>
+                    <TouchableOpacity
+                      style={styles.restWheelTriggerBtn}
+                      onPress={() => setRestWheelIndex(idx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <Timer size={14} color="#10B981" />
+                      <Text style={styles.restWheelTriggerText}>
+                        {item.restTimerSeconds > 0
+                          ? `${Math.floor(item.restTimerSeconds / 60)}m ${item.restTimerSeconds % 60}s`
+                          : 'Off'}
+                      </Text>
+                      <ChevronDown size={14} color="#9CA3AF" />
+                    </TouchableOpacity>
+
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.chipsScroll}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      {REST_OPTIONS.map(restOpt => {
+                        const isSelected = item.restTimerSeconds === restOpt.val;
+                        return (
+                          <TouchableOpacity
+                            key={restOpt.val}
+                            style={[styles.smallChip, isSelected && styles.smallChipActive]}
+                            onPress={() => handleUpdateRest(idx, restOpt.val)}
+                          >
+                            <Text style={[styles.smallChipText, isSelected && styles.smallChipTextActive]}>
+                              {restOpt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
                 </View>
               </View>
             ))}
@@ -695,6 +738,20 @@ export const RoutineEditorModal: React.FC<Props> = ({
           }}
           onSelectExercise={handleExerciseSelected}
           onSelectMultiple={handleAddMultipleExercises}
+        />
+
+        {/* Rest Time Wheel Modal */}
+        <RestTimeWheelModal
+          visible={restWheelIndex !== null}
+          initialSeconds={
+            restWheelIndex !== null ? draftExercises[restWheelIndex]?.restTimerSeconds : 90
+          }
+          exerciseName={
+            restWheelIndex !== null ? draftExercises[restWheelIndex]?.exercise.name : undefined
+          }
+          showApplyToAll={draftExercises.length > 1}
+          onClose={() => setRestWheelIndex(null)}
+          onSave={handleSaveRestWheel}
         />
       </View>
     </Modal>
@@ -1120,6 +1177,50 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     borderWidth: 1,
     borderColor: '#374151',
+  },
+  compactMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  compactRestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#132822',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1C4A3F',
+    gap: 4,
+  },
+  compactRestText: {
+    color: '#10B981',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  restRowContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  restWheelTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E232E',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+    gap: 5,
+  },
+  restWheelTriggerText: {
+    color: '#10B981',
+    fontSize: 13,
+    fontWeight: '700',
   },
   emptyCard: {
     backgroundColor: '#181A20',
