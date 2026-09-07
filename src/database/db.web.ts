@@ -205,10 +205,13 @@ export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
 }
 
 export async function getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]> {
-  for (const w of webStorage.workouts) {
+  const sorted = [...webStorage.workouts].sort(
+    (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+  );
+  for (const w of sorted) {
     const found = w.exercises.find(e => e.exerciseId === exerciseId);
     if (found) {
-      return found.sets.filter(s => s.isCompleted);
+      return found.sets.filter(s => s.isCompleted).sort((a, b) => a.setNumber - b.setNumber);
     }
   }
   return [];

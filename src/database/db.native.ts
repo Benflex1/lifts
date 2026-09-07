@@ -647,16 +647,6 @@ export async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
 }
 
 export async function getPreviousSetsForExercise(exerciseId: string): Promise<WorkoutSet[]> {
-  if (Platform.OS === 'web') {
-    for (const w of webStorage.workouts) {
-      const found = w.exercises.find(e => e.exerciseId === exerciseId);
-      if (found) {
-        return found.sets.filter(s => s.isCompleted);
-      }
-    }
-    return [];
-  }
-
   const db = await getDatabase();
   if (!db) return [];
 
@@ -665,9 +655,17 @@ export async function getPreviousSetsForExercise(exerciseId: string): Promise<Wo
      FROM exercise_sets s
      JOIN workout_exercises we ON s.workout_exercise_id = we.id
      JOIN workouts w ON we.workout_id = w.id
-     WHERE we.exercise_id = ? AND s.is_completed = 1
-     ORDER BY w.start_time DESC, s.set_number ASC
-     LIMIT 10`,
+     WHERE we.exercise_id = ?
+       AND s.is_completed = 1
+       AND w.id = (
+         SELECT w2.id FROM workouts w2
+         JOIN workout_exercises we2 ON we2.workout_id = w2.id
+         WHERE we2.exercise_id = ?
+         ORDER BY w2.start_time DESC
+         LIMIT 1
+       )
+     ORDER BY s.set_number ASC`,
+    exerciseId,
     exerciseId
   );
 
