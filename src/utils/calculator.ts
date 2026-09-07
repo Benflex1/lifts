@@ -1,9 +1,12 @@
 import { PlateCalculation } from '../types';
 
+export const LB_PLATES = [45, 25, 10, 5, 2.5];
+export const KG_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+
 export function calculatePlates(
   targetWeight: number,
   barWeight: number = 20,
-  availablePlates: number[] = [25, 20, 15, 10, 5, 2.5, 1.25]
+  availablePlates: number[] = KG_PLATES
 ): PlateCalculation {
   if (targetWeight <= barWeight) {
     return {
