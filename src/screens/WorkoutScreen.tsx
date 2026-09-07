@@ -43,13 +43,21 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   };
 
   const handleStartEmpty = async () => {
-    await startWorkout(undefined, 'Empty Workout');
-    onStartActiveWorkout();
+    try {
+      await startWorkout(undefined, 'Empty Workout');
+      onStartActiveWorkout();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to start workout.');
+    }
   };
 
   const handleStartRoutine = async (routine: Routine) => {
-    await startWorkout(routine);
-    onStartActiveWorkout();
+    try {
+      await startWorkout(routine);
+      onStartActiveWorkout();
+    } catch (e) {
+      Alert.alert('Error', `Failed to start "${routine.name}".`);
+    }
   };
 
   const handleDuplicateRoutine = async (routine: Routine) => {
@@ -57,7 +65,7 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
       await duplicateRoutine(routine.id);
       loadRoutines();
     } catch (e) {
-      console.error(e);
+      Alert.alert('Error', 'Failed to duplicate routine.');
     }
   };
 
@@ -71,8 +79,12 @@ export const WorkoutScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteRoutine(routine.id);
-            loadRoutines();
+            try {
+              await deleteRoutine(routine.id);
+              loadRoutines();
+            } catch (e) {
+              Alert.alert('Error', 'Failed to delete routine.');
+            }
           },
         },
       ]

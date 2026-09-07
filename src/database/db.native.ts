@@ -34,6 +34,7 @@ export async function initDatabase(): Promise<void> {
 
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
+    PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS app_meta (
       key TEXT PRIMARY KEY,
@@ -679,18 +680,7 @@ export async function getPreviousSetsForExercise(exerciseId: string): Promise<Wo
 export async function deleteWorkout(workoutId: string): Promise<void> {
   const db = await getDatabase();
   if (!db) return;
-
-  await db.withTransactionAsync(async () => {
-    const weRows = await db.getAllAsync<{ id: string }>(
-      'SELECT id FROM workout_exercises WHERE workout_id = ?',
-      workoutId
-    );
-    for (const we of weRows) {
-      await db.runAsync('DELETE FROM exercise_sets WHERE workout_exercise_id = ?', we.id);
-    }
-    await db.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workoutId);
-    await db.runAsync('DELETE FROM workouts WHERE id = ?', workoutId);
-  });
+  await db.runAsync('DELETE FROM workouts WHERE id = ?', workoutId);
 }
 
 export async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {

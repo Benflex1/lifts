@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../types';
@@ -138,51 +138,55 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const startWorkout = async (routine?: Routine, customName?: string) => {
-    const workoutId = `wo-${Date.now()}`;
-    const name = customName || (routine ? routine.name : 'Quick Workout');
+    try {
+      const workoutId = `wo-${Date.now()}`;
+      const name = customName || (routine ? routine.name : 'Quick Workout');
 
-    let exercises: ActiveExercise[] = [];
+      let exercises: ActiveExercise[] = [];
 
-    if (routine && routine.exercises.length > 0) {
-      for (const item of routine.exercises) {
-        const prevSets = await getPreviousSetsForExercise(item.exerciseId);
-        const sets: WorkoutSet[] = [];
-        const count = item.targetSets || 3;
+      if (routine && routine.exercises.length > 0) {
+        for (const item of routine.exercises) {
+          const prevSets = await getPreviousSetsForExercise(item.exerciseId);
+          const sets: WorkoutSet[] = [];
+          const count = item.targetSets || 3;
 
-        for (let i = 1; i <= count; i++) {
-          const ghost = prevSets[i - 1];
-          sets.push({
-            id: `set-${item.exerciseId}-${i}-${Date.now()}`,
-            setNumber: i,
-            type: 'normal',
-            weightKg: ghost ? ghost.weightKg : 0,
-            reps: ghost ? ghost.reps : 10,
-            isCompleted: false,
-            previousWeightKg: ghost ? ghost.weightKg : undefined,
-            previousReps: ghost ? ghost.reps : undefined,
+          for (let i = 1; i <= count; i++) {
+            const ghost = prevSets[i - 1];
+            sets.push({
+              id: `set-${item.exerciseId}-${i}-${Date.now()}`,
+              setNumber: i,
+              type: 'normal',
+              weightKg: ghost ? ghost.weightKg : 0,
+              reps: ghost ? ghost.reps : 10,
+              isCompleted: false,
+              previousWeightKg: ghost ? ghost.weightKg : undefined,
+              previousReps: ghost ? ghost.reps : undefined,
+            });
+          }
+
+          exercises.push({
+            id: `ae-${workoutId}-${item.exerciseId}-${Date.now()}`,
+            exerciseId: item.exerciseId,
+            exercise: item.exercise,
+            sets,
+            restTimerSeconds: item.restTimerSeconds ?? 0,
           });
         }
-
-        exercises.push({
-          id: `ae-${workoutId}-${item.exerciseId}-${Date.now()}`,
-          exerciseId: item.exerciseId,
-          exercise: item.exercise,
-          sets,
-          restTimerSeconds: item.restTimerSeconds ?? 0,
-        });
       }
-    }
 
-    setActiveWorkout({
-      id: workoutId,
-      name,
-      routineId: routine ? routine.id : undefined,
-      startTime: new Date().toISOString(),
-      durationSeconds: 0,
-      totalVolumeKg: 0,
-      exercises,
-    });
-    setElapsedSeconds(0);
+      setActiveWorkout({
+        id: workoutId,
+        name,
+        routineId: routine ? routine.id : undefined,
+        startTime: new Date().toISOString(),
+        durationSeconds: 0,
+        totalVolumeKg: 0,
+        exercises,
+      });
+      setElapsedSeconds(0);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to start workout. Please try again.');
+    }
   };
 
   const addExerciseToWorkout = async (exercise: Exercise) => {
@@ -371,35 +375,40 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const finishWorkout = async (): Promise<Workout | null> => {
     if (!activeWorkout) return null;
 
-    // Calculate total lifted volume (sum of weight * reps for completed sets)
-    let totalVolume = 0;
-    for (const e of activeWorkout.exercises) {
-      for (const s of e.sets) {
-        if (s.isCompleted) {
-          totalVolume += s.weightKg * s.reps;
+    try {
+      // Calculate total lifted volume (sum of weight * reps for completed sets)
+      let totalVolume = 0;
+      for (const e of activeWorkout.exercises) {
+        for (const s of e.sets) {
+          if (s.isCompleted) {
+            totalVolume += s.weightKg * s.reps;
+          }
         }
       }
+
+      const finished: Workout = {
+        ...activeWorkout,
+        durationSeconds: startTimeRef.current
+          ? Math.floor((Date.now() - new Date(startTimeRef.current).getTime()) / 1000)
+          : elapsedSeconds,
+        totalVolumeKg: Math.round(totalVolume),
+        endTime: new Date().toISOString(),
+      };
+
+      await saveCompletedWorkout(finished);
+
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      setActiveWorkout(null);
+      setIsMinimized(false);
+      stopRestTimer();
+      return finished;
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save workout. Your data may not have been saved.');
+      return null;
     }
-
-    const finished: Workout = {
-      ...activeWorkout,
-      durationSeconds: startTimeRef.current
-        ? Math.floor((Date.now() - new Date(startTimeRef.current).getTime()) / 1000)
-        : elapsedSeconds,
-      totalVolumeKg: Math.round(totalVolume),
-      endTime: new Date().toISOString(),
-    };
-
-    await saveCompletedWorkout(finished);
-
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-
-    setActiveWorkout(null);
-    setIsMinimized(false);
-    stopRestTimer();
-    return finished;
   };
 
   const cancelWorkout = () => {

@@ -81,9 +81,13 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await deleteWorkout(item.id);
-            setExpandedId(null);
-            loadHistory();
+            try {
+              await deleteWorkout(item.id);
+              setExpandedId(null);
+              loadHistory();
+            } catch (e) {
+              Alert.alert('Error', 'Failed to delete workout.');
+            }
           },
         },
       ]
@@ -91,8 +95,12 @@ export const HistoryScreen: React.FC<{ onStartActiveWorkout: () => void }> = ({
   };
 
   const handlePerformAgain = async (item: WorkoutHistorySummary) => {
-    await startWorkout(undefined, `${item.name}`);
-    onStartActiveWorkout();
+    try {
+      await startWorkout(undefined, `${item.name}`);
+      onStartActiveWorkout();
+    } catch (e) {
+      Alert.alert('Error', 'Failed to start workout.');
+    }
   };
 
   // Calculate totals
