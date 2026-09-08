@@ -155,3 +155,68 @@ describe('Untouched Set Completion Resolution', () => {
     assert.equal(completed.reps, 12); // user's 12 reps preserved
   });
 });
+
+describe('Swipe Right to Delete Gesture Logic', () => {
+  const SWIPE_THRESHOLD = 90;
+  const VELOCITY_THRESHOLD = 0.35;
+
+  function shouldTriggerSwipe(dx: number, dy: number): boolean {
+    return Math.abs(dx) > Math.abs(dy) * 1.2 && dx > 12 && Math.abs(dy) < 15;
+  }
+
+  function shouldDeleteOnRelease(dx: number, vx: number): boolean {
+    return dx > SWIPE_THRESHOLD || (dx > 40 && vx > VELOCITY_THRESHOLD);
+  }
+
+  it('recognizes deliberate rightward horizontal swipe', () => {
+    assert.equal(shouldTriggerSwipe(30, 5), true);
+    assert.equal(shouldTriggerSwipe(15, 2), true);
+  });
+
+  it('rejects vertical scrolling gestures so ScrollView takes precedence', () => {
+    assert.equal(shouldTriggerSwipe(10, 40), false);
+    assert.equal(shouldTriggerSwipe(20, 25), false);
+    assert.equal(shouldTriggerSwipe(15, 18), false);
+  });
+
+  it('rejects leftward swipes (only swipe right allowed)', () => {
+    assert.equal(shouldTriggerSwipe(-30, 0), false);
+    assert.equal(shouldTriggerSwipe(-10, 2), false);
+  });
+
+  it('triggers delete when dragged past swipe distance threshold', () => {
+    assert.equal(shouldDeleteOnRelease(95, 0.1), true);
+    assert.equal(shouldDeleteOnRelease(150, 0.0), true);
+  });
+
+  it('triggers delete on quick flick/velocity past minimum distance', () => {
+    assert.equal(shouldDeleteOnRelease(50, 0.4), true);
+  });
+
+  it('cancels delete and snaps back when released before threshold', () => {
+    assert.equal(shouldDeleteOnRelease(70, 0.2), false);
+    assert.equal(shouldDeleteOnRelease(30, 0.1), false);
+  });
+
+  it('renumbers remaining sets when a set is deleted', () => {
+    const sets: WorkoutSet[] = [
+      { id: 's-1', setNumber: 1, type: 'normal', weightKg: 80, reps: 10, isCompleted: true },
+      { id: 's-2', setNumber: 2, type: 'normal', weightKg: 80, reps: 10, isCompleted: true },
+      { id: 's-3', setNumber: 3, type: 'normal', weightKg: 80, reps: 8, isCompleted: false },
+      { id: 's-4', setNumber: 4, type: 'drop', weightKg: 60, reps: 12, isCompleted: false },
+    ];
+
+    // Delete set 2
+    const remaining = sets
+      .filter((s) => s.id !== 's-2')
+      .map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+
+    assert.equal(remaining.length, 3);
+    assert.equal(remaining[0].id, 's-1');
+    assert.equal(remaining[0].setNumber, 1);
+    assert.equal(remaining[1].id, 's-3');
+    assert.equal(remaining[1].setNumber, 2); // was 3
+    assert.equal(remaining[2].id, 's-4');
+    assert.equal(remaining[2].setNumber, 3); // was 4
+  });
+});

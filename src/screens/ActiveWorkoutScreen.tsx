@@ -36,6 +36,7 @@ import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { WeightInput } from '../components/WeightInput';
 import { RepsInput } from '../components/RepsInput';
+import { SwipeableSetRow } from '../components/SwipeableSetRow';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 import { useDialog } from '../context/DialogContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -497,107 +498,112 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 const badge = getSetBadgeStyle(set.type);
 
                 return (
-                  <View
+                  <SwipeableSetRow
                     key={set.id}
-                    style={[styles.setRow, set.isCompleted && styles.setRowCompleted]}
+                    isCompleted={set.isCompleted}
+                    onDelete={() => removeSet(activeEx.id, set.id)}
                   >
-                    {/* Set Number / Type Toggle Badge */}
-                    <TouchableOpacity
-                      style={[
-                        styles.setBadge,
-                        { backgroundColor: badge.bg, borderColor: badge.border },
-                      ]}
-                      onPress={() =>
-                        openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
-                      }
-                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                    <View
+                      style={[styles.setRow, set.isCompleted && styles.setRowCompleted]}
                     >
-                      <Text style={[styles.setBadgeText, { color: badge.text }]}>
-                        {badge.label || set.setNumber}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* Previous Performance Comparison */}
-                    <View style={styles.previousCell}>
-                      {set.previousWeightKg !== undefined ? (
-                        <Text style={styles.previousText}>
-                          {kgToDisplay(set.previousWeightKg, unit)} {unit} × {set.previousReps}
-                        </Text>
-                      ) : (
-                        <Text style={styles.previousPlaceholder}>—</Text>
-                      )}
-                    </View>
-
-                    {/* Weight Input */}
-                    <View style={styles.inputWrapWeight}>
-                      <WeightInput
-                        value={set.weightKg}
-                        onCommit={(w) => updateSet(activeEx.id, set.id, { weightKg: w })}
-                        placeholder={
-                          set.previousWeightKg !== undefined && set.previousWeightKg > 0
-                            ? kgToDisplay(set.previousWeightKg, unit).toString()
-                            : '-'
-                        }
-                        completed={set.isCompleted}
-                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
-                      />
-                    </View>
-
-                    {/* Reps Input */}
-                    <View style={styles.inputWrapReps}>
-                      <RepsInput
-                        value={set.reps}
-                        onCommit={(r) => updateSet(activeEx.id, set.id, { reps: r })}
-                        placeholder={
-                          activeEx.targetReps || (set.previousReps ? set.previousReps.toString() : '10')
-                        }
-                        completed={set.isCompleted}
-                        style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
-                      />
-                      {/* Compact RPE badge if defined and inline column is hidden */}
-                      {!showRpeColumn && set.rpe != null && (
-                        <TouchableOpacity
-                          style={styles.compactRpeBadge}
-                          onPress={() =>
-                            openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
-                          }
-                        >
-                          <Text style={styles.compactRpeText}>@{set.rpe}</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-
-                    {/* Optional Inline RPE Column */}
-                    {showRpeColumn && (
+                      {/* Set Number / Type Toggle Badge */}
                       <TouchableOpacity
-                        style={styles.rpeColCell}
+                        style={[
+                          styles.setBadge,
+                          { backgroundColor: badge.bg, borderColor: badge.border },
+                        ]}
                         onPress={() =>
                           openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
                         }
                         hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                       >
-                        <Text style={styles.rpeColCellText}>
-                          {set.rpe != null ? set.rpe.toString() : '–'}
+                        <Text style={[styles.setBadgeText, { color: badge.text }]}>
+                          {badge.label || set.setNumber}
                         </Text>
                       </TouchableOpacity>
-                    )}
 
-                    {/* Completion Checkbox */}
-                    <TouchableOpacity
-                      style={[
-                        styles.checkBtn,
-                        set.isCompleted ? styles.checkBtnActive : styles.checkBtnInactive,
-                      ]}
-                      onPress={() => toggleSetComplete(activeEx.id, set.id)}
-                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                    >
-                      <Check
-                        size={20}
-                        color={set.isCompleted ? '#000000' : '#4B5563'}
-                        strokeWidth={2.8}
-                      />
-                    </TouchableOpacity>
-                  </View>
+                      {/* Previous Performance Comparison */}
+                      <View style={styles.previousCell}>
+                        {set.previousWeightKg !== undefined ? (
+                          <Text style={styles.previousText}>
+                            {kgToDisplay(set.previousWeightKg, unit)} {unit} × {set.previousReps}
+                          </Text>
+                        ) : (
+                          <Text style={styles.previousPlaceholder}>—</Text>
+                        )}
+                      </View>
+
+                      {/* Weight Input */}
+                      <View style={styles.inputWrapWeight}>
+                        <WeightInput
+                          value={set.weightKg}
+                          onCommit={(w) => updateSet(activeEx.id, set.id, { weightKg: w })}
+                          placeholder={
+                            set.previousWeightKg !== undefined && set.previousWeightKg > 0
+                              ? kgToDisplay(set.previousWeightKg, unit).toString()
+                              : '-'
+                          }
+                          completed={set.isCompleted}
+                          style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+                        />
+                      </View>
+
+                      {/* Reps Input */}
+                      <View style={styles.inputWrapReps}>
+                        <RepsInput
+                          value={set.reps}
+                          onCommit={(r) => updateSet(activeEx.id, set.id, { reps: r })}
+                          placeholder={
+                            activeEx.targetReps || (set.previousReps ? set.previousReps.toString() : '10')
+                          }
+                          completed={set.isCompleted}
+                          style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+                        />
+                        {/* Compact RPE badge if defined and inline column is hidden */}
+                        {!showRpeColumn && set.rpe != null && (
+                          <TouchableOpacity
+                            style={styles.compactRpeBadge}
+                            onPress={() =>
+                              openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
+                            }
+                          >
+                            <Text style={styles.compactRpeText}>@{set.rpe}</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Optional Inline RPE Column */}
+                      {showRpeColumn && (
+                        <TouchableOpacity
+                          style={styles.rpeColCell}
+                          onPress={() =>
+                            openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
+                          }
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                        >
+                          <Text style={styles.rpeColCellText}>
+                            {set.rpe != null ? set.rpe.toString() : '–'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Completion Checkbox */}
+                      <TouchableOpacity
+                        style={[
+                          styles.checkBtn,
+                          set.isCompleted ? styles.checkBtnActive : styles.checkBtnInactive,
+                        ]}
+                        onPress={() => toggleSetComplete(activeEx.id, set.id)}
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      >
+                        <Check
+                          size={20}
+                          color={set.isCompleted ? '#000000' : '#4B5563'}
+                          strokeWidth={2.8}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </SwipeableSetRow>
                 );
               })}
 
