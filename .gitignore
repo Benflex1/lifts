@@ -47,3 +47,7 @@ AGENTS.md
 
 # Temporary user assets
 temp-screenshots/
+
+# Build artifacts
+build-artifacts/
+*.apk
