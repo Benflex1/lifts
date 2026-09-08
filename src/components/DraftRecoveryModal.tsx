@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Trash2, X, Clock, Dumbbell } from 'lucide-react-native';
 import { WorkoutDraft } from '../database/contract';
 import { formatDuration } from '../utils/calculator';

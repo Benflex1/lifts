@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Dumbbell, History, BookOpen, BarChart3 } from 'lucide-react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StorageProvider, useStorage } from './src/context/StorageContext';
 import { WorkoutProvider, useWorkout } from './src/context/WorkoutContext';
 import { SettingsProvider } from './src/context/SettingsContext';
@@ -29,6 +30,7 @@ type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
 function MainAppContent() {
   const { isWorkingOut, isMinimized } = useWorkout();
+  const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
   const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
 
@@ -63,18 +65,20 @@ function MainAppContent() {
           {/* Screen Views */}
           <View style={styles.screenContent}>
             <ReadOnlyBanner />
-            <DraftResumeBanner />
             {currentTab === 'workout' && <WorkoutScreen />}
             {currentTab === 'history' && <HistoryScreen />}
             {currentTab === 'exercises' && <ExercisesScreen />}
             {currentTab === 'analytics' && <AnalyticsScreen />}
           </View>
 
+          {/* Unfinished Workout Draft Card — placed in bottom thumb zone */}
+          <DraftResumeBanner />
+
           {/* Persistent Mini Bar when workout is active in background */}
           <ActiveWorkoutMiniBar />
 
           {/* Modern Bottom Navigation Bar */}
-          <View style={styles.bottomNav}>
+          <View style={[styles.bottomNav, { paddingBottom: Math.max(10, insets.bottom) }]}>
             <TouchableOpacity
               style={styles.navTab}
               onPress={() => setCurrentTab('workout')}
@@ -207,11 +211,13 @@ function AppRoot() {
 
 export default function App() {
   return (
-    <StorageProvider>
-      <DialogProvider>
-        <AppRoot />
-      </DialogProvider>
-    </StorageProvider>
+    <SafeAreaProvider>
+      <StorageProvider>
+        <DialogProvider>
+          <AppRoot />
+        </DialogProvider>
+      </StorageProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -225,11 +231,9 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     flexDirection: 'row',
-    height: 70,
     backgroundColor: '#181A20',
     borderTopWidth: 1,
     borderTopColor: '#262A34',
-    paddingBottom: 10,
     paddingTop: 8,
   },
   navTab: {

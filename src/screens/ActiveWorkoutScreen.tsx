@@ -38,11 +38,13 @@ import { WeightInput } from '../components/WeightInput';
 import { RepsInput } from '../components/RepsInput';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 import { useDialog } from '../context/DialogContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const RPE_CHIPS: (number | null)[] = [null, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
+  const insets = useSafeAreaInsets();
 
   const {
     activeWorkout,
@@ -271,7 +273,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   return (
     <View style={styles.screenContainer}>
       {/* Top App Bar - Lyfta Inspired */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: Math.max(50, insets.top + 8) }]}>
         <TouchableOpacity
           onPress={minimizeWorkout}
           style={styles.backBtn}
@@ -532,9 +534,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                         value={set.weightKg}
                         onCommit={(w) => updateSet(activeEx.id, set.id, { weightKg: w })}
                         placeholder={
-                          set.previousWeightKg
+                          set.previousWeightKg !== undefined && set.previousWeightKg > 0
                             ? kgToDisplay(set.previousWeightKg, unit).toString()
-                            : '0'
+                            : '-'
                         }
                         completed={set.isCompleted}
                         style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
@@ -673,7 +675,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         onRequestClose={() => setSetOptionsModal(null)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.setOptionsSheet}>
+          <View style={[styles.setOptionsSheet, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalHeaderTitle}>
@@ -813,7 +815,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           activeOpacity={1}
           onPress={() => setMenuActiveExercise(null)}
         >
-          <View style={styles.sheetContainer}>
+          <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                 {menuActiveExercise?.exercise?.name}
@@ -910,7 +912,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           activeOpacity={1}
           onPress={() => setShowWorkoutMenu(false)}
         >
-          <View style={styles.sheetContainer}>
+          <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                 {activeWorkout.name}

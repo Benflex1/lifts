@@ -37,12 +37,16 @@ export const WeightInput: React.FC<Props> = ({
     }
   }, [unit, rawText, onCommit]);
 
-  const displayValue = kgToDisplay(value, unit).toString();
+  const displayValue = !completed && value === 0 ? '' : kgToDisplay(value, unit).toString();
   const shownText = rawText !== null ? rawText : displayValue;
 
   const handleTextChange = (text: string) => {
     setRawText(text);
     const cleaned = text.trim().replace(',', '.');
+    if (cleaned === '') {
+      onCommit(0);
+      return;
+    }
     const parsed = parseFloat(cleaned);
     if (!isNaN(parsed) && Number.isFinite(parsed) && parsed >= 0) {
       onCommit(displayToKg(parsed, unit));
@@ -67,7 +71,7 @@ export const WeightInput: React.FC<Props> = ({
       style={style}
       keyboardType="decimal-pad"
       value={shownText}
-      placeholder={placeholder || '0'}
+      placeholder={placeholder !== undefined ? placeholder : '-'}
       placeholderTextColor="#6B7280"
       selectTextOnFocus
       onChangeText={handleTextChange}

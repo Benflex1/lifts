@@ -274,14 +274,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         for (let i = 1; i <= count; i++) {
           const ghost = prevSets[i - 1];
-          const defaultReps = initialReps(item.targetReps, i - 1, ghost?.reps);
-          const suggestedWeight = ghost ? ghost.weightKg : 0;
           sets.push({
             id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
             setNumber: i,
             type: 'normal',
-            weightKg: suggestedWeight,
-            reps: defaultReps,
+            weightKg: 0,
+            reps: 0,
             targetReps: item.targetReps,
             rpe: 8,
             isCompleted: false,
@@ -462,14 +460,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       for (let i = 1; i <= count; i++) {
         const ghost = prevSets[i - 1];
-        const defaultReps = initialReps('10', i - 1, ghost?.reps);
-        const suggestedWeight = ghost ? ghost.weightKg : 0;
         initialSets.push({
           id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
           setNumber: i,
           type: 'normal',
-          weightKg: suggestedWeight,
-          reps: defaultReps,
+          weightKg: 0,
+          reps: 0,
           targetReps: '10',
           rpe: 8,
           isCompleted: false,
@@ -535,20 +531,19 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (ex.id !== activeExerciseId) return ex;
       const nextNum = ex.sets.length + 1;
       const lastSet = ex.sets[ex.sets.length - 1];
-      const ghostReps = lastSet?.previousReps;
-      const reps = initialReps(ex.targetReps, nextNum - 1, lastSet ? lastSet.reps : ghostReps);
-      const weightKg = lastSet ? lastSet.weightKg : 0;
+      const ghostWeight = lastSet ? (lastSet.weightKg > 0 ? lastSet.weightKg : lastSet.previousWeightKg) : undefined;
+      const ghostReps = lastSet ? (lastSet.reps > 0 ? lastSet.reps : lastSet.previousReps) : undefined;
       const newSet: WorkoutSet = {
         id: `set-${ex.id}-${nextNum}-${Crypto.randomUUID().slice(0, 6)}`,
         setNumber: nextNum,
         type: setType,
-        weightKg,
-        reps,
+        weightKg: 0,
+        reps: 0,
         targetReps: ex.targetReps,
         rpe: 8,
         isCompleted: false,
-        previousWeightKg: lastSet?.previousWeightKg,
-        previousReps: lastSet?.previousReps,
+        previousWeightKg: ghostWeight,
+        previousReps: ghostReps,
       };
       return { ...ex, sets: [...ex.sets, newSet] };
     });
@@ -645,10 +640,28 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const targetEx = state.workout.exercises.find((e) => e.id === activeExerciseId);
     const targetSet = targetEx?.sets.find((s) => s.id === setId);
-    if (!targetSet) return;
+    if (!targetSet || !targetEx) return;
 
+    let effectiveSet = targetSet;
     if (!targetSet.isCompleted) {
-      const validationError = validateCompletedSet(targetSet);
+      const needsReps = targetSet.reps <= 0;
+      const needsWeight = targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
+      if (needsReps || needsWeight) {
+        const setIdx = targetEx.sets.findIndex((s) => s.id === setId);
+        const fallbackReps = needsReps
+          ? initialReps(targetEx.targetReps, setIdx >= 0 ? setIdx : 0, targetSet.previousReps)
+          : targetSet.reps;
+        const fallbackWeight = needsWeight
+          ? (targetSet.previousWeightKg ?? 0)
+          : targetSet.weightKg;
+        effectiveSet = {
+          ...targetSet,
+          reps: fallbackReps,
+          weightKg: fallbackWeight,
+        };
+      }
+
+      const validationError = validateCompletedSet(effectiveSet);
       if (validationError) {
         notify({
           title: 'Invalid Set',
@@ -674,6 +687,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
           return {
             ...s,
+            reps: nextCompleted ? effectiveSet.reps : s.reps,
+            weightKg: nextCompleted ? effectiveSet.weightKg : s.weightKg,
             isCompleted: nextCompleted,
             completedAt: nextCompleted ? new Date().toISOString() : undefined,
           };
