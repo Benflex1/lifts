@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Award, Clock, Dumbbell, Flame, Check } from 'lucide-react-native';
 import { Workout } from '../types';
 import { formatDuration } from '../utils/calculator';
