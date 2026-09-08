@@ -23,6 +23,7 @@ export interface WorkoutSet {
   completedAt?: string;
   previousWeightKg?: number;
   previousReps?: number;
+  isWeightEdited?: boolean;
 }
 
 export interface ActiveExercise {

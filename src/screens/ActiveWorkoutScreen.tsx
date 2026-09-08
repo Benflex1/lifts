@@ -537,7 +537,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       <View style={styles.inputWrapWeight}>
                         <WeightInput
                           value={set.weightKg}
-                          onCommit={(w) => updateSet(activeEx.id, set.id, { weightKg: w })}
+                          isEdited={set.isWeightEdited}
+                          onCommit={(w, edited) =>
+                            updateSet(activeEx.id, set.id, {
+                              weightKg: w,
+                              isWeightEdited: edited !== undefined ? edited : true,
+                            })
+                          }
                           placeholder={
                             set.previousWeightKg !== undefined && set.previousWeightKg > 0
                               ? kgToDisplay(set.previousWeightKg, unit).toString()
@@ -655,6 +661,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           if (activeSetForPlateCalc) {
             updateSet(activeSetForPlateCalc.exerciseId, activeSetForPlateCalc.setId, {
               weightKg: w,
+              isWeightEdited: true,
             });
           }
         }}

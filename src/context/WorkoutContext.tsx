@@ -283,6 +283,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             targetReps: item.targetReps,
             rpe: 8,
             isCompleted: false,
+            isWeightEdited: false,
             previousWeightKg: ghost ? ghost.weightKg : undefined,
             previousReps: ghost ? ghost.reps : undefined,
           });
@@ -469,6 +470,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           targetReps: '10',
           rpe: 8,
           isCompleted: false,
+          isWeightEdited: false,
           previousWeightKg: ghost ? ghost.weightKg : undefined,
           previousReps: ghost ? ghost.reps : undefined,
         });
@@ -531,7 +533,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (ex.id !== activeExerciseId) return ex;
       const nextNum = ex.sets.length + 1;
       const lastSet = ex.sets[ex.sets.length - 1];
-      const ghostWeight = lastSet ? (lastSet.weightKg > 0 ? lastSet.weightKg : lastSet.previousWeightKg) : undefined;
+      const lastWeightEdited = lastSet?.isWeightEdited ?? ((lastSet?.weightKg ?? 0) > 0 || lastSet?.isCompleted);
+      const ghostWeight = lastSet
+        ? (lastWeightEdited ? (lastSet.weightKg > 0 ? lastSet.weightKg : undefined) : lastSet.previousWeightKg)
+        : undefined;
       const ghostReps = lastSet ? (lastSet.reps > 0 ? lastSet.reps : lastSet.previousReps) : undefined;
       const newSet: WorkoutSet = {
         id: `set-${ex.id}-${nextNum}-${Crypto.randomUUID().slice(0, 6)}`,
@@ -542,6 +547,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         targetReps: ex.targetReps,
         rpe: 8,
         isCompleted: false,
+        isWeightEdited: false,
         previousWeightKg: ghostWeight,
         previousReps: ghostReps,
       };
@@ -644,8 +650,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     let effectiveSet = targetSet;
     if (!targetSet.isCompleted) {
+      const isWeightEdited = targetSet.isWeightEdited ?? (targetSet.weightKg > 0);
       const needsReps = targetSet.reps <= 0;
-      const needsWeight = targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
+      const needsWeight = !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
       if (needsReps || needsWeight) {
         const setIdx = targetEx.sets.findIndex((s) => s.id === setId);
         const fallbackReps = needsReps
@@ -658,6 +665,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           ...targetSet,
           reps: fallbackReps,
           weightKg: fallbackWeight,
+          isWeightEdited: true,
         };
       }
 
@@ -689,6 +697,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ...s,
             reps: nextCompleted ? effectiveSet.reps : s.reps,
             weightKg: nextCompleted ? effectiveSet.weightKg : s.weightKg,
+            isWeightEdited: nextCompleted ? true : s.isWeightEdited,
             isCompleted: nextCompleted,
             completedAt: nextCompleted ? new Date().toISOString() : undefined,
           };

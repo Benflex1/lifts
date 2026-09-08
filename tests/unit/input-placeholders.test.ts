@@ -5,26 +5,31 @@ import { kgToDisplay } from '../../src/utils/units';
 import { WorkoutSet } from '../../src/types';
 
 describe('Weight & Reps Input Display Logic', () => {
-  it('uncompleted set with value 0 returns empty display string for ghost placeholder', () => {
-    const value = 0;
-    const completed = false;
-    const displayValue = !completed && value === 0 ? '' : kgToDisplay(value, 'kg').toString();
-    assert.equal(displayValue, '');
+  const getWeightDisplay = (
+    value: number,
+    completed: boolean,
+    isEdited?: boolean,
+    unit: 'kg' | 'lb' = 'kg'
+  ) => {
+    const effectiveEdited = completed || (isEdited !== undefined ? isEdited : value > 0);
+    return effectiveEdited ? kgToDisplay(value, unit).toString() : '';
+  };
+
+  it('uncompleted untouched set with value 0 returns empty display string for ghost placeholder', () => {
+    assert.equal(getWeightDisplay(0, false, false), '');
+  });
+
+  it('uncompleted explicitly entered 0 displays 0', () => {
+    assert.equal(getWeightDisplay(0, false, true), '0');
   });
 
   it('completed set with value 0 displays 0', () => {
-    const value = 0;
-    const completed = true;
-    const displayValue = !completed && value === 0 ? '' : kgToDisplay(value, 'kg').toString();
-    assert.equal(displayValue, '0');
+    assert.equal(getWeightDisplay(0, true), '0');
   });
 
   it('set with positive weight displays value regardless of completion', () => {
-    const value = 82.5;
-    const uncompletedDisplay = !false && value === 0 ? '' : kgToDisplay(value, 'kg').toString();
-    const completedDisplay = !true && value === 0 ? '' : kgToDisplay(value, 'kg').toString();
-    assert.equal(uncompletedDisplay, '82.5');
-    assert.equal(completedDisplay, '82.5');
+    assert.equal(getWeightDisplay(82.5, false, true), '82.5');
+    assert.equal(getWeightDisplay(82.5, true), '82.5');
   });
 
   it('reps display logic displays empty string for 0 and numeric string for positive', () => {
@@ -54,8 +59,9 @@ describe('Untouched Set Completion Resolution', () => {
     setIndex: number
   ): WorkoutSet {
     let effectiveSet = targetSet;
+    const isWeightEdited = targetSet.isWeightEdited ?? (targetSet.weightKg > 0);
     const needsReps = targetSet.reps <= 0;
-    const needsWeight = targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
+    const needsWeight = !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
 
     if (needsReps || needsWeight) {
       const fallbackReps = needsReps
@@ -68,6 +74,7 @@ describe('Untouched Set Completion Resolution', () => {
         ...targetSet,
         reps: fallbackReps,
         weightKg: fallbackWeight,
+        isWeightEdited: true,
       };
     }
 
@@ -90,6 +97,7 @@ describe('Untouched Set Completion Resolution', () => {
       type: 'normal',
       weightKg: 0,
       reps: 0,
+      isWeightEdited: false,
       previousWeightKg: 70,
       previousReps: 8,
       isCompleted: false,
@@ -108,6 +116,7 @@ describe('Untouched Set Completion Resolution', () => {
       type: 'normal',
       weightKg: 0,
       reps: 0,
+      isWeightEdited: false,
       previousWeightKg: undefined,
       previousReps: undefined,
       isCompleted: false,
@@ -126,6 +135,7 @@ describe('Untouched Set Completion Resolution', () => {
       type: 'normal',
       weightKg: 85,
       reps: 0,
+      isWeightEdited: true,
       previousWeightKg: 80,
       previousReps: 6,
       isCompleted: false,
@@ -144,6 +154,7 @@ describe('Untouched Set Completion Resolution', () => {
       type: 'normal',
       weightKg: 0,
       reps: 12,
+      isWeightEdited: false,
       previousWeightKg: 65,
       previousReps: 10,
       isCompleted: false,
@@ -153,6 +164,43 @@ describe('Untouched Set Completion Resolution', () => {
     assert.equal(completed.isCompleted, true);
     assert.equal(completed.weightKg, 65); // previous weight auto-filled
     assert.equal(completed.reps, 12); // user's 12 reps preserved
+  });
+
+  it('preserves explicit 0 kg weight when completing a set with previous weight history', () => {
+    const bodyweightSet: WorkoutSet = {
+      id: 's-5',
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 0,
+      reps: 10,
+      isWeightEdited: true, // explicitly entered 0
+      previousWeightKg: 20, // previous session was weighted +20 kg
+      previousReps: 8,
+      isCompleted: false,
+    };
+
+    const completed = resolveSetOnComplete(bodyweightSet, '8-12', 0);
+    assert.equal(completed.isCompleted, true);
+    assert.equal(completed.weightKg, 0, 'Explicit 0 kg must NOT be overwritten by previousWeightKg');
+    assert.equal(completed.reps, 10);
+  });
+
+  it('clearing weight input resets isWeightEdited to false and restores previousWeight fallback', () => {
+    const clearedSet: WorkoutSet = {
+      id: 's-6',
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 0,
+      reps: 10,
+      isWeightEdited: false, // user backspaced/cleared input
+      previousWeightKg: 40,
+      previousReps: 10,
+      isCompleted: false,
+    };
+
+    const completed = resolveSetOnComplete(clearedSet, '10', 0);
+    assert.equal(completed.isCompleted, true);
+    assert.equal(completed.weightKg, 40, 'Cleared input should fall back to previousWeightKg');
   });
 });
 
