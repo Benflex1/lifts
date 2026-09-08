@@ -35,10 +35,10 @@ export const SwipeableSetRow: React.FC<Props> = ({
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         if (disabled || isDeletingRef.current) return false;
-        // Only trigger on intentional rightward drag, ignoring vertical scrolling
+        // Only trigger on intentional leftward drag, ignoring vertical scrolling
         return (
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2 &&
-          gestureState.dx > 12 &&
+          gestureState.dx < -12 &&
           Math.abs(gestureState.dy) < 15
         );
       },
@@ -46,7 +46,7 @@ export const SwipeableSetRow: React.FC<Props> = ({
         if (disabled || isDeletingRef.current) return false;
         return (
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2 &&
-          gestureState.dx > 16 &&
+          gestureState.dx < -16 &&
           Math.abs(gestureState.dy) < 15
         );
       },
@@ -55,16 +55,16 @@ export const SwipeableSetRow: React.FC<Props> = ({
       },
       onPanResponderMove: (_, gestureState) => {
         if (isDeletingRef.current) return;
-        if (gestureState.dx > 0) {
-          // Swipe right with natural friction past 160px
-          if (gestureState.dx <= 160) {
+        if (gestureState.dx < 0) {
+          // Swipe left with natural friction past -160px
+          if (gestureState.dx >= -160) {
             translateX.setValue(gestureState.dx);
           } else {
-            const extra = gestureState.dx - 160;
-            translateX.setValue(160 + extra * 0.4);
+            const extra = gestureState.dx + 160;
+            translateX.setValue(-160 + extra * 0.4);
           }
         } else {
-          // Slight resistance if dragged left
+          // Slight resistance if dragged right
           translateX.setValue(gestureState.dx * 0.1);
         }
       },
@@ -72,8 +72,8 @@ export const SwipeableSetRow: React.FC<Props> = ({
         if (isDeletingRef.current) return;
 
         const isPastThreshold =
-          gestureState.dx > SWIPE_THRESHOLD ||
-          (gestureState.dx > 40 && gestureState.vx > VELOCITY_THRESHOLD);
+          gestureState.dx < -SWIPE_THRESHOLD ||
+          (gestureState.dx < -40 && gestureState.vx < -VELOCITY_THRESHOLD);
 
         if (isPastThreshold) {
           isDeletingRef.current = true;
@@ -82,7 +82,7 @@ export const SwipeableSetRow: React.FC<Props> = ({
           }
 
           Animated.timing(translateX, {
-            toValue: 500,
+            toValue: -500,
             duration: 180,
             useNativeDriver: true,
           }).start(() => {
@@ -112,20 +112,20 @@ export const SwipeableSetRow: React.FC<Props> = ({
 
   // Icon opacity and slight scale-in as user swipes
   const iconOpacity = translateX.interpolate({
-    inputRange: [0, 25, 70],
-    outputRange: [0, 0.4, 1],
+    inputRange: [-70, -25, 0],
+    outputRange: [1, 0.4, 0],
     extrapolate: 'clamp',
   });
 
   const iconScale = translateX.interpolate({
-    inputRange: [0, 40, 100],
-    outputRange: [0.7, 0.85, 1],
+    inputRange: [-100, -40, 0],
+    outputRange: [1, 0.85, 0.7],
     extrapolate: 'clamp',
   });
 
   return (
     <View style={styles.container}>
-      {/* Red Delete Background Layer (Revealed on Swipe Right) */}
+      {/* Red Delete Background Layer (Revealed on Swipe Left) */}
       <View style={styles.deleteBackground}>
         <Animated.View
           style={[
@@ -136,8 +136,8 @@ export const SwipeableSetRow: React.FC<Props> = ({
             },
           ]}
         >
-          <Trash2 size={18} color="#FFFFFF" />
           <Text style={styles.deleteText}>Delete</Text>
+          <Trash2 size={18} color="#FFFFFF" />
         </Animated.View>
       </View>
 
@@ -174,7 +174,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#DC2626',
     borderRadius: 8,
     justifyContent: 'center',
-    paddingLeft: 16,
+    alignItems: 'flex-end',
+    paddingRight: 16,
   },
   deleteContent: {
     flexDirection: 'row',

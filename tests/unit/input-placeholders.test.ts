@@ -156,46 +156,47 @@ describe('Untouched Set Completion Resolution', () => {
   });
 });
 
-describe('Swipe Right to Delete Gesture Logic', () => {
+describe('Swipe Left to Delete Gesture Logic', () => {
   const SWIPE_THRESHOLD = 90;
   const VELOCITY_THRESHOLD = 0.35;
 
   function shouldTriggerSwipe(dx: number, dy: number): boolean {
-    return Math.abs(dx) > Math.abs(dy) * 1.2 && dx > 12 && Math.abs(dy) < 15;
+    return Math.abs(dx) > Math.abs(dy) * 1.2 && dx < -12 && Math.abs(dy) < 15;
   }
 
   function shouldDeleteOnRelease(dx: number, vx: number): boolean {
-    return dx > SWIPE_THRESHOLD || (dx > 40 && vx > VELOCITY_THRESHOLD);
+    return dx < -SWIPE_THRESHOLD || (dx < -40 && vx < -VELOCITY_THRESHOLD);
   }
 
-  it('recognizes deliberate rightward horizontal swipe', () => {
-    assert.equal(shouldTriggerSwipe(30, 5), true);
-    assert.equal(shouldTriggerSwipe(15, 2), true);
+  it('recognizes deliberate leftward horizontal swipe', () => {
+    assert.equal(shouldTriggerSwipe(-30, 5), true);
+    assert.equal(shouldTriggerSwipe(-15, 2), true);
   });
 
   it('rejects vertical scrolling gestures so ScrollView takes precedence', () => {
-    assert.equal(shouldTriggerSwipe(10, 40), false);
-    assert.equal(shouldTriggerSwipe(20, 25), false);
-    assert.equal(shouldTriggerSwipe(15, 18), false);
+    assert.equal(shouldTriggerSwipe(-10, 40), false);
+    assert.equal(shouldTriggerSwipe(-20, 25), false);
+    assert.equal(shouldTriggerSwipe(-15, 18), false);
   });
 
-  it('rejects leftward swipes (only swipe right allowed)', () => {
-    assert.equal(shouldTriggerSwipe(-30, 0), false);
-    assert.equal(shouldTriggerSwipe(-10, 2), false);
+  it('rejects rightward swipes (only swipe left allowed)', () => {
+    assert.equal(shouldTriggerSwipe(30, 0), false);
+    assert.equal(shouldTriggerSwipe(10, 2), false);
   });
 
-  it('triggers delete when dragged past swipe distance threshold', () => {
-    assert.equal(shouldDeleteOnRelease(95, 0.1), true);
-    assert.equal(shouldDeleteOnRelease(150, 0.0), true);
+  it('triggers delete when dragged left past swipe distance threshold', () => {
+    assert.equal(shouldDeleteOnRelease(-95, -0.1), true);
+    assert.equal(shouldDeleteOnRelease(-150, 0.0), true);
   });
 
-  it('triggers delete on quick flick/velocity past minimum distance', () => {
-    assert.equal(shouldDeleteOnRelease(50, 0.4), true);
+  it('triggers delete on quick leftward flick/velocity past minimum distance', () => {
+    assert.equal(shouldDeleteOnRelease(-50, -0.4), true);
   });
 
   it('cancels delete and snaps back when released before threshold', () => {
-    assert.equal(shouldDeleteOnRelease(70, 0.2), false);
-    assert.equal(shouldDeleteOnRelease(30, 0.1), false);
+    assert.equal(shouldDeleteOnRelease(-70, -0.2), false);
+    assert.equal(shouldDeleteOnRelease(-30, -0.1), false);
+    assert.equal(shouldDeleteOnRelease(10, 0.1), false);
   });
 
   it('renumbers remaining sets when a set is deleted', () => {
