@@ -49,6 +49,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     elapsedSeconds,
     minimizeWorkout,
     addExerciseToWorkout,
+    addExercisesToWorkout,
     removeExerciseFromWorkout,
     addSet,
     removeSet,
@@ -630,7 +631,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         onClose={() => setShowExercisePicker(false)}
         onSelectExercise={(ex: Exercise) => addExerciseToWorkout(ex)}
         onSelectMultiple={(exs: Exercise[]) => {
-          exs.forEach((ex) => addExerciseToWorkout(ex));
+          addExercisesToWorkout(exs);
         }}
       />
 
