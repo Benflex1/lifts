@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { initialReps, validateCompletedSet } from '../../src/workout/sets';
+import { initialReps, validateCompletedSet, validateTargetReps } from '../../src/workout/sets';
 import { WorkoutSet } from '../../src/types';
 
 describe('initialReps', () => {
@@ -130,5 +130,63 @@ describe('validateCompletedSet', () => {
       isCompleted: true,
     };
     assert.notEqual(validateCompletedSet(setFractional), null);
+  });
+});
+
+describe('validateTargetReps', () => {
+  it('accepts valid single numeric targets', () => {
+    assert.equal(validateTargetReps('10').isValid, true);
+    assert.equal(validateTargetReps('5').isValid, true);
+    assert.equal(validateTargetReps(' 12 ').isValid, true);
+    assert.equal(validateTargetReps('1').isValid, true);
+  });
+
+  it('rejects non-positive or excessive single numbers', () => {
+    assert.equal(validateTargetReps('0').isValid, false);
+    assert.equal(validateTargetReps('-5').isValid, false);
+    assert.equal(validateTargetReps('101').isValid, false);
+  });
+
+  it('accepts valid rep ranges', () => {
+    assert.equal(validateTargetReps('8-12').isValid, true);
+    assert.equal(validateTargetReps('6 - 8').isValid, true);
+    assert.equal(validateTargetReps('10-10').isValid, true);
+  });
+
+  it('rejects invalid rep ranges', () => {
+    assert.equal(validateTargetReps('12-8').isValid, false);
+    assert.equal(validateTargetReps('0-10').isValid, false);
+    assert.equal(validateTargetReps('8-0').isValid, false);
+    assert.equal(validateTargetReps('8-').isValid, false);
+    assert.equal(validateTargetReps('-12').isValid, false);
+    assert.equal(validateTargetReps('8-150').isValid, false);
+  });
+
+  it('accepts valid comma-separated lists', () => {
+    assert.equal(validateTargetReps('12, 10, 8, 6').isValid, true);
+    assert.equal(validateTargetReps('12,10,8').isValid, true);
+  });
+
+  it('rejects invalid comma-separated lists', () => {
+    assert.equal(validateTargetReps('12, 0, 8').isValid, false);
+    assert.equal(validateTargetReps('12, -5, 8').isValid, false);
+    assert.equal(validateTargetReps('12, , 8').isValid, false);
+    assert.equal(validateTargetReps('12,').isValid, false);
+  });
+
+  it('accepts AMRAP case-insensitively', () => {
+    assert.equal(validateTargetReps('AMRAP').isValid, true);
+    assert.equal(validateTargetReps('amrap').isValid, true);
+    assert.equal(validateTargetReps(' Amrap ').isValid, true);
+  });
+
+  it('rejects malformed and random text inputs like 7&x-9', () => {
+    assert.equal(validateTargetReps('7&x-9').isValid, false);
+    assert.equal(validateTargetReps('to failure').isValid, false);
+    assert.equal(validateTargetReps('10 reps').isValid, false);
+    assert.equal(validateTargetReps('8~12').isValid, false);
+    assert.equal(validateTargetReps('').isValid, false);
+    assert.equal(validateTargetReps('   ').isValid, false);
+    assert.equal(validateTargetReps(undefined).isValid, false);
   });
 });

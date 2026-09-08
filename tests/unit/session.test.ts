@@ -299,4 +299,82 @@ describe('SessionController Unit Tests', () => {
     assert.equal(controller.getState().workout, null);
     assert.equal(mockStore.drafts.size, 0);
   });
+
+  it('publishes a fresh immutable state object on every update for React state change detection', async () => {
+    let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+    const mockStore = createMockStore();
+    const controller = createSessionController(mockStore, () => currentTime);
+
+    const receivedStates: any[] = [];
+    controller.subscribe((state) => {
+      receivedStates.push(state);
+    });
+
+    const initialWorkout: Workout = {
+      id: 'w-immutability',
+      name: 'Immutability Test',
+      startTime: new Date(currentTime).toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: [
+        {
+          id: 'ae-1',
+          exerciseId: 'ex-1',
+          exercise: {
+            id: 'ex-1',
+            name: 'Bench Press',
+            category: 'chest',
+            equipment: 'barbell',
+            primaryMuscles: ['chest'],
+          },
+          restTimerSeconds: 90,
+          sets: [
+            {
+              id: 's-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 60,
+              reps: 20,
+              isCompleted: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    await controller.start(initialWorkout);
+
+    // Rapid updates mimicking fast user typing: 20 -> 1 -> 12
+    const prevCount = receivedStates.length;
+    const typingSteps = [1, 12];
+
+    for (const newReps of typingSteps) {
+      const currentWorkout = controller.getState().workout!;
+      const updatedWorkout: Workout = {
+        ...currentWorkout,
+        exercises: [
+          {
+            ...currentWorkout.exercises[0],
+            sets: [
+              {
+                ...currentWorkout.exercises[0].sets[0],
+                reps: newReps,
+              },
+            ],
+          },
+        ],
+      };
+      controller.update(updatedWorkout);
+    }
+
+    // Verify each update emitted a brand new state object reference (React state identity requirement)
+    assert.equal(receivedStates.length, prevCount + 2);
+    const stateA = receivedStates[receivedStates.length - 2];
+    const stateB = receivedStates[receivedStates.length - 1];
+
+    assert.notEqual(stateA, stateB, 'Consecutive state notifications must have distinct object identities');
+    assert.equal(stateA.workout.exercises[0].sets[0].reps, 1);
+    assert.equal(stateB.workout.exercises[0].sets[0].reps, 12);
+    assert.equal(stateB.revision, stateA.revision + 1);
+  });
 });

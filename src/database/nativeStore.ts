@@ -5,6 +5,7 @@ import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
 import { buildDefaultRoutines } from './seedData';
 import { calculate1RM } from '../utils/calculator';
+import { validateTargetReps } from '../workout/sets';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
@@ -274,6 +275,13 @@ export function createNativeStore(driver: SqliteDriver): Store {
     notes?: string,
     existingId?: string
   ): Promise<string> {
+    for (const item of exercises) {
+      const repVal = validateTargetReps(item.targetReps);
+      if (!repVal.isValid) {
+        throw new Error(`Invalid target reps for exercise ${item.exerciseId}: ${repVal.error}`);
+      }
+    }
+
     return writeQueue(async () => {
       const routineId = existingId || `routine-${Date.now()}`;
 

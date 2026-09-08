@@ -1,6 +1,7 @@
 import { DataSnapshot, Store } from '../database/contract';
 import { DEFAULT_EXERCISES } from '../database/seedData';
 import { Exercise, Routine, Workout, WorkoutSet } from '../types';
+import { validateTargetReps } from '../workout/sets';
 
 export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 
@@ -154,6 +155,13 @@ export function parseBackup(json: string): BackupV2 {
           re.exercise.category = re.exercise.category || def.category || bundled?.category || 'other';
           re.exercise.equipment = re.exercise.equipment || def.equipment || bundled?.equipment || 'other';
         }
+
+        if (re.targetReps !== undefined && re.targetReps !== null) {
+          if (typeof re.targetReps !== 'string') {
+            throw new Error(`Invalid targetReps in routine exercise: ${re.exerciseId}`);
+          }
+          // Preserve legacy target reps text (e.g. "8 each side") during restore
+        }
       }
     }
   }
@@ -260,6 +268,13 @@ export function parseBackup(json: string): BackupV2 {
           ? we.exercise.instructions
           : (Array.isArray(def.instructions) ? [...def.instructions] : (bundled?.instructions ? [...bundled.instructions] : []));
         we.exercise.isCustom = we.exercise.isCustom !== undefined ? Boolean(we.exercise.isCustom) : Boolean(def.isCustom);
+      }
+
+      if (we.targetReps !== undefined && we.targetReps !== null) {
+        if (typeof we.targetReps !== 'string') {
+          throw new Error(`Invalid targetReps in ${entityLabel} exercise: ${we.exerciseId}`);
+        }
+        // Preserve legacy target reps text (e.g. "8 each side") during restore
       }
 
       if (!Array.isArray(we.sets)) {

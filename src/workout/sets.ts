@@ -1,5 +1,66 @@
 import { WorkoutSet } from '../types';
 
+export function validateTargetReps(target: string | undefined): { isValid: boolean; error?: string } {
+  if (!target || typeof target !== 'string' || !target.trim()) {
+    return { isValid: false, error: 'Target reps cannot be empty' };
+  }
+
+  const trimmed = target.trim();
+
+  // AMRAP (case-insensitive)
+  if (/^amrap$/i.test(trimmed)) {
+    return { isValid: true };
+  }
+
+  // Single positive integer: e.g. "5", "10"
+  if (/^\d+$/.test(trimmed)) {
+    const val = parseInt(trimmed, 10);
+    if (val <= 0) {
+      return { isValid: false, error: 'Target reps must be greater than 0' };
+    }
+    if (val > 100) {
+      return { isValid: false, error: 'Target reps cannot exceed 100' };
+    }
+    return { isValid: true };
+  }
+
+  // Range: e.g. "8-12", "6 - 8"
+  if (/^\d+\s*-\s*\d+$/.test(trimmed)) {
+    const [minStr, maxStr] = trimmed.split('-');
+    const min = parseInt(minStr.trim(), 10);
+    const max = parseInt(maxStr.trim(), 10);
+    if (min <= 0 || max <= 0) {
+      return { isValid: false, error: 'Range values must be greater than 0' };
+    }
+    if (min > max) {
+      return { isValid: false, error: 'Minimum reps cannot exceed maximum reps' };
+    }
+    if (max > 100) {
+      return { isValid: false, error: 'Target reps cannot exceed 100' };
+    }
+    return { isValid: true };
+  }
+
+  // Comma-separated list: e.g. "12, 10, 8, 6"
+  if (/^\d+(\s*,\s*\d+)+$/.test(trimmed)) {
+    const parts = trimmed.split(',').map((p) => parseInt(p.trim(), 10));
+    for (const num of parts) {
+      if (num <= 0) {
+        return { isValid: false, error: 'All per-set reps must be greater than 0' };
+      }
+      if (num > 100) {
+        return { isValid: false, error: 'Target reps cannot exceed 100' };
+      }
+    }
+    return { isValid: true };
+  }
+
+  return {
+    isValid: false,
+    error: 'Invalid target reps format. Use a number (e.g. 10), range (e.g. 8-12), list (e.g. 12, 10, 8), or AMRAP',
+  };
+}
+
 export function initialReps(target: string | undefined, setIndex: number, previousReps?: number): number {
   if (!target || typeof target !== 'string') {
     return previousReps !== undefined && previousReps > 0 ? previousReps : 10;
@@ -15,7 +76,7 @@ export function initialReps(target: string | undefined, setIndex: number, previo
   }
 
   // Comma-separated list: e.g. "10, 8, 6"
-  if (trimmed.includes(',')) {
+  if (/^\d+(\s*,\s*\d+)+$/.test(trimmed)) {
     const parts = trimmed.split(',').map((p) => p.trim());
     const validNumbers = parts.map((p) => parseInt(p, 10)).filter((n) => !isNaN(n) && n > 0);
     if (validNumbers.length > 0) {
@@ -28,7 +89,7 @@ export function initialReps(target: string | undefined, setIndex: number, previo
   }
 
   // Range: e.g. "6-8" or "8 - 12"
-  if (trimmed.includes('-')) {
+  if (/^\d+\s*-\s*\d+$/.test(trimmed)) {
     const [lowerStr] = trimmed.split('-');
     const lower = parseInt(lowerStr.trim(), 10);
     if (!isNaN(lower) && lower > 0) {

@@ -3,6 +3,7 @@ import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
 import { calculate1RM } from '../utils/calculator';
+import { validateTargetReps } from '../workout/sets';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -348,6 +349,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     notes?: string,
     existingId?: string
   ): Promise<string> {
+    for (const item of exercises) {
+      const repVal = validateTargetReps(item.targetReps);
+      if (!repVal.isValid) {
+        throw new Error(`Invalid target reps for exercise ${item.exerciseId}: ${repVal.error}`);
+      }
+    }
+
     const database = await openDb();
     await verifyAndRenewLease(database);
 

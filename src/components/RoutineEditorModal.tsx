@@ -30,6 +30,7 @@ import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
 import { saveRoutine } from '../database/db';
+import { validateTargetReps } from '../workout/sets';
 
 interface Props {
   visible: boolean;
@@ -247,6 +248,17 @@ export const RoutineEditorModal: React.FC<Props> = ({
     if (draftExercises.length === 0) {
       notify({ title: 'Error', message: 'Please add at least one exercise.' });
       return;
+    }
+
+    for (const e of draftExercises) {
+      const repVal = validateTargetReps(e.targetReps);
+      if (!repVal.isValid) {
+        notify({
+          title: 'Invalid Target Reps',
+          message: `"${e.exercise.name}": ${repVal.error}. Example valid formats: 10, 8-12, 12, 10, 8, or AMRAP`,
+        });
+        return;
+      }
     }
 
     await saveRoutine(
@@ -618,33 +630,51 @@ export const RoutineEditorModal: React.FC<Props> = ({
                 </View>
 
                 {/* Target Reps Row: Custom Main Input with Presets Dropdown */}
-                <View style={styles.configRow}>
-                  <Text style={styles.configLabel}>TARGET REPS</Text>
-                  <View style={styles.repsRowContainer}>
-                    <View style={styles.customRepInputWrapper}>
-                      <TextInput
-                        style={styles.primaryRepInput}
-                        placeholder="e.g. 8-12"
-                        placeholderTextColor="#6B7280"
-                        value={item.targetReps}
-                        onChangeText={txt => handleUpdateReps(idx, txt)}
-                        selectTextOnFocus={true}
-                      />
-                      <Text style={styles.repInputSuffix}>reps</Text>
-                    </View>
+                {(() => {
+                  const repVal = validateTargetReps(item.targetReps);
+                  const isRepInvalid = !repVal.isValid && item.targetReps.trim().length > 0;
+                  return (
+                    <>
+                      <View style={styles.configRow}>
+                        <Text style={styles.configLabel}>TARGET REPS</Text>
+                        <View style={styles.repsRowContainer}>
+                          <View
+                            style={[
+                              styles.customRepInputWrapper,
+                              isRepInvalid && styles.customRepInputWrapperError,
+                            ]}
+                          >
+                            <TextInput
+                              style={styles.primaryRepInput}
+                              placeholder="e.g. 8-12"
+                              placeholderTextColor="#6B7280"
+                              value={item.targetReps}
+                              onChangeText={txt => handleUpdateReps(idx, txt)}
+                              selectTextOnFocus={true}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                            />
+                            <Text style={styles.repInputSuffix}>reps</Text>
+                          </View>
 
-                    <TouchableOpacity
-                      style={styles.presetDropdownBtn}
-                      onPress={() => setRepDropdownIndex(idx)}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Sparkles size={13} color="#60A5FA" />
-                      <Text style={styles.presetDropdownBtnText}>Presets</Text>
-                      <ChevronDown size={13} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                          <TouchableOpacity
+                            style={styles.presetDropdownBtn}
+                            onPress={() => setRepDropdownIndex(idx)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Sparkles size={13} color="#60A5FA" />
+                            <Text style={styles.presetDropdownBtnText}>Presets</Text>
+                            <ChevronDown size={13} color="#9CA3AF" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      {isRepInvalid ? (
+                        <Text style={styles.repErrorText}>{repVal.error}</Text>
+                      ) : null}
+                    </>
+                  );
+                })()}
 
                 {/* Rest Timer Row with Precision Wheel Trigger */}
                 <View style={styles.configRow}>
@@ -1213,6 +1243,18 @@ const styles = StyleSheet.create({
     borderColor: '#374151',
     paddingHorizontal: 10,
     height: 38,
+  },
+  customRepInputWrapperError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#2D1B22',
+  },
+  repErrorText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: -4,
+    marginBottom: 6,
+    marginLeft: 93,
   },
   primaryRepInput: {
     flex: 1,

@@ -50,9 +50,10 @@ export function createSessionController(
   let inFlightWrite: Promise<void> | null = null;
 
   function notify(): void {
+    const snapshot: SessionState = { ...state };
     for (const listener of listeners) {
       try {
-        listener(state);
+        listener(snapshot);
       } catch (_) {}
     }
   }
@@ -79,8 +80,11 @@ export function createSessionController(
       throw new Error('Cannot start workout: a workout session is already in progress');
     }
 
-    state.phase = 'starting';
-    state.persistenceError = null;
+    state = {
+      ...state,
+      phase: 'starting',
+      persistenceError: null,
+    };
     notify();
 
     const currentNow = getNow();
@@ -129,14 +133,15 @@ export function createSessionController(
     const currentNow = getNow();
     const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000));
 
-    state.workout = {
-      ...workout,
-      durationSeconds,
+    state = {
+      ...state,
+      workout: {
+        ...workout,
+        durationSeconds,
+      },
+      restTimer: restTimer !== undefined ? restTimer : state.restTimer,
+      revision: state.revision + 1,
     };
-    if (restTimer !== undefined) {
-      state.restTimer = restTimer;
-    }
-    state.revision += 1;
     notify();
 
     isDirty = true;
@@ -194,11 +199,18 @@ export function createSessionController(
 
     try {
       await writePromise;
-      if (state.revision === targetRevision) {
-        state.persistenceError = null;
+      if (state.revision === targetRevision && state.persistenceError !== null) {
+        state = {
+          ...state,
+          persistenceError: null,
+        };
+        notify();
       }
     } catch (err: any) {
-      state.persistenceError = err;
+      state = {
+        ...state,
+        persistenceError: err,
+      };
       notify();
       throw err;
     } finally {
@@ -241,15 +253,19 @@ export function createSessionController(
       throw new Error('Cannot finish workout: no active workout');
     }
 
+    const currentWorkout = state.workout;
     clearAutosave();
-    state.phase = 'finishing';
+    state = {
+      ...state,
+      phase: 'finishing',
+    };
     notify();
 
     await drainInFlightWrite();
 
     const finalNow = getNow();
-    const finalDuration = Math.max(0, Math.floor((finalNow - new Date(state.workout.startTime).getTime()) / 1000));
-    const calculatedVolume = (state.workout.exercises || []).reduce(
+    const finalDuration = Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
+    const calculatedVolume = (currentWorkout.exercises || []).reduce(
       (sum, ex) =>
         sum +
         (ex.sets || [])
@@ -259,10 +275,10 @@ export function createSessionController(
     );
 
     const completedWorkout: Workout = {
-      ...state.workout,
+      ...currentWorkout,
       endTime: new Date(finalNow).toISOString(),
       durationSeconds: finalDuration,
-      totalVolumeKg: state.workout.totalVolumeKg || calculatedVolume,
+      totalVolumeKg: currentWorkout.totalVolumeKg || calculatedVolume,
     };
 
     try {
@@ -277,8 +293,11 @@ export function createSessionController(
       notify();
       return completedWorkout;
     } catch (err: any) {
-      state.phase = 'active';
-      state.persistenceError = err;
+      state = {
+        ...state,
+        phase: 'active',
+        persistenceError: err,
+      };
       notify();
       throw err;
     }
@@ -291,7 +310,10 @@ export function createSessionController(
 
     clearAutosave();
     const workoutId = state.workout.id;
-    state.phase = 'discarding';
+    state = {
+      ...state,
+      phase: 'discarding',
+    };
     notify();
 
     await drainInFlightWrite();
@@ -307,8 +329,11 @@ export function createSessionController(
       };
       notify();
     } catch (err: any) {
-      state.phase = 'active';
-      state.persistenceError = err;
+      state = {
+        ...state,
+        phase: 'active',
+        persistenceError: err,
+      };
       notify();
       throw err;
     }

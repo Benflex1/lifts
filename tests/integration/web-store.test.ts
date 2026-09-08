@@ -5,6 +5,7 @@ import { createStoreFixture } from '../helpers/storeFixture';
 import { createWebStore } from '../../src/database/webStore';
 import { createSessionController } from '../../src/workout/session';
 import { restoreBackup } from '../../src/utils/restore';
+import { getBundledExercise } from '../../src/database/seedData';
 
 describe('webStore persistence and lease handling', () => {
   it('persists every user record type across store recreation and matches snapshot', async () => {
@@ -323,5 +324,489 @@ describe('webStore persistence and lease handling', () => {
 
     if (store.close) await store.close();
     if (reopened.close) await reopened.close();
+  });
+
+  it('rejects saving a routine with malformed targetReps in web store', async () => {
+    const dbName = `test-bad-reps-${Date.now()}`;
+    const store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    await assert.rejects(async () => {
+      await store.saveRoutine('Bad Reps Routine', 'Folder', [
+        { exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', targetSets: 3, targetReps: '7&x-9', restTimerSeconds: 60 },
+      ]);
+    }, /Invalid target reps/);
+
+    if (store.close) await store.close();
+  });
+
+  it('browser regression: rapid number entry publishes distinct session-state objects and flushes cleanly without lag or stale values', async () => {
+    const dbName = `test-browser-rapid-entry-${Date.now()}`;
+    const store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    let currentTime = new Date('2026-09-07T12:00:00.000Z').getTime();
+    const controller = createSessionController(store, () => currentTime, { maxDirtyTimeMs: 1000 });
+
+    const publishedStates: any[] = [];
+    controller.subscribe((state) => {
+      publishedStates.push(state);
+    });
+
+    const initialWorkout = {
+      id: 'w-browser-rapid-1',
+      name: 'Rapid Typing Session',
+      startTime: new Date(currentTime).toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: [
+        {
+          id: 'ae-b1',
+          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+          exercise: {
+            id: 'Barbell_Bench_Press_-_Medium_Grip',
+            name: 'Barbell Bench Press',
+            category: 'chest',
+            equipment: 'barbell',
+            primaryMuscles: ['chest'],
+          },
+          restTimerSeconds: 90,
+          sets: [
+            {
+              id: 'set-b1',
+              setNumber: 1,
+              type: 'normal' as const,
+              weightKg: 80,
+              reps: 20,
+              isCompleted: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    await controller.start(initialWorkout);
+
+    // Rapid number typing sequence: selecting 20, typing 1, then 12
+    const baseCount = publishedStates.length;
+    const typedRepsSequence = [1, 12];
+
+    for (const repsVal of typedRepsSequence) {
+      const activeW = controller.getState().workout!;
+      const updated = {
+        ...activeW,
+        exercises: [
+          {
+            ...activeW.exercises[0],
+            sets: [
+              {
+                ...activeW.exercises[0].sets[0],
+                reps: repsVal,
+              },
+            ],
+          },
+        ],
+      };
+      controller.update(updated);
+    }
+
+    assert.equal(publishedStates.length, baseCount + 2, 'Every rapid update must notify subscribers');
+    const firstTypedState = publishedStates[publishedStates.length - 2];
+    const secondTypedState = publishedStates[publishedStates.length - 1];
+
+    // Verify object reference identity changes immediately (satisfies React state identity)
+    assert.notEqual(firstTypedState, secondTypedState);
+    assert.equal(firstTypedState.workout.exercises[0].sets[0].reps, 1);
+    assert.equal(secondTypedState.workout.exercises[0].sets[0].reps, 12);
+
+    // Flush and verify IndexedDB draft storage has the latest value 12
+    await controller.flush();
+    const draft = await store.getWorkoutDraft('w-browser-rapid-1');
+    assert.ok(draft);
+    assert.equal(draft.workout.exercises[0].sets[0].reps, 12);
+
+    if (store.close) await store.close();
+  });
+
+  it('browser regression: restores legacy backup with custom targetReps (e.g. 8 each side) into IndexedDB successfully', async () => {
+    const dbName = `test-browser-legacy-restore-${Date.now()}`;
+    const store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    const legacyBackupJson = JSON.stringify({
+      version: 2,
+      exportedAt: '2026-09-07T12:00:00.000Z',
+      workouts: [
+        {
+          id: 'w-legacy-browser-1',
+          name: 'Legacy Workout',
+          startTime: '2026-09-07T08:00:00.000Z',
+          endTime: '2026-09-07T09:00:00.000Z',
+          durationSeconds: 3600,
+          totalVolumeKg: 1000,
+          exercises: [
+            {
+              id: 'we-legacy-1',
+              exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+              exercise: {
+                id: 'Barbell_Bench_Press_-_Medium_Grip',
+                name: 'Barbell Bench Press',
+                category: 'chest',
+                equipment: 'barbell',
+                primaryMuscles: ['chest'],
+              },
+              targetReps: '8 each side',
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: 's-leg-1',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 50,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      routines: [
+        {
+          id: 'routine-legacy-browser-1',
+          name: 'Legacy Upper Routine',
+          folderName: 'Strength',
+          notes: 'Legacy exported notes',
+          exercises: [
+            {
+              id: 're-leg-b1',
+              exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+              orderIndex: 0,
+              targetSets: 3,
+              targetReps: '8 each side',
+              restTimerSeconds: 90,
+            },
+          ],
+        },
+      ],
+      exercises: [],
+      drafts: [],
+      settings: { weight_unit: 'kg' },
+    });
+
+    // Should successfully restore without rejecting legacy targetReps
+    await restoreBackup(legacyBackupJson, store);
+
+    // Verify routine in IndexedDB
+    const routines = await store.getRoutines();
+    const legacyRoutine = routines.find((r) => r.id === 'routine-legacy-browser-1');
+    assert.ok(legacyRoutine, 'Legacy routine should exist in IndexedDB');
+    assert.equal(legacyRoutine.exercises[0].targetReps, '8 each side');
+
+    // Verify workout history and workout detail in IndexedDB
+    const history = await store.getWorkoutHistory();
+    assert.equal(history.length, 1);
+    const workoutDetail = await store.getWorkoutDetail('w-legacy-browser-1');
+    assert.ok(workoutDetail, 'Legacy workout should exist in IndexedDB');
+    assert.equal(workoutDetail.exercises[0].targetReps, '8 each side');
+
+    if (store.close) await store.close();
+  });
+
+  it('browser regression: multi-select adding multiple exercises (Air Bike and Alternate Hammer Curl) preserves all exercises and sets across persistence and reload', async () => {
+    let currentTime = new Date('2026-09-08T08:00:00.000Z').getTime();
+    const now = () => currentTime;
+    const dbName = `test-browser-multi-exercise-${Date.now()}`;
+
+    const store = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    await store.init();
+
+    const controller = createSessionController(store, now, { maxDirtyTimeMs: 1000 });
+
+    // 1. Start workout with 4 initial exercises (3 sets each = 12 sets total)
+    const initialExerciseIds = [
+      'Barbell_Bench_Press_-_Medium_Grip',
+      'Barbell_Curl',
+      'Barbell_Deadlift',
+      'Barbell_Full_Squat',
+    ];
+
+    const initialActiveExercises = initialExerciseIds.map((id, idx) => {
+      const ex = getBundledExercise(id);
+      return {
+        id: `ae-init-${idx}`,
+        exerciseId: id,
+        exercise: ex,
+        targetReps: '10',
+        restTimerSeconds: 90,
+        sets: [1, 2, 3].map((setNum) => ({
+          id: `set-init-${idx}-${setNum}`,
+          setNumber: setNum,
+          type: 'normal' as const,
+          weightKg: 50 + idx * 10,
+          reps: 10,
+          targetReps: '10',
+          isCompleted: false,
+        })),
+      };
+    });
+
+    const initialWorkout = {
+      id: 'w-browser-multi-1',
+      name: 'Full Body Session',
+      startTime: new Date(currentTime).toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: initialActiveExercises,
+    };
+
+    await controller.start(initialWorkout);
+
+    const startingWorkout = controller.getState().workout!;
+    assert.equal(startingWorkout.exercises.length, 4, 'Should start with 4 exercises');
+    const startingSetsCount = startingWorkout.exercises.reduce((sum, e) => sum + e.sets.length, 0);
+    assert.equal(startingSetsCount, 12, 'Should start with exactly 12 sets');
+
+    // 2. Select Air Bike and Alternate Hammer Curl to add to active workout
+    const airBike = getBundledExercise('Air_Bike');
+    const hammerCurl = getBundledExercise('Alternate_Hammer_Curl');
+    const selectedExercises = [airBike, hammerCurl];
+
+    // Batch addition (as performed by ActiveWorkoutScreen onSelectMultiple -> addExercisesToWorkout)
+    const addExercisesBatch = async (exercises: typeof selectedExercises) => {
+      const currentState = controller.getState();
+      if (currentState.phase !== 'active' || !currentState.workout) return;
+
+      const currentWorkout = currentState.workout;
+      const exerciseCounts = new Map<string, number>();
+      for (const ex of currentWorkout.exercises) {
+        exerciseCounts.set(ex.exerciseId, (exerciseCounts.get(ex.exerciseId) || 0) + 1);
+      }
+
+      const newActiveExercises: any[] = [];
+      for (const exercise of exercises) {
+        const occurrenceIndex = exerciseCounts.get(exercise.id) || 0;
+        exerciseCounts.set(exercise.id, occurrenceIndex + 1);
+
+        const activeExId = `ae-${currentWorkout.id}-${exercise.id}-occ${occurrenceIndex}-${Math.random().toString(36).slice(2, 8)}`;
+        const prevSets = await store.getPreviousSetsForExercise(exercise.id, occurrenceIndex);
+        const initialSets: any[] = [];
+        const count = 3;
+
+        for (let i = 1; i <= count; i++) {
+          const ghost = prevSets[i - 1];
+          initialSets.push({
+            id: `set-${activeExId}-${i}`,
+            setNumber: i,
+            type: 'normal',
+            weightKg: ghost ? ghost.weightKg : 0,
+            reps: ghost ? ghost.reps : 10,
+            targetReps: '10',
+            rpe: 8,
+            isCompleted: false,
+          });
+        }
+
+        newActiveExercises.push({
+          id: activeExId,
+          exerciseId: exercise.id,
+          exercise,
+          sets: initialSets,
+          notes: '',
+          targetReps: '10',
+          restTimerSeconds: 90,
+        });
+      }
+
+      const latestState = controller.getState();
+      if (latestState.phase !== 'active' || !latestState.workout) return;
+
+      const updated = {
+        ...latestState.workout,
+        exercises: [...latestState.workout.exercises, ...newActiveExercises],
+      };
+      controller.update(updated, null);
+    };
+
+    await addExercisesBatch(selectedExercises);
+
+    // Verify in-memory controller state
+    const workoutAfterAdd = controller.getState().workout!;
+    assert.equal(workoutAfterAdd.exercises.length, 6, 'Active workout should contain all 6 exercises');
+    const totalSetsAfterAdd = workoutAfterAdd.exercises.reduce((sum, e) => sum + e.sets.length, 0);
+    assert.equal(totalSetsAfterAdd, 18, 'Total sets must increase from 12 to 18 (not 15)');
+    assert.ok(
+      workoutAfterAdd.exercises.some((e) => e.exerciseId === 'Air_Bike'),
+      'Air Bike must be present'
+    );
+    assert.ok(
+      workoutAfterAdd.exercises.some((e) => e.exerciseId === 'Alternate_Hammer_Curl'),
+      'Alternate Hammer Curl must be present'
+    );
+
+    // 3. Flush to IndexedDB
+    await controller.flush();
+
+    // Verify draft in IndexedDB before browser reload
+    const draftsBefore = await store.getWorkoutDrafts();
+    assert.equal(draftsBefore.length, 1, 'IndexedDB must contain 1 draft');
+    assert.equal(draftsBefore[0].workout.exercises.length, 6, 'Draft in IndexedDB must contain 6 exercises');
+    const draftSetsBefore = draftsBefore[0].workout.exercises.reduce((sum, e) => sum + e.sets.length, 0);
+    assert.equal(draftSetsBefore, 18, 'Draft in IndexedDB must contain all 18 sets');
+
+    // 4. Simulate page reload / store recreation
+    await store.close();
+
+    const reopened = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    await reopened.init();
+
+    // Verify drafts survived browser reload
+    const draftsAfterReload = await reopened.getWorkoutDrafts();
+    assert.equal(draftsAfterReload.length, 1, 'Draft must survive reload');
+    const reloadedWorkout = draftsAfterReload[0].workout;
+    assert.equal(reloadedWorkout.exercises.length, 6, 'Reloaded draft must retain all 6 exercises');
+    const reloadedSetsCount = reloadedWorkout.exercises.reduce((sum, e) => sum + e.sets.length, 0);
+    assert.equal(reloadedSetsCount, 18, 'Reloaded draft must retain all 18 sets');
+    assert.ok(
+      reloadedWorkout.exercises.some((e) => e.exerciseId === 'Air_Bike'),
+      'Air Bike must survive reload'
+    );
+    assert.ok(
+      reloadedWorkout.exercises.some((e) => e.exerciseId === 'Alternate_Hammer_Curl'),
+      'Alternate Hammer Curl must survive reload'
+    );
+
+    // 5. Resume draft in new session controller
+    currentTime += 10000;
+    const recoveryController = createSessionController(reopened, now);
+    recoveryController.resume(draftsAfterReload[0]);
+    assert.equal(recoveryController.getState().phase, 'active');
+    assert.equal(recoveryController.getState().workout?.exercises.length, 6);
+
+    // 6. Complete sets and finish workout
+    const resumedWorkout = recoveryController.getState().workout!;
+    const completedWorkout = {
+      ...resumedWorkout,
+      exercises: resumedWorkout.exercises.map((ex, exIdx) => ({
+        ...ex,
+        sets: ex.sets.map((s, sIdx) => ({
+          ...s,
+          isCompleted: true,
+          completedAt: new Date(currentTime + exIdx * 60000 + sIdx * 10000).toISOString(),
+        })),
+      })),
+    };
+    recoveryController.update(completedWorkout);
+    await recoveryController.flush();
+
+    const finished = await recoveryController.finish();
+    assert.equal(finished.id, 'w-browser-multi-1');
+    assert.equal(finished.exercises.length, 6);
+    const finishedSetsCount = finished.exercises.reduce((sum, e) => sum + e.sets.length, 0);
+    assert.equal(finishedSetsCount, 18);
+
+    // 7. Verify draft removed and history durable in IndexedDB
+    const draftsAfterFinish = await reopened.getWorkoutDrafts();
+    assert.equal(draftsAfterFinish.length, 0, 'Draft deleted after finish');
+
+    const history = await reopened.getWorkoutHistory();
+    assert.equal(history.length, 1);
+    assert.equal(history[0].id, 'w-browser-multi-1');
+
+    const detail = await reopened.getWorkoutDetail('w-browser-multi-1');
+    assert.ok(detail);
+    assert.equal(detail!.exercises.length, 6);
+    assert.equal(detail!.exercises.reduce((sum, e) => sum + e.sets.length, 0), 18);
+
+    if (reopened.close) await reopened.close();
+  });
+
+  it('browser regression: concurrent asynchronous exercise additions do not overwrite earlier additions', async () => {
+    let currentTime = new Date('2026-09-08T09:00:00.000Z').getTime();
+    const now = () => currentTime;
+    const dbName = `test-browser-concurrent-add-${Date.now()}`;
+
+    const store = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    await store.init();
+
+    const controller = createSessionController(store, now, { maxDirtyTimeMs: 1000 });
+
+    const workout = {
+      id: 'w-browser-concurrent-1',
+      name: 'Concurrent Add Session',
+      startTime: new Date(currentTime).toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: [],
+    };
+
+    await controller.start(workout);
+
+    const airBike = getBundledExercise('Air_Bike');
+    const hammerCurl = getBundledExercise('Alternate_Hammer_Curl');
+
+    // Simulate concurrent individual additions with async lookups reading latest controller state
+    const addSingleExercise = async (exercise: any) => {
+      const currentState = controller.getState();
+      if (currentState.phase !== 'active' || !currentState.workout) return;
+
+      const occurrenceIndex = currentState.workout.exercises.filter(
+        (e) => e.exerciseId === exercise.id
+      ).length;
+      const activeExId = `ae-${currentState.workout.id}-${exercise.id}-occ${occurrenceIndex}-${Math.random().toString(36).slice(2, 8)}`;
+
+      // Asynchronous lookup
+      const prevSets = await store.getPreviousSetsForExercise(exercise.id, occurrenceIndex);
+      const initialSets = [1, 2, 3].map((setNum) => ({
+        id: `set-${activeExId}-${setNum}`,
+        setNumber: setNum,
+        type: 'normal' as const,
+        weightKg: 20,
+        reps: 10,
+        targetReps: '10',
+        rpe: 8,
+        isCompleted: false,
+      }));
+
+      const newExercise = {
+        id: activeExId,
+        exerciseId: exercise.id,
+        exercise,
+        sets: initialSets,
+        notes: '',
+        targetReps: '10',
+        restTimerSeconds: 90,
+      };
+
+      // Read fresh controller state after async lookup
+      const latestState = controller.getState();
+      if (latestState.phase !== 'active' || !latestState.workout) return;
+
+      const updated = {
+        ...latestState.workout,
+        exercises: [...latestState.workout.exercises, newExercise],
+      };
+      controller.update(updated, null);
+    };
+
+    // Run both additions concurrently (like concurrent addExerciseToWorkout calls)
+    await Promise.all([
+      addSingleExercise(airBike),
+      addSingleExercise(hammerCurl),
+    ]);
+
+    // Verify both exercises are retained and neither clobbered the other
+    const state = controller.getState();
+    assert.equal(state.workout?.exercises.length, 2, 'Both concurrent additions must be retained');
+    assert.ok(state.workout?.exercises.some((e) => e.exerciseId === 'Air_Bike'));
+    assert.ok(state.workout?.exercises.some((e) => e.exerciseId === 'Alternate_Hammer_Curl'));
+    assert.equal(state.workout?.exercises.reduce((sum, e) => sum + e.sets.length, 0), 6);
+
+    await controller.flush();
+    const drafts = await store.getWorkoutDrafts();
+    assert.equal(drafts.length, 1);
+    assert.equal(drafts[0].workout.exercises.length, 2);
+
+    if (store.close) await store.close();
   });
 });

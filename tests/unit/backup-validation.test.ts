@@ -574,4 +574,84 @@ describe('Backup validation (parseBackup)', () => {
       parseBackup(JSON.stringify(nonStringElementDraft));
     }, /Invalid primaryMuscles/);
   });
+
+  it('rejects backup with non-string targetReps in routine or workout exercise', () => {
+    const badRoutineReps = {
+      ...validBaseBackup,
+      routines: [
+        {
+          id: 'routine-bad-reps',
+          name: 'Bad Reps Routine',
+          exercises: [
+            {
+              id: 're-1',
+              exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+              orderIndex: 0,
+              targetSets: 3,
+              targetReps: 123 as any,
+              restTimerSeconds: 90,
+            },
+          ],
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badRoutineReps));
+    }, /Invalid targetReps/);
+
+    const badWorkoutReps = {
+      ...validBaseBackup,
+      workouts: [
+        {
+          ...validBaseBackup.workouts[0],
+          exercises: [
+            {
+              ...validBaseBackup.workouts[0].exercises[0],
+              targetReps: { invalid: true } as any,
+            },
+          ],
+        },
+      ],
+    };
+    assert.throws(() => {
+      parseBackup(JSON.stringify(badWorkoutReps));
+    }, /Invalid targetReps/);
+  });
+
+  it('accepts and preserves legacy targetReps (e.g. 8 each side) during backup restore', () => {
+    const legacyBackup = {
+      ...validBaseBackup,
+      routines: [
+        {
+          id: 'routine-legacy-reps',
+          name: 'Legacy Reps Routine',
+          exercises: [
+            {
+              id: 're-leg-1',
+              exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+              orderIndex: 0,
+              targetSets: 3,
+              targetReps: '8 each side',
+              restTimerSeconds: 90,
+            },
+          ],
+        },
+      ],
+      workouts: [
+        {
+          ...validBaseBackup.workouts[0],
+          exercises: [
+            {
+              ...validBaseBackup.workouts[0].exercises[0],
+              targetReps: '8 each side',
+            },
+          ],
+        },
+      ],
+    };
+
+    const parsed = parseBackup(JSON.stringify(legacyBackup));
+    assert.equal(parsed.routines[0].exercises[0].targetReps, '8 each side');
+    assert.equal(parsed.workouts[0].exercises[0].targetReps, '8 each side');
+  });
 });
