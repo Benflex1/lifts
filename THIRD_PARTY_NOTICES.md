@@ -60,4 +60,10 @@ Lifts incorporates open-source software packages and libraries. This document li
 
 ## 5. Bundled Data
 
-For information regarding the bundled exercise database and asset origins, please refer to [`docs/data-provenance.md`](docs/data-provenance.md).
+### Free Exercise DB exercise data
+- **Upstream**: [`yuhonas/free-exercise-db`](https://github.com/yuhonas/free-exercise-db/tree/a859101d633a01c4a1a920d6a8ce41dabba0705f), revision `a859101d633a01c4a1a920d6a8ce41dabba0705f`
+- **Credited original dataset**: [`wrkout/exercises.json`](https://github.com/wrkout/exercises.json/tree/5994bea047eee4d39a2c0872be3dd8fdd258ba31)
+- **License**: Unlicense / public-domain dedication
+- **Lifts transformation**: Lifts retains the 876 upstream records, IDs, order, names, categories, muscle fields, and instructions. It normalizes 77 upstream `null` equipment values to `body only`. Lifts does not bundle upstream images or videos.
+- **License text**: [`licenses/UNLICENSE`](licenses/UNLICENSE)
+- **Detailed provenance and verification hashes**: [`docs/data-provenance.md`](docs/data-provenance.md)

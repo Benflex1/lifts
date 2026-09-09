@@ -19,8 +19,8 @@ This document maps each finding identified in the comprehensive codebase audit t
 | **9. Incomplete Seed Database on Web** | Resolved | Task 2 | `src/database/seedData.ts`, `src/database/webStore.ts`, `src/database/nativeStore.ts` | `tests/unit/seed-data.test.ts` |
 | **10. Broken Web Confirmation Dialogs** | Resolved | Task 5 | `src/context/DialogContext.tsx` | `tests/unit/dialog.test.ts`, `tests/integration/completion-lifecycle.test.ts` |
 | **11. Missing Parity Features Claimed** | Resolved | Task 8 | `README.md`, `ROADMAP.md` | Documentation review |
-| **12. Authorship & Data Provenance Gaps** | Documented; release blocked | Task 8 | `LICENSE`, `THIRD_PARTY_NOTICES.md`, `docs/data-provenance.md` | Legal & provenance trace |
-| **13. Test Coverage & CI Gaps** | Resolved | Tasks 1–9 | `.github/workflows/ci.yml`, `tests/unit/*`, `tests/integration/*` | Full test suites (80 tests passing) |
+| **12. Authorship & Data Provenance Gaps** | Resolved for bundled exercise JSON | Task 8 plus provenance verification | `THIRD_PARTY_NOTICES.md`, `docs/data-provenance.md`, `licenses/UNLICENSE` | Recorded upstream revisions, field comparison, and SHA-256 hashes |
+| **13. Test Coverage & CI Gaps** | Resolved | Tasks 1–9 | `.github/workflows/ci.yml`, `tests/unit/*`, `tests/integration/*` | Full test suites (147 tests passing) |
 
 ---
 
@@ -71,8 +71,9 @@ This document maps each finding identified in the comprehensive codebase audit t
 ## Test Suite Execution Evidence
 
 ```
-Total Test Suites: 24
-Total Tests Passed: 139
+Unit Tests: 101
+Integration Tests: 46
+Total Tests Passed: 147
 Total Tests Failed: 0
 TypeScript Validation: Clean (0 errors)
 Web Bundle Export: Successful (0 errors)

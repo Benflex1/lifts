@@ -71,4 +71,4 @@ This document details the environment requirements, build procedures, and device
 | **REL-12** | Destructive Confirmations| Confirm and cancel routine/workout deletions | Cancellation changes nothing; confirmation commits delete | Verified |
 | **REL-13** | Completion Modal | Finish workout | Summary modal displays total volume, sets, and duration | Verified |
 | **REL-14** | Android Back Button | Press hardware back while in workout | Minimizes session to floating bar; does not drop workout | Verified |
-| **REL-15** | Exercise Dataset Licensing | Verify upstream rights for bundled exercise descriptions | Explicit redistribution permission is recorded or the dataset is replaced | **Blocked** — see `docs/data-provenance.md` |
+| **REL-15** | Exercise Dataset Licensing | Verify upstream rights for bundled exercise descriptions | Explicit redistribution permission is recorded or the dataset is replaced | **Verified** — Unlicense/public-domain provenance and transformation hashes recorded in `docs/data-provenance.md`; upstream images are not bundled |
