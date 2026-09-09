@@ -3,6 +3,7 @@ import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
 import { calculate1RM } from '../utils/calculator';
+import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 
 export interface WebStoreOptions {
@@ -303,7 +304,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     const custom: Exercise = {
       ...exercise,
-      id: (exercise as any).id || `custom-${Date.now()}`,
+      id: (exercise as any).id || createScopedId('custom'),
       isCustom: true,
     };
 
@@ -360,7 +361,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     const allEx = await getAllExercises();
-    const routineId = existingId || `routine-${Date.now()}`;
+    const routineId = existingId || createScopedId('routine');
     const existing = existingId ? await getRoutineById(existingId) : null;
 
     const routine: Routine = {
@@ -407,7 +408,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const original = await getRoutineById(routineId);
     if (!original) throw new Error('Routine not found');
 
-    const newId = `routine-${Date.now()}`;
+    const newId = createScopedId('routine');
     const copy: Routine = {
       ...original,
       id: newId,

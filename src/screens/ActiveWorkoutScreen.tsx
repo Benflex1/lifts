@@ -40,8 +40,7 @@ import { SwipeableSetRow } from '../components/SwipeableSetRow';
 import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
 import { useDialog } from '../context/DialogContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const RPE_CHIPS: (number | null)[] = [null, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+import { RPE_CHIPS } from '../workout/sets';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();

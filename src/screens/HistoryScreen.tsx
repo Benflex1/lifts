@@ -25,6 +25,7 @@ import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { useDialog } from '../context/DialogContext';
+import { resolveHistoricalTargetReps } from '../workout/sets';
 
 export const HistoryScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
@@ -108,7 +109,7 @@ export const HistoryScreen: React.FC = () => {
           exerciseId: ex.exerciseId,
           exercise: ex.exercise,
           notes: '',
-          targetReps: ex.sets[0]?.targetReps || '10',
+          targetReps: resolveHistoricalTargetReps(ex.targetReps, ex.sets[0]?.targetReps),
           restTimerSeconds: ex.restTimerSeconds ?? 90,
           sets: ex.sets.map((s, sIdx) => ({
             id: `set-${activeExId}-${sIdx + 1}-${Crypto.randomUUID().slice(0, 6)}`,
@@ -116,7 +117,7 @@ export const HistoryScreen: React.FC = () => {
             type: s.type || 'normal',
             weightKg: s.weightKg,
             reps: s.reps,
-            targetReps: s.targetReps || '10',
+            targetReps: resolveHistoricalTargetReps(ex.targetReps, s.targetReps),
             rpe: s.rpe ?? 8,
             isCompleted: false,
             previousWeightKg: s.weightKg,

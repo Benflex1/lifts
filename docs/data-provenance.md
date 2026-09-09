@@ -17,7 +17,7 @@ This document tracks the origin, license status, transformation history, and dis
 
 ## 2. Default Seed Routines (`src/database/seedData.ts`)
 
-- **Description**: Seed workout routines created on first launch (Push, Pull, Legs, Upper Body, Lower Body).
+- **Description**: Seed workout routines created on first launch (Push, Pull, Legs).
 - **Origin**: Authored directly for the Lifts project based on standard, non-copyrightable barbell/dumbbell strength training splits.
 - **License**: MIT License (same as project repository).
 

@@ -5,6 +5,7 @@ import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
 import { buildDefaultRoutines } from './seedData';
 import { calculate1RM } from '../utils/calculator';
+import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
@@ -158,7 +159,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
     return writeQueue(async () => {
-      const newId = (exercise as any).id || `custom-${Date.now()}`;
+      const newId = (exercise as any).id || createScopedId('custom');
       const customExercise: Exercise = {
         ...exercise,
         id: newId,
@@ -283,7 +284,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     }
 
     return writeQueue(async () => {
-      const routineId = existingId || `routine-${Date.now()}`;
+      const routineId = existingId || createScopedId('routine');
 
       await driver.withTransactionAsync(async () => {
         const existing = existingId
@@ -349,7 +350,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         routineId
       );
 
-      const newId = `routine-${Date.now()}`;
+      const newId = createScopedId('routine');
       await driver.withTransactionAsync(async () => {
         await driver.runAsync(
           'INSERT INTO routines (id, name, folder_name, notes, created_at) VALUES (?, ?, ?, ?, ?)',

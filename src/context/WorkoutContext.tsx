@@ -7,7 +7,7 @@ import { getStore, getPreviousSetsForExercise } from '../database/db';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
-import { initialReps, validateCompletedSet } from '../workout/sets';
+import { initialReps, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
 import { useDialog } from './DialogContext';
 
 interface RestTimerState {
@@ -296,7 +296,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           sets,
           notes: '',
           targetReps: item.targetReps,
-          restTimerSeconds: item.restTimerSeconds || 90,
+          restTimerSeconds: resolveRestTimerSeconds(item.restTimerSeconds),
         });
       }
     }
@@ -483,7 +483,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         sets: initialSets,
         notes: '',
         targetReps: '10',
-        restTimerSeconds: 90,
+        restTimerSeconds: 0,
       });
     }
 
@@ -691,7 +691,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const nextCompleted = !s.isCompleted;
           if (nextCompleted) {
             justCompleted = true;
-            targetRestSeconds = ex.restTimerSeconds || 90;
+            targetRestSeconds = resolveRestTimerSeconds(ex.restTimerSeconds);
           }
           return {
             ...s,

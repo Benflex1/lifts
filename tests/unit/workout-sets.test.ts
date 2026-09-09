@@ -1,6 +1,13 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { initialReps, validateCompletedSet, validateTargetReps } from '../../src/workout/sets';
+import {
+  initialReps,
+  RPE_CHIPS,
+  resolveHistoricalTargetReps,
+  resolveRestTimerSeconds,
+  validateCompletedSet,
+  validateTargetReps,
+} from '../../src/workout/sets';
 import { WorkoutSet } from '../../src/types';
 
 describe('initialReps', () => {
@@ -36,6 +43,26 @@ describe('initialReps', () => {
     assert.equal(initialReps('drop set', 0), 10);
     assert.equal(initialReps('', 0, 15), 15);
     assert.equal(initialReps('', 0), 10);
+  });
+});
+
+describe('workout defaults', () => {
+  it('preserves an explicit rest timer value of zero as off', () => {
+    assert.equal(resolveRestTimerSeconds(0), 0);
+    assert.equal(resolveRestTimerSeconds(undefined), 0);
+    assert.equal(resolveRestTimerSeconds(null), 0);
+    assert.equal(resolveRestTimerSeconds(90), 90);
+  });
+
+  it('prefers the exercise target when reconstructing a historical workout', () => {
+    assert.equal(resolveHistoricalTargetReps('8-12', undefined), '8-12');
+    assert.equal(resolveHistoricalTargetReps(undefined, '6-8'), '6-8');
+    assert.equal(resolveHistoricalTargetReps('', '6-8'), '6-8');
+    assert.equal(resolveHistoricalTargetReps(undefined, undefined), '10');
+  });
+
+  it('offers the documented RPE range from 5 through 10', () => {
+    assert.deepEqual(RPE_CHIPS, [null, 5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]);
   });
 });
 
