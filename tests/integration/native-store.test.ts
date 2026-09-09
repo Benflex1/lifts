@@ -368,6 +368,111 @@ describe('nativeStore and migration safety', () => {
     fs.unlinkSync(tempFile);
   });
 
+  it('preserves commas in native history exercise names', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-native-history-commas-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+
+    try {
+      const store = createNativeStore(driver);
+      await store.init();
+
+      const commaExercises = (await store.getAllExercises())
+        .filter(exercise => exercise.name.includes(','))
+        .slice(0, 2);
+      assert.equal(commaExercises.length, 2, 'Seed data must include comma-containing exercise names');
+
+      const workout: Workout = {
+        id: 'native-history-commas-workout',
+        name: 'Comma Names Test',
+        startTime: '2026-09-08T11:00:00.000Z',
+        endTime: '2026-09-08T12:00:00.000Z',
+        durationSeconds: 3600,
+        totalVolumeKg: 200,
+        exercises: commaExercises.map((exercise, index) => ({
+          id: `native-history-commas-exercise-${index}`,
+          exerciseId: exercise.id,
+          exercise,
+          restTimerSeconds: 0,
+          sets: [{
+            id: `native-history-commas-set-${index}`,
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 10,
+            reps: 10,
+            isCompleted: true,
+          }],
+        })),
+      };
+
+      await store.saveCompletedWorkout(workout);
+      const history = await store.getWorkoutHistory();
+
+      assert.deepEqual(history[0].exerciseNames, commaExercises.map(exercise => exercise.name));
+    } finally {
+      driver.close();
+      fs.unlinkSync(tempFile);
+    }
+  });
+
+  it('updates an existing native history workout when saving edits under the same ID', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-native-history-edit-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+
+    try {
+      const store = createNativeStore(driver);
+      await store.init();
+      const exercise = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+      if (!exercise) throw new Error('Seed exercise missing from native store');
+
+      const workout: Workout = {
+        id: 'native-history-edit-workout',
+        name: 'Editable Workout',
+        startTime: '2026-09-08T13:00:00.000Z',
+        endTime: '2026-09-08T14:00:00.000Z',
+        durationSeconds: 3600,
+        totalVolumeKg: 100,
+        exercises: [{
+          id: 'native-history-edit-exercise',
+          exerciseId: exercise.id,
+          exercise,
+          restTimerSeconds: 0,
+          sets: [{
+            id: 'native-history-edit-set',
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 10,
+            reps: 10,
+            isCompleted: true,
+          }],
+        }],
+      };
+
+      await store.saveCompletedWorkout(workout);
+      await store.saveCompletedWorkout({
+        ...workout,
+        name: 'Corrected Workout',
+        totalVolumeKg: 200,
+        exercises: [{
+          ...workout.exercises[0],
+          sets: [{ ...workout.exercises[0].sets[0], weightKg: 20 }],
+        }],
+      });
+
+      const history = await store.getWorkoutHistory();
+      assert.equal(history.length, 1);
+      assert.equal(history[0].id, workout.id);
+      assert.equal(history[0].name, 'Corrected Workout');
+      assert.equal(history[0].totalVolumeKg, 200);
+
+      const detail = await store.getWorkoutDetail(workout.id);
+      assert.ok(detail);
+      assert.equal(detail.exercises[0].sets[0].weightKg, 20);
+    } finally {
+      driver.close();
+      fs.unlinkSync(tempFile);
+    }
+  });
+
   it('creates distinct custom exercise IDs even when the clock does not advance', async () => {
     const tempFile = path.join(os.tmpdir(), `test-custom-id-collision-${Date.now()}.db`);
     const driver = new NodeSqliteDriver(tempFile);

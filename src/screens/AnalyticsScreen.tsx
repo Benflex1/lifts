@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   TextInput,
@@ -10,7 +11,7 @@ import {
 import { Calculator, Award, Dumbbell, ShieldCheck, Download, Upload } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
-import { getWorkoutHistory, getStore } from '../database/db';
+import { getStore } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
@@ -19,6 +20,8 @@ import { pickBackupJson } from '../utils/pickBackup';
 import { parseBackup } from '../utils/backup';
 import { computeRestorePlan } from '../utils/restore';
 import { useDialog } from '../context/DialogContext';
+import { Workout } from '../types';
+import { MuscleFrequencyPoint, WeeklyVolumePoint, buildMuscleFrequency, buildWeeklyVolume } from '../workout/analytics';
 
 export const AnalyticsScreen: React.FC = () => {
   const { unit } = useSettings();
@@ -28,6 +31,36 @@ export const AnalyticsScreen: React.FC = () => {
   const [weight, setWeight] = useState('100');
   const [reps, setReps] = useState('5');
   const [showPlateCalc, setShowPlateCalc] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [hasWorkoutData, setHasWorkoutData] = useState(false);
+  const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolumePoint[]>([]);
+  const [muscleFrequency, setMuscleFrequency] = useState<MuscleFrequencyPoint[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadAnalytics = async () => {
+      try {
+        const store = await getStore();
+        const snapshot = await store.readSnapshot();
+        if (!mounted) return;
+
+        const workouts: Workout[] = snapshot.workouts || [];
+        setHasWorkoutData(workouts.length > 0);
+        setWeeklyVolume(buildWeeklyVolume(workouts));
+        setMuscleFrequency(buildMuscleFrequency(workouts));
+      } catch (error) {
+        console.error('Failed to load analytics:', error);
+      } finally {
+        if (mounted) setAnalyticsLoading(false);
+      }
+    };
+
+    loadAnalytics();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const numWeight = displayToKg(parseFloat(weight) || 0, unit);
   const numReps = parseInt(reps, 10) || 1;
@@ -120,6 +153,71 @@ export const AnalyticsScreen: React.FC = () => {
             </Text>
           </View>
         </View>
+
+        {/* Progress Charts */}
+        {analyticsLoading ? (
+          <View style={styles.chartLoading}>
+            <ActivityIndicator size="small" color="#3B82F6" />
+            <Text style={styles.chartLoadingText}>Loading progress...</Text>
+          </View>
+        ) : hasWorkoutData ? (
+          <>
+            <View style={styles.toolCard}>
+              <View style={styles.toolHeader}>
+                <Dumbbell size={20} color="#38BDF8" />
+                <Text style={styles.toolTitle}>Weekly Volume</Text>
+              </View>
+              <Text style={styles.toolSubtitle}>Total completed-set volume over the last eight weeks.</Text>
+              <View style={styles.volumeChart}>
+                {weeklyVolume.map(point => {
+                  const maxVolume = Math.max(1, ...weeklyVolume.map(item => item.volumeKg));
+                  const barHeight = point.volumeKg > 0
+                    ? Math.max(6, (point.volumeKg / maxVolume) * 112)
+                    : 4;
+                  return (
+                    <View key={point.key} style={styles.volumeColumn}>
+                      <View style={styles.volumeBarTrack}>
+                        <View style={[styles.volumeBar, { height: barHeight }]} />
+                      </View>
+                      <Text style={styles.volumeLabel}>{point.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {muscleFrequency.length > 0 && (
+              <View style={styles.toolCard}>
+                <View style={styles.toolHeader}>
+                  <Award size={20} color="#F59E0B" />
+                  <Text style={styles.toolTitle}>Muscle Frequency</Text>
+                </View>
+                <Text style={styles.toolSubtitle}>Workouts that trained each primary muscle.</Text>
+                <View style={styles.muscleChart}>
+                  {muscleFrequency.map(point => {
+                    const maxCount = Math.max(1, ...muscleFrequency.map(item => item.count));
+                    return (
+                      <View key={point.muscle} style={styles.muscleRow}>
+                        <View style={styles.muscleRowHeader}>
+                          <Text style={styles.muscleName}>{point.muscle}</Text>
+                          <Text style={styles.muscleCount}>{point.count}</Text>
+                        </View>
+                        <View style={styles.muscleBarTrack}>
+                          <View style={[styles.muscleBar, { width: `${(point.count / maxCount) * 100}%` }]} />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={styles.chartEmpty}>
+            <Text style={styles.chartEmptyTitle}>Progress charts will appear here</Text>
+            <Text style={styles.chartEmptyText}>Complete a workout to start tracking volume and muscle frequency.</Text>
+          </View>
+        )}
 
         {/* 1RM Calculator Section */}
         <View style={styles.toolCard}>
@@ -312,6 +410,98 @@ const styles = StyleSheet.create({
     color: '#A7F3D0',
     fontSize: 12,
     lineHeight: 16,
+  },
+  chartLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 28,
+  },
+  chartLoadingText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+  },
+  chartEmpty: {
+    backgroundColor: '#181A20',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    padding: 18,
+    marginBottom: 16,
+  },
+  chartEmptyTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  chartEmptyText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  volumeChart: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    minHeight: 142,
+    gap: 5,
+  },
+  volumeColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  volumeBarTrack: {
+    height: 112,
+    width: '100%',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    backgroundColor: '#20242E',
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  volumeBar: {
+    width: '70%',
+    backgroundColor: '#38BDF8',
+    borderRadius: 5,
+  },
+  volumeLabel: {
+    color: '#6B7280',
+    fontSize: 9,
+  },
+  muscleChart: {
+    gap: 9,
+  },
+  muscleRow: {
+    gap: 4,
+  },
+  muscleRowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  muscleName: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  muscleCount: {
+    color: '#F59E0B',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  muscleBarTrack: {
+    height: 8,
+    backgroundColor: '#20242E',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  muscleBar: {
+    height: '100%',
+    backgroundColor: '#F59E0B',
+    borderRadius: 4,
   },
   toolCard: {
     backgroundColor: '#181A20',

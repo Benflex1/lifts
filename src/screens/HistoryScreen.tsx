@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -19,13 +19,20 @@ import {
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
 import { Workout, WorkoutHistorySummary, Routine, ActiveExercise } from '../types';
-import { getWorkoutHistory, getWorkoutDetail, deleteWorkout, getRoutineById } from '../database/db';
+import {
+  getWorkoutHistory,
+  getWorkoutDetail,
+  deleteWorkout,
+  getRoutineById,
+  saveCompletedWorkout,
+} from '../database/db';
 import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { useDialog } from '../context/DialogContext';
 import { resolveHistoricalTargetReps } from '../workout/sets';
+import { WorkoutEditModal } from '../components/WorkoutEditModal';
 
 export const HistoryScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
@@ -36,6 +43,7 @@ export const HistoryScreen: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [workoutDetails, setWorkoutDetails] = useState<Record<string, Workout>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
 
   useEffect(() => {
     loadHistory();
@@ -140,6 +148,17 @@ export const HistoryScreen: React.FC = () => {
     }
   };
 
+  const handleSaveEditedWorkout = async (updated: Workout) => {
+    try {
+      await saveCompletedWorkout(updated);
+      setWorkoutDetails(previous => ({ ...previous, [updated.id]: updated }));
+      await loadHistory();
+    } catch (e) {
+      await notify({ title: 'Error', message: 'Failed to save workout changes.' });
+      throw e;
+    }
+  };
+
   // Calculate totals
   const totalWorkouts = history.length;
   const totalVolume = history.reduce((sum, w) => sum + w.totalVolumeKg, 0);
@@ -182,12 +201,13 @@ export const HistoryScreen: React.FC = () => {
           <ActivityIndicator size="large" color="#3B82F6" />
         </View>
       ) : (
-        <ScrollView
+        <FlatList
           style={styles.scrollArea}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, history.length === 0 && styles.emptyListContent]}
           keyboardShouldPersistTaps="handled"
-        >
-          {history.map(item => {
+          data={history}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => {
             const isExpanded = expandedId === item.id;
             const detail = workoutDetails[item.id];
 
@@ -302,6 +322,15 @@ export const HistoryScreen: React.FC = () => {
                         </Text>
                       </View>
                     )}
+
+                    {detail && (
+                      <TouchableOpacity
+                        style={styles.editWorkoutButton}
+                        onPress={() => setEditingWorkout(detail)}
+                      >
+                        <Text style={styles.editWorkoutButtonText}>Edit Workout</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
 
@@ -315,9 +344,8 @@ export const HistoryScreen: React.FC = () => {
                 )}
               </View>
             );
-          })}
-
-          {history.length === 0 && (
+          }}
+          ListEmptyComponent={(
             <View style={styles.emptyBox}>
               <Dumbbell size={48} color="#2A2E3B" />
               <Text style={styles.emptyTitle}>No workouts logged yet</Text>
@@ -326,8 +354,16 @@ export const HistoryScreen: React.FC = () => {
               </Text>
             </View>
           )}
-        </ScrollView>
+        />
       )}
+
+      <WorkoutEditModal
+        visible={editingWorkout !== null}
+        workout={editingWorkout}
+        unit={unit}
+        onClose={() => setEditingWorkout(null)}
+        onSave={handleSaveEditedWorkout}
+      />
     </View>
   );
 };
@@ -384,6 +420,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 100,
+  },
+  emptyListContent: {
+    flexGrow: 1,
   },
   historyCard: {
     backgroundColor: '#181A20',
@@ -472,6 +511,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#20242E',
     gap: 10,
+  },
+  editWorkoutButton: {
+    alignItems: 'center',
+    backgroundColor: '#1D4ED8',
+    borderRadius: 8,
+    marginTop: 2,
+    paddingVertical: 10,
+  },
+  editWorkoutButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   detailExBlock: {
     backgroundColor: '#14161D',

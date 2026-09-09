@@ -8,6 +8,7 @@ import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
 import { initialReps, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
+import { moveActiveExercise, replaceActiveExercise } from '../workout/active-exercises';
 import { useDialog } from './DialogContext';
 
 interface RestTimerState {
@@ -36,6 +37,8 @@ interface WorkoutContextType {
   addExerciseToWorkout: (exercise: Exercise) => Promise<void>;
   addExercisesToWorkout: (exercises: Exercise[]) => Promise<void>;
   removeExerciseFromWorkout: (activeExerciseId: string) => void;
+  moveExercise: (activeExerciseId: string, direction: -1 | 1) => void;
+  swapExercise: (activeExerciseId: string, exercise: Exercise) => void;
   addSet: (activeExerciseId: string, setType?: SetType) => void;
   removeSet: (activeExerciseId: string, setId: string) => void;
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
@@ -523,6 +526,45 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
+  const moveExercise = (activeExerciseId: string, direction: -1 | 1) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const updatedExercises = moveActiveExercise(state.workout.exercises, activeExerciseId, direction);
+    if (updatedExercises === state.workout.exercises) return;
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+  };
+
+  const swapExercise = (activeExerciseId: string, exercise: Exercise) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: replaceActiveExercise(state.workout.exercises, activeExerciseId, exercise),
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+  };
+
   const addSet = (activeExerciseId: string, setType: SetType = 'normal') => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
@@ -760,6 +802,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addExerciseToWorkout,
         addExercisesToWorkout,
         removeExerciseFromWorkout,
+        moveExercise,
+        swapExercise,
         addSet,
         removeSet,
         updateSet,

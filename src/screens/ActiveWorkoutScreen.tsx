@@ -24,6 +24,9 @@ import {
   MoreVertical,
   Dumbbell,
   CheckCircle2,
+  ArrowUp,
+  ArrowDown,
+  Repeat,
 } from 'lucide-react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
@@ -53,6 +56,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     addExerciseToWorkout,
     addExercisesToWorkout,
     removeExerciseFromWorkout,
+    moveExercise,
+    swapExercise,
     addSet,
     removeSet,
     updateSet,
@@ -66,6 +71,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const { confirm, notify } = useDialog();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
   const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
   const [plateCalcWeight, setPlateCalcWeight] = useState<number | null>(null);
   const [activeSetForPlateCalc, setActiveSetForPlateCalc] = useState<{
@@ -160,6 +166,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
     return { liveVolume: volume, completedSetsCount: completed, totalSetsCount: total };
   }, [activeWorkout.exercises]);
+
+  const menuExerciseIndex = menuActiveExercise
+    ? activeWorkout.exercises.findIndex(exercise => exercise.id === menuActiveExercise.id)
+    : -1;
 
   const toggleExerciseExpanded = (id: string) => {
     setExpandedExercises((prev) => ({
@@ -627,7 +637,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         {/* Add Exercise Big Button */}
         <TouchableOpacity
           style={styles.addExerciseMainBtn}
-          onPress={() => setShowExercisePicker(true)}
+          onPress={() => {
+            setSwapExerciseId(null);
+            setShowExercisePicker(true);
+          }}
         >
           <Plus size={20} color="#FFFFFF" />
           <Text style={styles.addExerciseMainBtnText}>Add Exercise</Text>
@@ -640,11 +653,24 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       {/* Exercise Picker Modal */}
       <ExercisePickerModal
         visible={showExercisePicker}
-        multiSelect={true}
-        onClose={() => setShowExercisePicker(false)}
-        onSelectExercise={(ex: Exercise) => addExerciseToWorkout(ex)}
+        title={swapExerciseId ? 'Swap Exercise' : undefined}
+        multiSelect={swapExerciseId === null}
+        onClose={() => {
+          setShowExercisePicker(false);
+          setSwapExerciseId(null);
+        }}
+        onSelectExercise={(ex: Exercise) => {
+          if (swapExerciseId) {
+            swapExercise(swapExerciseId, ex);
+            setSwapExerciseId(null);
+          } else {
+            addExerciseToWorkout(ex);
+          }
+        }}
         onSelectMultiple={(exs: Exercise[]) => {
-          addExercisesToWorkout(exs);
+          if (swapExerciseId === null) {
+            addExercisesToWorkout(exs);
+          }
         }}
       />
 
@@ -839,6 +865,54 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 <X size={20} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={[styles.menuItem, menuExerciseIndex <= 0 && styles.menuItemDisabled]}
+              disabled={menuExerciseIndex <= 0}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  moveExercise(menuActiveExercise.id, -1);
+                  setMenuActiveExercise(null);
+                }
+              }}
+            >
+              <ArrowUp size={18} color={menuExerciseIndex <= 0 ? '#4B5563' : '#38BDF8'} />
+              <Text style={styles.menuItemText}>Move Up</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.menuItem,
+                (menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1) && styles.menuItemDisabled,
+              ]}
+              disabled={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  moveExercise(menuActiveExercise.id, 1);
+                  setMenuActiveExercise(null);
+                }
+              }}
+            >
+              <ArrowDown
+                size={18}
+                color={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1 ? '#4B5563' : '#38BDF8'}
+              />
+              <Text style={styles.menuItemText}>Move Down</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  setSwapExerciseId(menuActiveExercise.id);
+                  setMenuActiveExercise(null);
+                  setShowExercisePicker(true);
+                }
+              }}
+            >
+              <Repeat size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Swap Exercise</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -1600,6 +1674,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
+  },
+  menuItemDisabled: {
+    opacity: 0.45,
   },
   menuItemDestructive: {
     borderBottomWidth: 0,
