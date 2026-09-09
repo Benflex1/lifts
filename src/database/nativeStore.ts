@@ -5,6 +5,7 @@ import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
 import { buildDefaultRoutines } from './seedData';
 import { calculate1RM } from '../utils/calculator';
+import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
@@ -158,7 +159,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
     return writeQueue(async () => {
-      const newId = (exercise as any).id || `custom-${Date.now()}`;
+      const newId = (exercise as any).id || createScopedId('custom');
       const customExercise: Exercise = {
         ...exercise,
         id: newId,
@@ -283,7 +284,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     }
 
     return writeQueue(async () => {
-      const routineId = existingId || `routine-${Date.now()}`;
+      const routineId = existingId || createScopedId('routine');
 
       await driver.withTransactionAsync(async () => {
         const existing = existingId
@@ -349,7 +350,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         routineId
       );
 
-      const newId = `routine-${Date.now()}`;
+      const newId = createScopedId('routine');
       await driver.withTransactionAsync(async () => {
         await driver.runAsync(
           'INSERT INTO routines (id, name, folder_name, notes, created_at) VALUES (?, ?, ?, ?, ?)',
@@ -453,16 +454,34 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
     const rows = await driver.getAllAsync<any>(
       `SELECT w.*, 
-              COUNT(DISTINCT s.id) as total_sets,
-              GROUP_CONCAT(DISTINCT e.name) as exercise_names
+              COUNT(DISTINCT s.id) as total_sets
        FROM workouts w
        LEFT JOIN workout_exercises we ON w.id = we.workout_id
-       LEFT JOIN exercises e ON we.exercise_id = e.id
        LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
        WHERE w.in_progress = 0
        GROUP BY w.id
        ORDER BY w.start_time DESC`
     );
+
+    const namesByWorkout = new Map<string, string[]>();
+    const exerciseNameRows = await driver.getAllAsync<{
+      workout_id: string;
+      name: string;
+      first_order: number;
+    }>(
+      `SELECT we.workout_id, e.name, MIN(we.order_index) AS first_order
+       FROM workout_exercises we
+       INNER JOIN workouts w ON w.id = we.workout_id AND w.in_progress = 0
+       INNER JOIN exercises e ON we.exercise_id = e.id
+       GROUP BY we.workout_id, e.name
+       ORDER BY we.workout_id ASC, first_order ASC`
+    );
+
+    for (const row of exerciseNameRows) {
+      const names = namesByWorkout.get(row.workout_id) || [];
+      names.push(row.name);
+      namesByWorkout.set(row.workout_id, names);
+    }
 
     return rows.map(r => ({
       id: r.id,
@@ -473,7 +492,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       durationSeconds: r.duration_seconds || 0,
       totalVolumeKg: r.total_volume_kg || 0,
       totalSets: r.total_sets || 0,
-      exerciseNames: r.exercise_names ? r.exercise_names.split(',') : [],
+      exerciseNames: namesByWorkout.get(r.id) || [],
       notes: r.notes,
     }));
   }

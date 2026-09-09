@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import { NodeSqliteDriver } from '../helpers/storeFixture';
 import { createNativeStore } from '../../src/database/nativeStore';
 import { applyMigrations } from '../../src/database/migrations';
+import { Workout } from '../../src/types';
 
 describe('nativeStore and migration safety', () => {
   it('migrates an old-schema database with completed workouts and in-progress drafts without data loss', async () => {
@@ -217,6 +218,291 @@ describe('nativeStore and migration safety', () => {
 
     rawDriver.close();
     fs.unlinkSync(tempFile);
+  });
+
+  it('adds the in_progress column when upgrading a legacy database that predates it', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-legacy-no-progress-${Date.now()}.db`);
+    const rawDriver = new NodeSqliteDriver(tempFile);
+
+    await rawDriver.execAsync(`
+      CREATE TABLE workouts (
+        id TEXT PRIMARY KEY, routine_id TEXT, name TEXT NOT NULL,
+        start_time TEXT NOT NULL, end_time TEXT, duration_seconds INTEGER DEFAULT 0,
+        total_volume_kg REAL DEFAULT 0, notes TEXT
+      );
+    `);
+    await rawDriver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, end_time, duration_seconds, total_volume_kg)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      'legacy-completed-1',
+      'Legacy Workout',
+      '2026-09-05T09:00:00.000Z',
+      '2026-09-05T10:00:00.000Z',
+      3600,
+      500
+    );
+    rawDriver.close();
+
+    const driver = new NodeSqliteDriver(tempFile);
+    try {
+      const store = createNativeStore(driver);
+      await store.init();
+
+      const history = await store.getWorkoutHistory();
+      assert.equal(history.length, 1);
+      assert.equal(history[0].id, 'legacy-completed-1');
+
+      const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts);');
+      assert.ok(columns.some(column => column.name === 'in_progress'));
+    } finally {
+      driver.close();
+      fs.unlinkSync(tempFile);
+    }
+  });
+
+  it('repairs databases that already recorded the old migration without in_progress', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-legacy-recorded-migration-${Date.now()}.db`);
+    const rawDriver = new NodeSqliteDriver(tempFile);
+
+    await rawDriver.execAsync(`
+      CREATE TABLE workouts (
+        id TEXT PRIMARY KEY, routine_id TEXT, name TEXT NOT NULL,
+        start_time TEXT NOT NULL, end_time TEXT, duration_seconds INTEGER DEFAULT 0,
+        total_volume_kg REAL DEFAULT 0, notes TEXT
+      );
+    `);
+    await applyMigrations(rawDriver, { maxVersion: 1 });
+    await rawDriver.execAsync(`
+      CREATE TABLE workout_drafts (
+        id TEXT PRIMARY KEY,
+        revision INTEGER NOT NULL DEFAULT 1,
+        saved_at TEXT NOT NULL,
+        rest_timer_ends_at INTEGER,
+        rest_timer_total_seconds INTEGER,
+        data TEXT NOT NULL
+      );
+      ALTER TABLE workout_exercises ADD COLUMN target_reps TEXT;
+    `);
+    await rawDriver.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      2,
+      new Date().toISOString()
+    );
+    await rawDriver.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      3,
+      new Date().toISOString()
+    );
+    await rawDriver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, end_time, duration_seconds, total_volume_kg)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      'legacy-recorded-completed-1',
+      'Legacy Recorded Workout',
+      '2026-09-06T09:00:00.000Z',
+      '2026-09-06T10:00:00.000Z',
+      3600,
+      600
+    );
+    rawDriver.close();
+
+    const driver = new NodeSqliteDriver(tempFile);
+    try {
+      const store = createNativeStore(driver);
+      await store.init();
+
+      const history = await store.getWorkoutHistory();
+      assert.equal(history.length, 1);
+      assert.equal(history[0].id, 'legacy-recorded-completed-1');
+
+      const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts);');
+      assert.ok(columns.some(column => column.name === 'in_progress'));
+      const migration = await driver.getFirstAsync<{ version: number }>(
+        'SELECT version FROM schema_migrations WHERE version = 4'
+      );
+      assert.ok(migration);
+    } finally {
+      driver.close();
+      fs.unlinkSync(tempFile);
+    }
+  });
+
+  it('preserves exercise-level target reps in native workout details', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-native-target-reps-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    const store = createNativeStore(driver);
+    await store.init();
+
+    const exercise = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+    if (!exercise) throw new Error('Seed exercise missing from native store');
+
+    const workout: Workout = {
+      id: 'native-target-reps-workout',
+      name: 'Target Reps Test',
+      startTime: '2026-09-08T09:00:00.000Z',
+      endTime: '2026-09-08T10:00:00.000Z',
+      durationSeconds: 3600,
+      totalVolumeKg: 800,
+      exercises: [{
+        id: 'native-target-reps-exercise',
+        exerciseId: exercise.id,
+        exercise,
+        targetReps: '8-12',
+        restTimerSeconds: 0,
+        sets: [{
+          id: 'native-target-reps-set',
+          setNumber: 1,
+          type: 'normal',
+          weightKg: 80,
+          reps: 10,
+          isCompleted: true,
+        }],
+      }],
+    };
+
+    await store.saveCompletedWorkout(workout);
+    const detail = await store.getWorkoutDetail(workout.id);
+    assert.ok(detail);
+    assert.equal(detail.exercises[0].targetReps, '8-12');
+
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
+
+  it('preserves commas in native history exercise names', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-native-history-commas-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+
+    try {
+      const store = createNativeStore(driver);
+      await store.init();
+
+      const commaExercises = (await store.getAllExercises())
+        .filter(exercise => exercise.name.includes(','))
+        .slice(0, 2);
+      assert.equal(commaExercises.length, 2, 'Seed data must include comma-containing exercise names');
+
+      const workout: Workout = {
+        id: 'native-history-commas-workout',
+        name: 'Comma Names Test',
+        startTime: '2026-09-08T11:00:00.000Z',
+        endTime: '2026-09-08T12:00:00.000Z',
+        durationSeconds: 3600,
+        totalVolumeKg: 200,
+        exercises: commaExercises.map((exercise, index) => ({
+          id: `native-history-commas-exercise-${index}`,
+          exerciseId: exercise.id,
+          exercise,
+          restTimerSeconds: 0,
+          sets: [{
+            id: `native-history-commas-set-${index}`,
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 10,
+            reps: 10,
+            isCompleted: true,
+          }],
+        })),
+      };
+
+      await store.saveCompletedWorkout(workout);
+      const history = await store.getWorkoutHistory();
+
+      assert.deepEqual(history[0].exerciseNames, commaExercises.map(exercise => exercise.name));
+    } finally {
+      driver.close();
+      fs.unlinkSync(tempFile);
+    }
+  });
+
+  it('updates an existing native history workout when saving edits under the same ID', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-native-history-edit-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+
+    try {
+      const store = createNativeStore(driver);
+      await store.init();
+      const exercise = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+      if (!exercise) throw new Error('Seed exercise missing from native store');
+
+      const workout: Workout = {
+        id: 'native-history-edit-workout',
+        name: 'Editable Workout',
+        startTime: '2026-09-08T13:00:00.000Z',
+        endTime: '2026-09-08T14:00:00.000Z',
+        durationSeconds: 3600,
+        totalVolumeKg: 100,
+        exercises: [{
+          id: 'native-history-edit-exercise',
+          exerciseId: exercise.id,
+          exercise,
+          restTimerSeconds: 0,
+          sets: [{
+            id: 'native-history-edit-set',
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 10,
+            reps: 10,
+            isCompleted: true,
+          }],
+        }],
+      };
+
+      await store.saveCompletedWorkout(workout);
+      await store.saveCompletedWorkout({
+        ...workout,
+        name: 'Corrected Workout',
+        totalVolumeKg: 200,
+        exercises: [{
+          ...workout.exercises[0],
+          sets: [{ ...workout.exercises[0].sets[0], weightKg: 20 }],
+        }],
+      });
+
+      const history = await store.getWorkoutHistory();
+      assert.equal(history.length, 1);
+      assert.equal(history[0].id, workout.id);
+      assert.equal(history[0].name, 'Corrected Workout');
+      assert.equal(history[0].totalVolumeKg, 200);
+
+      const detail = await store.getWorkoutDetail(workout.id);
+      assert.ok(detail);
+      assert.equal(detail.exercises[0].sets[0].weightKg, 20);
+    } finally {
+      driver.close();
+      fs.unlinkSync(tempFile);
+    }
+  });
+
+  it('creates distinct custom exercise IDs even when the clock does not advance', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-custom-id-collision-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    const store = createNativeStore(driver);
+    await store.init();
+
+    const originalNow = Date.now;
+    Date.now = () => 1700000000000;
+    try {
+      const first = await store.createCustomExercise({
+        name: 'Custom One',
+        category: 'Test',
+        equipment: 'None',
+        primaryMuscles: ['Test'],
+      });
+      const second = await store.createCustomExercise({
+        name: 'Custom Two',
+        category: 'Test',
+        equipment: 'None',
+        primaryMuscles: ['Test'],
+      });
+
+      assert.notEqual(first.id, second.id);
+      assert.ok(await store.getExerciseById(first.id));
+      assert.ok(await store.getExerciseById(second.id));
+    } finally {
+      Date.now = originalNow;
+      driver.close();
+      fs.unlinkSync(tempFile);
+    }
   });
 
   it('recovers write queue after a failed write and executes subsequent writes', async () => {

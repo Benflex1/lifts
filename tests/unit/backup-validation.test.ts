@@ -56,6 +56,17 @@ describe('Backup validation (parseBackup)', () => {
     assert.equal(parsed.settings.unit, 'kg');
   });
 
+  it('rejects a routine that omits its exercises array', () => {
+    const malformedRoutine = {
+      ...validBaseBackup,
+      routines: [{ id: 'r1', name: 'Broken Routine' }],
+    };
+
+    assert.throws(() => {
+      parseBackup(JSON.stringify(malformedRoutine));
+    }, /Invalid exercises in routine r1/);
+  });
+
   it('rejects malformed JSON', () => {
     assert.throws(() => {
       parseBackup('{ not valid json }');

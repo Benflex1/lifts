@@ -130,12 +130,18 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
         );
       `);
 
-      let inProgressWorkouts: any[] = [];
-      try {
-        inProgressWorkouts = await driver.getAllAsync<any>(
-          'SELECT * FROM workouts WHERE in_progress = 1'
+      const workoutColumns = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(workouts);'
+      );
+      if (!workoutColumns.some(column => column.name === 'in_progress')) {
+        await driver.execAsync(
+          'ALTER TABLE workouts ADD COLUMN in_progress INTEGER NOT NULL DEFAULT 0;'
         );
-      } catch (_) {}
+      }
+
+      const inProgressWorkouts = await driver.getAllAsync<any>(
+        'SELECT * FROM workouts WHERE in_progress = 1'
+      );
 
       for (const w of inProgressWorkouts) {
         const weRows = await driver.getAllAsync<any>(
@@ -239,6 +245,28 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
 
       await driver.runAsync(
         'INSERT INTO schema_migrations (version, applied_at) VALUES (3, ?)',
+        new Date().toISOString()
+      );
+    });
+  }
+
+  // Migration 4: Repair in_progress for databases that already ran the old Migration 2
+  if (!applied.has(4) && (options?.maxVersion === undefined || options.maxVersion >= 4)) {
+    await driver.withTransactionAsync(async () => {
+      const tableInfo = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts);');
+      const hasInProgress = tableInfo.some(column => column.name === 'in_progress');
+      if (!hasInProgress) {
+        await driver.execAsync(
+          'ALTER TABLE workouts ADD COLUMN in_progress INTEGER NOT NULL DEFAULT 0;'
+        );
+      }
+
+      if (options?.failAtVersion === 4) {
+        throw new Error('Injected migration failure at version 4');
+      }
+
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (4, ?)',
         new Date().toISOString()
       );
     });

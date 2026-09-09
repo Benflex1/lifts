@@ -103,65 +103,70 @@ export function parseBackup(json: string): BackupV2 {
     }
     routineIds.add(r.id);
 
-    if (Array.isArray(r.exercises)) {
-      for (const re of r.exercises) {
-        if (!knownExercisesMap.has(re.exerciseId)) {
-          throw new Error(`Missing exercise definition for routine exercise: ${re.exerciseId}`);
-        }
-        const def = knownExercisesMap.get(re.exerciseId)!;
-        const bundled = DEFAULT_EXERCISES.find((d) => d.id === re.exerciseId);
-        if (!re.exercise || typeof re.exercise !== 'object') {
-          const primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
-            ? [...def.primaryMuscles]
-            : ((def as any).targetMuscle ? [(def as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
-          const secondaryMuscles = (Array.isArray(def.secondaryMuscles) && def.secondaryMuscles.length > 0)
-            ? [...def.secondaryMuscles]
-            : (bundled?.secondaryMuscles ? [...bundled.secondaryMuscles] : []);
-          const instructions = (Array.isArray(def.instructions) && def.instructions.length > 0)
-            ? [...def.instructions]
-            : (bundled?.instructions ? [...bundled.instructions] : []);
+    if (!Array.isArray(r.exercises)) {
+      throw new Error(`Invalid exercises in routine ${r.id}: expected array`);
+    }
 
-          re.exercise = {
-            id: def.id,
-            name: def.name || bundled?.name || re.exerciseId,
-            category: def.category || bundled?.category || 'other',
-            equipment: def.equipment || bundled?.equipment || 'other',
-            primaryMuscles,
-            secondaryMuscles,
-            instructions,
-            isCustom: Boolean(def.isCustom),
-          };
+    for (const re of r.exercises) {
+      if (!re || typeof re !== 'object' || typeof re.exerciseId !== 'string' || !re.exerciseId) {
+        throw new Error(`Invalid exercise entry in routine ${r.id}`);
+      }
+      if (!knownExercisesMap.has(re.exerciseId)) {
+        throw new Error(`Missing exercise definition for routine exercise: ${re.exerciseId}`);
+      }
+      const def = knownExercisesMap.get(re.exerciseId)!;
+      const bundled = DEFAULT_EXERCISES.find((d) => d.id === re.exerciseId);
+      if (!re.exercise || typeof re.exercise !== 'object') {
+        const primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
+          ? [...def.primaryMuscles]
+          : ((def as any).targetMuscle ? [(def as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
+        const secondaryMuscles = (Array.isArray(def.secondaryMuscles) && def.secondaryMuscles.length > 0)
+          ? [...def.secondaryMuscles]
+          : (bundled?.secondaryMuscles ? [...bundled.secondaryMuscles] : []);
+        const instructions = (Array.isArray(def.instructions) && def.instructions.length > 0)
+          ? [...def.instructions]
+          : (bundled?.instructions ? [...bundled.instructions] : []);
+
+        re.exercise = {
+          id: def.id,
+          name: def.name || bundled?.name || re.exerciseId,
+          category: def.category || bundled?.category || 'other',
+          equipment: def.equipment || bundled?.equipment || 'other',
+          primaryMuscles,
+          secondaryMuscles,
+          instructions,
+          isCustom: Boolean(def.isCustom),
+        };
+      } else {
+        if (re.exercise.name !== undefined && (typeof re.exercise.name !== 'string' || !re.exercise.name.trim())) {
+          throw new Error(`Invalid exercise name in routine exercise: ${re.exerciseId}`);
+        }
+        if (re.exercise.primaryMuscles !== undefined) {
+          if (!Array.isArray(re.exercise.primaryMuscles) || re.exercise.primaryMuscles.some((m: any) => typeof m !== 'string')) {
+            throw new Error(`Invalid primaryMuscles in routine exercise: ${re.exerciseId}`);
+          }
         } else {
-          if (re.exercise.name !== undefined && (typeof re.exercise.name !== 'string' || !re.exercise.name.trim())) {
-            throw new Error(`Invalid exercise name in routine exercise: ${re.exerciseId}`);
-          }
-          if (re.exercise.primaryMuscles !== undefined) {
-            if (!Array.isArray(re.exercise.primaryMuscles) || re.exercise.primaryMuscles.some((m: any) => typeof m !== 'string')) {
-              throw new Error(`Invalid primaryMuscles in routine exercise: ${re.exerciseId}`);
-            }
-          } else {
-            re.exercise.primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
-              ? [...def.primaryMuscles]
-              : ((re.exercise as any).targetMuscle ? [(re.exercise as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
-          }
-          if (re.exercise.equipment !== undefined && typeof re.exercise.equipment !== 'string') {
-            throw new Error(`Invalid equipment in routine exercise: ${re.exerciseId}`);
-          }
-          if (re.exercise.category !== undefined && typeof re.exercise.category !== 'string') {
-            throw new Error(`Invalid category in routine exercise: ${re.exerciseId}`);
-          }
-          re.exercise.id = re.exercise.id || def.id;
-          re.exercise.name = re.exercise.name || def.name || bundled?.name || re.exerciseId;
-          re.exercise.category = re.exercise.category || def.category || bundled?.category || 'other';
-          re.exercise.equipment = re.exercise.equipment || def.equipment || bundled?.equipment || 'other';
+          re.exercise.primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
+            ? [...def.primaryMuscles]
+            : ((re.exercise as any).targetMuscle ? [(re.exercise as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
         }
+        if (re.exercise.equipment !== undefined && typeof re.exercise.equipment !== 'string') {
+          throw new Error(`Invalid equipment in routine exercise: ${re.exerciseId}`);
+        }
+        if (re.exercise.category !== undefined && typeof re.exercise.category !== 'string') {
+          throw new Error(`Invalid category in routine exercise: ${re.exerciseId}`);
+        }
+        re.exercise.id = re.exercise.id || def.id;
+        re.exercise.name = re.exercise.name || def.name || bundled?.name || re.exerciseId;
+        re.exercise.category = re.exercise.category || def.category || bundled?.category || 'other';
+        re.exercise.equipment = re.exercise.equipment || def.equipment || bundled?.equipment || 'other';
+      }
 
-        if (re.targetReps !== undefined && re.targetReps !== null) {
-          if (typeof re.targetReps !== 'string') {
-            throw new Error(`Invalid targetReps in routine exercise: ${re.exerciseId}`);
-          }
-          // Preserve legacy target reps text (e.g. "8 each side") during restore
+      if (re.targetReps !== undefined && re.targetReps !== null) {
+        if (typeof re.targetReps !== 'string') {
+          throw new Error(`Invalid targetReps in routine exercise: ${re.exerciseId}`);
         }
+        // Preserve legacy target reps text (e.g. "8 each side") during restore
       }
     }
   }

@@ -1,5 +1,20 @@
 import { WorkoutSet } from '../types';
 
+export const RPE_CHIPS: (number | null)[] = [null, 5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+
+export function resolveRestTimerSeconds(seconds: number | null | undefined): number {
+  return seconds ?? 0;
+}
+
+export function resolveHistoricalTargetReps(
+  exerciseTargetReps: string | undefined,
+  setTargetReps: string | undefined
+): string {
+  if (exerciseTargetReps?.trim()) return exerciseTargetReps;
+  if (setTargetReps?.trim()) return setTargetReps;
+  return '10';
+}
+
 export function validateTargetReps(target: string | undefined): { isValid: boolean; error?: string } {
   if (!target || typeof target !== 'string' || !target.trim()) {
     return { isValid: false, error: 'Target reps cannot be empty' };
