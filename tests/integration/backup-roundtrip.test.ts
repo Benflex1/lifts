@@ -496,6 +496,164 @@ describe('Backup Roundtrip & Merge Safety', () => {
   }
 
   for (const platform of ['native', 'web'] as const) {
+    it(`rejects globally duplicate nested IDs in direct ${platform} merges without mutation`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const exercise = before.exercises[0];
+      const gymId = before.gyms[0].id;
+      const makeExercise = (id: string, setId: string): any => ({
+        id,
+        exerciseId: exercise.id,
+        exercise,
+        restTimerSeconds: 90,
+        sets: [{ id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+      });
+      const makeWorkout = (id: string, exerciseId: string, setId: string): Workout => ({
+        id,
+        name: id,
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 60,
+        totalVolumeKg: 160,
+        exercises: [makeExercise(exerciseId, setId)],
+      });
+      const makeRoutine = (id: string, exerciseInstanceId: string): Routine => ({
+        id,
+        name: id,
+        createdAt: '2026-09-10T08:00:00.000Z',
+        exercises: [{
+          id: exerciseInstanceId,
+          exerciseId: exercise.id,
+          exercise,
+          orderIndex: 0,
+          targetSets: 1,
+          targetReps: '8',
+          restTimerSeconds: 90,
+        }],
+      });
+      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) => fixture.store.mergeSnapshot({
+        exercises: [],
+        routines,
+        workouts,
+        drafts,
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      await assert.rejects(() => merge([
+        makeWorkout('duplicate-workout-1', 'duplicate-workout-exercise', 'duplicate-workout-set-1'),
+        makeWorkout('duplicate-workout-2', 'duplicate-workout-exercise', 'duplicate-workout-set-2'),
+      ], []), /Duplicate workout exercise ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+
+      await assert.rejects(() => merge([
+        makeWorkout('duplicate-set-workout-1', 'duplicate-set-exercise-1', 'duplicate-set-id'),
+        makeWorkout('duplicate-set-workout-2', 'duplicate-set-exercise-2', 'duplicate-set-id'),
+      ], []), /Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+
+      await assert.rejects(() => merge([
+        makeWorkout('duplicate-cross-parent-workout', 'duplicate-cross-parent-exercise', 'duplicate-cross-parent-set'),
+      ], [], [{
+        version: 1,
+        workout: makeWorkout('duplicate-cross-parent-draft', 'duplicate-cross-parent-exercise', 'duplicate-cross-parent-set'),
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+      }]), /Duplicate workout exercise ID|Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+
+      await assert.rejects(() => merge([], [
+        makeRoutine('duplicate-routine-1', 'duplicate-routine-exercise'),
+        makeRoutine('duplicate-routine-2', 'duplicate-routine-exercise'),
+      ]), /Duplicate routine exercise ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+      await fixture.dispose();
+    });
+  }
+
+  for (const platform of ['native', 'web'] as const) {
+    it(`rejects destination nested-ID collisions for new ${platform} parents without mutation`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const exercise = before.exercises[0];
+      const gymId = before.gyms[0].id;
+      const makeExercise = (id: string, setId: string): any => ({
+        id,
+        exerciseId: exercise.id,
+        exercise,
+        restTimerSeconds: 90,
+        sets: [{ id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+      });
+      const makeWorkout = (id: string, exerciseId: string, setId: string): Workout => ({
+        id,
+        name: id,
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 60,
+        totalVolumeKg: 160,
+        exercises: [makeExercise(exerciseId, setId)],
+      });
+      const makeRoutine = (id: string, exerciseInstanceId: string): Routine => ({
+        id,
+        name: id,
+        createdAt: '2026-09-10T08:00:00.000Z',
+        exercises: [{
+          id: exerciseInstanceId,
+          exerciseId: exercise.id,
+          exercise,
+          orderIndex: 0,
+          targetSets: 1,
+          targetReps: '8',
+          restTimerSeconds: 90,
+        }],
+      });
+      const existingWorkout = makeWorkout('destination-workout', 'destination-workout-exercise', 'destination-workout-set');
+      const existingRoutine = makeRoutine('destination-routine', 'destination-routine-exercise');
+      const existingDraft: WorkoutDraft = {
+        version: 1,
+        workout: makeWorkout('destination-draft', 'destination-draft-exercise', 'destination-draft-set'),
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+      };
+      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) => fixture.store.mergeSnapshot({
+        exercises: [],
+        routines,
+        workouts,
+        drafts,
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      await merge([existingWorkout], [existingRoutine], [existingDraft]);
+      const seeded = await fixture.store.readSnapshot();
+
+      await assert.rejects(() => merge([
+        makeWorkout('new-workout-parent', 'destination-workout-exercise', 'destination-workout-set'),
+      ], []), /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i);
+      assert.deepEqual(await fixture.store.readSnapshot(), seeded);
+
+      await assert.rejects(() => merge([], [
+        makeRoutine('new-routine-parent', 'destination-routine-exercise'),
+      ]), /existing|collision|Duplicate routine exercise ID/i);
+      assert.deepEqual(await fixture.store.readSnapshot(), seeded);
+
+      await assert.rejects(() => merge([], [], [{
+        version: 1,
+        workout: makeWorkout('new-draft-parent', 'destination-draft-exercise', 'destination-draft-set'),
+        savedAt: '2026-09-10T08:02:00.000Z',
+        revision: 1,
+        restTimer: null,
+      }]), /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i);
+      assert.deepEqual(await fixture.store.readSnapshot(), seeded);
+      await fixture.dispose();
+    });
+  }
+
+  for (const platform of ['native', 'web'] as const) {
     for (const [field, value] of [
       ['id', undefined],
       ['setNumber', '1'],

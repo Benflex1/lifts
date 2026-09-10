@@ -605,7 +605,7 @@ describe('Backup validation (parseBackup)', () => {
                 exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
                 orderIndex: 0,
                 sets: [
-                  { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+                  { id: 'draft-s1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
                 ],
               },
             ],

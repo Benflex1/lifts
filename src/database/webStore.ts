@@ -981,12 +981,12 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
     snapshot = canonicalizeSnapshotGyms(snapshot);
 
-    const destinationGyms = await getGyms();
+    const existing = await readSnapshot();
+    const destinationGyms = existing.gyms;
     const incomingGyms = snapshot.gyms || [];
-    const existingExercises = await getAllExercises();
-    validateSharedSnapshotForMerge(snapshot, { exercises: existingExercises, gyms: destinationGyms });
-    const knownExerciseIds = new Set([...existingExercises.map(exercise => exercise.id), ...snapshot.exercises.map(exercise => exercise.id)]);
-    const existingScopes = new Map((await getExerciseGymScopes()).map(scope => [scope.exerciseId, scope]));
+    validateSharedSnapshotForMerge(snapshot, existing);
+    const knownExerciseIds = new Set([...existing.exercises.map(exercise => exercise.id), ...snapshot.exercises.map(exercise => exercise.id)]);
+    const existingScopes = new Map(existing.exerciseGymScopes.map(scope => [scope.exerciseId, scope]));
     for (const scope of snapshot.exerciseGymScopes || []) {
       const existingScope = existingScopes.get(scope.exerciseId);
       if (existingScope && !scopesAreIdentical(scope, existingScope)) throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);

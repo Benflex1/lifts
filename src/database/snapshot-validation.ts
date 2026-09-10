@@ -103,7 +103,7 @@ function validateActiveExerciseRecord(
   value: unknown,
   label: string,
   knownExerciseIds: ReadonlySet<string>,
-  setIds: Set<string>,
+  nestedIds: NestedIdValidationContext,
 ): asserts value is ActiveExercise {
   if (!isRecord(value)) throw new Error(`Invalid ${label}: expected object`);
   requireString(value.id, `${label}.id`);
@@ -114,19 +114,30 @@ function validateActiveExerciseRecord(
   if (!Array.isArray(value.sets)) throw new Error(`Invalid ${label}.sets: expected array`);
   value.sets.forEach((set: unknown, index: number) => {
     validateWorkoutSetRecord(set, `${label}.sets[${index}]`);
-    if (setIds.has(set.id)) throw new Error(`Duplicate set ID in ${label}: ${set.id}`);
-    setIds.add(set.id);
+    if (nestedIds.incomingSetIds.has(set.id)) throw new Error(`Duplicate set ID in ${label}: ${set.id}`);
+    if (nestedIds.parentIsNew && nestedIds.existingSetIds.has(set.id)) {
+      throw new Error(`Duplicate set ID already exists in destination: ${set.id}`);
+    }
+    nestedIds.incomingSetIds.add(set.id);
   });
   requireOptionalString(value.notes, `${label}.notes`, true);
   if (value.targetReps !== undefined && value.targetReps !== null) requireString(value.targetReps, `${label}.targetReps`, true);
   requireFiniteNumber(value.restTimerSeconds, `${label}.restTimerSeconds`, 0);
   if ('orderIndex' in value) requireInteger(value.orderIndex, `${label}.orderIndex`, 0);
+  if (nestedIds.incomingWorkoutExerciseIds.has(value.id)) {
+    throw new Error(`Duplicate workout exercise ID in ${label}: ${value.id}`);
+  }
+  if (nestedIds.parentIsNew && nestedIds.existingWorkoutExerciseIds.has(value.id)) {
+    throw new Error(`Duplicate workout exercise ID already exists in destination: ${value.id}`);
+  }
+  nestedIds.incomingWorkoutExerciseIds.add(value.id);
 }
 
 function validateRoutineExerciseRecord(
   value: unknown,
   label: string,
   knownExerciseIds: ReadonlySet<string>,
+  nestedIds: NestedIdValidationContext,
 ): asserts value is RoutineExercise {
   if (!isRecord(value)) throw new Error(`Invalid ${label}: expected object`);
   requireString(value.id, `${label}.id`);
@@ -138,9 +149,30 @@ function validateRoutineExerciseRecord(
   requireInteger(value.targetSets, `${label}.targetSets`, 0);
   requireString(value.targetReps, `${label}.targetReps`, true);
   requireFiniteNumber(value.restTimerSeconds, `${label}.restTimerSeconds`, 0);
+  if (nestedIds.incomingRoutineExerciseIds.has(value.id)) {
+    throw new Error(`Duplicate routine exercise ID in ${label}: ${value.id}`);
+  }
+  if (nestedIds.parentIsNew && nestedIds.existingRoutineExerciseIds.has(value.id)) {
+    throw new Error(`Duplicate routine exercise ID already exists in destination: ${value.id}`);
+  }
+  nestedIds.incomingRoutineExerciseIds.add(value.id);
 }
 
-function validateRoutineRecord(value: unknown, knownExerciseIds: ReadonlySet<string>): asserts value is Routine {
+interface NestedIdValidationContext {
+  incomingWorkoutExerciseIds: Set<string>;
+  incomingSetIds: Set<string>;
+  incomingRoutineExerciseIds: Set<string>;
+  existingWorkoutExerciseIds: ReadonlySet<string>;
+  existingSetIds: ReadonlySet<string>;
+  existingRoutineExerciseIds: ReadonlySet<string>;
+  parentIsNew: boolean;
+}
+
+function validateRoutineRecord(
+  value: unknown,
+  knownExerciseIds: ReadonlySet<string>,
+  nestedIds: NestedIdValidationContext,
+): asserts value is Routine {
   if (!isRecord(value)) throw new Error('Invalid routine: expected object');
   requireString(value.id, 'routine.id');
   requireString(value.name, `routine ${value.id}.name`);
@@ -149,11 +181,8 @@ function validateRoutineRecord(value: unknown, knownExerciseIds: ReadonlySet<str
   requireTimestamp(value.createdAt, `routine ${value.id}.createdAt`);
   requireOptionalTimestamp(value.lastPerformedAt, `routine ${value.id}.lastPerformedAt`);
   if (!Array.isArray(value.exercises)) throw new Error(`Invalid exercises in routine ${value.id}: expected array`);
-  const exerciseInstanceIds = new Set<string>();
   value.exercises.forEach((exercise: unknown, index: number) => {
-    validateRoutineExerciseRecord(exercise, `routine ${value.id}.exercises[${index}]`, knownExerciseIds);
-    if (exerciseInstanceIds.has(exercise.id)) throw new Error(`Duplicate routine exercise ID: ${exercise.id}`);
-    exerciseInstanceIds.add(exercise.id);
+    validateRoutineExerciseRecord(exercise, `routine ${value.id}.exercises[${index}]`, knownExerciseIds, nestedIds);
   });
 }
 
@@ -162,6 +191,7 @@ function validateWorkoutRecord(
   label: string,
   knownExerciseIds: ReadonlySet<string>,
   knownGymIds: ReadonlySet<string>,
+  nestedIds: NestedIdValidationContext,
 ): asserts value is Workout {
   if (!isRecord(value)) throw new Error(`Invalid ${label}: expected object`);
   requireString(value.id, `${label}.id`);
@@ -175,12 +205,8 @@ function validateWorkoutRecord(
   requireFiniteNumber(value.totalVolumeKg, `${label}.totalVolumeKg`, 0);
   requireOptionalString(value.notes, `${label}.notes`, true);
   if (!Array.isArray(value.exercises)) throw new Error(`Invalid exercises in ${label}: expected array`);
-  const exerciseInstanceIds = new Set<string>();
-  const setIds = new Set<string>();
   value.exercises.forEach((exercise: unknown, index: number) => {
-    validateActiveExerciseRecord(exercise, `${label}.exercises[${index}]`, knownExerciseIds, setIds);
-    if (exerciseInstanceIds.has(exercise.id)) throw new Error(`Duplicate active exercise ID in ${label}: ${exercise.id}`);
-    exerciseInstanceIds.add(exercise.id);
+    validateActiveExerciseRecord(exercise, `${label}.exercises[${index}]`, knownExerciseIds, nestedIds);
   });
 }
 
@@ -188,6 +214,7 @@ function validateDraftRecord(
   value: unknown,
   knownExerciseIds: ReadonlySet<string>,
   knownGymIds: ReadonlySet<string>,
+  nestedIds: NestedIdValidationContext,
 ): asserts value is WorkoutDraft {
   if (!isRecord(value)) throw new Error('Invalid draft: expected object');
   if (value.version !== 1) throw new Error(`Invalid draft.version: ${String(value.version)}`);
@@ -198,7 +225,7 @@ function validateDraftRecord(
     requireFiniteNumber(value.restTimer.endsAt, 'draft.restTimer.endsAt');
     requireFiniteNumber(value.restTimer.totalSeconds, 'draft.restTimer.totalSeconds', 0);
   }
-  validateWorkoutRecord(value.workout, `draft ${value.workout?.id || ''}.workout`, knownExerciseIds, knownGymIds);
+  validateWorkoutRecord(value.workout, `draft ${value.workout?.id || ''}.workout`, knownExerciseIds, knownGymIds, nestedIds);
 }
 
 function validateGymRecord(value: unknown, label: string): asserts value is Gym {
@@ -232,7 +259,38 @@ export interface SnapshotValidationOptions {
   knownExerciseIds?: ReadonlySet<string>;
   existingExercises?: readonly Exercise[];
   existingGyms?: readonly Gym[];
+  existingWorkouts?: readonly Workout[];
+  existingDrafts?: readonly WorkoutDraft[];
+  existingRoutines?: readonly Routine[];
   requireDefaultGym?: boolean;
+}
+
+function collectNestedIds(
+  workouts: readonly Workout[],
+  drafts: readonly WorkoutDraft[],
+  routines: readonly Routine[],
+): Pick<NestedIdValidationContext, 'existingWorkoutExerciseIds' | 'existingSetIds' | 'existingRoutineExerciseIds'> {
+  const workoutExerciseIds = new Set<string>();
+  const setIds = new Set<string>();
+  const routineExerciseIds = new Set<string>();
+  for (const workout of [...workouts, ...drafts.map(draft => draft.workout)]) {
+    for (const exercise of workout.exercises || []) {
+      if (typeof exercise.id === 'string') workoutExerciseIds.add(exercise.id);
+      for (const set of exercise.sets || []) {
+        if (typeof set.id === 'string') setIds.add(set.id);
+      }
+    }
+  }
+  for (const routine of routines) {
+    for (const exercise of routine.exercises || []) {
+      if (typeof exercise.id === 'string') routineExerciseIds.add(exercise.id);
+    }
+  }
+  return {
+    existingWorkoutExerciseIds: workoutExerciseIds,
+    existingSetIds: setIds,
+    existingRoutineExerciseIds: routineExerciseIds,
+  };
 }
 
 /** Validate the complete runtime shape shared by backup parsing and both stores. */
@@ -259,6 +317,21 @@ export function validateSnapshotStructure(value: unknown, options: SnapshotValid
 
   const knownExerciseIds = new Set(options.knownExerciseIds || []);
   for (const exercise of options.existingExercises || []) knownExerciseIds.add(exercise.id);
+  const existingWorkoutIds = new Set((options.existingWorkouts || []).map(workout => workout.id));
+  const existingDraftIds = new Set((options.existingDrafts || []).map(draft => draft.workout.id));
+  const existingRoutineIds = new Set((options.existingRoutines || []).map(routine => routine.id));
+  const existingNestedIds = collectNestedIds(
+    options.existingWorkouts || [],
+    options.existingDrafts || [],
+    options.existingRoutines || [],
+  );
+  const nestedIds: NestedIdValidationContext = {
+    incomingWorkoutExerciseIds: new Set<string>(),
+    incomingSetIds: new Set<string>(),
+    incomingRoutineExerciseIds: new Set<string>(),
+    ...existingNestedIds,
+    parentIsNew: true,
+  };
   const incomingExerciseIds = new Set<string>();
   (value.exercises as unknown[]).forEach((exercise, index) => {
     validateExerciseRecord(exercise, `exercise[${index}]`);
@@ -269,21 +342,29 @@ export function validateSnapshotStructure(value: unknown, options: SnapshotValid
 
   const routineIds = new Set<string>();
   (value.routines as unknown[]).forEach((routine, index) => {
-    validateRoutineRecord(routine, knownExerciseIds);
+    const routineId = isRecord(routine) && typeof routine.id === 'string' ? routine.id : undefined;
+    nestedIds.parentIsNew = routineId === undefined || !existingRoutineIds.has(routineId);
+    validateRoutineRecord(routine, knownExerciseIds, nestedIds);
     if (routineIds.has(routine.id)) throw new Error(`Duplicate routine ID in snapshot: ${routine.id}`);
     routineIds.add(routine.id);
   });
 
   const workoutIds = new Set<string>();
   (value.workouts as unknown[]).forEach((workout, index) => {
-    validateWorkoutRecord(workout, `workout[${index}]`, knownExerciseIds, gymIds);
+    const workoutId = isRecord(workout) && typeof workout.id === 'string' ? workout.id : undefined;
+    nestedIds.parentIsNew = workoutId === undefined || !existingWorkoutIds.has(workoutId);
+    validateWorkoutRecord(workout, `workout[${index}]`, knownExerciseIds, gymIds, nestedIds);
     if (workoutIds.has(workout.id)) throw new Error(`Duplicate workout ID in snapshot: ${workout.id}`);
     workoutIds.add(workout.id);
   });
 
   const draftIds = new Set<string>();
   (value.drafts as unknown[]).forEach((draft, index) => {
-    validateDraftRecord(draft, knownExerciseIds, gymIds);
+    const draftWorkoutId = isRecord(draft) && isRecord(draft.workout) && typeof draft.workout.id === 'string'
+      ? draft.workout.id
+      : undefined;
+    nestedIds.parentIsNew = draftWorkoutId === undefined || !existingDraftIds.has(draftWorkoutId);
+    validateDraftRecord(draft, knownExerciseIds, gymIds, nestedIds);
     if (draftIds.has(draft.workout.id)) throw new Error(`Duplicate draft ID in snapshot: ${draft.workout.id}`);
     draftIds.add(draft.workout.id);
   });
@@ -299,11 +380,14 @@ export function validateSnapshotStructure(value: unknown, options: SnapshotValid
 /** Validate an incoming partial merge against destination IDs before opening a write transaction. */
 export function validateSnapshotForMerge(
   value: unknown,
-  existing: Pick<DataSnapshot, 'exercises' | 'gyms'>,
+  existing: Pick<DataSnapshot, 'exercises' | 'gyms'> & Partial<Pick<DataSnapshot, 'workouts' | 'drafts' | 'routines'>>,
 ): asserts value is DataSnapshot {
   validateSnapshotStructure(value, {
     existingExercises: existing.exercises,
     existingGyms: existing.gyms,
+    existingWorkouts: existing.workouts,
+    existingDrafts: existing.drafts,
+    existingRoutines: existing.routines,
     requireDefaultGym: false,
   });
 }
