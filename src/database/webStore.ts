@@ -8,6 +8,7 @@ import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName, validateWorkoutGymId } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
+import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -53,9 +54,10 @@ function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
 }
 
 function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
+  if (!Array.isArray(snapshot.gyms)) return snapshot;
   return {
     ...snapshot,
-    gyms: (snapshot.gyms || []).map((gym) => {
+    gyms: snapshot.gyms.map((gym) => {
       if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
       if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
         throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
@@ -947,33 +949,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     const destinationGyms = await getGyms();
     const incomingGyms = snapshot.gyms || [];
-    const knownGymIds = new Set([...destinationGyms, ...incomingGyms].map(g => g.id));
-    if (new Set(incomingGyms.map(g => g.id)).size !== incomingGyms.length) throw new Error('Snapshot contains duplicate gym IDs');
-    if (new Set((snapshot.exerciseGymScopes || []).map(scope => scope.exerciseId)).size !== (snapshot.exerciseGymScopes || []).length) throw new Error('Snapshot contains duplicate exercise scope IDs');
-    if (incomingGyms.filter(g => g.isDefault).length > 1) throw new Error('Snapshot contains multiple default gyms');
-    for (const gym of incomingGyms) {
-      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
-      if (typeof gym.isDefault !== 'boolean') throw new Error(`Invalid isDefault in gym: ${gym.id}`);
-      validateGymName(gym.name);
-      validateGymColor(gym.color);
-      if (!gym.createdAt || isNaN(Date.parse(gym.createdAt))) throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
-    }
-    const knownExerciseIds = new Set([...(await getAllExercises()).map(exercise => exercise.id), ...snapshot.exercises.map(exercise => exercise.id)]);
+    const existingExercises = await getAllExercises();
+    validateSharedSnapshotForMerge(snapshot, { exercises: existingExercises, gyms: destinationGyms });
+    const knownExerciseIds = new Set([...existingExercises.map(exercise => exercise.id), ...snapshot.exercises.map(exercise => exercise.id)]);
     const existingScopes = new Map((await getExerciseGymScopes()).map(scope => [scope.exerciseId, scope]));
     for (const scope of snapshot.exerciseGymScopes || []) {
-      if (!knownExerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
-      if (scope.linkedGymIds !== undefined && (!Array.isArray(scope.linkedGymIds) || scope.linkedGymIds.some((id) => typeof id !== 'string'))) {
-        throw new Error(`Invalid linked gym IDs in scope: ${scope.exerciseId}`);
-      }
-      validateExerciseGymScope(scope, knownGymIds);
       const existingScope = existingScopes.get(scope.exerciseId);
       if (existingScope && !scopesAreIdentical(scope, existingScope)) throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
-    }
-    for (const workout of snapshot.workouts) {
-      if (typeof workout.gymId !== 'string' || !knownGymIds.has(workout.gymId)) throw new Error(`Workout references missing gym: ${workout.gymId}`);
-    }
-    for (const draft of snapshot.drafts) {
-      if (typeof draft.workout.gymId !== 'string' || !knownGymIds.has(draft.workout.gymId)) throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
     }
 
     await new Promise<void>((resolve, reject) => {

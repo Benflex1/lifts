@@ -4,6 +4,7 @@ import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutSet } from '.
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateTargetReps } from '../workout/sets';
+import { validateSnapshotStructure } from '../database/snapshot-validation';
 
 export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 
@@ -125,7 +126,8 @@ export function parseBackup(json: string): BackupV3 {
     throw new Error('Invalid settings format: expected object');
   }
 
-  if (parsed.version === 2) {
+  const isLegacyV2 = parsed.version === 2;
+  if (isLegacyV2) {
     parsed.version = 3;
     parsed.gyms = [{
       id: 'gym-default',
@@ -148,6 +150,45 @@ export function parseBackup(json: string): BackupV3 {
       throw new Error('Invalid exerciseGymScopes format: expected array');
     }
   }
+
+  // Older exports omitted fields that are required by the current runtime model.
+  // Normalize only those known legacy omissions; v3 remains strict below.
+  parsed.routines = parsed.routines.map((routine: any) => ({
+    ...routine,
+    ...(isLegacyV2 && routine.createdAt === undefined ? { createdAt: parsed.exportedAt } : {}),
+    exercises: Array.isArray(routine.exercises)
+      ? routine.exercises.map((exercise: any, index: number) => ({
+          ...exercise,
+          ...(isLegacyV2 && exercise.id === undefined ? { id: `re-${routine.id}-${index}` } : {}),
+          ...(isLegacyV2 && exercise.orderIndex === undefined ? { orderIndex: index } : {}),
+          ...(isLegacyV2 && exercise.targetSets === undefined ? { targetSets: 0 } : {}),
+          ...(isLegacyV2 && exercise.targetReps === undefined ? { targetReps: '' } : {}),
+          restTimerSeconds: exercise.restTimerSeconds ?? 0,
+        }))
+      : routine.exercises,
+  }));
+  parsed.workouts = parsed.workouts.map((workout: any) => ({
+    ...workout,
+    ...(isLegacyV2 && workout.durationSeconds === undefined ? { durationSeconds: 0 } : {}),
+    ...(isLegacyV2 && workout.totalVolumeKg === undefined ? { totalVolumeKg: 0 } : {}),
+    exercises: Array.isArray(workout.exercises)
+      ? workout.exercises.map((exercise: any) => ({ ...exercise, restTimerSeconds: exercise.restTimerSeconds ?? 0 }))
+      : workout.exercises,
+  }));
+  parsed.drafts = parsed.drafts.map((draft: any) => ({
+    ...draft,
+    ...(isLegacyV2 && draft.version === undefined ? { version: 1 } : {}),
+    ...(isLegacyV2 && draft.revision === undefined ? { revision: 0 } : {}),
+    ...(draft.restTimer === undefined ? { restTimer: null } : {}),
+    workout: draft.workout && {
+      ...draft.workout,
+      ...(isLegacyV2 && draft.workout.durationSeconds === undefined ? { durationSeconds: 0 } : {}),
+      ...(isLegacyV2 && draft.workout.totalVolumeKg === undefined ? { totalVolumeKg: 0 } : {}),
+      exercises: Array.isArray(draft.workout.exercises)
+        ? draft.workout.exercises.map((exercise: any) => ({ ...exercise, restTimerSeconds: exercise.restTimerSeconds ?? 0 }))
+        : draft.workout.exercises,
+    },
+  }));
 
   validateGyms(parsed.gyms);
 
@@ -469,6 +510,7 @@ export function parseBackup(json: string): BackupV3 {
   }
 
   validateScopes(parsed.exerciseGymScopes, parsed.gyms, new Set(knownExercisesMap.keys()));
+  validateSnapshotStructure(parsed, { knownExerciseIds: new Set(knownExercisesMap.keys()), requireDefaultGym: true });
 
   return parsed as BackupV3;
 }

@@ -272,6 +272,23 @@ describe('Backup validation (parseBackup)', () => {
     }, /Duplicate set ID/);
   });
 
+  it('rejects malformed required WorkoutSet runtime fields', () => {
+    const malformedFields: Array<[string, unknown]> = [
+      ['id', undefined],
+      ['setNumber', '1'],
+      ['isCompleted', 'true'],
+      ['completedAt', 1234567890],
+    ];
+
+    for (const [field, value] of malformedFields) {
+      const backup = JSON.parse(JSON.stringify(validBaseBackup));
+      if (value === undefined) delete backup.workouts[0].exercises[0].sets[0][field];
+      else backup.workouts[0].exercises[0].sets[0][field] = value;
+
+      assert.throws(() => parseBackup(JSON.stringify(backup)), new RegExp(field));
+    }
+  });
+
   it('rejects missing exercise reference when not in backup and not in bundled seed list', () => {
     const missingEx = {
       ...validBaseBackup,

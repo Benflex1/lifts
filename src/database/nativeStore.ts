@@ -21,6 +21,7 @@ import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymNa
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
+import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
@@ -84,9 +85,10 @@ function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
 }
 
 function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
+  if (!Array.isArray(snapshot.gyms)) return snapshot;
   return {
     ...snapshot,
-    gyms: (snapshot.gyms || []).map((gym) => {
+    gyms: snapshot.gyms.map((gym) => {
       if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
       if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
         throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
@@ -100,25 +102,8 @@ function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
   };
 }
 
-function validateSnapshotForMerge(snapshot: DataSnapshot, existing: DataSnapshot): void {
-  const incomingGyms = snapshot.gyms || [];
+function validateSnapshotMergeConflicts(snapshot: DataSnapshot, existing: DataSnapshot): void {
   const incomingScopes = snapshot.exerciseGymScopes || [];
-  const gymIds = new Set(existing.gyms.map((gym) => gym.id));
-  const incomingGymIds = new Set<string>();
-  let defaultCount = 0;
-  for (const gym of incomingGyms) {
-    if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
-    if (incomingGymIds.has(gym.id)) throw new Error(`Snapshot contains duplicate gym IDs: ${gym.id}`);
-    incomingGymIds.add(gym.id);
-    if (typeof gym.isDefault !== 'boolean') throw new Error(`Invalid isDefault in gym: ${gym.id}`);
-    if (gym.isDefault) defaultCount++;
-    validateGymName(gym.name);
-    validateGymColor(gym.color);
-    if (!gym.createdAt || isNaN(Date.parse(gym.createdAt))) throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
-    gymIds.add(gym.id);
-  }
-  if (defaultCount > 1) throw new Error('Snapshot contains multiple default gyms');
-
   const exerciseIds = new Set([
     ...existing.exercises.map((exercise) => exercise.id),
     ...snapshot.exercises.map((exercise) => exercise.id),
@@ -129,22 +114,12 @@ function validateSnapshotForMerge(snapshot: DataSnapshot, existing: DataSnapshot
     if (seenScopeIds.has(scope.exerciseId)) throw new Error(`Snapshot contains duplicate exercise scope IDs: ${scope.exerciseId}`);
     seenScopeIds.add(scope.exerciseId);
     if (!exerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
-    if (scope.linkedGymIds !== undefined && (!Array.isArray(scope.linkedGymIds) || scope.linkedGymIds.some((id) => typeof id !== 'string'))) {
-      throw new Error(`Invalid linked gym IDs in scope: ${scope.exerciseId}`);
-    }
-    validateExerciseGymScope(scope, gymIds);
     const existingScope = existingScopes.get(scope.exerciseId);
     if (existingScope && !scopesAreIdentical(scope, existingScope)) {
       throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
     }
   }
 
-  for (const workout of snapshot.workouts) {
-    if (typeof workout.gymId !== 'string' || !gymIds.has(workout.gymId)) throw new Error(`Workout references missing gym: ${workout.gymId}`);
-  }
-  for (const draft of snapshot.drafts) {
-    if (typeof draft.workout.gymId !== 'string' || !gymIds.has(draft.workout.gymId)) throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
-  }
 }
 
 export function createNativeStore(driver: SqliteDriver): Store {
@@ -1012,7 +987,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function mergeSnapshot(snapshot: DataSnapshot): Promise<void> {
     return writeQueue(async () => {
       snapshot = canonicalizeSnapshotGyms(snapshot);
-      validateSnapshotForMerge(snapshot, await readSnapshot());
+      const existing = await readSnapshot();
+      validateSharedSnapshotForMerge(snapshot, existing);
+      validateSnapshotMergeConflicts(snapshot, existing);
       await driver.withTransactionAsync(async () => {
         for (const gym of snapshot.gyms || []) {
           await driver.runAsync(

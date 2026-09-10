@@ -223,6 +223,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
             exerciseId: 'custom-pause-squat',
             orderIndex: 0,
             exercise: customEx,
+            restTimerSeconds: 0,
             sets: [
               { id: 'ds1', setNumber: 1, type: 'normal', weightKg: 100, reps: 2, isCompleted: true },
             ],
@@ -441,6 +442,51 @@ describe('Backup Roundtrip & Merge Safety', () => {
     assert.deepEqual(await fixture.store.readSnapshot(), before);
     await fixture.dispose();
   });
+
+  for (const platform of ['native', 'web'] as const) {
+    for (const [field, value] of [
+      ['id', undefined],
+      ['setNumber', '1'],
+      ['isCompleted', 'true'],
+      ['completedAt', 1234567890],
+    ] as const) {
+      it(`rejects malformed ${field} in a direct ${platform} snapshot merge without mutation`, async () => {
+        const fixture = await createStoreFixture(platform);
+        const before = await fixture.store.readSnapshot();
+        const exercise = before.exercises[0];
+        const set: any = { id: 'merge-set-1', setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true };
+        if (value === undefined) delete set[field];
+        else set[field] = value;
+        const workout: Workout = {
+          id: `malformed-${platform}-${field}`,
+          name: 'Malformed Snapshot',
+          gymId: before.gyms[0].id,
+          startTime: '2026-09-10T08:00:00.000Z',
+          durationSeconds: 60,
+          totalVolumeKg: 160,
+          exercises: [{
+            id: 'merge-exercise-1',
+            exerciseId: exercise.id,
+            exercise,
+            sets: [set],
+            restTimerSeconds: 90,
+          }],
+        };
+
+        await assert.rejects(() => fixture.store.mergeSnapshot({
+          exercises: [],
+          routines: [],
+          workouts: [workout],
+          drafts: [],
+          settings: {},
+          gyms: [],
+          exerciseGymScopes: [],
+        }), new RegExp(field));
+        assert.deepEqual(await fixture.store.readSnapshot(), before);
+        await fixture.dispose();
+      });
+    }
+  }
 
   for (const platform of ['native', 'web'] as const) {
     it(`canonicalizes gym names and rejects invalid timestamps during ${platform} snapshot merge`, async () => {
