@@ -34,3 +34,19 @@ Native device validation was not available in this environment. The following li
 
 - The native/manual interaction flow is covered by existing `WorkoutContext`/`gym-session` behavior and static/type/build checks, but still needs Android/iOS device confirmation.
 - The shell environment emits pre-existing `NPM_CONFIG_PREFIX` and missing `/tmp/devspace-semgrep-*/uv/env` profile warnings; they did not affect command exit status or verification results.
+
+## Fix round 1
+
+### Review findings addressed
+
+1. Increased the complete active-workout gym chip control to `minHeight: 44`, preserving its existing label, color swatch, name, and dropdown marker.
+2. Added an effect keyed to `gymTrackingEnabled` that clears `showGymPicker` whenever tracking is disabled. This only resets transient picker UI state and does not alter the stored workout gym ID.
+
+### Verification
+
+- `npx tsx --test tests/unit/gym-display.test.ts tests/unit/gym-session.test.ts` — passed, 12/12.
+- `npx tsc --noEmit` — passed.
+- `npx expo export --platform web --output-dir /tmp/lifts-web-export-multi-gym-fix-round-1` — passed; web bundle exported successfully.
+- `git diff --check` — passed.
+
+Native device validation remains unavailable in this environment.

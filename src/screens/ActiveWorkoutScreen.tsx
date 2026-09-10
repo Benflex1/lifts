@@ -173,6 +173,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     return () => subscription.remove();
   }, [minimizeWorkout]);
 
+  useEffect(() => {
+    if (!gymTrackingEnabled) {
+      setShowGymPicker(false);
+    }
+  }, [gymTrackingEnabled]);
+
   if (!activeWorkout) {
     return null;
   }
@@ -1171,6 +1177,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     maxWidth: '100%',
+    minHeight: 44,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
