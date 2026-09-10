@@ -709,7 +709,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const workouts = (req.result as Workout[]).map(normalizeWorkout)
           .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
-        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime));
+        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || b.id.localeCompare(a.id));
         const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
           const matching = workout.exercises.filter(item => item.exerciseId === exerciseId);
           const requested = matching[occurrenceIndex];
@@ -724,7 +724,10 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             occurrenceIndex: requested?.sets.some(set => set.isCompleted)
               ? occurrenceIndex
               : Math.max(0, matching.indexOf(selected!)),
-            sets: selected?.sets.filter(set => set.isCompleted).map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
+            sets: selected?.sets
+              .filter(set => set.isCompleted)
+              .sort((a, b) => a.setNumber - b.setNumber || a.id.localeCompare(b.id))
+              .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
           };
         });
         resolve(resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined));

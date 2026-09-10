@@ -322,5 +322,116 @@ describe('History-derived stats & previous set suggestions', () => {
         await fixture.dispose();
       }
     });
+
+    it(`[${platform}] uses the compact repeated-exercise index when exercises are interleaved`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('Interleaved Gym');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        const barbell = await fixture.store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+        assert.ok(machine);
+        assert.ok(barbell);
+        const workout: Workout = {
+          id: 'interleaved-occurrences',
+          name: 'Interleaved occurrences',
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 0,
+          exercises: [
+            {
+              id: 'interleaved-machine-0',
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [{ id: 'interleaved-set-0', setNumber: 1, type: 'normal', weightKg: 45, reps: 8, isCompleted: true }],
+            },
+            {
+              id: 'interleaved-barbell-0',
+              exerciseId: barbell.id,
+              exercise: barbell,
+              restTimerSeconds: 90,
+              sets: [{ id: 'interleaved-barbell-set', setNumber: 1, type: 'normal', weightKg: 80, reps: 8, isCompleted: true }],
+            },
+            {
+              id: 'interleaved-machine-1',
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [{ id: 'interleaved-set-1', setNumber: 1, type: 'normal', weightKg: 65, reps: 8, isCompleted: true }],
+            },
+          ],
+        };
+        await fixture.store.finishWorkout(workout);
+
+        const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 1, gym.id);
+        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [65]);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
+    it(`[${platform}] breaks equal-time ties by descending workout ID`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('Tie Break Gym');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(machine);
+        const makeWorkout = (id: string, weightKg: number): Workout => ({
+          id,
+          name: id,
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: `${id}-occurrence`,
+            exerciseId: machine.id,
+            exercise: machine,
+            restTimerSeconds: 90,
+            sets: [{ id: `${id}-set`, setNumber: 1, type: 'normal', weightKg, reps: 8, isCompleted: true }],
+          }],
+        });
+        await fixture.store.finishWorkout(makeWorkout('tie-a', 40));
+        await fixture.store.finishWorkout(makeWorkout('tie-b', 50));
+
+        const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
+        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [50]);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
+    it(`[${platform}] orders completed suggestion sets by set number`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('Set Order Gym');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(machine);
+        await fixture.store.finishWorkout({
+          id: 'unsorted-sets',
+          name: 'Unsorted sets',
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: 'unsorted-sets-occurrence',
+            exerciseId: machine.id,
+            exercise: machine,
+            restTimerSeconds: 90,
+            sets: [
+              { id: 'set-2', setNumber: 2, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
+              { id: 'set-1', setNumber: 1, type: 'normal', weightKg: 10, reps: 8, isCompleted: true },
+            ],
+          }],
+        });
+
+        const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
+        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [10, 20]);
+      } finally {
+        await fixture.dispose();
+      }
+    });
   }
 });

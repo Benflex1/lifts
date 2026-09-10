@@ -763,7 +763,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
        LEFT JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
        LEFT JOIN gyms g ON g.id = w.gym_id
        WHERE w.in_progress = 0
-       ORDER BY w.start_time DESC, w.id DESC, we.order_index ASC, s.set_number ASC`,
+       ORDER BY w.start_time DESC, w.id DESC, we.order_index ASC, s.set_number ASC, s.id ASC`,
       exerciseId,
     );
 
@@ -771,7 +771,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       startTime: string;
       gymId: string;
       gymName: string;
-      occurrences: Array<{ sets: Array<{ weightKg: number; reps: number }> }>;
+      occurrences: Array<{ id: string; sets: Array<{ weightKg: number; reps: number }> }>;
     }>();
     for (const row of rows) {
       const workoutId = row.workout_id as string;
@@ -785,8 +785,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
         };
         byWorkout.set(workoutId, workout);
       }
-      const occurrence = workout.occurrences[row.order_index] || { sets: [] };
-      if (!workout.occurrences[row.order_index]) workout.occurrences[row.order_index] = occurrence;
+      let occurrence = workout.occurrences.find(item => item.id === row.occurrence_id);
+      if (!occurrence) {
+        occurrence = { id: row.occurrence_id, sets: [] };
+        workout.occurrences.push(occurrence);
+      }
       if (row.weight_kg !== null && row.reps !== null) occurrence.sets.push({ weightKg: row.weight_kg, reps: row.reps });
     }
 
