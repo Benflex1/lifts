@@ -92,6 +92,31 @@ describe('Backup validation (parseBackup)', () => {
     assert.deepEqual(parsed.exerciseGymScopes[0].linkedGymIds, ['gym-default', 'gym-a']);
   });
 
+  it('trims gym names and rejects numeric or malformed gym timestamps', () => {
+    const v3 = {
+      ...validBaseBackup,
+      version: 3,
+      workouts: validBaseBackup.workouts.map((workout) => ({ ...workout, gymId: 'gym-default' })),
+      gyms: [{
+        id: 'gym-default', name: '  Default Gym  ', color: '#3B82F6', isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      }],
+      exerciseGymScopes: [],
+    };
+
+    const parsed = parseBackup(JSON.stringify(v3));
+    assert.equal(parsed.gyms[0].name, 'Default Gym');
+
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      gyms: [{ ...v3.gyms[0], createdAt: 1234567890 }],
+    })), /createdAt timestamp/);
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      gyms: [{ ...v3.gyms[0], createdAt: 'not-a-timestamp' }],
+    })), /createdAt timestamp/);
+  });
+
   it('rejects invalid gym IDs, duplicate gyms, and invalid gym fields', () => {
     const v3 = {
       ...validBaseBackup,

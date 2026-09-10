@@ -40,6 +40,23 @@ function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
     && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
 }
 
+function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
+  return {
+    ...snapshot,
+    gyms: (snapshot.gyms || []).map((gym) => {
+      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
+      if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
+        throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
+      }
+      return {
+        ...gym,
+        name: validateGymName(gym.name),
+        color: validateGymColor(gym.color),
+      };
+    }),
+  };
+}
+
 export async function createWebStore(name: string = 'lifts_web_db', options?: WebStoreOptions): Promise<WebStore> {
   const idb: IDBFactory = options?.idbFactory || (typeof indexedDB !== 'undefined' ? indexedDB : undefined as any);
   if (!idb) {
@@ -904,6 +921,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   async function mergeSnapshot(snapshot: DataSnapshot): Promise<void> {
     const database = await openDb();
     await verifyAndRenewLease(database);
+    snapshot = canonicalizeSnapshotGyms(snapshot);
 
     const destinationGyms = await getGyms();
     const incomingGyms = snapshot.gyms || [];

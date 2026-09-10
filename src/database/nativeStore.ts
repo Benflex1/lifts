@@ -71,6 +71,23 @@ function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
     && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
 }
 
+function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
+  return {
+    ...snapshot,
+    gyms: (snapshot.gyms || []).map((gym) => {
+      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
+      if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
+        throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
+      }
+      return {
+        ...gym,
+        name: validateGymName(gym.name),
+        color: validateGymColor(gym.color),
+      };
+    }),
+  };
+}
+
 function validateSnapshotForMerge(snapshot: DataSnapshot, existing: DataSnapshot): void {
   const incomingGyms = snapshot.gyms || [];
   const incomingScopes = snapshot.exerciseGymScopes || [];
@@ -887,6 +904,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function mergeSnapshot(snapshot: DataSnapshot): Promise<void> {
     return writeQueue(async () => {
+      snapshot = canonicalizeSnapshotGyms(snapshot);
       validateSnapshotForMerge(snapshot, await readSnapshot());
       await driver.withTransactionAsync(async () => {
         for (const gym of snapshot.gyms || []) {

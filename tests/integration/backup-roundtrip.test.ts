@@ -4,7 +4,105 @@ import { createStoreFixture } from '../helpers/storeFixture';
 import { buildBackupJson } from '../../src/utils/backup';
 import { computeRestorePlan, restoreBackup } from '../../src/utils/restore';
 import { Exercise, Routine, Workout } from '../../src/types';
-import { WorkoutDraft } from '../../src/database/contract';
+import { DataSnapshot, Store, WorkoutDraft } from '../../src/database/contract';
+import { NodeSqliteDriver } from '../helpers/storeFixture';
+import { indexedDB } from 'fake-indexeddb';
+import { createWebStore } from '../../src/database/webStore';
+import { createNativeStore, SqliteDriver } from '../../src/database/nativeStore';
+
+class FailingSqliteDriver implements SqliteDriver {
+  private calls = 0;
+  public armed = false;
+
+  constructor(private readonly inner: NodeSqliteDriver, private readonly failAfter: number) {}
+
+  execAsync(sql: string): Promise<void> { return this.inner.execAsync(sql); }
+  getFirstAsync<T>(sql: string, ...params: any[]): Promise<T | null> { return this.inner.getFirstAsync<T>(sql, ...params); }
+  getAllAsync<T>(sql: string, ...params: any[]): Promise<T[]> { return this.inner.getAllAsync<T>(sql, ...params); }
+  async runAsync(sql: string, ...params: any[]): Promise<{ changes: number; lastInsertRowId: number }> {
+    const result = await this.inner.runAsync(sql, ...params);
+    if (this.armed && ++this.calls === this.failAfter) throw new Error('Injected merge failure');
+    return result;
+  }
+  withTransactionAsync(task: () => Promise<void>): Promise<void> { return this.inner.withTransactionAsync(task); }
+  close(): void { this.inner.close(); }
+}
+
+function createFailingIdbFactory(failAfterWrites: number): { factory: IDBFactory; arm: () => void } {
+  let enabled = false;
+  let writes = 0;
+
+  const wrapStore = (store: any, transaction: any): any => new Proxy(store, {
+    get(target, property, receiver) {
+      if (['add', 'clear', 'delete', 'put'].includes(String(property))) {
+        return (...args: any[]) => {
+          const result = target[property](...args);
+          if (enabled && ++writes === failAfterWrites) transaction.abort();
+          return result;
+        };
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  const wrapTransaction = (transaction: any): any => new Proxy(transaction, {
+    get(target, property, receiver) {
+      if (property === 'objectStore') return (name: string) => wrapStore(target.objectStore(name), target);
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  const wrapDatabase = (database: any): any => new Proxy(database, {
+    get(target, property, receiver) {
+      if (property === 'transaction') return (...args: any[]) => wrapTransaction(target.transaction(...args));
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  const factory = {
+    open(name: string, version?: number): IDBOpenDBRequest {
+      const request = indexedDB.open(name, version);
+      return new Proxy(request, {
+        get(target, property, receiver) {
+          if (property === 'result') return target.result ? wrapDatabase(target.result) : target.result;
+          return Reflect.get(target, property, receiver);
+        },
+      });
+    },
+  } as unknown as IDBFactory;
+
+  return {
+    factory,
+    arm: () => { writes = 0; enabled = true; },
+  };
+}
+
+function buildFailureSnapshot(before: DataSnapshot): DataSnapshot {
+  const gym = {
+    id: 'gym-merge-failure', name: 'Merge Failure Gym', color: '#10B981', isDefault: false,
+    createdAt: '2026-09-10T00:00:00.000Z',
+  };
+  const workout: Workout = {
+    id: 'merge-failure-workout', name: 'Merge Failure Workout', gymId: gym.id,
+    startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [],
+  };
+  return {
+    exercises: [],
+    routines: [],
+    workouts: [workout],
+    drafts: [{ version: 1, workout: { ...workout, id: 'merge-failure-draft' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null }],
+    settings: { 'merge-failure-setting': 'present' },
+    gyms: [...before.gyms, gym],
+    exerciseGymScopes: [...before.exerciseGymScopes, {
+      exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+      scopeType: 'linked_group',
+      linkedGymIds: ['gym-default', gym.id],
+    }],
+  };
+}
 
 describe('Backup Roundtrip & Merge Safety', () => {
   async function populateSourceStore(store: any) {
@@ -294,9 +392,10 @@ describe('Backup Roundtrip & Merge Safety', () => {
     await fixture.dispose();
   });
 
-  it('remaps colliding gym IDs without overwriting destination records', async () => {
+  for (const destinationPlatform of ['native', 'web'] as const) {
+    it(`remaps colliding gym IDs without overwriting ${destinationPlatform} destination records`, async () => {
     const sourceFixture = await createStoreFixture('native');
-    const destinationFixture = await createStoreFixture('native');
+    const destinationFixture = await createStoreFixture(destinationPlatform);
     await populateSourceStore(sourceFixture.store);
     const destinationGym = await destinationFixture.store.createGym('Destination Gym', '#F59E0B');
 
@@ -325,7 +424,8 @@ describe('Backup Roundtrip & Merge Safety', () => {
 
     await sourceFixture.dispose();
     await destinationFixture.dispose();
-  });
+    });
+  }
 
   it('aborts a conflicting exercise scope before writing any restore data', async () => {
     const fixture = await createStoreFixture('native');
@@ -340,5 +440,64 @@ describe('Backup Roundtrip & Merge Safety', () => {
     await assert.rejects(() => restoreBackup(JSON.stringify(parsed), fixture.store), /Conflicting exercise gym scope/);
     assert.deepEqual(await fixture.store.readSnapshot(), before);
     await fixture.dispose();
+  });
+
+  for (const platform of ['native', 'web'] as const) {
+    it(`canonicalizes gym names and rejects invalid timestamps during ${platform} snapshot merge`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const trimmedGym = {
+        id: `gym-trim-${platform}`, name: '  Trimmed Gym  ', color: '#10B981', isDefault: false,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      };
+      await fixture.store.mergeSnapshot({
+        ...before,
+        gyms: [...before.gyms, trimmedGym],
+      });
+      assert.equal((await fixture.store.getGyms()).find((gym) => gym.id === trimmedGym.id)?.name, 'Trimmed Gym');
+
+      const afterTrim = await fixture.store.readSnapshot();
+      for (const createdAt of [1234567890, 'not-a-timestamp'] as const) {
+        await assert.rejects(() => fixture.store.mergeSnapshot({
+          ...afterTrim,
+          gyms: [...afterTrim.gyms, {
+            id: `gym-invalid-${String(createdAt)}`, name: 'Invalid Timestamp', color: '#F59E0B', isDefault: false,
+            createdAt,
+          }],
+        } as any), /createdAt timestamp/);
+      }
+      assert.deepEqual(await fixture.store.readSnapshot(), afterTrim);
+      await fixture.dispose();
+    });
+  }
+
+  it('rolls back a mid-merge native transaction failure with no partial snapshot changes', async () => {
+    const driver = new FailingSqliteDriver(new NodeSqliteDriver(), 2);
+    const store = createNativeStore(driver);
+    await store.init();
+    const before = await store.readSnapshot();
+    driver.armed = true;
+
+    await assert.rejects(() => store.mergeSnapshot(buildFailureSnapshot(before)), /Injected merge failure/);
+    assert.deepEqual(await store.readSnapshot(), before);
+    driver.close();
+  });
+
+  it('rolls back a mid-merge web transaction failure with no partial snapshot changes', async () => {
+    const dbName = `test-backup-merge-failure-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const failingIdb = createFailingIdbFactory(2);
+    const store = await createWebStore(dbName, { idbFactory: failingIdb.factory });
+    await store.init();
+    const before = await store.readSnapshot();
+    failingIdb.arm();
+
+    await assert.rejects(() => store.mergeSnapshot(buildFailureSnapshot(before)), /AbortError|TransactionInactiveError|merge failure/i);
+    assert.deepEqual(await store.readSnapshot(), before);
+    await store.close();
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(dbName);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   });
 });

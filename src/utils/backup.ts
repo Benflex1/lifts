@@ -41,9 +41,9 @@ function validateGyms(gyms: unknown): asserts gyms is Gym[] {
     if (typeof candidate.isDefault !== 'boolean') {
       throw new Error(`Invalid isDefault in gym: ${candidate.id}`);
     }
-    validateGymName(candidate.name);
+    candidate.name = validateGymName(candidate.name);
     validateGymColor(candidate.color);
-    if (!candidate.createdAt || isNaN(Date.parse(candidate.createdAt))) {
+    if (typeof candidate.createdAt !== 'string' || !candidate.createdAt || isNaN(Date.parse(candidate.createdAt))) {
       throw new Error(`Invalid createdAt timestamp in gym: ${candidate.id}`);
     }
     if (candidate.isDefault) defaultCount++;
@@ -105,7 +105,7 @@ export function parseBackup(json: string): BackupV3 {
     throw new Error(`Unsupported backup version: ${parsed.version}`);
   }
 
-  if (!parsed.exportedAt || isNaN(Date.parse(parsed.exportedAt))) {
+  if (typeof parsed.exportedAt !== 'string' || !parsed.exportedAt || isNaN(Date.parse(parsed.exportedAt))) {
     throw new Error('Invalid exportedAt timestamp in backup file');
   }
 
