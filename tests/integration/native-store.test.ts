@@ -8,6 +8,7 @@ import { createNativeStore } from '../../src/database/nativeStore';
 import { applyMigrations } from '../../src/database/migrations';
 import { Workout } from '../../src/types';
 import { createStoreFixture } from '../helpers/storeFixture';
+import { createSessionController } from '../../src/workout/session';
 
 describe('nativeStore and migration safety', () => {
   it('bootstraps the default gym and backfills legacy workout and draft gym IDs', async () => {
@@ -81,7 +82,7 @@ describe('nativeStore and migration safety', () => {
         startTime: '2026-09-09T11:00:00.000Z', durationSeconds: 60, totalVolumeKg: 0, exercises: [],
       };
       await store.saveCompletedWorkout(workout);
-      await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-reassignment-draft' }, savedAt: workout.startTime, revision: 1, restTimer: null });
+      await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-reassignment-draft', endTime: '2026-09-09T12:00:00.000Z' }, savedAt: workout.startTime, revision: 1, restTimer: null });
       await store.saveExerciseGymScope({ exerciseId: exercise.id, scopeType: 'linked_group', linkedGymIds: [first.id, second.id] });
       await store.setDefaultGym(first.id);
       assert.equal((await store.getDefaultGym()).id, first.id);
@@ -133,13 +134,49 @@ describe('nativeStore and migration safety', () => {
     }
   });
 
-  it('rejects deleting the gym supplied as the active workout gym at the store boundary', async () => {
+  it('rejects deleting a gym used by an active draft without a caller-supplied gym ID', async () => {
     const fixture = await createStoreFixture('native');
     try {
       const replacement = await fixture.store.createGym('Replacement');
+      const controller = createSessionController(fixture.store);
+      await controller.start({
+        id: 'active-native-delete-guard',
+        name: 'Active workout',
+        gymId: 'gym-default',
+        startTime: new Date().toISOString(),
+        durationSeconds: 0,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
       await assert.rejects(
-        () => fixture.store.deleteGym('gym-default', replacement.id, 'gym-default'),
+        () => fixture.store.deleteGym('gym-default', replacement.id),
         /active workout/i,
+      );
+      assert.deepEqual((await fixture.store.getGyms()).map((gym) => gym.id), ['gym-default', replacement.id]);
+      assert.equal((await fixture.store.getWorkoutDraft('active-native-delete-guard'))?.workout.gymId, 'gym-default');
+      await controller.discard();
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('rejects deleting a gym referenced by a legacy in-progress workout row', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const replacement = await fixture.store.createGym('Replacement');
+      await fixture.driver!.runAsync(
+        `INSERT INTO workouts (id, name, gym_id, start_time, duration_seconds, total_volume_kg, in_progress)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        'legacy-active-delete-guard',
+        'Legacy active workout',
+        'gym-default',
+        new Date().toISOString(),
+        0,
+        0,
+      );
+      await assert.rejects(
+        () => fixture.store.deleteGym('gym-default', replacement.id),
+        /in-progress|active workout/i,
       );
       assert.deepEqual((await fixture.store.getGyms()).map((gym) => gym.id), ['gym-default', replacement.id]);
     } finally {

@@ -6,7 +6,14 @@ import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../
 import { calculateDualExerciseStats } from '../workout/gym-records';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
-import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName, validateWorkoutGymId } from '../workout/gym-profile';
+import {
+  DEFAULT_GYM_COLOR,
+  isActiveWorkoutForGym,
+  validateGymColor,
+  validateGymDeletion,
+  validateGymName,
+  validateWorkoutGymId,
+} from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
 
@@ -430,26 +437,53 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     validateGymDeletion(id, replacementGymId, await getGyms(), activeWorkoutGymId);
     await new Promise<void>((resolve, reject) => {
       const tx = database.transaction(['gyms', 'workouts', 'workout_drafts', 'exercise_gym_scopes'], 'readwrite');
+      let validationError: unknown = null;
       const gyms = tx.objectStore('gyms'); const workouts = tx.objectStore('workouts'); const drafts = tx.objectStore('workout_drafts'); const scopes = tx.objectStore('exercise_gym_scopes');
       const all = gyms.getAll();
       all.onsuccess = () => {
         const rows = all.result as Gym[];
         validateGymDeletion(id, replacementGymId, rows, activeWorkoutGymId);
         const removed = rows.find(g => g.id === id)!;
-        for (const gym of rows) gyms.put({ ...gym, isDefault: removed.isDefault ? gym.id === replacementGymId : gym.isDefault });
-        const wr = workouts.getAll(); wr.onsuccess = () => (wr.result as Workout[]).forEach(w => { if (w.gymId === id) workouts.put({ ...w, gymId: replacementGymId }); });
-        const dr = drafts.getAll(); dr.onsuccess = () => (dr.result as WorkoutDraft[]).forEach(d => { const n = normalizeDraft(d); if (n.workout.gymId === id) drafts.put({ ...n, workout: { ...n.workout, gymId: replacementGymId } }); });
-        const sr = scopes.getAll(); sr.onsuccess = () => {
-          for (const scope of sr.result as ExerciseGymScope[]) {
-            if (!scope.linkedGymIds?.includes(id)) continue;
-            const ids = scope.linkedGymIds.filter(g => g !== id);
-            if (ids.length === 0) scopes.delete(scope.exerciseId);
-            else scopes.put({ ...scope, scopeType: ids.length < 2 ? 'gym_specific' : 'linked_group', linkedGymIds: ids.length < 2 ? undefined : ids });
+        const dr = drafts.getAll();
+        dr.onerror = () => {
+          validationError = dr.error;
+          tx.abort();
+        };
+        dr.onsuccess = () => {
+          try {
+            if ((dr.result as WorkoutDraft[]).some((draft) => isActiveWorkoutForGym(normalizeDraft(draft).workout, id))) {
+              throw new Error('cannot delete the gym used by an active workout draft');
+            }
+            for (const gym of rows) gyms.put({ ...gym, isDefault: removed.isDefault ? gym.id === replacementGymId : gym.isDefault });
+            for (const draft of dr.result as WorkoutDraft[]) {
+              const normalizedDraft = normalizeDraft(draft);
+              if (normalizedDraft.workout.gymId === id) {
+                drafts.put({ ...normalizedDraft, workout: { ...normalizedDraft.workout, gymId: replacementGymId } });
+              }
+            }
+            const wr = workouts.getAll(); wr.onsuccess = () => (wr.result as Workout[]).forEach(w => { if (w.gymId === id) workouts.put({ ...w, gymId: replacementGymId }); });
+            const sr = scopes.getAll(); sr.onsuccess = () => {
+              for (const scope of sr.result as ExerciseGymScope[]) {
+                if (!scope.linkedGymIds?.includes(id)) continue;
+                const ids = scope.linkedGymIds.filter(g => g !== id);
+                if (ids.length === 0) scopes.delete(scope.exerciseId);
+                else scopes.put({ ...scope, scopeType: ids.length < 2 ? 'gym_specific' : 'linked_group', linkedGymIds: ids.length < 2 ? undefined : ids });
+              }
+              gyms.delete(id);
+            };
+          } catch (error) {
+            validationError = error;
+            tx.abort();
           }
-          gyms.delete(id);
         };
       };
-      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error('Gym deletion aborted'));
+      all.onerror = () => {
+        validationError = all.error;
+        tx.abort();
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(validationError || tx.error);
+      tx.onabort = () => reject(validationError || tx.error || new Error('Gym deletion aborted'));
     });
   }
 

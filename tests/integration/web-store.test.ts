@@ -72,7 +72,7 @@ describe('webStore persistence and lease handling', () => {
     const gym = await store.createGym('Temporary');
     const workout = { id: 'gym-workout', name: 'Gym workout', gymId: gym.id, startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [] };
     await store.saveCompletedWorkout(workout);
-    await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-draft' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
+    await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-draft', endTime: '2026-09-10T09:00:00.000Z' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
     await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'linked_group', linkedGymIds: [gym.id, 'gym-default'] });
     await store.deleteGym(gym.id, 'gym-default');
     assert.equal((await store.getWorkoutDetail('gym-workout')).gymId, 'gym-default');
@@ -176,7 +176,7 @@ describe('webStore persistence and lease handling', () => {
     const secondary = await store.createGym('Secondary');
     const workout = { id: 'default-gym-workout', name: 'Default gym workout', gymId: 'gym-default', startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [] };
     await store.saveCompletedWorkout(workout);
-    await store.saveDraft({ version: 1, workout: { ...workout, id: 'default-gym-draft' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
+    await store.saveDraft({ version: 1, workout: { ...workout, id: 'default-gym-draft', endTime: '2026-09-10T09:00:00.000Z' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
     const beforeInvalidDelete = await store.readSnapshot();
     await assert.rejects(() => store.deleteGym('gym-default', 'missing-gym'), /unknown replacement gym/i);
     assert.deepEqual(await store.readSnapshot(), beforeInvalidDelete);
@@ -201,17 +201,29 @@ describe('webStore persistence and lease handling', () => {
     await store.close();
   });
 
-  it('rejects deleting the gym supplied as the active workout gym at the store boundary', async () => {
+  it('rejects deleting a gym used by an active draft without a caller-supplied gym ID', async () => {
     const dbName = `test-web-active-gym-delete-${Date.now()}`;
     const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await store.init();
     try {
       const replacement = await store.createGym('Replacement');
+      const controller = createSessionController(store);
+      await controller.start({
+        id: 'active-web-delete-guard',
+        name: 'Active workout',
+        gymId: 'gym-default',
+        startTime: new Date().toISOString(),
+        durationSeconds: 0,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
       await assert.rejects(
-        () => store.deleteGym('gym-default', replacement.id, 'gym-default'),
+        () => store.deleteGym('gym-default', replacement.id),
         /active workout/i,
       );
       assert.deepEqual((await store.getGyms()).map((gym: any) => gym.id), ['gym-default', replacement.id]);
+      assert.equal((await store.getWorkoutDraft('active-web-delete-guard'))?.workout.gymId, 'gym-default');
+      await controller.discard();
     } finally {
       await store.close();
     }

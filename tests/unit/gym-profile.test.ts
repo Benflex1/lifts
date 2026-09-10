@@ -9,6 +9,7 @@ import {
   validateGymDeletion,
   validateWorkoutGymId,
   isGymUsedByActiveWorkout,
+  isActiveWorkoutForGym,
   resolveActiveGymAfterRefresh,
 } from '../../src/workout/gym-profile';
 
@@ -50,6 +51,8 @@ describe('gym profile validation', () => {
   it('identifies the active workout gym and preserves its refreshed metadata', () => {
     assert.equal(isGymUsedByActiveWorkout('gym-default', 'gym-default'), true);
     assert.equal(isGymUsedByActiveWorkout('gym-default', null), false);
+    assert.equal(isActiveWorkoutForGym({ gymId: 'gym-default' }, 'gym-default'), true);
+    assert.equal(isActiveWorkoutForGym({ gymId: 'gym-default', endTime: '2026-09-10T10:00:00.000Z' }, 'gym-default'), false);
 
     const renamedActiveGym = { ...gyms[0], name: 'Renamed Default' };
     assert.equal(resolveActiveGymAfterRefresh([renamedActiveGym, gyms[1]], gyms[1], 'gym-default'), renamedActiveGym);

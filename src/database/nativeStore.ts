@@ -17,7 +17,14 @@ import { smartSearchExercises } from '../utils/search';
 import { buildDefaultRoutines } from './seedData';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
-import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName, validateWorkoutGymId } from '../workout/gym-profile';
+import {
+  DEFAULT_GYM_COLOR,
+  isActiveWorkoutForGym,
+  validateGymColor,
+  validateGymDeletion,
+  validateGymName,
+  validateWorkoutGymId,
+} from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
@@ -195,8 +202,21 @@ export function createNativeStore(driver: SqliteDriver): Store {
       validateGymDeletion(id, replacementGymId, gyms, activeWorkoutGymId);
       const deleted = gyms.find(gym => gym.id === id)!;
       if (!gyms.some(gym => gym.id === replacementGymId)) throw new Error(`unknown replacement gym: ${replacementGymId}`);
-      await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id = ?', replacementGymId, id);
       const drafts = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
+      if (drafts.some((row) => {
+        const draft = normalizeDraftPayload(row.data);
+        return Boolean(draft && isActiveWorkoutForGym(draft.workout, id));
+      })) {
+        throw new Error('cannot delete the gym used by an active workout draft');
+      }
+      const inProgressWorkout = await driver.getFirstAsync<{ id: string }>(
+        'SELECT id FROM workouts WHERE gym_id = ? AND in_progress = 1 LIMIT 1',
+        id,
+      );
+      if (inProgressWorkout) {
+        throw new Error('cannot delete the gym used by an in-progress workout');
+      }
+      await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id = ?', replacementGymId, id);
       for (const row of drafts) {
         const draft = normalizeDraftPayload(row.data);
         if (draft && draft.workout.gymId === id) {

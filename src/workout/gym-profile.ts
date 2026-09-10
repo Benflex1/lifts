@@ -1,4 +1,4 @@
-import { Gym } from '../types';
+import { Gym, Workout } from '../types';
 
 export const GYM_COLOR_PALETTE = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'] as const;
 export const DEFAULT_GYM_COLOR = '#3B82F6';
@@ -18,6 +18,13 @@ export function validateGymColor(color: string): string {
 
 export function isGymUsedByActiveWorkout(gymId: string, activeWorkoutGymId?: string | null): boolean {
   return Boolean(activeWorkoutGymId) && gymId === activeWorkoutGymId;
+}
+
+export function isActiveWorkoutForGym(
+  workout: Pick<Workout, 'gymId' | 'endTime'>,
+  gymId: string,
+): boolean {
+  return workout.gymId === gymId && !workout.endTime;
 }
 
 export function resolveActiveGymAfterRefresh(
