@@ -24,6 +24,7 @@ import {
   getWorkoutDetail,
   deleteWorkout,
   getRoutineById,
+  getGyms,
   saveCompletedWorkout,
 } from '../database/db';
 import { formatDuration } from '../utils/calculator';
@@ -110,6 +111,8 @@ export const HistoryScreen: React.FC = () => {
       }
 
       const newWorkoutPrefix = `wo-again-${Crypto.randomUUID().slice(0, 8)}`;
+      const gyms = await getGyms();
+      const sourceGymName = gyms.find((gym) => gym.id === item.gymId)?.name;
       const initialExercises: ActiveExercise[] = detail.exercises.map((ex, exIdx) => {
         const activeExId = `ae-${newWorkoutPrefix}-${ex.exerciseId}-occ${exIdx}-${Crypto.randomUUID().slice(0, 6)}`;
         return {
@@ -130,6 +133,8 @@ export const HistoryScreen: React.FC = () => {
             isCompleted: false,
             previousWeightKg: s.weightKg,
             previousReps: s.reps,
+            previousGymId: item.gymId,
+            previousGymName: sourceGymName,
           })),
         };
       });

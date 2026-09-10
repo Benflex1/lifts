@@ -78,6 +78,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const history = await fixture.store.getWorkoutHistory();
       assert.equal(history.length, 1);
       assert.equal(history[0].name, 'Push Day');
+      assert.equal(history[0].gymId, 'gym-default');
       assert.equal(history[0].totalVolumeKg, 1640);
 
       await fixture.dispose();
