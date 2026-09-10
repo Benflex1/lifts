@@ -1,4 +1,13 @@
-import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import {
+  DualExerciseStats,
+  Exercise,
+  ExerciseGymScope,
+  Gym,
+  PreviousSetSuggestion,
+  Routine,
+  Workout,
+  WorkoutHistorySummary,
+} from '../types';
 
 export interface WorkoutDraft {
   version: 1;
@@ -57,13 +66,12 @@ export interface Store {
   getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null>;
   saveExerciseGymScope(scope: ExerciseGymScope): Promise<void>;
   deleteExerciseGymScope(exerciseId: string): Promise<void>;
-  getPreviousSetsForExercise(exerciseId: string, occurrenceIndex?: number): Promise<WorkoutSet[]>;
-  getExerciseStats(exerciseId: string): Promise<{
-    maxWeightKg: number;
-    maxReps: number;
-    estimated1RM: number;
-    sessionCount: number;
-  }>;
+  getPreviousSetsForExercise(
+    exerciseId: string,
+    occurrenceIndex?: number,
+    currentGymId?: string,
+  ): Promise<PreviousSetSuggestion[]>;
+  getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats>;
 
   getAllExercises(): Promise<Exercise[]>;
   searchExercises(query?: string, muscle?: string, equipment?: string): Promise<Exercise[]>;

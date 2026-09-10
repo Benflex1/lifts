@@ -11,12 +11,13 @@ describe('History-derived stats & previous set suggestions', () => {
       const fixture = await createStoreFixture(platform);
 
       const exId = 'Barbell_Bench_Press_-_Medium_Grip';
+      const currentGymId = (await fixture.store.getDefaultGym()).id;
 
       // 1. Initial stats should be 0
-      const initialStats = await fixture.store.getExerciseStats(exId);
-      assert.equal(initialStats.sessionCount, 0);
-      assert.equal(initialStats.maxWeightKg, 0);
-      assert.equal(initialStats.estimated1RM, 0);
+      const initialStats = await fixture.store.getExerciseStats(exId, currentGymId);
+      assert.equal(initialStats.global.sessionCount, 0);
+      assert.equal(initialStats.global.maxWeightKg, 0);
+      assert.equal(initialStats.global.estimated1RM, 0);
 
       // 2. Save an active draft with huge sets (should NEVER count)
       const draft: WorkoutDraft = {
@@ -54,9 +55,9 @@ describe('History-derived stats & previous set suggestions', () => {
       await fixture.store.saveDraft(draft);
 
       // Draft must not affect exercise stats or suggestions
-      const statsAfterDraft = await fixture.store.getExerciseStats(exId);
-      assert.equal(statsAfterDraft.sessionCount, 0, 'Draft should not increase sessionCount');
-      assert.equal(statsAfterDraft.maxWeightKg, 0, 'Draft sets should not affect maxWeightKg');
+      const statsAfterDraft = await fixture.store.getExerciseStats(exId, currentGymId);
+      assert.equal(statsAfterDraft.global.sessionCount, 0, 'Draft should not increase sessionCount');
+      assert.equal(statsAfterDraft.global.maxWeightKg, 0, 'Draft sets should not affect maxWeightKg');
 
       const prevSetsFromDraft = await fixture.store.getPreviousSetsForExercise(exId);
       assert.equal(prevSetsFromDraft.length, 0, 'Draft sets should not be returned as previous sets');
@@ -67,6 +68,7 @@ describe('History-derived stats & previous set suggestions', () => {
     it(`[${platform}] counts session once even when exercise appears twice, and skips empty recent sessions`, async () => {
       const fixture = await createStoreFixture(platform);
       const exId = 'Barbell_Bench_Press_-_Medium_Grip';
+      const currentGymId = (await fixture.store.getDefaultGym()).id;
 
       // 1. First completed workout with 2 occurrences of the same exercise
       const workout1: Workout = {
@@ -114,16 +116,16 @@ describe('History-derived stats & previous set suggestions', () => {
       await fixture.store.finishWorkout(workout1);
 
       // Session count should be 1, not 2!
-      const stats1 = await fixture.store.getExerciseStats(exId);
-      assert.equal(stats1.sessionCount, 1, 'Workout with 2 occurrences of same exercise counts as 1 session');
-      assert.equal(stats1.maxWeightKg, 100);
-      assert.equal(stats1.maxReps, 8);
+      const stats1 = await fixture.store.getExerciseStats(exId, currentGymId);
+      assert.equal(stats1.global.sessionCount, 1, 'Workout with 2 occurrences of same exercise counts as 1 session');
+      assert.equal(stats1.global.maxWeightKg, 100);
+      assert.equal(stats1.global.maxReps, 8);
       // 1RM consistent with calculate1RM average
       const expected1RM = Math.max(
         calculate1RM(100, 5).average,
         calculate1RM(80, 8).average
       );
-      assert.equal(stats1.estimated1RM, expected1RM);
+      assert.equal(stats1.global.estimated1RM, expected1RM);
 
       // 2. Add a more recent workout with NO completed sets for this exercise
       const workout2: Workout = {
@@ -155,9 +157,9 @@ describe('History-derived stats & previous set suggestions', () => {
       await fixture.store.finishWorkout(workout2);
 
       // Session count should still be 1 (empty session does not count)
-      const stats2 = await fixture.store.getExerciseStats(exId);
-      assert.equal(stats2.sessionCount, 1);
-      assert.equal(stats2.maxWeightKg, 100);
+      const stats2 = await fixture.store.getExerciseStats(exId, currentGymId);
+      assert.equal(stats2.global.sessionCount, 1);
+      assert.equal(stats2.global.maxWeightKg, 100);
 
       // Previous sets must skip workout2 and find workout1!
       const prevSetsOcc0 = await fixture.store.getPreviousSetsForExercise(exId, 0);
@@ -170,12 +172,155 @@ describe('History-derived stats & previous set suggestions', () => {
 
       // 3. Deleting workout1 refreshes derived stats back to 0
       await fixture.store.deleteWorkout(workout1.id);
-      const stats3 = await fixture.store.getExerciseStats(exId);
-      assert.equal(stats3.sessionCount, 0);
-      assert.equal(stats3.maxWeightKg, 0);
-      assert.equal(stats3.estimated1RM, 0);
+      const stats3 = await fixture.store.getExerciseStats(exId, currentGymId);
+      assert.equal(stats3.global.sessionCount, 0);
+      assert.equal(stats3.global.maxWeightKg, 0);
+      assert.equal(stats3.global.estimated1RM, 0);
 
       await fixture.dispose();
+    });
+  }
+
+  for (const platform of ['native', 'web'] as const) {
+    it(`[${platform}] chooses gym-aware completed history and returns dual stats`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const defaultGym = await fixture.store.getDefaultGym();
+        const gymA = await fixture.store.createGym('FitX');
+        const gymB = await fixture.store.createGym('McFit');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        const barbell = await fixture.store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+        assert.ok(machine);
+        assert.ok(barbell);
+
+        const workoutWith = (
+          id: string,
+          gymId: string,
+          startTime: string,
+          exercise: typeof machine,
+          weightKg: number,
+        ): Workout => ({
+          id,
+          name: id,
+          gymId,
+          startTime,
+          durationSeconds: 600,
+          totalVolumeKg: weightKg * 8,
+          exercises: [{
+            id: `${id}-occ-0`,
+            exerciseId: exercise!.id,
+            exercise: exercise!,
+            restTimerSeconds: 90,
+            sets: [{
+              id: `${id}-set-0`,
+              setNumber: 1,
+              type: 'normal',
+              weightKg,
+              reps: 8,
+              isCompleted: true,
+            }],
+          }],
+        });
+
+        await fixture.store.finishWorkout(workoutWith(
+          'machine-local', gymA.id, '2026-09-09T10:00:00.000Z', machine, 45,
+        ));
+        await fixture.store.finishWorkout(workoutWith(
+          'machine-foreign', gymB.id, '2026-09-10T10:00:00.000Z', machine, 35,
+        ));
+        await fixture.store.finishWorkout(workoutWith(
+          'global-barbell', gymB.id, '2026-09-11T10:00:00.000Z', barbell, 100,
+        ));
+        await fixture.store.saveDraft({
+          version: 1,
+          revision: 1,
+          savedAt: '2026-09-12T10:00:00.000Z',
+          restTimer: null,
+          workout: workoutWith(
+            'machine-draft', defaultGym.id, '2026-09-12T09:00:00.000Z', machine, 300,
+          ),
+        });
+
+        const local = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gymA.id);
+        assert.equal(local[0].weightKg, 45);
+        assert.equal(local[0].sourceGymName, undefined);
+
+        const foreign = await fixture.store.getPreviousSetsForExercise(machine.id, 0, defaultGym.id);
+        assert.equal(foreign[0].weightKg, 35);
+        assert.equal(foreign[0].sourceGymName, 'McFit');
+
+        const globalSuggestion = await fixture.store.getPreviousSetsForExercise(barbell.id, 0, defaultGym.id);
+        assert.equal(globalSuggestion[0].weightKg, 100);
+        assert.equal(globalSuggestion[0].sourceGymName, undefined);
+
+        const stats = await fixture.store.getExerciseStats(machine.id, gymA.id);
+        assert.equal(stats.global.sessionCount, 2);
+        assert.equal(stats.gym.sessionCount, 1);
+        assert.equal(stats.global.maxWeightKg, 45);
+        assert.equal(stats.global.maxSetVolumeKg, 360);
+
+        await fixture.store.saveExerciseGymScope({
+          exerciseId: machine.id,
+          scopeType: 'linked_group',
+          linkedGymIds: [gymA.id, gymB.id],
+        });
+        const linked = await fixture.store.getPreviousSetsForExercise(machine.id, 0, defaultGym.id);
+        assert.equal(linked[0].weightKg, 35);
+        assert.equal(linked[0].sourceGymName, undefined);
+        const linkedFromA = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gymA.id);
+        assert.equal(linkedFromA[0].weightKg, 35);
+        assert.equal(linkedFromA[0].sourceGymName, undefined);
+        const linkedStats = await fixture.store.getExerciseStats(machine.id, defaultGym.id);
+        assert.equal(linkedStats.global.sessionCount, 2);
+        assert.equal(linkedStats.gym.sessionCount, 2);
+
+        const history = await fixture.store.getWorkoutHistory();
+        assert.equal(history.find(item => item.id === 'machine-local')?.gymId, gymA.id);
+        assert.equal((await fixture.store.getWorkoutDetail('machine-foreign'))?.gymId, gymB.id);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
+    it(`[${platform}] preserves occurrence selection and same-workout empty fallback`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('FitX');
+        const exercise = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(exercise);
+        const workout: Workout = {
+          id: 'repeated-occurrences',
+          name: 'Repeated occurrences',
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 480,
+          exercises: [
+            {
+              id: 'repeated-occ-0',
+              exerciseId: exercise.id,
+              exercise,
+              restTimerSeconds: 90,
+              sets: [{ id: 'repeated-incomplete', setNumber: 1, type: 'normal', weightKg: 70, reps: 8, isCompleted: false }],
+            },
+            {
+              id: 'repeated-occ-1',
+              exerciseId: exercise.id,
+              exercise,
+              restTimerSeconds: 90,
+              sets: [{ id: 'repeated-complete', setNumber: 1, type: 'normal', weightKg: 60, reps: 8, isCompleted: true }],
+            },
+          ],
+        };
+        await fixture.store.finishWorkout(workout);
+
+        const requested = await fixture.store.getPreviousSetsForExercise(exercise.id, 1, gym.id);
+        const emptyRequested = await fixture.store.getPreviousSetsForExercise(exercise.id, 0, gym.id);
+        assert.equal(requested[0].weightKg, 60);
+        assert.equal(emptyRequested[0].weightKg, 60);
+      } finally {
+        await fixture.dispose();
+      }
     });
   }
 });

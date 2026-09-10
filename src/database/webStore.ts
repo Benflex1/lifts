@@ -1,8 +1,9 @@
-import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
-import { calculate1RM } from '../utils/calculator';
+import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
+import { calculateDualExerciseStats } from '../workout/gym-records';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName } from '../workout/gym-profile';
@@ -689,78 +690,59 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
-  async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
+  async function getPreviousSetsForExercise(
+    exerciseId: string,
+    occurrenceIndex: number = 0,
+    currentGymId?: string,
+  ): Promise<PreviousSetSuggestion[]> {
     const database = await openDb();
+    const [gyms, exerciseScope, exercise] = await Promise.all([
+      getGyms(),
+      getExerciseGymScope(exerciseId),
+      getExerciseById(exerciseId),
+    ]);
+    if (!exercise) return [];
+    const gymNames = new Map(gyms.map(gym => [gym.id, gym.name]));
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
-        const workouts = req.result as Workout[];
+        const workouts = (req.result as Workout[]).map(normalizeWorkout)
+          .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime));
-
-        for (const w of workouts) {
-          const occurrences = (w.exercises || []).filter(e => e.exerciseId === exerciseId);
-          if (occurrences.length === 0) continue;
-
-          const hasAnyCompleted = occurrences.some(occ => (occ.sets || []).some(s => s.isCompleted));
-          if (!hasAnyCompleted) continue;
-
-          const targetOcc = occurrences[occurrenceIndex] || occurrences[0];
-          let completedSets = (targetOcc.sets || []).filter(s => s.isCompleted);
-          if (completedSets.length === 0) {
-            for (const occ of occurrences) {
-              completedSets = (occ.sets || []).filter(s => s.isCompleted);
-              if (completedSets.length > 0) break;
-            }
-          }
-          return resolve(completedSets);
-        }
-        resolve([]);
+        const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
+          const matching = workout.exercises.filter(item => item.exerciseId === exerciseId);
+          const requested = matching[occurrenceIndex];
+          const selected = requested?.sets.some(set => set.isCompleted)
+            ? requested
+            : matching.find(item => item.sets.some(set => set.isCompleted));
+          return {
+            workoutId: workout.id,
+            startTime: workout.startTime,
+            gymId: workout.gymId,
+            gymName: gymNames.get(workout.gymId) || 'Default Gym',
+            occurrenceIndex: requested?.sets.some(set => set.isCompleted)
+              ? occurrenceIndex
+              : Math.max(0, matching.indexOf(selected!)),
+            sets: selected?.sets.filter(set => set.isCompleted).map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
+          };
+        });
+        resolve(resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined));
       };
       req.onerror = () => reject(req.error);
     });
   }
 
-  async function getExerciseStats(exerciseId: string): Promise<{
-    maxWeightKg: number;
-    maxReps: number;
-    estimated1RM: number;
-    sessionCount: number;
-  }> {
+  async function getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats> {
     const database = await openDb();
+    const [scope] = await Promise.all([getExerciseGymScope(exerciseId)]);
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
-        const workouts = req.result as Workout[];
-        let maxWeightKg = 0;
-        let maxReps = 0;
-        let estimated1RM = 0;
-        let sessionCount = 0;
-
-        for (const w of workouts) {
-          const occurrences = (w.exercises || []).filter(e => e.exerciseId === exerciseId);
-          if (occurrences.length === 0) continue;
-
-          let hadCompletedInThisWorkout = false;
-          for (const occ of occurrences) {
-            const completed = (occ.sets || []).filter(s => s.isCompleted);
-            if (completed.length > 0) {
-              hadCompletedInThisWorkout = true;
-              for (const s of completed) {
-                if (s.weightKg > maxWeightKg) maxWeightKg = s.weightKg;
-                if (s.reps > maxReps) maxReps = s.reps;
-                const oneRM = calculate1RM(s.weightKg, s.reps).average;
-                if (oneRM > estimated1RM) estimated1RM = oneRM;
-              }
-            }
-          }
-          if (hadCompletedInThisWorkout) {
-            sessionCount++;
-          }
-        }
-
-        resolve({ maxWeightKg, maxReps, estimated1RM, sessionCount });
+        const workouts = (req.result as Workout[]).map(normalizeWorkout)
+          .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
+        resolve(calculateDualExerciseStats(workouts, exerciseId, currentGymId, scope || undefined));
       };
       req.onerror = () => reject(req.error);
     });

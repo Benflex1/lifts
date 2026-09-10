@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Search, X, Dumbbell, Plus, ChevronRight, Info, Trophy, TrendingUp } from 'lucide-react-native';
 import { Exercise } from '../types';
-import { searchExercises, createCustomExercise, getExerciseStats } from '../database/db';
+import { searchExercises, createCustomExercise, getDefaultGym, getExerciseStats } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 
@@ -81,7 +81,7 @@ export const ExercisesScreen: React.FC = () => {
 
   useEffect(() => {
     if (activeDetail) {
-      getExerciseStats(activeDetail.id).then(stats => setExerciseStats(stats));
+      getDefaultGym().then(gym => getExerciseStats(activeDetail.id, gym.id)).then(stats => setExerciseStats(stats.global));
     } else {
       setExerciseStats(null);
     }

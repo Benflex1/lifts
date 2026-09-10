@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { DualExerciseStats, Exercise, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { createNativeStore, SqliteDriver } from './nativeStore';
 import { Store, WorkoutDraft, DataSnapshot } from './contract';
 
@@ -89,19 +89,18 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   return store.deleteWorkout(workoutId);
 }
 
-export async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
-  const store = await getStore() as any;
-  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
+export async function getPreviousSetsForExercise(
+  exerciseId: string,
+  occurrenceIndex: number = 0,
+  currentGymId?: string,
+): Promise<PreviousSetSuggestion[]> {
+  const store = await getStore();
+  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex, currentGymId);
 }
 
-export async function getExerciseStats(exerciseId: string): Promise<{
-  maxWeightKg: number;
-  maxReps: number;
-  estimated1RM: number;
-  sessionCount: number;
-}> {
-  const store = await getStore() as any;
-  return store.getExerciseStats(exerciseId);
+export async function getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats> {
+  const store = await getStore();
+  return store.getExerciseStats(exerciseId, currentGymId);
 }
 
 export async function getGyms() { return (await getStore()).getGyms(); }
