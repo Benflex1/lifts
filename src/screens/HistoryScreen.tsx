@@ -33,6 +33,7 @@ import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { useDialog } from '../context/DialogContext';
 import { resolveHistoricalTargetReps } from '../workout/sets';
+import { resolveRepeatSourceGym } from '../workout/gym-session';
 import { WorkoutEditModal } from '../components/WorkoutEditModal';
 
 export const HistoryScreen: React.FC = () => {
@@ -112,7 +113,7 @@ export const HistoryScreen: React.FC = () => {
 
       const newWorkoutPrefix = `wo-again-${Crypto.randomUUID().slice(0, 8)}`;
       const gyms = await getGyms();
-      const sourceGymName = gyms.find((gym) => gym.id === item.gymId)?.name;
+      const sourceGym = resolveRepeatSourceGym(detail, gyms);
       const initialExercises: ActiveExercise[] = detail.exercises.map((ex, exIdx) => {
         const activeExId = `ae-${newWorkoutPrefix}-${ex.exerciseId}-occ${exIdx}-${Crypto.randomUUID().slice(0, 6)}`;
         return {
@@ -133,8 +134,8 @@ export const HistoryScreen: React.FC = () => {
             isCompleted: false,
             previousWeightKg: s.weightKg,
             previousReps: s.reps,
-            previousGymId: item.gymId,
-            previousGymName: sourceGymName,
+            previousGymId: sourceGym?.id,
+            previousGymName: sourceGym?.name,
           })),
         };
       });

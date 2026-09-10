@@ -14,9 +14,12 @@ import {
   replaceActiveExercise,
 } from '../workout/active-exercises';
 import {
-  rehydrateUntouchedSuggestions,
+  captureWorkoutVersion,
+  appendExercisesToCurrentWorkout,
+  loadSuggestionsForExercise,
   resolveStartGymId,
   StartWorkoutOptions,
+  switchWorkoutGym,
 } from '../workout/gym-session';
 import { useDialog } from './DialogContext';
 import {
@@ -323,7 +326,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const item = routine.exercises[ord];
         const occ = occurrenceCounts[item.exerciseId] || 0;
         occurrenceCounts[item.exerciseId] = occ + 1;
-        const prevSets = await store.getPreviousSetsForExercise(item.exerciseId, occ, gymId);
+        const prevSets = await loadSuggestionsForExercise(store, item.exerciseId, occ, gymId);
         const count = item.targetSets || 3;
         const activeExId = `ae-${workoutId}-${item.exerciseId}-occ${occ}-${Crypto.randomUUID().slice(0, 6)}`;
         const sets: WorkoutSet[] = [];
@@ -452,44 +455,15 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const requestId = ++gymSwitchRequestRef.current;
     const store = await getStore();
-    const loadedGyms = await store.getGyms();
-    const selectedGym = loadedGyms.find((gym) => gym.id === gymId);
-    if (!selectedGym) {
-      throw new Error(`Cannot switch workout gym: unknown gym ${gymId}`);
-    }
-
-    const initialState = ctrl.getState();
-    if (initialState.phase === 'active' && initialState.workout) {
-      const occurrenceCounts = new Map<string, number>();
-      const suggestions = await Promise.all(
-        initialState.workout.exercises.map(async (exercise) => {
-          const occurrenceIndex = occurrenceCounts.get(exercise.exerciseId) || 0;
-          occurrenceCounts.set(exercise.exerciseId, occurrenceIndex + 1);
-          return [
-            exercise.exerciseId,
-            await store.getPreviousSetsForExercise(exercise.exerciseId, occurrenceIndex, gymId),
-          ] as const;
-        }),
-      );
-
-      if (requestId !== gymSwitchRequestRef.current) return;
-      const latestState = ctrl.getState();
-      if (latestState.phase !== 'active' || !latestState.workout) return;
-
-      const suggestionsByExercise = Object.fromEntries(
-        initialState.workout.exercises.map((exercise, index) => [exercise.id, suggestions[index][1]]),
-      );
-      const updatedWorkout = rehydrateUntouchedSuggestions(
-        { ...latestState.workout, gymId },
-        suggestionsByExercise,
-      );
-      ctrl.update(updatedWorkout, latestState.restTimer);
-      await ctrl.flush();
-    }
-
-    if (requestId !== gymSwitchRequestRef.current) return;
-    setGyms(loadedGyms);
-    setActiveGymState(selectedGym);
+    const result = await switchWorkoutGym(
+      ctrl,
+      store,
+      gymId,
+      () => requestId === gymSwitchRequestRef.current,
+    );
+    if (result.cancelled) return;
+    setGyms(result.gyms);
+    setActiveGymState(result.gym);
   };
 
   const discardDraft = async (draftId?: string) => {
@@ -552,6 +526,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!ctrl || exercises.length === 0) return;
     const currentState = ctrl.getState();
     if (currentState.phase !== 'active' || !currentState.workout) return;
+    const expectedVersion = captureWorkoutVersion(currentState);
+    if (!expectedVersion) return;
     const store = await getStore();
 
     // Track occurrences across existing exercises and the batch
@@ -567,7 +543,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exerciseCounts.set(exercise.id, occurrenceIndex + 1);
 
       const activeExId = `ae-${currentWorkout.id}-${exercise.id}-occ${occurrenceIndex}-${Crypto.randomUUID().slice(0, 6)}`;
-      const prevSets = await store.getPreviousSetsForExercise(
+      const prevSets = await loadSuggestionsForExercise(
+        store,
         exercise.id,
         occurrenceIndex,
         currentWorkout.gymId,
@@ -605,20 +582,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
     }
 
-    // Re-read latest controller state after asynchronous lookups
-    const latestState = ctrl.getState();
-    if (latestState.phase !== 'active' || !latestState.workout) return;
-
-    const updated: Workout = {
-      ...latestState.workout,
-      exercises: [...latestState.workout.exercises, ...newActiveExercises],
-    };
-    ctrl.update(
-      updated,
-      restTimer.isActive && restTimer.endsAt
-        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
-    );
+    appendExercisesToCurrentWorkout(ctrl, expectedVersion, newActiveExercises);
   };
 
   const addExerciseToWorkout = async (exercise: Exercise) => {

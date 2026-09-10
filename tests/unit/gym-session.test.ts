@@ -2,8 +2,14 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { PreviousSetSuggestion, Workout } from '../../src/types';
 import {
+  loadSuggestionsForWorkout,
+  captureWorkoutVersion,
+  appendExercisesToCurrentWorkout,
+  isCurrentWorkoutVersion,
   rehydrateUntouchedSuggestions,
+  resolveRepeatSourceGym,
   resolveStartGymId,
+  switchWorkoutGym,
 } from '../../src/workout/gym-session';
 
 const workout: Workout = {
@@ -135,4 +141,200 @@ describe('gym session helpers', () => {
     assert.equal(resolveStartGymId(defaultGym, {}), 'gym-default');
     assert.equal(resolveStartGymId(defaultGym, { gymId: 'gym-other' }), 'gym-other');
   });
+
+  it('uses the loaded workout detail gym for repeat source metadata', () => {
+    const detail = { gymId: 'gym-detail' } as Workout;
+    const staleSummaryGym = { gymId: 'gym-summary' } as Workout;
+    const gyms = [workoutGym('gym-summary'), workoutGym('gym-detail')];
+
+    assert.equal(resolveRepeatSourceGym(detail, gyms)?.id, 'gym-detail');
+    assert.notEqual(resolveRepeatSourceGym(staleSummaryGym, gyms)?.id, 'gym-detail');
+  });
+
+  it('rejects a current-state match when the active exercise graph changed', () => {
+    const state = {
+      phase: 'active' as const,
+      revision: 4,
+      workout,
+      restTimer: null,
+    };
+    const expected = captureWorkoutVersion(state)!;
+    const replacedExerciseState = {
+      ...state,
+      workout: {
+        ...workout,
+        exercises: [{ ...workout.exercises[0], id: 'replacement-exercise' }],
+      },
+    };
+
+    assert.equal(isCurrentWorkoutVersion(state, expected), true);
+    assert.equal(isCurrentWorkoutVersion(replacedExerciseState, expected), false);
+
+    const swappedExerciseState = {
+      ...state,
+      workout: {
+        ...workout,
+        exercises: [{ ...workout.exercises[0], exerciseId: 'different-exercise' }],
+      },
+    };
+    assert.equal(isCurrentWorkoutVersion(swappedExerciseState, expected), false);
+  });
+
+  it('routes every repeated exercise occurrence through the selected gym', async () => {
+    const calls: Array<[string, number, string | undefined]> = [];
+    const store = {
+      getPreviousSetsForExercise: async (exerciseId: string, occurrenceIndex: number, gymId?: string) => {
+        calls.push([exerciseId, occurrenceIndex, gymId]);
+        return [{ weightKg: occurrenceIndex + 1, reps: 8 }];
+      },
+    };
+    const repeatedWorkout: Workout = {
+      ...workout,
+      exercises: [workout.exercises[0], { ...workout.exercises[0], id: 'active-exercise-2' }],
+    };
+
+    const suggestions = await loadSuggestionsForWorkout(store, repeatedWorkout, 'gym-new');
+
+    assert.deepEqual(calls, [
+      ['machine-row', 0, 'gym-new'],
+      ['machine-row', 1, 'gym-new'],
+    ]);
+    assert.equal(suggestions['active-exercise-1'][0].weightKg, 1);
+    assert.equal(suggestions['active-exercise-2'][0].weightKg, 2);
+  });
+
+  it('ignores a switch result when the controller workout changes during lookup', async () => {
+    let releaseLookup!: () => void;
+    const lookupFinished = new Promise<void>((resolve) => {
+      releaseLookup = resolve;
+    });
+    const selectedGym = {
+      id: 'gym-new',
+      name: 'New Gym',
+      isDefault: false,
+      color: '#10B981',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    let state = {
+      phase: 'active' as const,
+      revision: 4,
+      workout,
+      restTimer: { endsAt: 12345, totalSeconds: 90 },
+    };
+    const updates: Workout[] = [];
+    const controller = {
+      getState: () => state,
+      update: (updated: Workout) => updates.push(updated),
+      flush: async () => {},
+    };
+    const store = {
+      getGyms: async () => [
+        { ...workoutGym('gym-default'), isDefault: true },
+        selectedGym,
+      ],
+      getPreviousSetsForExercise: async () => {
+        lookupStartedResolve();
+        await lookupFinished;
+        return [{ weightKg: 60, reps: 6, sourceGymId: 'gym-new', sourceGymName: 'New Gym' }];
+      },
+    };
+
+    let lookupStartedResolve!: () => void;
+    const lookupStarted = new Promise<void>((resolve) => {
+      lookupStartedResolve = resolve;
+    });
+    const pending = switchWorkoutGym(controller, store, 'gym-new');
+    await lookupStarted;
+    state = {
+      ...state,
+      revision: state.revision + 1,
+      workout: { ...state.workout, exercises: [] },
+    };
+    releaseLookup();
+
+    const result = await pending;
+    assert.equal(result.applied, false);
+    assert.equal(updates.length, 0);
+  });
+
+  it('updates the current workout with fresh ghosts, preserves the rest timer, and flushes', async () => {
+    const selectedGym = workoutGym('gym-new');
+    let state = {
+      phase: 'active' as const,
+      revision: 4,
+      workout,
+      restTimer: { endsAt: 12345, totalSeconds: 90 },
+    };
+    let updatedWorkout: Workout | null = null;
+    let updatedTimer: { endsAt: number; totalSeconds: number } | null | undefined;
+    let flushes = 0;
+    const controller = {
+      getState: () => state,
+      update: (updated: Workout, timer?: { endsAt: number; totalSeconds: number } | null) => {
+        updatedWorkout = updated;
+        updatedTimer = timer;
+        state = { ...state, revision: state.revision + 1, workout: updated };
+      },
+      flush: async () => {
+        flushes += 1;
+      },
+    };
+    const store = {
+      getGyms: async () => [workoutGym('gym-default'), selectedGym],
+      getPreviousSetsForExercise: async () => [
+        {},
+        {},
+        { weightKg: 60, reps: 6, sourceGymId: 'gym-new', sourceGymName: 'New Gym' },
+      ],
+    };
+
+    const result = await switchWorkoutGym(controller, store, 'gym-new');
+
+    assert.equal(result.applied, true);
+    assert.equal(updatedWorkout?.gymId, 'gym-new');
+    assert.equal(updatedWorkout?.exercises[0].sets[2].previousWeightKg, 60);
+    assert.deepEqual(updatedTimer, state.restTimer);
+    assert.equal(flushes, 1);
+  });
+
+  it('appends exercises only to the captured current workout revision', () => {
+    const state = {
+      phase: 'active' as const,
+      revision: 4,
+      workout,
+      restTimer: { endsAt: 12345, totalSeconds: 90 },
+    };
+    const expected = captureWorkoutVersion(state)!;
+    const addedExercise = { ...workout.exercises[0], id: 'added-exercise' };
+    const updates: Array<{ workout: Workout; timer: unknown }> = [];
+    const controller = {
+      getState: () => state,
+      update: (updated: Workout, timer: unknown) => updates.push({ workout: updated, timer }),
+      flush: async () => {},
+    };
+
+    assert.equal(appendExercisesToCurrentWorkout(controller, expected, [addedExercise]), true);
+    assert.equal(updates[0].workout.exercises.at(-1)?.id, 'added-exercise');
+    assert.deepEqual(updates[0].timer, state.restTimer);
+
+    const staleState = { ...state, revision: 5 };
+    const staleController = {
+      getState: () => staleState,
+      update: () => {
+        throw new Error('stale update must not run');
+      },
+      flush: async () => {},
+    };
+    assert.equal(appendExercisesToCurrentWorkout(staleController, expected, [addedExercise]), false);
+  });
 });
+
+function workoutGym(id: string) {
+  return {
+    id,
+    name: id === 'gym-new' ? 'New Gym' : 'Default Gym',
+    isDefault: id === 'gym-default',
+    color: id === 'gym-new' ? '#10B981' : '#3B82F6',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+}
