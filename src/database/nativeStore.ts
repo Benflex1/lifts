@@ -1,4 +1,4 @@
-import { ActiveExercise, DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { ActiveExercise, Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
@@ -8,8 +8,7 @@ import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
-import { resolvePreviousSetsForExercise } from '../workout/gym-history';
-import { calculateDualExerciseStats } from '../workout/gym-records';
+import { calculate1RM } from '../utils/calculator';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
@@ -671,35 +670,47 @@ export function createNativeStore(driver: SqliteDriver): Store {
     });
   }
 
-  async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0, currentGymId?: string): Promise<PreviousSetSuggestion[]> {
-    const gym = currentGymId || (await getDefaultGym()).id;
-    const exercise = await getExerciseById(exerciseId);
-    if (!exercise) return [];
-    const rows = await driver.getAllAsync<any>(
-      `SELECT w.id workout_id, w.start_time, COALESCE(w.gym_id, 'gym-default') gym_id,
-              COALESCE(g.name, 'Default Gym') gym_name, we.order_index occurrence_index,
-              s.weight_kg, s.reps
-       FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id
-       JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
-       LEFT JOIN gyms g ON g.id = w.gym_id
-       WHERE we.exercise_id = ? AND w.in_progress = 0
-       ORDER BY w.start_time DESC, we.order_index ASC, s.set_number ASC`, exerciseId);
-    const occurrences = new Map<string, any>();
-    for (const row of rows) {
-      const key = `${row.workout_id}:${row.occurrence_index}`;
-      const occurrence = occurrences.get(key) || { workoutId: row.workout_id, startTime: row.start_time, gymId: row.gym_id, gymName: row.gym_name, occurrenceIndex: row.occurrence_index, sets: [] };
-      occurrence.sets.push({ weightKg: row.weight_kg, reps: row.reps });
-      occurrences.set(key, occurrence);
+  async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
+    const latestWorkout = await driver.getFirstAsync<{ id: string }>(
+      `SELECT w.id FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id
+       JOIN exercise_sets s ON s.workout_exercise_id = we.id
+       WHERE we.exercise_id = ? AND w.in_progress = 0 AND s.is_completed = 1
+       ORDER BY w.start_time DESC LIMIT 1`, exerciseId);
+    if (!latestWorkout) return [];
+    const occurrences = await driver.getAllAsync<{ id: string }>(
+      'SELECT id FROM workout_exercises WHERE workout_id = ? AND exercise_id = ? ORDER BY order_index ASC', latestWorkout.id, exerciseId);
+    if (occurrences.length === 0) return [];
+    const targetWeId = occurrences[occurrenceIndex]?.id || occurrences[0].id;
+    let rows = await driver.getAllAsync<any>('SELECT * FROM exercise_sets WHERE workout_exercise_id = ? AND is_completed = 1 ORDER BY set_number ASC', targetWeId);
+    if (rows.length === 0) {
+      for (const occurrence of occurrences) {
+        rows = await driver.getAllAsync<any>('SELECT * FROM exercise_sets WHERE workout_exercise_id = ? AND is_completed = 1 ORDER BY set_number ASC', occurrence.id);
+        if (rows.length > 0) break;
+      }
     }
-    return resolvePreviousSetsForExercise(exercise, [...occurrences.values()], gym, (await getExerciseGymScope(exerciseId)) || undefined);
+    return rows.map(mapSetRow);
   }
 
-  async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
-    const workouts = await getWorkoutHistory();
-    const details = (await Promise.all(workouts.map(workout => getWorkoutDetail(workout.id)))).filter((workout): workout is Workout => Boolean(workout));
-    const exercise = await getExerciseById(exerciseId);
-    if (!exercise) return calculateDualExerciseStats([], exerciseId, currentGymId || (await getDefaultGym()).id);
-    return calculateDualExerciseStats(details, exerciseId, currentGymId || (await getDefaultGym()).id, (await getExerciseGymScope(exerciseId)) || undefined);
+  async function getExerciseStats(exerciseId: string): Promise<{
+    maxWeightKg: number;
+    maxReps: number;
+    estimated1RM: number;
+    sessionCount: number;
+  }> {
+    const countRow = await driver.getFirstAsync<any>(
+      `SELECT COUNT(DISTINCT we.workout_id) as count FROM workout_exercises we
+       JOIN workouts w ON we.workout_id = w.id JOIN exercise_sets s ON s.workout_exercise_id = we.id
+       WHERE we.exercise_id = ? AND w.in_progress = 0 AND s.is_completed = 1`, exerciseId);
+    const setsRows = await driver.getAllAsync<any>(
+      `SELECT s.weight_kg, s.reps FROM exercise_sets s JOIN workout_exercises we ON s.workout_exercise_id = we.id
+       JOIN workouts w ON we.workout_id = w.id WHERE we.exercise_id = ? AND s.is_completed = 1 AND w.in_progress = 0`, exerciseId);
+    let maxWeightKg = 0; let maxReps = 0; let estimated1RM = 0;
+    for (const s of setsRows) {
+      maxWeightKg = Math.max(maxWeightKg, s.weight_kg);
+      maxReps = Math.max(maxReps, s.reps);
+      estimated1RM = Math.max(estimated1RM, calculate1RM(s.weight_kg, s.reps).average);
+    }
+    return { maxWeightKg, maxReps, estimated1RM, sessionCount: countRow?.count || 0 };
   }
 
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
@@ -1004,5 +1015,5 @@ export function createNativeStore(driver: SqliteDriver): Store {
     setSetting,
     renameFolder,
     deleteFolder,
-  };
+  } as unknown as Store;
 }

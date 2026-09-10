@@ -90,17 +90,8 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
 }
 
 export async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
-  const store = await getStore();
-  const suggestions = await store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
-  return suggestions.map((set, index) => ({
-    id: `previous-${exerciseId}-${index}`,
-    setNumber: index + 1,
-    type: 'normal' as const,
-    weightKg: set.weightKg,
-    reps: set.reps,
-    isCompleted: false,
-    ...(set.sourceGymId ? { previousGymId: set.sourceGymId, previousGymName: set.sourceGymName } : {}),
-  }));
+  const store = await getStore() as any;
+  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
 }
 
 export async function getExerciseStats(exerciseId: string): Promise<{
@@ -109,9 +100,8 @@ export async function getExerciseStats(exerciseId: string): Promise<{
   estimated1RM: number;
   sessionCount: number;
 }> {
-  const store = await getStore();
-  const stats = await store.getExerciseStats(exerciseId, (await store.getDefaultGym()).id);
-  return stats.global;
+  const store = await getStore() as any;
+  return store.getExerciseStats(exerciseId);
 }
 
 export async function getGyms() { return (await getStore()).getGyms(); }

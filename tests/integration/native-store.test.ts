@@ -48,9 +48,22 @@ describe('nativeStore and migration safety', () => {
   it('rolls back all migration 5 changes when failure is injected', async () => {
     const driver = new NodeSqliteDriver();
     await applyMigrations(driver, { maxVersion: 4 });
+    await driver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, in_progress) VALUES (?, ?, ?, 0)`,
+      'rollback-workout', 'Keep Workout', '2026-09-09T08:00:00.000Z'
+    );
+    const legacyDraft = JSON.stringify({ version: 1, workout: { id: 'rollback-draft', name: 'Keep Draft' } });
+    await driver.runAsync(
+      `INSERT INTO workout_drafts (id, revision, saved_at, data) VALUES (?, ?, ?, ?)`,
+      'rollback-draft', 1, '2026-09-09T09:00:00.000Z', legacyDraft
+    );
     await assert.rejects(() => applyMigrations(driver, { failAtVersion: 5 }), /Injected migration failure at version 5/);
     assert.equal(await driver.getFirstAsync<any>("SELECT name FROM sqlite_master WHERE type='table' AND name='gyms'"), null);
     assert.equal((await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)')).some(c => c.name === 'gym_id'), false);
+    const rollbackWorkout = await driver.getFirstAsync<any>('SELECT id, name FROM workouts WHERE id = ?', 'rollback-workout');
+    assert.equal(rollbackWorkout?.id, 'rollback-workout');
+    assert.equal(rollbackWorkout?.name, 'Keep Workout');
+    assert.equal((await driver.getFirstAsync<{ data: string }>('SELECT data FROM workout_drafts WHERE id = ?', 'rollback-draft'))?.data, legacyDraft);
     assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 5'), null);
     driver.close();
   });
@@ -61,19 +74,38 @@ describe('nativeStore and migration safety', () => {
       const { store } = fixture;
       const first = await store.createGym('Home', '#10B981');
       const second = await store.createGym('Away', '#F59E0B');
-      await store.setDefaultGym(second.id);
-      assert.equal((await store.getDefaultGym()).id, second.id);
-      assert.equal((await store.updateGym(first.id, { name: 'Home Gym', color: '#EF4444' })).name, 'Home Gym');
       const exercise = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
       assert.ok(exercise);
+      const workout: Workout = {
+        id: 'gym-reassignment-workout', name: 'Gym Reassignment', gymId: first.id,
+        startTime: '2026-09-09T11:00:00.000Z', durationSeconds: 60, totalVolumeKg: 0, exercises: [],
+      };
+      await store.saveCompletedWorkout(workout);
+      await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-reassignment-draft' }, savedAt: workout.startTime, revision: 1, restTimer: null });
       await store.saveExerciseGymScope({ exerciseId: exercise.id, scopeType: 'linked_group', linkedGymIds: [first.id, second.id] });
+      await store.setDefaultGym(first.id);
+      assert.equal((await store.getDefaultGym()).id, first.id);
+      assert.equal((await store.updateGym(first.id, { name: 'Home Gym', color: '#EF4444' })).name, 'Home Gym');
       assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.linkedGymIds, [first.id, second.id]);
-      await store.deleteExerciseGymScope(exercise.id);
-      assert.equal(await store.getExerciseGymScope(exercise.id), null);
       await store.deleteGym(first.id, second.id);
       assert.equal((await store.getGyms()).length, 2);
+      assert.equal((await store.getDefaultGym()).id, second.id);
+      assert.equal((await store.getWorkoutDetail(workout.id))?.gymId, second.id);
+      assert.equal((await store.getWorkoutDrafts()).find(d => d.workout.id === 'gym-reassignment-draft')?.workout.gymId, second.id);
+      assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.scopeType, 'gym_specific');
+      await store.deleteExerciseGymScope(exercise.id);
+      assert.equal(await store.getExerciseGymScope(exercise.id), null);
       await assert.rejects(() => store.deleteGym(second.id, second.id), /different/);
       await assert.rejects(() => store.createGym('   '), /empty/);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('rejects deletion when the default gym is the only gym', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      await assert.rejects(() => fixture.store.deleteGym('gym-default', 'replacement'), /at least two/);
     } finally {
       await fixture.dispose();
     }

@@ -20,3 +20,16 @@
 - `npx tsx --test tests/integration/native-store.test.ts tests/unit/gym-scope.test.ts tests/unit/gym-profile.test.ts tests/unit/gym-history.test.ts tests/unit/gym-records.test.ts` — 32 passed, 0 failed.
 - `git diff --check` — passed.
 - `npx tsc --noEmit` — native Task 3 diagnostics are resolved; it remains non-zero because existing Task 4/6 and backup work is incomplete in `db.web.ts`, `webStore.ts`, `utils/backup.ts`, and `utils/restore.ts`. Those files are outside Task 3 scope and were intentionally not changed.
+
+## Fix round 1
+
+- Reverted native previous-set persistence to the pre-Task-6 occurrence-index SQL behavior, including the original `WorkoutSet` metadata mapper.
+- Reverted native stats to the existing flat stats shape; dual-tier stats and gym-aware suggestion selection remain deferred to Task 6.
+- Restored the native database wrapper’s direct metadata-preserving delegation; gym/scope wrapper exports remain Task 3 additions.
+- Strengthened migration rollback assertions with legacy workout/draft data and strengthened deletion tests with workout, draft, linked-scope, default-transfer, replacement, and last-gym cases.
+
+Verification for fix round 1:
+
+- `npx tsx --test tests/integration/native-store.test.ts tests/integration/history-stats.test.ts tests/integration/completion-lifecycle.test.ts tests/integration/draft-lifecycle.test.ts` — 33 passed, 0 failed.
+- `git diff --check` — passed.
+- `npx tsc --noEmit` — native Task 3 files no longer report errors; the same pre-existing deferred web/backup diagnostics remain.
