@@ -5,6 +5,7 @@ import { useWorkout } from '../context/WorkoutContext';
 import { formatDuration } from '../utils/calculator';
 import { DraftRecoveryModal } from './DraftRecoveryModal';
 import { useDialog } from '../context/DialogContext';
+import { getPausedWorkoutCountLabel } from '../workout/session-copy';
 
 export const DraftResumeBanner: React.FC = () => {
   const { confirm } = useDialog();
@@ -39,19 +40,19 @@ export const DraftResumeBanner: React.FC = () => {
       <View style={styles.banner}>
         <View style={styles.bannerInfo}>
           <Text style={styles.bannerTitle}>
-            {availableDrafts.length === 1 ? 'Unfinished Workout' : `Unfinished Workouts (${availableDrafts.length})`}
+            {getPausedWorkoutCountLabel(availableDrafts.length)}
           </Text>
           <Text style={styles.bannerSub}>
             {availableDrafts.length === 1
-              ? `${firstDraft.workout.name} • ${formatDuration(firstDraft.workout.durationSeconds || 0)}`
-              : `${availableDrafts.length} recoverable sessions available`}
+              ? `Saved session • ${firstDraft.workout.name} • ${formatDuration(firstDraft.workout.durationSeconds || 0)}`
+              : `${availableDrafts.length} saved paused sessions available`}
           </Text>
         </View>
         <View style={styles.bannerActions}>
           {availableDrafts.length > 1 ? (
             <TouchableOpacity style={styles.reviewBtn} onPress={openDraftModal} activeOpacity={0.7}>
               <List size={14} color="#000000" />
-              <Text style={styles.reviewBtnText}>Review & Recover</Text>
+              <Text style={styles.reviewBtnText}>Review & Continue</Text>
             </TouchableOpacity>
           ) : (
             <>
@@ -60,7 +61,7 @@ export const DraftResumeBanner: React.FC = () => {
                 onPress={() => handleDiscard(firstDraft.workout.id)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Discard unfinished workout"
+                accessibilityLabel="Discard paused workout"
               >
                 <Trash2 size={14} color="#EF4444" />
               </TouchableOpacity>
@@ -69,10 +70,10 @@ export const DraftResumeBanner: React.FC = () => {
                 onPress={() => resumeDraft(firstDraft)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Resume unfinished workout"
+                accessibilityLabel="Continue paused workout"
               >
                 <Play size={14} color="#000000" fill="#000000" />
-                <Text style={styles.resumeBtnText}>Resume</Text>
+                <Text style={styles.resumeBtnText}>Continue</Text>
               </TouchableOpacity>
             </>
           )}

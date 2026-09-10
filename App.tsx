@@ -71,7 +71,7 @@ function MainAppContent() {
             {currentTab === 'analytics' && <AnalyticsScreen />}
           </View>
 
-          {/* Unfinished Workout Draft Card — placed in bottom thumb zone */}
+          {/* Paused Workout Card — placed in bottom thumb zone */}
           <DraftResumeBanner />
 
           {/* Persistent Mini Bar when workout is active in background */}
