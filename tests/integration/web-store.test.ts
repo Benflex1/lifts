@@ -56,7 +56,7 @@ describe('webStore persistence and lease handling', () => {
     await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'global' });
     assert.equal((await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType, 'global');
     const snapshot = await store.readSnapshot();
-    assert.deepEqual(snapshot.gyms.map((g: any) => g.id), ['gym-default', gym.id]);
+    assert.deepEqual(snapshot.gyms.map((g: any) => g.id), [gym.id, 'gym-default']);
     assert.equal(snapshot.exerciseGymScopes.length, 1);
     await store.close();
     await new Promise<void>((resolve, reject) => {
@@ -88,9 +88,61 @@ describe('webStore persistence and lease handling', () => {
     const second: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await second.init();
     await assert.rejects(() => first.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }), /Exercise not found/);
+    await assert.rejects(() => first.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'invalid' }), /scope type/i);
     await assert.rejects(() => second.createGym('Read only'), /read-only mode/);
     await assert.rejects(() => second.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }), /read-only mode/);
     await first.close(); await second.close();
+  });
+
+  it('matches canonical gym validation and default-first name ordering', async () => {
+    const dbName = `test-web-gym-policy-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    await assert.rejects(() => store.createGym('  '), /gym name cannot be empty/i);
+    await assert.rejects(() => store.createGym('valid', '#06B6D4'), /approved palette/);
+    const zulu = await store.createGym('Zulu');
+    const alpha = await store.createGym('Alpha');
+    await store.setDefaultGym(zulu.id);
+    assert.deepEqual((await store.getGyms()).map((gym: any) => gym.name), ['Zulu', 'Alpha', 'Default Gym']);
+    await store.close();
+  });
+
+  it('persists v2 normalization across reopen and allows read-only legacy reads', async () => {
+    const dbName = `test-web-v2-repeat-${Date.now()}`;
+    const legacy = await openLegacyVersionOneDatabase(dbName);
+    legacy.close();
+    const writer: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await writer.init();
+    await writer.close();
+    const reopened: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await reopened.init();
+    const readOnly: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await readOnly.init();
+    const raw = await new Promise<any>((resolve, reject) => {
+      const req = (indexedDB as any).open(dbName, 2);
+      req.onsuccess = () => { const db = req.result; const tx = db.transaction('workouts', 'readonly'); const get = tx.objectStore('workouts').get('legacy-workout'); get.onsuccess = () => { db.close(); resolve(get.result); }; get.onerror = () => reject(get.error); };
+      req.onerror = () => reject(req.error);
+    });
+    assert.equal(raw.gymId, 'gym-default');
+    assert.equal((await readOnly.getWorkoutDetail('legacy-workout')).gymId, 'gym-default');
+    assert.equal((await reopened.getGyms()).filter((gym: any) => gym.isDefault).length, 1);
+    await reopened.close(); await readOnly.close();
+  });
+
+  it('rejects invalid snapshot scopes without partially merging any data', async () => {
+    const dbName = `test-web-merge-validation-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    const before = await store.readSnapshot();
+    await assert.rejects(() => store.mergeSnapshot({
+      ...before,
+      exercises: [...before.exercises, { id: 'new-exercise', name: 'New', category: 'Test', equipment: 'barbell', primaryMuscles: [] }],
+      gyms: [...before.gyms, { id: 'gym-new', name: 'New Gym', color: '#10B981', isDefault: false, createdAt: '2026-09-10T00:00:01.000Z' }],
+      exerciseGymScopes: [{ exerciseId: 'missing-exercise', scopeType: 'linked_group', linkedGymIds: ['gym-new', 'gym-new'] }],
+    }), /duplicate|unknown exercise|at least two/i);
+    const after = await store.readSnapshot();
+    assert.deepEqual(after, before);
+    await store.close();
   });
   it('persists every user record type across store recreation and matches snapshot', async () => {
     const fixture = await createStoreFixture('web');

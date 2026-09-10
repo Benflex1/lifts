@@ -23,17 +23,25 @@
 
 ## Verification
 
-- `npx tsx --test tests/integration/web-store.test.ts` — 13 passed.
-- `npx tsx --test tests/integration/web-store.test.ts tests/integration/native-store.test.ts` — 24 passed.
-- `npm test` — 101 passed.
-- `npm run test:integration` — 49 passed.
-- `npx tsc --noEmit` — passed.
+- `npx tsx --test tests/integration/web-store.test.ts` — 16 passed.
+- `npx tsx --test tests/integration/web-store.test.ts tests/integration/native-store.test.ts` — 32 passed.
+- `npm test` — 118 passed.
+- `npm run test:integration` — 57 passed.
+- `npx tsc --noEmit` — two known Task 5 diagnostics remain at `src/utils/backup.ts:399` and `src/utils/restore.ts:202`; no Task 4 diagnostics remain.
 - `git diff --check` — passed.
 
 ## Concerns
 
 - The shared `Store` contract now contains one required declaration for each Task 1 gym/profile/scope operation; native implementations from the preceding tasks satisfy those declarations.
 - `Workout.gymId` remains required in the canonical Task 1 types; web persistence still normalizes missing legacy records to `gym-default` during upgrade and reads.
+
+## Fix-round 1
+
+- Routed web gym name/color/deletion and exercise-scope validation through the canonical shared validators; the web palette now exactly matches native.
+- Added merge preflight validation for duplicate gym/scope IDs, gym profile values, exercise existence, scope type/cardinality, and all referenced gyms before any IndexedDB writes.
+- Matched native default-first/name ordering in `getGyms()` and issued the gym deletion request after reference updates are scheduled.
+- Added focused tests for exact validation parity, ordering, repeated upgrade persistence, read-only legacy reads, invalid merge atomicity, and invalid scope types.
+- The corrected branch verification is 32 focused integration passes, 118 unit passes, and 57 full integration passes. Typecheck remains limited to the two expected Task 5 backup/restore diagnostics listed above.
 
 ## Fix-round note (correct integration worktree)
 

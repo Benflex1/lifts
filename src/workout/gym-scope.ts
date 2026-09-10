@@ -19,6 +19,9 @@ export function getAllowedGymIds(exercise: Exercise, override: ExerciseGymScope 
 
 export function validateExerciseGymScope(scope: ExerciseGymScope, knownGymIds: ReadonlySet<string>): void {
   if (!scope.exerciseId.trim()) throw new Error('exercise ID cannot be empty');
+  if (!['global', 'gym_specific', 'linked_group'].includes(scope.scopeType)) {
+    throw new Error(`invalid scope type: ${scope.scopeType}`);
+  }
   const linkedGymIds = scope.linkedGymIds ?? [];
   if (scope.scopeType !== 'linked_group' && linkedGymIds.length > 0) {
     throw new Error('linked gym IDs are only valid for linked_group scopes');

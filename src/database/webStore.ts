@@ -5,6 +5,8 @@ import { smartSearchExercises } from '../utils/search';
 import { calculate1RM } from '../utils/calculator';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
+import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName } from '../workout/gym-profile';
+import { validateExerciseGymScope } from '../workout/gym-scope';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -23,7 +25,6 @@ const DEFAULT_GYM: Gym = {
   id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
   createdAt: '2026-09-10T00:00:00.000Z',
 };
-const GYM_COLORS = new Set(['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4']);
 
 function normalizeWorkout(workout: Workout): Workout {
   return workout.gymId ? workout : { ...workout, gymId: 'gym-default' };
@@ -32,18 +33,6 @@ function normalizeWorkout(workout: Workout): Workout {
 function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
   const workout = normalizeWorkout(draft.workout);
   return workout === draft.workout ? draft : { ...draft, workout };
-}
-
-function validateGymName(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) throw new Error('Gym name cannot be empty');
-  if ([...trimmed].length > 80) throw new Error('Gym name cannot exceed 80 characters');
-  return trimmed;
-}
-
-function validateGymColor(color: string): string {
-  if (!GYM_COLORS.has(color)) throw new Error('Invalid gym color');
-  return color;
 }
 
 export async function createWebStore(name: string = 'lifts_web_db', options?: WebStoreOptions): Promise<WebStore> {
@@ -345,7 +334,10 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return new Promise((resolve, reject) => {
       const tx = database.transaction('gyms', 'readonly');
       const req = tx.objectStore('gyms').getAll();
-      req.onsuccess = () => resolve((req.result as Gym[]).sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+      req.onsuccess = () => resolve((req.result as Gym[]).sort((a, b) => {
+        if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      }));
       req.onerror = () => reject(req.error);
     });
   }
@@ -357,7 +349,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return gym;
   }
 
-  async function createGym(name: string, color: string = '#3B82F6'): Promise<Gym> {
+  async function createGym(name: string, color: string = DEFAULT_GYM_COLOR): Promise<Gym> {
     const database = await openDb();
     await verifyAndRenewLease(database);
     const gym: Gym = { id: createScopedId('gym'), name: validateGymName(name), color: validateGymColor(color), isDefault: false, createdAt: new Date(getNow()).toISOString() };
@@ -404,18 +396,21 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const gyms = tx.objectStore('gyms'); const workouts = tx.objectStore('workouts'); const drafts = tx.objectStore('workout_drafts'); const scopes = tx.objectStore('exercise_gym_scopes');
       const all = gyms.getAll();
       all.onsuccess = () => {
-        const rows = all.result as Gym[]; const removed = rows.find(g => g.id === id); const replacement = rows.find(g => g.id === replacementGymId);
-        if (!removed) return reject(new Error('Gym not found')); if (!replacement) return reject(new Error('Replacement gym not found'));
+        const rows = all.result as Gym[];
+        validateGymDeletion(id, replacementGymId, rows);
+        const removed = rows.find(g => g.id === id)!;
         for (const gym of rows) gyms.put({ ...gym, isDefault: removed.isDefault ? gym.id === replacementGymId : gym.isDefault });
-        gyms.delete(id);
         const wr = workouts.getAll(); wr.onsuccess = () => (wr.result as Workout[]).forEach(w => { if (w.gymId === id) workouts.put({ ...w, gymId: replacementGymId }); });
         const dr = drafts.getAll(); dr.onsuccess = () => (dr.result as WorkoutDraft[]).forEach(d => { const n = normalizeDraft(d); if (n.workout.gymId === id) drafts.put({ ...n, workout: { ...n.workout, gymId: replacementGymId } }); });
-        const sr = scopes.getAll(); sr.onsuccess = () => (sr.result as ExerciseGymScope[]).forEach(scope => {
-          if (!scope.linkedGymIds?.includes(id)) return;
-          const ids = scope.linkedGymIds.filter(g => g !== id);
-          if (ids.length === 0) scopes.delete(scope.exerciseId);
-          else scopes.put({ ...scope, scopeType: ids.length < 2 ? 'gym_specific' : 'linked_group', linkedGymIds: ids.length < 2 ? undefined : ids });
-        });
+        const sr = scopes.getAll(); sr.onsuccess = () => {
+          for (const scope of sr.result as ExerciseGymScope[]) {
+            if (!scope.linkedGymIds?.includes(id)) continue;
+            const ids = scope.linkedGymIds.filter(g => g !== id);
+            if (ids.length === 0) scopes.delete(scope.exerciseId);
+            else scopes.put({ ...scope, scopeType: ids.length < 2 ? 'gym_specific' : 'linked_group', linkedGymIds: ids.length < 2 ? undefined : ids });
+          }
+          gyms.delete(id);
+        };
       };
       tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error('Gym deletion aborted'));
     });
@@ -429,11 +424,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
   async function saveExerciseGymScope(scope: ExerciseGymScope): Promise<void> {
     const database = await openDb(); await verifyAndRenewLease(database);
-    if (!['global', 'gym_specific', 'linked_group'].includes(scope.scopeType)) throw new Error('Invalid scope type');
     if (!(await getExerciseById(scope.exerciseId))) throw new Error('Exercise not found');
     const gyms = await getGyms(); const ids = scope.linkedGymIds || [];
-    if (scope.scopeType === 'linked_group' && (ids.length < 2 || new Set(ids).size !== ids.length || ids.some(id => !gyms.some(g => g.id === id)))) throw new Error('Invalid linked gym scope');
-    if (scope.scopeType !== 'linked_group' && ids.length) throw new Error('Linked gym IDs are only valid for linked_group');
+    validateExerciseGymScope(scope, new Set(gyms.map(gym => gym.id)));
     const database2 = await openDb(); await new Promise<void>((resolve, reject) => { const tx = database2.transaction('exercise_gym_scopes', 'readwrite'); tx.objectStore('exercise_gym_scopes').put(scope); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
   }
   async function deleteExerciseGymScope(exerciseId: string): Promise<void> { const database = await openDb(); await verifyAndRenewLease(database); await new Promise<void>((resolve, reject) => { const tx = database.transaction('exercise_gym_scopes', 'readwrite'); tx.objectStore('exercise_gym_scopes').delete(exerciseId); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); }
@@ -909,15 +902,23 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const destinationGyms = await getGyms();
     const incomingGyms = snapshot.gyms || [];
     const knownGymIds = new Set([...destinationGyms, ...incomingGyms].map(g => g.id));
+    if (new Set(incomingGyms.map(g => g.id)).size !== incomingGyms.length) throw new Error('Snapshot contains duplicate gym IDs');
+    if (new Set((snapshot.exerciseGymScopes || []).map(scope => scope.exerciseId)).size !== (snapshot.exerciseGymScopes || []).length) throw new Error('Snapshot contains duplicate exercise scope IDs');
     if (incomingGyms.filter(g => g.isDefault).length > 1) throw new Error('Snapshot contains multiple default gyms');
+    for (const gym of incomingGyms) {
+      validateGymName(gym.name);
+      validateGymColor(gym.color);
+    }
+    const knownExerciseIds = new Set([...(await getAllExercises()).map(exercise => exercise.id), ...snapshot.exercises.map(exercise => exercise.id)]);
+    for (const scope of snapshot.exerciseGymScopes || []) {
+      if (!knownExerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
+      validateExerciseGymScope(scope, knownGymIds);
+    }
     for (const workout of snapshot.workouts) {
       if (!knownGymIds.has(workout.gymId || 'gym-default')) throw new Error(`Workout references missing gym: ${workout.gymId}`);
     }
     for (const draft of snapshot.drafts) {
       if (!knownGymIds.has(draft.workout.gymId || 'gym-default')) throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
-    }
-    for (const scope of snapshot.exerciseGymScopes || []) {
-      if (scope.linkedGymIds?.some(id => !knownGymIds.has(id))) throw new Error(`Scope references missing gym: ${scope.exerciseId}`);
     }
 
     await new Promise<void>((resolve, reject) => {
