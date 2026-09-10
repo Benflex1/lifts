@@ -107,7 +107,15 @@ export const ExerciseScopeModal: React.FC<Props> = ({
               <Text style={styles.title}>Exercise Scope</Text>
               <Text style={styles.subtitle} numberOfLines={1}>{exercise?.name}</Text>
             </View>
-            <TouchableOpacity onPress={onClose} disabled={saving} hitSlop={8}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={onClose}
+              disabled={saving}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Close exercise scope"
+              accessibilityState={{ disabled: saving }}
+            >
               <X size={22} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
@@ -207,12 +215,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#262A34',
   },
+  closeButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   title: { color: '#FFFFFF', fontSize: 19, fontWeight: '800' },
   subtitle: { color: '#9CA3AF', fontSize: 13, marginTop: 3, maxWidth: 260 },
   content: { padding: 20, paddingBottom: 12 },
   scopeOption: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     padding: 13,
     marginBottom: 8,
     borderRadius: 12,
@@ -230,6 +240,7 @@ const styles = StyleSheet.create({
   gymOption: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     padding: 11,
     marginBottom: 7,
     borderRadius: 10,

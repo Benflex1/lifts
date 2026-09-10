@@ -504,6 +504,7 @@ const styles = StyleSheet.create({
   gymFilterChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 16,
