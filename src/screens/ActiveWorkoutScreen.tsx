@@ -38,6 +38,7 @@ import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { DraggableExerciseCard } from '../components/DraggableExerciseCard';
+import { GymPickerModal } from '../components/GymPickerModal';
 import { WeightInput } from '../components/WeightInput';
 import { RepsInput } from '../components/RepsInput';
 import { SwipeableSetRow } from '../components/SwipeableSetRow';
@@ -47,6 +48,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
 import { getExerciseDropIndex } from '../workout/active-exercises';
 import type { ExerciseLayout } from '../workout/active-exercises';
+import { formatPreviousMetric } from '../workout/gym-display';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -70,11 +72,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
+    gyms,
+    activeGym,
+    setActiveGym,
   } = useWorkout();
-  const { unit } = useSettings();
+  const { unit, gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [showGymPicker, setShowGymPicker] = useState(false);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
   const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
   const [plateCalcWeight, setPlateCalcWeight] = useState<number | null>(null);
@@ -190,6 +196,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     return { liveVolume: volume, completedSetsCount: completed, totalSetsCount: total };
   }, [activeWorkout.exercises]);
 
+  const displayedActiveGym = activeGym || gyms.find((gym) => gym.id === activeWorkout.gymId) || null;
+
   const menuExerciseIndex = menuActiveExercise
     ? activeWorkout.exercises.findIndex(exercise => exercise.id === menuActiveExercise.id)
     : -1;
@@ -265,6 +273,18 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     });
     if (shouldDiscard) {
       cancelWorkout();
+    }
+  };
+
+  const handleGymSelect = async (gymId: string) => {
+    try {
+      await setActiveGym(gymId);
+    } catch (error: any) {
+      await notify({
+        title: 'Gym Error',
+        message: error?.message || 'Failed to switch gym.',
+      });
+      throw error;
     }
   };
 
@@ -347,6 +367,24 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           </TouchableOpacity>
         </View>
       </View>
+
+      {gymTrackingEnabled && displayedActiveGym && (
+        <View style={styles.gymSelectorContainer}>
+          <TouchableOpacity
+            style={styles.gymSelector}
+            onPress={() => setShowGymPicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Workout gym: ${displayedActiveGym.name}`}
+            accessibilityHint="Opens the gym picker"
+          >
+            <View style={[styles.gymSelectorSwatch, { backgroundColor: displayedActiveGym.color }]} />
+            <Text style={styles.gymSelectorText} numberOfLines={1}>
+              {displayedActiveGym.name}
+            </Text>
+            <Text style={styles.gymSelectorChevron}>▾</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Top Metrics Card - Lyfta Screenshot 2 Style */}
       <View style={styles.metricsContainer}>
@@ -575,7 +613,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       <View style={styles.previousCell}>
                         {set.previousWeightKg !== undefined ? (
                           <Text style={styles.previousText}>
-                            {kgToDisplay(set.previousWeightKg, unit)} {unit} × {set.previousReps}
+                            {formatPreviousMetric(
+                              {
+                                weightKg: set.previousWeightKg,
+                                reps: set.previousReps ?? 0,
+                                sourceGymId: set.previousGymId,
+                                sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
+                              },
+                              unit,
+                            )}
                           </Text>
                         ) : (
                           <Text style={styles.previousPlaceholder}>—</Text>
@@ -713,6 +759,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             addExercisesToWorkout(exs);
           }
         }}
+      />
+
+      {/* Active Workout Gym Picker */}
+      <GymPickerModal
+        visible={gymTrackingEnabled && showGymPicker}
+        gyms={gyms}
+        selectedGymId={displayedActiveGym?.id}
+        onSelect={handleGymSelect}
+        onClose={() => setShowGymPicker(false)}
       />
 
       {/* Plate Calculator Modal */}
@@ -1105,6 +1160,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#14171F',
     borderBottomWidth: 1,
     borderBottomColor: '#20242E',
+  },
+  gymSelectorContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    backgroundColor: '#14171F',
+  },
+  gymSelector: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: '100%',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#1E232E',
+    borderWidth: 1,
+    borderColor: '#2D3748',
+  },
+  gymSelectorSwatch: {
+    width: 10,
+    height: 10,
+    marginRight: 7,
+    borderRadius: 5,
+  },
+  gymSelectorText: {
+    maxWidth: 240,
+    color: '#F3F4F6',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  gymSelectorChevron: {
+    marginLeft: 6,
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   backBtn: {
     width: 36,
