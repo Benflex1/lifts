@@ -15,6 +15,7 @@ describe('Draft Lifecycle Integration', () => {
       const workout: Workout = {
         id: `session-${platform}-1`,
         name: 'Full Body A',
+        gymId: 'gym-default',
         startTime: new Date(currentTime).toISOString(),
         durationSeconds: 0,
         totalVolumeKg: 0,
@@ -117,6 +118,7 @@ describe('Draft Lifecycle Integration', () => {
         workout: {
           id: `draft-A-${platform}`,
           name: 'Draft A',
+          gymId: 'gym-default',
           startTime: '2026-09-07T08:00:00.000Z',
           durationSeconds: 300,
           totalVolumeKg: 100,
@@ -132,6 +134,7 @@ describe('Draft Lifecycle Integration', () => {
         workout: {
           id: `draft-B-${platform}`,
           name: 'Draft B',
+          gymId: 'gym-default',
           startTime: '2026-09-07T09:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 200,
@@ -167,6 +170,7 @@ describe('Draft Lifecycle Integration', () => {
       const workout: Workout = {
         id: `workout-zero-${platform}`,
         name: 'Zero Kg and Repeated Occurrences',
+        gymId: 'gym-default',
         startTime: '2026-09-07T11:00:00.000Z',
         endTime: '2026-09-07T11:30:00.000Z',
         durationSeconds: 1800,
@@ -256,6 +260,7 @@ describe('Draft Lifecycle Integration', () => {
             workout: {
               id: `draft-reconstruct-${platform}`,
               name: 'Draft With Omitted Exercise',
+              gymId: 'gym-default',
               startTime: '2026-09-07T10:00:00.000Z',
               durationSeconds: 300,
               totalVolumeKg: 1000,
@@ -273,6 +278,8 @@ describe('Draft Lifecycle Integration', () => {
           },
         ],
         settings: {},
+        gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+        exerciseGymScopes: [],
       });
 
       const { restoreBackup } = await import('../../src/utils/restore');

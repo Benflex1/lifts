@@ -28,6 +28,8 @@ function createMockStore(): Store & {
       exercises: [],
       drafts: Array.from(drafts.values()),
       settings: {},
+      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      exerciseGymScopes: [],
     }),
     saveDraft: async (draft: WorkoutDraft) => {
       drafts.set(draft.workout.id, draft);
@@ -66,8 +68,18 @@ function createMockStore(): Store & {
     deleteWorkout: async (id: string) => {
       workouts.delete(id);
     },
+    getGyms: async () => [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+    getDefaultGym: async () => ({ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }),
+    createGym: async () => ({ id: 'gym-new', name: 'New Gym', isDefault: false, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }),
+    updateGym: async () => ({ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }),
+    setDefaultGym: async () => {},
+    deleteGym: async () => {},
+    getExerciseGymScopes: async () => [],
+    getExerciseGymScope: async () => null,
+    saveExerciseGymScope: async () => {},
+    deleteExerciseGymScope: async () => {},
     getPreviousSetsForExercise: async () => [],
-    getExerciseStats: async () => ({ maxWeightKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 }),
+    getExerciseStats: async () => ({ global: { maxWeightKg: 0, maxSetVolumeKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 }, gym: { maxWeightKg: 0, maxSetVolumeKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 } }),
     getAllExercises: async () => [],
     searchExercises: async () => [],
     getExerciseById: async () => null,
@@ -89,6 +101,7 @@ describe('SessionController Unit Tests', () => {
     const workout: Workout = {
       id: 'w-1',
       name: 'Push Day',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -113,6 +126,7 @@ describe('SessionController Unit Tests', () => {
     const workout1: Workout = {
       id: 'w-1',
       name: 'Session 1',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -121,6 +135,7 @@ describe('SessionController Unit Tests', () => {
     const workout2: Workout = {
       id: 'w-2',
       name: 'Session 2',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -145,6 +160,7 @@ describe('SessionController Unit Tests', () => {
     await controller.start({
       id: 'w-1',
       name: 'Chest & Arms',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -156,6 +172,7 @@ describe('SessionController Unit Tests', () => {
     controller.update({
       id: 'w-1',
       name: 'Chest & Arms Edited',
+      gymId: 'gym-default',
       startTime: new Date(currentTime - 30_000).toISOString(),
       durationSeconds: 30,
       totalVolumeKg: 50,
@@ -183,6 +200,7 @@ describe('SessionController Unit Tests', () => {
     await controller.start({
       id: 'w-err',
       name: 'Leg Day',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -219,6 +237,7 @@ describe('SessionController Unit Tests', () => {
       workout: {
         id: 'draft-20min',
         name: 'Interrupted Workout',
+        gymId: 'gym-default',
         startTime: started,
         durationSeconds: 150, // old stale duration
         totalVolumeKg: 200,
@@ -261,6 +280,7 @@ describe('SessionController Unit Tests', () => {
       workout: {
         id: 'draft-expired-timer',
         name: 'Session',
+        gymId: 'gym-default',
         startTime: started,
         durationSeconds: 100,
         totalVolumeKg: 0,
@@ -286,6 +306,7 @@ describe('SessionController Unit Tests', () => {
     await controller.start({
       id: 'w-discard',
       name: 'To Discard',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -313,6 +334,7 @@ describe('SessionController Unit Tests', () => {
     const initialWorkout: Workout = {
       id: 'w-immutability',
       name: 'Immutability Test',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,

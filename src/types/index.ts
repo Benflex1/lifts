@@ -23,6 +23,8 @@ export interface WorkoutSet {
   completedAt?: string;
   previousWeightKg?: number;
   previousReps?: number;
+  previousGymId?: string;
+  previousGymName?: string;
   isWeightEdited?: boolean;
 }
 
@@ -40,6 +42,7 @@ export interface Workout {
   id: string;
   name: string;
   routineId?: string;
+  gymId: string;
   startTime: string;
   endTime?: string;
   durationSeconds: number;
@@ -72,6 +75,7 @@ export interface WorkoutHistorySummary {
   id: string;
   name: string;
   routineId?: string;
+  gymId: string;
   startTime: string;
   endTime?: string;
   durationSeconds: number;
@@ -79,6 +83,42 @@ export interface WorkoutHistorySummary {
   totalSets: number;
   exerciseNames: string[];
   notes?: string;
+}
+
+export interface Gym {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  color: string;
+  createdAt: string;
+}
+
+export type ExerciseScopeType = 'global' | 'gym_specific' | 'linked_group';
+
+export interface ExerciseGymScope {
+  exerciseId: string;
+  scopeType: ExerciseScopeType;
+  linkedGymIds?: string[];
+}
+
+export interface PreviousSetSuggestion {
+  weightKg: number;
+  reps: number;
+  sourceGymId?: string;
+  sourceGymName?: string;
+}
+
+export interface ExerciseStats {
+  maxWeightKg: number;
+  maxSetVolumeKg: number;
+  maxReps: number;
+  estimated1RM: number;
+  sessionCount: number;
+}
+
+export interface DualExerciseStats {
+  global: ExerciseStats;
+  gym: ExerciseStats;
 }
 
 export interface PlateCalculation {

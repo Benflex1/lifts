@@ -194,6 +194,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
             id: w.id,
             name: w.name,
             routineId: w.routine_id || undefined,
+            gymId: 'gym-default',
             startTime: w.start_time,
             durationSeconds: w.duration_seconds || 0,
             totalVolumeKg: w.total_volume_kg || 0,

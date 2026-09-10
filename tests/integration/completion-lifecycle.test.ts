@@ -14,6 +14,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const initialWorkout: Workout = {
         id: `w-push-${platform}-1`,
         name: 'Push Day',
+        gymId: 'gym-default',
         startTime: new Date(currentTime).toISOString(),
         durationSeconds: 0,
         totalVolumeKg: 0,
@@ -95,6 +96,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const initialWorkout: Workout = {
         id: `w-leg-${platform}-1`,
         name: 'Leg Day',
+        gymId: 'gym-default',
         startTime: new Date(currentTime).toISOString(),
         durationSeconds: 0,
         totalVolumeKg: 0,

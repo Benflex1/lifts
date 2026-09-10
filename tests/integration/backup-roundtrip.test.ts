@@ -48,6 +48,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
       id: 'w-roundtrip-1',
       routineId,
       name: 'Upper Body Blast',
+      gymId: 'gym-default',
       startTime: '2026-09-07T08:00:00.000Z',
       endTime: '2026-09-07T09:15:00.000Z',
       durationSeconds: 4500,
@@ -108,6 +109,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
       workout: {
         id: 'draft-active-1',
         name: 'In-Progress Session',
+        gymId: 'gym-default',
         startTime: '2026-09-07T09:20:00.000Z',
         durationSeconds: 600,
         totalVolumeKg: 200,

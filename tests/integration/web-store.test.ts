@@ -38,6 +38,7 @@ describe('webStore persistence and lease handling', () => {
       id: 'workout-web-1',
       routineId,
       name: 'Upper Power Session',
+      gymId: 'gym-default',
       startTime: '2026-09-07T08:00:00.000Z',
       endTime: '2026-09-07T09:00:00.000Z',
       durationSeconds: 3600,
@@ -71,6 +72,7 @@ describe('webStore persistence and lease handling', () => {
       workout: {
         id: 'draft-web-1',
         name: 'In-Progress Web Session',
+        gymId: 'gym-default',
         startTime: '2026-09-07T10:00:00.000Z',
         durationSeconds: 500,
         totalVolumeKg: 300,
@@ -212,12 +214,15 @@ describe('webStore persistence and lease handling', () => {
           workout: {
             id: 'corrupt-draft',
             name: 'Corrupt Draft',
+            gymId: 'gym-default',
             startTime: 'bad-date',
             exercises: null,
           },
         },
       ],
       settings: {},
+      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      exerciseGymScopes: [],
     });
 
     await assert.rejects(async () => {
@@ -232,6 +237,7 @@ describe('webStore persistence and lease handling', () => {
     const workout = {
       id: 'browser-workout-1',
       name: 'Chest & Triceps',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -356,6 +362,7 @@ describe('webStore persistence and lease handling', () => {
     const initialWorkout = {
       id: 'w-browser-rapid-1',
       name: 'Rapid Typing Session',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -440,6 +447,7 @@ describe('webStore persistence and lease handling', () => {
         {
           id: 'w-legacy-browser-1',
           name: 'Legacy Workout',
+          gymId: 'gym-default',
           startTime: '2026-09-07T08:00:00.000Z',
           endTime: '2026-09-07T09:00:00.000Z',
           durationSeconds: 3600,
@@ -492,6 +500,8 @@ describe('webStore persistence and lease handling', () => {
       exercises: [],
       drafts: [],
       settings: { weight_unit: 'kg' },
+      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      exerciseGymScopes: [],
     });
 
     // Should successfully restore without rejecting legacy targetReps
@@ -554,6 +564,7 @@ describe('webStore persistence and lease handling', () => {
     const initialWorkout = {
       id: 'w-browser-multi-1',
       name: 'Full Body Session',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -734,6 +745,7 @@ describe('webStore persistence and lease handling', () => {
     const workout = {
       id: 'w-browser-concurrent-1',
       name: 'Concurrent Add Session',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,

@@ -338,6 +338,7 @@ describe('nativeStore and migration safety', () => {
     const workout: Workout = {
       id: 'native-target-reps-workout',
       name: 'Target Reps Test',
+      gymId: 'gym-default',
       startTime: '2026-09-08T09:00:00.000Z',
       endTime: '2026-09-08T10:00:00.000Z',
       durationSeconds: 3600,
@@ -384,6 +385,7 @@ describe('nativeStore and migration safety', () => {
       const workout: Workout = {
         id: 'native-history-commas-workout',
         name: 'Comma Names Test',
+        gymId: 'gym-default',
         startTime: '2026-09-08T11:00:00.000Z',
         endTime: '2026-09-08T12:00:00.000Z',
         durationSeconds: 3600,
@@ -427,6 +429,7 @@ describe('nativeStore and migration safety', () => {
       const workout: Workout = {
         id: 'native-history-edit-workout',
         name: 'Editable Workout',
+        gymId: 'gym-default',
         startTime: '2026-09-08T13:00:00.000Z',
         endTime: '2026-09-08T14:00:00.000Z',
         durationSeconds: 3600,

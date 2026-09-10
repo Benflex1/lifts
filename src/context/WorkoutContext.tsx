@@ -318,6 +318,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: workoutId,
       name,
       routineId: routine?.id,
+      gymId: 'gym-default',
       startTime: new Date().toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,

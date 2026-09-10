@@ -27,6 +27,7 @@ describe('History-derived stats & previous set suggestions', () => {
         workout: {
           id: 'draft-huge-1',
           name: 'Draft Workout',
+          gymId: 'gym-default',
           startTime: '2026-09-07T09:00:00.000Z',
           durationSeconds: 1000,
           totalVolumeKg: 99999,
@@ -71,6 +72,7 @@ describe('History-derived stats & previous set suggestions', () => {
       const workout1: Workout = {
         id: 'w-multi-occ',
         name: 'Bench Extravaganza',
+        gymId: 'gym-default',
         startTime: '2026-09-01T10:00:00.000Z',
         durationSeconds: 3600,
         totalVolumeKg: 1500,
@@ -127,6 +129,7 @@ describe('History-derived stats & previous set suggestions', () => {
       const workout2: Workout = {
         id: 'w-empty-recent',
         name: 'Empty Bench Day',
+        gymId: 'gym-default',
         startTime: '2026-09-05T10:00:00.000Z',
         durationSeconds: 1800,
         totalVolumeKg: 0,

@@ -6,6 +6,7 @@ import { applyWorkoutEdits } from '../../src/workout/workout-edit';
 const workoutFixture = (): Workout => ({
   id: 'workout-1',
   name: 'Original Workout',
+  gymId: 'gym-default',
   startTime: '2026-09-08T09:00:00.000Z',
   endTime: '2026-09-08T10:00:00.000Z',
   durationSeconds: 3600,
