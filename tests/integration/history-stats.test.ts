@@ -402,6 +402,69 @@ describe('History-derived stats & previous set suggestions', () => {
       }
     });
 
+    it(`[${platform}] uses binary ordering for case-sensitive workout IDs`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('Binary Workout ID Gym');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(machine);
+        const makeWorkout = (id: string, weightKg: number): Workout => ({
+          id,
+          name: id,
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: `${id}-occurrence`,
+            exerciseId: machine.id,
+            exercise: machine,
+            restTimerSeconds: 90,
+            sets: [{ id: `${id}-set`, setNumber: 1, type: 'normal', weightKg, reps: 8, isCompleted: true }],
+          }],
+        });
+        await fixture.store.finishWorkout(makeWorkout('Z-workout', 40));
+        await fixture.store.finishWorkout(makeWorkout('a-workout', 50));
+
+        const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
+        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [50]);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
+    it(`[${platform}] uses binary ordering for case-sensitive set IDs`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('Binary Set ID Gym');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(machine);
+        await fixture.store.finishWorkout({
+          id: 'binary-set-workout',
+          name: 'Binary set IDs',
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: 'binary-set-occurrence',
+            exerciseId: machine.id,
+            exercise: machine,
+            restTimerSeconds: 90,
+            sets: [
+              { id: 'a-set', setNumber: 1, type: 'normal', weightKg: 10, reps: 8, isCompleted: true },
+              { id: 'Z-set', setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
+            ],
+          }],
+        });
+
+        const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
+        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [20, 10]);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
     it(`[${platform}] orders completed suggestion sets by set number`, async () => {
       const fixture = await createStoreFixture(platform);
       try {

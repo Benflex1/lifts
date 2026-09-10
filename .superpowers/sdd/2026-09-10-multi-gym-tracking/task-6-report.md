@@ -30,6 +30,28 @@ Implemented only Task 6 in the `multi-gym-tracking` worktree. Active session/UI 
 - `npx tsc --noEmit` — passed.
 - `git diff --check` — passed.
 
+## Fix round 2
+
+### Review finding addressed
+
+The web occurrence loader used locale-sensitive `localeCompare` for workout-ID and set-ID tie-breaks, while native SQLite uses binary ordering. This could produce different occurrence and suggestion results for case-sensitive or non-ASCII-safe IDs.
+
+### TDD evidence
+
+Added native/web parity regressions using same-timestamp workout IDs `Z-workout` and `a-workout`, plus same-number set IDs `a-set` and `Z-set`. Before the production fix, the focused binary-ordering run passed both native tests but failed both web tests: web selected `[40]` instead of `[50]` for the workout occurrence and returned `[10, 20]` instead of `[20, 10]` for set suggestions.
+
+### Fix
+
+Web now uses a deterministic UTF-16 code-unit comparator matching SQLite BINARY semantics for descending workout-ID and ascending set-ID ordering. Native binary ordering and the existing deterministic tie-break behavior remain unchanged.
+
+### Fix-round verification
+
+- Focused history/native/web integration command — 53 passed, 0 failed.
+- `npm test` — 124 passed, 0 failed.
+- `npm run test:integration` — 81 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `git diff --check` — passed.
+
 Final verification was rerun after removing an incidental web history-summary sort change; the retained fix-round behavior and all existing suites remained green.
 
 The shell profile prints pre-existing `NPM_CONFIG_PREFIX`/missing temporary `uv` environment warnings before commands; they did not affect exit status or test results.

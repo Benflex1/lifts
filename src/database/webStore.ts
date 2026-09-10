@@ -36,6 +36,15 @@ function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
   return workout === draft.workout ? draft : { ...draft, workout };
 }
 
+function compareBinaryStrings(a: string, b: string): number {
+  const length = Math.min(a.length, b.length);
+  for (let index = 0; index < length; index++) {
+    const difference = a.charCodeAt(index) - b.charCodeAt(index);
+    if (difference !== 0) return difference;
+  }
+  return a.length - b.length;
+}
+
 function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
   return a.exerciseId === b.exerciseId && a.scopeType === b.scopeType
     && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
@@ -709,7 +718,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const workouts = (req.result as Workout[]).map(normalizeWorkout)
           .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
-        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || b.id.localeCompare(a.id));
+        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
           const matching = workout.exercises.filter(item => item.exerciseId === exerciseId);
           const requested = matching[occurrenceIndex];
@@ -726,7 +735,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
               : Math.max(0, matching.indexOf(selected!)),
             sets: selected?.sets
               .filter(set => set.isCompleted)
-              .sort((a, b) => a.setNumber - b.setNumber || a.id.localeCompare(b.id))
+              .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
               .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
           };
         });
