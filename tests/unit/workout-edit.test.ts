@@ -47,6 +47,29 @@ const workoutFixture = (): Workout => ({
 });
 
 describe('applyWorkoutEdits', () => {
+  it('reassigns only the workout gym while preserving the completed workout ID', () => {
+    const original = workoutFixture();
+
+    const updated = applyWorkoutEdits(original, {
+      gymId: 'gym-b',
+      sets: [],
+    });
+
+    assert.equal(updated.id, original.id);
+    assert.equal(updated.gymId, 'gym-b');
+    assert.equal(updated.name, original.name);
+    assert.equal(updated.totalVolumeKg, original.totalVolumeKg);
+    assert.deepEqual(updated.exercises, original.exercises);
+    assert.equal(original.gymId, 'gym-default');
+  });
+
+  it('rejects an empty gym reassignment', () => {
+    assert.throws(() => applyWorkoutEdits(workoutFixture(), {
+      gymId: '  ',
+      sets: [],
+    }), /Gym ID cannot be empty/);
+  });
+
   it('updates selected sets, keeps IDs and metadata, and recalculates volume', () => {
     const original = workoutFixture();
 

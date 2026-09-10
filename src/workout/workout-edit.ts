@@ -10,6 +10,7 @@ export interface WorkoutSetEdit {
 export interface WorkoutEdits {
   name?: string;
   notes?: string;
+  gymId?: string;
   sets: WorkoutSetEdit[];
 }
 
@@ -35,6 +36,11 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
   const nextName = edits.name === undefined ? workout.name : edits.name.trim();
   if (!nextName) {
     throw new Error('Workout name cannot be empty');
+  }
+
+  const nextGymId = edits.gymId === undefined ? workout.gymId : edits.gymId.trim();
+  if (!nextGymId) {
+    throw new Error('Gym ID cannot be empty');
   }
 
   for (const edit of edits.sets) {
@@ -78,6 +84,7 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
     ...workout,
     name: nextName,
     notes: edits.notes === undefined ? workout.notes : edits.notes.trim() || undefined,
+    gymId: nextGymId,
     exercises,
     totalVolumeKg,
   };

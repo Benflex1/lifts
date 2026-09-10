@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import {
   Calendar as CalendarIcon,
@@ -18,7 +19,7 @@ import {
   ChevronUp,
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
-import { Workout, WorkoutHistorySummary, Routine, ActiveExercise } from '../types';
+import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise } from '../types';
 import {
   getWorkoutHistory,
   getWorkoutDetail,
@@ -38,9 +39,11 @@ import { WorkoutEditModal } from '../components/WorkoutEditModal';
 
 export const HistoryScreen: React.FC = () => {
   const { startWorkout } = useWorkout();
-  const { unit } = useSettings();
+  const { unit, gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
+  const [gyms, setGyms] = useState<Gym[]>([]);
+  const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [workoutDetails, setWorkoutDetails] = useState<Record<string, Workout>>({});
@@ -51,17 +54,35 @@ export const HistoryScreen: React.FC = () => {
     loadHistory();
   }, []);
 
+  useEffect(() => {
+    if (!gymTrackingEnabled) {
+      setSelectedGymId(null);
+      return;
+    }
+    if (selectedGymId && !gyms.some(gym => gym.id === selectedGymId)) {
+      setSelectedGymId(null);
+    }
+  }, [gymTrackingEnabled, gyms, selectedGymId]);
+
   const loadHistory = async () => {
     setLoading(true);
     try {
-      const list = await getWorkoutHistory();
+      const [list, gymList] = await Promise.all([getWorkoutHistory(), getGyms()]);
       setHistory(list);
+      setGyms(gymList);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
   };
+
+  const filteredHistory = useMemo(
+    () => selectedGymId ? history.filter(item => item.gymId === selectedGymId) : history,
+    [history, selectedGymId],
+  );
+
+  const gymById = useMemo(() => new Map(gyms.map(gym => [gym.id, gym])), [gyms]);
 
   const handleToggleExpand = async (workoutId: string) => {
     if (expandedId === workoutId) {
@@ -156,6 +177,9 @@ export const HistoryScreen: React.FC = () => {
 
   const handleSaveEditedWorkout = async (updated: Workout) => {
     try {
+      if (!gyms.some(gym => gym.id === updated.gymId)) {
+        throw new Error('Unknown gym selected for workout.');
+      }
       await saveCompletedWorkout(updated);
       setWorkoutDetails(previous => ({ ...previous, [updated.id]: updated }));
       await loadHistory();
@@ -166,8 +190,8 @@ export const HistoryScreen: React.FC = () => {
   };
 
   // Calculate totals
-  const totalWorkouts = history.length;
-  const totalVolume = history.reduce((sum, w) => sum + w.totalVolumeKg, 0);
+  const totalWorkouts = filteredHistory.length;
+  const totalVolume = filteredHistory.reduce((sum, w) => sum + w.totalVolumeKg, 0);
 
   const formatDate = (isoString: string) => {
     try {
@@ -202,6 +226,43 @@ export const HistoryScreen: React.FC = () => {
         </View>
       </View>
 
+      {gymTrackingEnabled && (
+        <View style={styles.gymFilterSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.gymFilterScroll}
+            keyboardShouldPersistTaps="handled"
+          >
+            <TouchableOpacity
+              style={[styles.gymFilterChip, selectedGymId === null && styles.gymFilterChipActive]}
+              onPress={() => setSelectedGymId(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Show all gyms"
+              accessibilityState={{ selected: selectedGymId === null }}
+            >
+              <Text style={[styles.gymFilterText, selectedGymId === null && styles.gymFilterTextActive]}>All Gyms</Text>
+            </TouchableOpacity>
+            {gyms.map(gym => {
+              const selected = selectedGymId === gym.id;
+              return (
+                <TouchableOpacity
+                  key={gym.id}
+                  style={[styles.gymFilterChip, selected && styles.gymFilterChipActive]}
+                  onPress={() => setSelectedGymId(gym.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${gym.name} workouts`}
+                  accessibilityState={{ selected }}
+                >
+                  <View style={[styles.gymSwatch, { backgroundColor: gym.color }]} />
+                  <Text style={[styles.gymFilterText, selected && styles.gymFilterTextActive]}>{gym.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.centerBox}>
           <ActivityIndicator size="large" color="#3B82F6" />
@@ -209,9 +270,9 @@ export const HistoryScreen: React.FC = () => {
       ) : (
         <FlatList
           style={styles.scrollArea}
-          contentContainerStyle={[styles.scrollContent, history.length === 0 && styles.emptyListContent]}
+          contentContainerStyle={[styles.scrollContent, filteredHistory.length === 0 && styles.emptyListContent]}
           keyboardShouldPersistTaps="handled"
-          data={history}
+          data={filteredHistory}
           keyExtractor={item => item.id}
           renderItem={({ item }) => {
             const isExpanded = expandedId === item.id;
@@ -226,6 +287,12 @@ export const HistoryScreen: React.FC = () => {
                       <CalendarIcon size={13} color="#9CA3AF" />
                       <Text style={styles.dateText}>{formatDate(item.startTime)}</Text>
                     </View>
+                    {gymTrackingEnabled && gymById.get(item.gymId) && (
+                      <View style={styles.gymTag}>
+                        <View style={[styles.gymSwatch, { backgroundColor: gymById.get(item.gymId)!.color }]} />
+                        <Text style={styles.gymTagText}>{gymById.get(item.gymId)!.name}</Text>
+                      </View>
+                    )}
                   </View>
 
                   <View style={styles.headerRightActions}>
@@ -354,7 +421,9 @@ export const HistoryScreen: React.FC = () => {
           ListEmptyComponent={(
             <View style={styles.emptyBox}>
               <Dumbbell size={48} color="#2A2E3B" />
-              <Text style={styles.emptyTitle}>No workouts logged yet</Text>
+              <Text style={styles.emptyTitle}>
+                {selectedGymId ? 'No workouts at this gym' : 'No workouts logged yet'}
+              </Text>
               <Text style={styles.emptySub}>
                 Start your first workout to view your history and progression!
               </Text>
@@ -366,6 +435,8 @@ export const HistoryScreen: React.FC = () => {
       <WorkoutEditModal
         visible={editingWorkout !== null}
         workout={editingWorkout}
+        gyms={gyms}
+        gymTrackingEnabled={gymTrackingEnabled}
         unit={unit}
         onClose={() => setEditingWorkout(null)}
         onSave={handleSaveEditedWorkout}
@@ -419,6 +490,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  gymFilterSection: {
+    backgroundColor: '#13151B',
+    borderBottomWidth: 1,
+    borderBottomColor: '#20242E',
+  },
+  gymFilterScroll: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  gymFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: '#181A20',
+    borderWidth: 1,
+    borderColor: '#2F3748',
+  },
+  gymFilterChipActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#3B82F6',
+  },
+  gymFilterText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  gymFilterTextActive: {
+    color: '#FFFFFF',
+  },
+  gymSwatch: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    marginRight: 6,
+  },
+  gymTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#20242E',
+  },
+  gymTagText: {
+    color: '#D1D5DB',
+    fontSize: 11,
+    fontWeight: '600',
   },
   scrollArea: {
     flex: 1,

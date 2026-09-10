@@ -11,10 +11,19 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Search, X, Dumbbell, Plus, ChevronRight, Info, Trophy, TrendingUp } from 'lucide-react-native';
-import { Exercise } from '../types';
-import { searchExercises, createCustomExercise, getDefaultGym, getExerciseStats } from '../database/db';
+import { DualExerciseStats, Exercise, ExerciseGymScope, Gym } from '../types';
+import {
+  searchExercises,
+  createCustomExercise,
+  getDefaultGym,
+  getExerciseStats,
+  getExerciseGymScope,
+  getGyms,
+} from '../database/db';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
+import { resolveExerciseScope } from '../workout/gym-scope';
+import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 
 const MUSCLE_GROUPS = [
   'All',
@@ -54,7 +63,7 @@ const QUICK_SUGGESTIONS = [
 ];
 
 export const ExercisesScreen: React.FC = () => {
-  const { unit } = useSettings();
+  const { unit, gymTrackingEnabled } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
@@ -72,20 +81,80 @@ export const ExercisesScreen: React.FC = () => {
   const [customEquipment, setCustomEquipment] = useState('Barbell');
 
   // Exercise personal stats
-  const [exerciseStats, setExerciseStats] = useState<{
-    maxWeightKg: number;
-    maxReps: number;
-    estimated1RM: number;
-    sessionCount: number;
-  } | null>(null);
+  const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
+  const [gyms, setGyms] = useState<Gym[]>([]);
+  const [currentGym, setCurrentGym] = useState<Gym | null>(null);
+  const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
+  const [showScopeModal, setShowScopeModal] = useState(false);
 
   useEffect(() => {
-    if (activeDetail) {
-      getDefaultGym().then(gym => getExerciseStats(activeDetail.id, gym.id)).then(stats => setExerciseStats(stats.global));
-    } else {
+    if (!activeDetail) {
       setExerciseStats(null);
+      setCurrentGym(null);
+      setExerciseScope(null);
+      setShowScopeModal(false);
+      return;
     }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const [gymList, defaultGym, scope] = await Promise.all([
+          getGyms(),
+          getDefaultGym(),
+          getExerciseGymScope(activeDetail.id),
+        ]);
+        const selectedGym = gymList.find(gym => gym.id === defaultGym.id) || gymList[0] || defaultGym;
+        const stats = await getExerciseStats(activeDetail.id, selectedGym.id);
+        if (cancelled) return;
+        setGyms(gymList);
+        setCurrentGym(selectedGym);
+        setExerciseScope(scope);
+        setExerciseStats(stats);
+      } catch (e) {
+        if (!cancelled) console.error('Error loading exercise stats:', e);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [activeDetail]);
+
+  useEffect(() => {
+    if (!gymTrackingEnabled) setShowScopeModal(false);
+  }, [gymTrackingEnabled]);
+
+  const handleScopeSaved = (scope: ExerciseGymScope | null) => {
+    setExerciseScope(scope);
+  };
+
+  const statsCard = (label: string, stats: DualExerciseStats['global']) => (
+    <View style={styles.statsCard}>
+      <Text style={styles.statsTierTitle}>{label}</Text>
+      <View style={styles.statsGrid}>
+        <View style={styles.statBox}>
+          <Text style={styles.statBoxLabel}>HEAVIEST LIFT</Text>
+          <Text style={styles.statBoxValue}>
+            {stats.maxWeightKg > 0 ? formatWeight(stats.maxWeightKg, unit) : '—'}
+          </Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statBoxLabel}>MAX SET VOLUME</Text>
+          <Text style={styles.statBoxValue}>
+            {stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—'}
+          </Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statBoxLabel}>ESTIMATED 1RM</Text>
+          <Text style={styles.statBoxValue}>
+            {stats.estimated1RM > 0 ? formatWeight(stats.estimated1RM, unit) : '—'}
+          </Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statBoxLabel}>SESSIONS</Text>
+          <Text style={styles.statBoxValue}>{stats.sessionCount}</Text>
+        </View>
+      </View>
+    </View>
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -324,30 +393,37 @@ export const ExercisesScreen: React.FC = () => {
               )}
 
               {/* Personal Bests & Stats Card */}
-              {exerciseStats && (
-                <View style={styles.statsCard}>
+              {exerciseStats && currentGym && (
+                <>
                   <View style={styles.statsHeader}>
                     <Trophy size={16} color="#F59E0B" />
                     <Text style={styles.statsHeaderTitle}>PERSONAL BESTS & STATS</Text>
                   </View>
-                  <View style={styles.statsGrid}>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statBoxLabel}>HEAVIEST LIFT</Text>
-                      <Text style={styles.statBoxValue}>
-                        {exerciseStats.maxWeightKg > 0 ? formatWeight(exerciseStats.maxWeightKg, unit) : '—'}
-                      </Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statBoxLabel}>ESTIMATED 1RM</Text>
-                      <Text style={styles.statBoxValue}>
-                        {exerciseStats.estimated1RM > 0 ? formatWeight(exerciseStats.estimated1RM, unit) : '—'}
-                      </Text>
-                    </View>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statBoxLabel}>SESSIONS</Text>
-                      <Text style={styles.statBoxValue}>{exerciseStats.sessionCount}</Text>
-                    </View>
+                  {statsCard('Global', exerciseStats.global)}
+                  {statsCard(currentGym.name, exerciseStats.gym)}
+                </>
+              )}
+
+              {gymTrackingEnabled && currentGym && (
+                <View style={styles.scopeCard}>
+                  <View style={styles.scopeText}>
+                    <Text style={styles.scopeLabel}>EFFECTIVE SCOPE</Text>
+                    <Text style={styles.scopeValue}>
+                      {exerciseScope ? (
+                        exerciseScope.scopeType === 'linked_group'
+                          ? `Linked gyms (${exerciseScope.linkedGymIds?.length ?? 0})`
+                          : exerciseScope.scopeType === 'gym_specific' ? 'Gym-specific' : 'Global'
+                      ) : `${resolveExerciseScope(activeDetail, undefined) === 'gym_specific' ? 'Gym-specific' : 'Global'} (equipment default)`}
+                    </Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.scopeButton}
+                    onPress={() => setShowScopeModal(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit exercise scope"
+                  >
+                    <Text style={styles.scopeButtonText}>Edit</Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -377,6 +453,15 @@ export const ExercisesScreen: React.FC = () => {
           )}
         </View>
       </Modal>
+
+      <ExerciseScopeModal
+        visible={gymTrackingEnabled && showScopeModal && activeDetail !== null}
+        exercise={activeDetail}
+        gyms={gyms}
+        scope={exerciseScope}
+        onClose={() => setShowScopeModal(false)}
+        onSaved={handleScopeSaved}
+      />
 
       {/* Create Custom Modal */}
       <Modal 
@@ -711,13 +796,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  statsTierTitle: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
   statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: 8,
   },
   statBox: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '22%',
+    minWidth: 70,
     backgroundColor: '#13151B',
     borderRadius: 10,
     padding: 10,
@@ -737,6 +831,44 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  scopeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#181A20',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    marginBottom: 14,
+  },
+  scopeText: {
+    flex: 1,
+    marginRight: 12,
+  },
+  scopeLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  scopeValue: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  scopeButton: {
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 9,
+    backgroundColor: '#1D4ED8',
+  },
+  scopeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   instructionsBox: {
     backgroundColor: '#181A20',

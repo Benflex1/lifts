@@ -277,6 +277,14 @@ describe('History-derived stats & previous set suggestions', () => {
         const history = await fixture.store.getWorkoutHistory();
         assert.equal(history.find(item => item.id === 'machine-local')?.gymId, gymA.id);
         assert.equal((await fixture.store.getWorkoutDetail('machine-foreign'))?.gymId, gymB.id);
+
+        const allHistory = history.map(item => ({ ...item }));
+        const gymAHistory = history.filter(item => item.gymId === gymA.id);
+        assert.equal(gymAHistory.length, 1);
+        assert.equal(gymAHistory.reduce((sum, item) => sum + item.totalVolumeKg, 0), 45 * 8);
+        assert.deepEqual(history.map(item => item.id), allHistory.map(item => item.id));
+        assert.deepEqual(history.map(item => item.gymId), allHistory.map(item => item.gymId));
+        assert.equal((await fixture.store.getWorkoutDetail('machine-local'))?.gymId, gymA.id);
       } finally {
         await fixture.dispose();
       }
