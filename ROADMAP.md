@@ -37,7 +37,7 @@
 | **RPE Tracking** | Premium feature | Interactive RPE cycle badge (5–10) | Completed (Active workout badge + history breakdown) |
 | **Supersets & Giant Sets** | Premium feature | Planned Phase 3 | Backlog |
 | **Warmup Set Progression** | Premium feature | Planned Phase 3 | Backlog |
-| **Progress Charts & Graphs** | Premium feature | Planned Phase 3 | Backlog |
+| **Progress Charts & Graphs** | Premium feature | Weekly volume and muscle-frequency views; strength/1RM trend charts remain planned | Partial — volume/frequency delivered |
 | **Exercise Demonstration Videos**| Premium feature | Planned Phase 4 | Backlog |
 | **Apple Health / Health Connect** | Premium feature | Planned Phase 4 | Backlog |
 
@@ -69,11 +69,13 @@
 - [x] Dual-drum rest time wheel modal and quick presets.
 - [x] Expandable workout history cards with set summaries and delete options.
 - [x] Screen keep-awake lock during gym sessions.
+- [x] **Multi-Gym Tracking & Machine Isolation**: Gym profiles, active-gym workout assignment, machine/cable history isolation, global/current-gym records, linked scopes, and v2 import/v3 export. Implementation is complete; native/manual release acceptance remains pending.
 
 ### Phase 3: Advanced Training Features [Planned]
 - [ ] **Supersets & Giant Sets**: Visual grouping brackets connecting two or more exercises with combined rest intervals.
 - [ ] **Warmup Progression Calculator**: Automatic warmup ramp generator (e.g. 50% x 10, 70% x 5, 85% x 2).
-- [ ] **Volume & Strength Progression Charts**: Interactive charts visualizing weekly volume and 1RM progress per muscle group.
+- [x] **Weekly Volume & Muscle-Frequency Charts**: Delivered weekly completed-set volume and primary-muscle workout-frequency views.
+- [ ] **Strength / 1RM Progression Charts**: Interactive strength and estimated-1RM trend views per exercise or muscle group.
 - [ ] **Personal Record (PR) Badges**: Visual indicators when completing a set that sets a new weight or volume record.
 - [ ] **CSV / Strong / Hevy Data Import**: Import tools for existing workout history files from third-party trackers.
 
