@@ -114,6 +114,8 @@ export const AnalyticsScreen: React.FC = () => {
 
       const message =
         `Backup Summary:\n` +
+        `• ${preview.gymsCount} gyms to import\n` +
+        `• ${preview.scopeOverridesCount} exercise scope overrides to import\n` +
         `• ${preview.workoutsCount} workouts to import (${preview.skippedWorkoutsCount} identical skipped)\n` +
         `• ${preview.routinesCount} routines to import (${preview.skippedRoutinesCount} identical skipped)\n` +
         `• ${preview.customExercisesCount} custom exercises to import\n` +
@@ -349,7 +351,7 @@ export const AnalyticsScreen: React.FC = () => {
           accessibilityLabel="Save Backup to Files"
         >
           <Download size={20} color="#9CA3AF" />
-          <Text style={styles.exportCardText}>Save Backup to Files (v2)</Text>
+          <Text style={styles.exportCardText}>Save Backup to Files (v3)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

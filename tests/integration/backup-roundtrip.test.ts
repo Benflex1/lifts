@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { createStoreFixture } from '../helpers/storeFixture';
 import { buildBackupJson } from '../../src/utils/backup';
-import { restoreBackup } from '../../src/utils/restore';
+import { computeRestorePlan, restoreBackup } from '../../src/utils/restore';
 import { Exercise, Routine, Workout } from '../../src/types';
 import { WorkoutDraft } from '../../src/database/contract';
 
@@ -22,6 +22,12 @@ describe('Backup Roundtrip & Merge Safety', () => {
       secondaryMuscles: ['glutes'],
     };
     await store.createCustomExercise(customEx);
+    const sourceGym = await store.createGym('Satellite Gym', '#10B981');
+    await store.saveExerciseGymScope({
+      exerciseId: customEx.id,
+      scopeType: 'linked_group',
+      linkedGymIds: ['gym-default', sourceGym.id],
+    });
 
     // 2. Create routine with targets
     const routineId = await store.saveRoutine(
@@ -146,6 +152,10 @@ describe('Backup Roundtrip & Merge Safety', () => {
 
       // Export snapshot
       const backupJson = await buildBackupJson(sourceFixture.store);
+      const exportedBackup = JSON.parse(backupJson);
+      assert.equal(exportedBackup.version, 3);
+      assert.ok(Array.isArray(exportedBackup.gyms));
+      assert.ok(Array.isArray(exportedBackup.exerciseGymScopes));
 
       // Restore into empty destination
       await restoreBackup(backupJson, destFixture.store);
@@ -178,6 +188,13 @@ describe('Backup Roundtrip & Merge Safety', () => {
       // Compare drafts
       assert.equal(destSnap.drafts.length, sourceSnap.drafts.length);
       assert.equal(destSnap.drafts[0].workout.id, sourceSnap.drafts[0].workout.id);
+
+      // Compare multi-gym snapshot data
+      assert.deepEqual(
+        destSnap.gyms.filter((gym) => !gym.isDefault),
+        sourceSnap.gyms.filter((gym) => !gym.isDefault),
+      );
+      assert.deepEqual(destSnap.exerciseGymScopes, sourceSnap.exerciseGymScopes);
 
       // Compare settings
       assert.equal(destSnap.settings.unit, 'lb');
@@ -274,6 +291,54 @@ describe('Backup Roundtrip & Merge Safety', () => {
     assert.equal(snap.workouts[0].notes, 'Great workout session');
     assert.equal(snap.workouts[0].exercises[0].sets[0].rpe, 5);
 
+    await fixture.dispose();
+  });
+
+  it('remaps colliding gym IDs without overwriting destination records', async () => {
+    const sourceFixture = await createStoreFixture('native');
+    const destinationFixture = await createStoreFixture('native');
+    await populateSourceStore(sourceFixture.store);
+    const destinationGym = await destinationFixture.store.createGym('Destination Gym', '#F59E0B');
+
+    const parsed = JSON.parse(await buildBackupJson(sourceFixture.store));
+    const sourceGym = parsed.gyms.find((gym: any) => gym.name === 'Satellite Gym');
+    sourceGym.id = destinationGym.id;
+    parsed.workouts[0].gymId = destinationGym.id;
+    parsed.drafts[0].workout.gymId = destinationGym.id;
+    parsed.exerciseGymScopes[0].linkedGymIds[1] = destinationGym.id;
+
+    const { preview, snapshotToMerge } = await computeRestorePlan(parsed, destinationFixture.store);
+    assert.equal(preview.gymsCount, 1);
+    assert.equal(preview.scopeOverridesCount, 1);
+    const importedGym = snapshotToMerge.gyms[0];
+    assert.match(importedGym.id, /^gym-import-restore-/);
+    assert.equal(snapshotToMerge.workouts[0].gymId, importedGym.id);
+    assert.equal(snapshotToMerge.drafts[0].workout.gymId, importedGym.id);
+    assert.deepEqual(snapshotToMerge.exerciseGymScopes[0].linkedGymIds, ['gym-default', importedGym.id]);
+
+    await destinationFixture.store.mergeSnapshot(snapshotToMerge);
+    const destinationSnapshot = await destinationFixture.store.readSnapshot();
+    assert.equal(destinationSnapshot.gyms.find((gym) => gym.id === destinationGym.id)?.name, 'Destination Gym');
+    assert.equal(destinationSnapshot.workouts[0].gymId, importedGym.id);
+    assert.equal(destinationSnapshot.drafts[0].workout.gymId, importedGym.id);
+    assert.deepEqual(destinationSnapshot.exerciseGymScopes[0].linkedGymIds, ['gym-default', importedGym.id]);
+
+    await sourceFixture.dispose();
+    await destinationFixture.dispose();
+  });
+
+  it('aborts a conflicting exercise scope before writing any restore data', async () => {
+    const fixture = await createStoreFixture('native');
+    await populateSourceStore(fixture.store);
+    const parsed = JSON.parse(await buildBackupJson(fixture.store));
+    parsed.exerciseGymScopes[0] = {
+      exerciseId: parsed.exerciseGymScopes[0].exerciseId,
+      scopeType: 'global',
+    };
+    const before = await fixture.store.readSnapshot();
+
+    await assert.rejects(() => restoreBackup(JSON.stringify(parsed), fixture.store), /Conflicting exercise gym scope/);
+    assert.deepEqual(await fixture.store.readSnapshot(), before);
     await fixture.dispose();
   });
 });

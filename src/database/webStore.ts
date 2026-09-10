@@ -35,6 +35,11 @@ function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
   return workout === draft.workout ? draft : { ...draft, workout };
 }
 
+function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
+  return a.exerciseId === b.exerciseId && a.scopeType === b.scopeType
+    && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
+}
+
 export async function createWebStore(name: string = 'lifts_web_db', options?: WebStoreOptions): Promise<WebStore> {
   const idb: IDBFactory = options?.idbFactory || (typeof indexedDB !== 'undefined' ? indexedDB : undefined as any);
   if (!idb) {
@@ -907,31 +912,42 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (new Set((snapshot.exerciseGymScopes || []).map(scope => scope.exerciseId)).size !== (snapshot.exerciseGymScopes || []).length) throw new Error('Snapshot contains duplicate exercise scope IDs');
     if (incomingGyms.filter(g => g.isDefault).length > 1) throw new Error('Snapshot contains multiple default gyms');
     for (const gym of incomingGyms) {
+      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
+      if (typeof gym.isDefault !== 'boolean') throw new Error(`Invalid isDefault in gym: ${gym.id}`);
       validateGymName(gym.name);
       validateGymColor(gym.color);
+      if (!gym.createdAt || isNaN(Date.parse(gym.createdAt))) throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
     }
     const knownExerciseIds = new Set([...(await getAllExercises()).map(exercise => exercise.id), ...snapshot.exercises.map(exercise => exercise.id)]);
+    const existingScopes = new Map((await getExerciseGymScopes()).map(scope => [scope.exerciseId, scope]));
     for (const scope of snapshot.exerciseGymScopes || []) {
       if (!knownExerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
+      if (scope.linkedGymIds !== undefined && (!Array.isArray(scope.linkedGymIds) || scope.linkedGymIds.some((id) => typeof id !== 'string'))) {
+        throw new Error(`Invalid linked gym IDs in scope: ${scope.exerciseId}`);
+      }
       validateExerciseGymScope(scope, knownGymIds);
+      const existingScope = existingScopes.get(scope.exerciseId);
+      if (existingScope && !scopesAreIdentical(scope, existingScope)) throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
     }
     for (const workout of snapshot.workouts) {
-      if (!knownGymIds.has(workout.gymId || 'gym-default')) throw new Error(`Workout references missing gym: ${workout.gymId}`);
+      if (typeof workout.gymId !== 'string' || !knownGymIds.has(workout.gymId)) throw new Error(`Workout references missing gym: ${workout.gymId}`);
     }
     for (const draft of snapshot.drafts) {
-      if (!knownGymIds.has(draft.workout.gymId || 'gym-default')) throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
+      if (typeof draft.workout.gymId !== 'string' || !knownGymIds.has(draft.workout.gymId)) throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
     }
 
     await new Promise<void>((resolve, reject) => {
       const tx = database.transaction(['exercises', 'routines', 'workouts', 'workout_drafts', 'settings', 'gyms', 'exercise_gym_scopes'], 'readwrite');
 
       const gymStore = tx.objectStore('gyms');
+      const destinationGymIds = new Set(destinationGyms.map((gym) => gym.id));
       for (const gym of incomingGyms) {
-        const destinationDefault = destinationGyms.find(g => g.isDefault);
-        gymStore.put(destinationDefault && gym.id !== destinationDefault.id ? { ...gym, isDefault: false } : gym);
+        if (!destinationGymIds.has(gym.id)) gymStore.put({ ...gym, isDefault: false });
       }
       const scopeStore = tx.objectStore('exercise_gym_scopes');
-      for (const scope of snapshot.exerciseGymScopes || []) scopeStore.put(scope);
+      for (const scope of snapshot.exerciseGymScopes || []) {
+        if (!existingScopes.has(scope.exerciseId)) scopeStore.put(scope);
+      }
 
       const exStore = tx.objectStore('exercises');
       for (const ex of snapshot.exercises) {

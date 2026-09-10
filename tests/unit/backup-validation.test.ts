@@ -51,9 +51,105 @@ describe('Backup validation (parseBackup)', () => {
   it('accepts valid v2 backup', () => {
     const json = JSON.stringify(validBaseBackup);
     const parsed = parseBackup(json);
-    assert.equal(parsed.version, 2);
+    assert.equal(parsed.version, 3);
     assert.equal(parsed.workouts.length, 1);
+    assert.deepEqual(parsed.gyms.map((gym) => gym.id), ['gym-default']);
+    assert.equal(parsed.workouts[0].gymId, 'gym-default');
     assert.equal(parsed.settings.unit, 'kg');
+  });
+
+  it('accepts valid v3 backup with gyms and scope overrides', () => {
+    const v3Backup = {
+      ...validBaseBackup,
+      version: 3,
+      workouts: validBaseBackup.workouts.map((workout) => ({ ...workout, gymId: 'gym-default' })),
+      gyms: [
+        {
+          id: 'gym-default',
+          name: 'Default Gym',
+          color: '#3B82F6',
+          isDefault: true,
+          createdAt: '2026-09-10T00:00:00.000Z',
+        },
+        {
+          id: 'gym-a',
+          name: 'Gym A',
+          color: '#10B981',
+          isDefault: false,
+          createdAt: '2026-09-10T00:00:00.000Z',
+        },
+      ],
+      exerciseGymScopes: [{
+        exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+        scopeType: 'linked_group',
+        linkedGymIds: ['gym-default', 'gym-a'],
+      }],
+    };
+
+    const parsed = parseBackup(JSON.stringify(v3Backup));
+    assert.equal(parsed.version, 3);
+    assert.deepEqual(parsed.gyms.map((gym) => gym.id), ['gym-default', 'gym-a']);
+    assert.deepEqual(parsed.exerciseGymScopes[0].linkedGymIds, ['gym-default', 'gym-a']);
+  });
+
+  it('rejects invalid gym IDs, duplicate gyms, and invalid gym fields', () => {
+    const v3 = {
+      ...validBaseBackup,
+      version: 3,
+      workouts: validBaseBackup.workouts.map((workout) => ({ ...workout, gymId: 'gym-default' })),
+      gyms: [{
+        id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      }],
+      exerciseGymScopes: [],
+    };
+
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      gyms: [{ ...v3.gyms[0], id: '' }],
+    })), /Invalid gym ID/);
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      gyms: [v3.gyms[0], { ...v3.gyms[0], isDefault: false }],
+    })), /Duplicate gym ID/);
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      gyms: [{ ...v3.gyms[0], name: '   ' }],
+    })), /gym name cannot be empty/);
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      gyms: [{ ...v3.gyms[0], color: '#06B6D4' }],
+    })), /approved palette/);
+  });
+
+  it('rejects malformed linked scope IDs and missing scope references', () => {
+    const v3 = {
+      ...validBaseBackup,
+      version: 3,
+      workouts: validBaseBackup.workouts.map((workout) => ({ ...workout, gymId: 'gym-default' })),
+      gyms: [{
+        id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      }],
+      exerciseGymScopes: [],
+    };
+
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      exerciseGymScopes: [{
+        exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+        scopeType: 'linked_group',
+        linkedGymIds: 'gym-default',
+      }],
+    })), /linked gym IDs/);
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      exerciseGymScopes: [{
+        exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+        scopeType: 'linked_group',
+        linkedGymIds: ['gym-default', 'missing-gym'],
+      }],
+    })), /unknown gym/);
   });
 
   it('rejects a routine that omits its exercises array', () => {

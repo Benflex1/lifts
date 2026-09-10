@@ -66,6 +66,58 @@ function normalizeDraftPayload(data: string): WorkoutDraft | null {
   }
 }
 
+function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
+  return a.exerciseId === b.exerciseId && a.scopeType === b.scopeType
+    && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
+}
+
+function validateSnapshotForMerge(snapshot: DataSnapshot, existing: DataSnapshot): void {
+  const incomingGyms = snapshot.gyms || [];
+  const incomingScopes = snapshot.exerciseGymScopes || [];
+  const gymIds = new Set(existing.gyms.map((gym) => gym.id));
+  const incomingGymIds = new Set<string>();
+  let defaultCount = 0;
+  for (const gym of incomingGyms) {
+    if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
+    if (incomingGymIds.has(gym.id)) throw new Error(`Snapshot contains duplicate gym IDs: ${gym.id}`);
+    incomingGymIds.add(gym.id);
+    if (typeof gym.isDefault !== 'boolean') throw new Error(`Invalid isDefault in gym: ${gym.id}`);
+    if (gym.isDefault) defaultCount++;
+    validateGymName(gym.name);
+    validateGymColor(gym.color);
+    if (!gym.createdAt || isNaN(Date.parse(gym.createdAt))) throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
+    gymIds.add(gym.id);
+  }
+  if (defaultCount > 1) throw new Error('Snapshot contains multiple default gyms');
+
+  const exerciseIds = new Set([
+    ...existing.exercises.map((exercise) => exercise.id),
+    ...snapshot.exercises.map((exercise) => exercise.id),
+  ]);
+  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
+  const seenScopeIds = new Set<string>();
+  for (const scope of incomingScopes) {
+    if (seenScopeIds.has(scope.exerciseId)) throw new Error(`Snapshot contains duplicate exercise scope IDs: ${scope.exerciseId}`);
+    seenScopeIds.add(scope.exerciseId);
+    if (!exerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
+    if (scope.linkedGymIds !== undefined && (!Array.isArray(scope.linkedGymIds) || scope.linkedGymIds.some((id) => typeof id !== 'string'))) {
+      throw new Error(`Invalid linked gym IDs in scope: ${scope.exerciseId}`);
+    }
+    validateExerciseGymScope(scope, gymIds);
+    const existingScope = existingScopes.get(scope.exerciseId);
+    if (existingScope && !scopesAreIdentical(scope, existingScope)) {
+      throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
+    }
+  }
+
+  for (const workout of snapshot.workouts) {
+    if (typeof workout.gymId !== 'string' || !gymIds.has(workout.gymId)) throw new Error(`Workout references missing gym: ${workout.gymId}`);
+  }
+  for (const draft of snapshot.drafts) {
+    if (typeof draft.workout.gymId !== 'string' || !gymIds.has(draft.workout.gymId)) throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
+  }
+}
+
 export function createNativeStore(driver: SqliteDriver): Store {
   const writeQueue = createWriteQueue();
   let cachedExercises: Exercise[] | null = null;
@@ -835,12 +887,24 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function mergeSnapshot(snapshot: DataSnapshot): Promise<void> {
     return writeQueue(async () => {
+      validateSnapshotForMerge(snapshot, await readSnapshot());
       await driver.withTransactionAsync(async () => {
-        // Merge exercises
+        for (const gym of snapshot.gyms || []) {
+          await driver.runAsync(
+            `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)`,
+            gym.id, gym.name, gym.color, gym.createdAt
+          );
+        }
+
+        // Exercises must precede scopes because scopes have an exercise foreign key.
         for (const ex of snapshot.exercises) {
           await driver.runAsync(
-            `INSERT OR REPLACE INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, category = excluded.category,
+               equipment = excluded.equipment, primary_muscles = excluded.primary_muscles,
+               secondary_muscles = excluded.secondary_muscles, instructions = excluded.instructions,
+               is_custom = excluded.is_custom`,
             ex.id,
             ex.name,
             ex.category,
@@ -852,19 +916,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
           );
         }
 
-        for (const gym of snapshot.gyms || []) {
-          await driver.runAsync(
-            `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)`,
-            gym.id, gym.name, gym.color, gym.createdAt
-          );
-        }
-        const snapshotDefault = (snapshot.gyms || []).find(gym => gym.isDefault);
-        if (snapshotDefault) {
-          await driver.runAsync('UPDATE gyms SET is_default = 0');
-          await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', snapshotDefault.id);
-        }
-
         for (const scope of snapshot.exerciseGymScopes || []) {
+          if ((await driver.getFirstAsync<any>('SELECT exercise_id FROM exercise_gym_scopes WHERE exercise_id = ?', scope.exerciseId))) {
+            continue;
+          }
           await driver.runAsync(
             'INSERT OR REPLACE INTO exercise_gym_scopes (exercise_id, scope_type, linked_gym_ids) VALUES (?, ?, ?)',
             scope.exerciseId, scope.scopeType, scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null
