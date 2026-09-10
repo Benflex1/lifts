@@ -32,5 +32,14 @@
 
 ## Concerns
 
-- The shared `Store` contract keeps new Task 4 operations optional because the checked-out native Task 1–3 implementation has not yet been upgraded; making them required would incorrectly force native changes into this task.
-- `Workout.gymId` is optional at the TypeScript boundary for the same backward-compatibility reason, while web persistence always normalizes missing values to `gym-default`.
+- The shared `Store` contract now contains one required declaration for each Task 1 gym/profile/scope operation; native implementations from the preceding tasks satisfy those declarations.
+- `Workout.gymId` remains required in the canonical Task 1 types; web persistence still normalizes missing legacy records to `gym-default` during upgrade and reads.
+
+## Fix-round note (correct integration worktree)
+
+This report was corrected in `/workspace/lifts/.worktrees/multi-gym-tracking` after the Task 4 commit was cherry-picked into the reviewed integration branch. The cherry-pick had combined the required Task 1 gym/scope declarations with duplicate optional declarations and had promoted previous-set/stat signatures to their Task 6 forms. The contract now has exactly one required declaration for each gym/profile/scope method, while `getPreviousSetsForExercise(exerciseId, occurrenceIndex?)` returns legacy `WorkoutSet[]` and `getExerciseStats(exerciseId)` returns the existing flat stats. Web/native wrappers remain legacy through Task 5; gym-aware query algorithms are deferred to Task 6.
+
+The corrected worktree verification produced 29 passing focused web/native integration tests. `npx tsc --noEmit` is otherwise clean; the remaining two diagnostics are the expected Task 5 backup/restore construction errors caused by the now-required snapshot gym/scope arrays:
+
+- `src/utils/backup.ts:399` — legacy `BackupV2` construction lacks Task 5 gym/scope fields.
+- `src/utils/restore.ts:202` — legacy restore snapshot construction lacks Task 5 gym/scope fields.

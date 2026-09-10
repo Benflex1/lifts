@@ -1,4 +1,4 @@
-import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
+import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
 
 export interface WorkoutDraft {
   version: 1;
@@ -57,8 +57,13 @@ export interface Store {
   getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null>;
   saveExerciseGymScope(scope: ExerciseGymScope): Promise<void>;
   deleteExerciseGymScope(exerciseId: string): Promise<void>;
-  getPreviousSetsForExercise(exerciseId: string, occurrenceIndex?: number, currentGymId?: string): Promise<PreviousSetSuggestion[]>;
-  getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats>;
+  getPreviousSetsForExercise(exerciseId: string, occurrenceIndex?: number): Promise<WorkoutSet[]>;
+  getExerciseStats(exerciseId: string): Promise<{
+    maxWeightKg: number;
+    maxReps: number;
+    estimated1RM: number;
+    sessionCount: number;
+  }>;
 
   getAllExercises(): Promise<Exercise[]>;
   searchExercises(query?: string, muscle?: string, equipment?: string): Promise<Exercise[]>;
@@ -70,14 +75,4 @@ export interface Store {
   renameFolder(oldName: string, newName: string): Promise<void>;
   deleteFolder(name: string): Promise<void>;
 
-  getGyms?(): Promise<Gym[]>;
-  getDefaultGym?(): Promise<Gym>;
-  createGym?(name: string, color?: string): Promise<Gym>;
-  updateGym?(id: string, updates: { name?: string; color?: string }): Promise<Gym>;
-  setDefaultGym?(id: string): Promise<void>;
-  deleteGym?(id: string, replacementGymId: string): Promise<void>;
-  getExerciseGymScopes?(): Promise<ExerciseGymScope[]>;
-  getExerciseGymScope?(exerciseId: string): Promise<ExerciseGymScope | null>;
-  saveExerciseGymScope?(scope: ExerciseGymScope): Promise<void>;
-  deleteExerciseGymScope?(exerciseId: string): Promise<void>;
 }
