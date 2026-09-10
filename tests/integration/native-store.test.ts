@@ -7,8 +7,89 @@ import { NodeSqliteDriver } from '../helpers/storeFixture';
 import { createNativeStore } from '../../src/database/nativeStore';
 import { applyMigrations } from '../../src/database/migrations';
 import { Workout } from '../../src/types';
+import { createStoreFixture } from '../helpers/storeFixture';
 
 describe('nativeStore and migration safety', () => {
+  it('bootstraps the default gym and backfills legacy workout and draft gym IDs', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-native-gym-backfill-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    await applyMigrations(driver, { maxVersion: 4 });
+    await driver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles) VALUES (?, ?, ?, ?, ?)`,
+      'legacy-exercise', 'Legacy Exercise', 'strength', 'machine', '[]'
+    );
+    await driver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, end_time, in_progress) VALUES (?, ?, ?, ?, 0)`,
+      'legacy-workout', 'Legacy Workout', '2026-09-09T08:00:00.000Z', '2026-09-09T09:00:00.000Z'
+    );
+    await driver.runAsync(
+      `INSERT INTO workout_drafts (id, revision, saved_at, data) VALUES (?, ?, ?, ?)`,
+      'legacy-draft', 1, '2026-09-09T10:00:00.000Z', JSON.stringify({
+        version: 1, workout: { id: 'legacy-draft', name: 'Draft', startTime: '2026-09-09T10:00:00.000Z', durationSeconds: 0, totalVolumeKg: 0, exercises: [] },
+        savedAt: '2026-09-09T10:00:00.000Z', revision: 1, restTimer: null,
+      })
+    );
+    const store = createNativeStore(driver);
+    await store.init();
+    const gyms = await store.getGyms();
+    assert.equal(gyms.length, 1);
+    assert.equal(gyms[0].id, 'gym-default');
+    assert.equal(gyms[0].name, 'Default Gym');
+    assert.equal(gyms[0].isDefault, true);
+    assert.equal(gyms[0].color, '#3B82F6');
+    const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)');
+    assert.ok(columns.some(column => column.name === 'gym_id'));
+    assert.equal((await store.getWorkoutDetail('legacy-workout'))?.gymId, 'gym-default');
+    assert.equal((await store.getWorkoutDrafts())[0].workout.gymId, 'gym-default');
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
+
+  it('rolls back all migration 5 changes when failure is injected', async () => {
+    const driver = new NodeSqliteDriver();
+    await applyMigrations(driver, { maxVersion: 4 });
+    await assert.rejects(() => applyMigrations(driver, { failAtVersion: 5 }), /Injected migration failure at version 5/);
+    assert.equal(await driver.getFirstAsync<any>("SELECT name FROM sqlite_master WHERE type='table' AND name='gyms'"), null);
+    assert.equal((await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)')).some(c => c.name === 'gym_id'), false);
+    assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 5'), null);
+    driver.close();
+  });
+
+  it('persists gym CRUD, atomic reassignment, and scope overrides', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const { store } = fixture;
+      const first = await store.createGym('Home', '#10B981');
+      const second = await store.createGym('Away', '#F59E0B');
+      await store.setDefaultGym(second.id);
+      assert.equal((await store.getDefaultGym()).id, second.id);
+      assert.equal((await store.updateGym(first.id, { name: 'Home Gym', color: '#EF4444' })).name, 'Home Gym');
+      const exercise = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+      assert.ok(exercise);
+      await store.saveExerciseGymScope({ exerciseId: exercise.id, scopeType: 'linked_group', linkedGymIds: [first.id, second.id] });
+      assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.linkedGymIds, [first.id, second.id]);
+      await store.deleteExerciseGymScope(exercise.id);
+      assert.equal(await store.getExerciseGymScope(exercise.id), null);
+      await store.deleteGym(first.id, second.id);
+      assert.equal((await store.getGyms()).length, 2);
+      await assert.rejects(() => store.deleteGym(second.id, second.id), /different/);
+      await assert.rejects(() => store.createGym('   '), /empty/);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('includes gyms and scopes in native snapshots', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const snapshot = await fixture.store.readSnapshot();
+      assert.equal(snapshot.gyms[0].id, 'gym-default');
+      assert.deepEqual(snapshot.exerciseGymScopes, []);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
   it('migrates an old-schema database with completed workouts and in-progress drafts without data loss', async () => {
     const tempFile = path.join(os.tmpdir(), `test-old-schema-${Date.now()}.db`);
     const rawDriver = new NodeSqliteDriver(tempFile);

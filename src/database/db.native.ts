@@ -91,7 +91,16 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
 
 export async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
   const store = await getStore();
-  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
+  const suggestions = await store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
+  return suggestions.map((set, index) => ({
+    id: `previous-${exerciseId}-${index}`,
+    setNumber: index + 1,
+    type: 'normal' as const,
+    weightKg: set.weightKg,
+    reps: set.reps,
+    isCompleted: false,
+    ...(set.sourceGymId ? { previousGymId: set.sourceGymId, previousGymName: set.sourceGymName } : {}),
+  }));
 }
 
 export async function getExerciseStats(exerciseId: string): Promise<{
@@ -101,8 +110,20 @@ export async function getExerciseStats(exerciseId: string): Promise<{
   sessionCount: number;
 }> {
   const store = await getStore();
-  return store.getExerciseStats(exerciseId);
+  const stats = await store.getExerciseStats(exerciseId, (await store.getDefaultGym()).id);
+  return stats.global;
 }
+
+export async function getGyms() { return (await getStore()).getGyms(); }
+export async function getDefaultGym() { return (await getStore()).getDefaultGym(); }
+export async function createGym(name: string, color?: string) { return (await getStore()).createGym(name, color); }
+export async function updateGym(id: string, updates: { name?: string; color?: string }) { return (await getStore()).updateGym(id, updates); }
+export async function setDefaultGym(id: string) { return (await getStore()).setDefaultGym(id); }
+export async function deleteGym(id: string, replacementGymId: string) { return (await getStore()).deleteGym(id, replacementGymId); }
+export async function getExerciseGymScopes() { return (await getStore()).getExerciseGymScopes(); }
+export async function getExerciseGymScope(exerciseId: string) { return (await getStore()).getExerciseGymScope(exerciseId); }
+export async function saveExerciseGymScope(scope: import('../types').ExerciseGymScope) { return (await getStore()).saveExerciseGymScope(scope); }
+export async function deleteExerciseGymScope(exerciseId: string) { return (await getStore()).deleteExerciseGymScope(exerciseId); }
 
 export async function getAllExercises(): Promise<Exercise[]> {
   const store = await getStore();
