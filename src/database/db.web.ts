@@ -1,4 +1,4 @@
-import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
 import { createWebStore, WebStore } from './webStore';
 import { WorkoutDraft, DataSnapshot } from './contract';
 
@@ -111,6 +111,17 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
   const store = await getStore();
   return store.createCustomExercise(exercise);
 }
+
+export async function getGyms(): Promise<Gym[]> { return (await getStore()).getGyms!(); }
+export async function getDefaultGym(): Promise<Gym> { return (await getStore()).getDefaultGym!(); }
+export async function createGym(name: string, color?: string): Promise<Gym> { return (await getStore()).createGym!(name, color); }
+export async function updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym> { return (await getStore()).updateGym!(id, updates); }
+export async function setDefaultGym(id: string): Promise<void> { return (await getStore()).setDefaultGym!(id); }
+export async function deleteGym(id: string, replacementGymId: string): Promise<void> { return (await getStore()).deleteGym!(id, replacementGymId); }
+export async function getExerciseGymScopes(): Promise<ExerciseGymScope[]> { return (await getStore()).getExerciseGymScopes!(); }
+export async function getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null> { return (await getStore()).getExerciseGymScope!(exerciseId); }
+export async function saveExerciseGymScope(scope: ExerciseGymScope): Promise<void> { return (await getStore()).saveExerciseGymScope!(scope); }
+export async function deleteExerciseGymScope(exerciseId: string): Promise<void> { return (await getStore()).deleteExerciseGymScope!(exerciseId); }
 
 export async function getSetting(key: string): Promise<string | null> {
   const store = await getStore();

@@ -1,4 +1,4 @@
-import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
@@ -17,6 +17,33 @@ export interface WebStore extends Store {
   tryAcquireLease(): Promise<boolean>;
   onReadOnlyChange(listener: (isReadOnly: boolean) => void): () => void;
   close(): Promise<void>;
+}
+
+const DEFAULT_GYM: Gym = {
+  id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
+  createdAt: '2026-09-10T00:00:00.000Z',
+};
+const GYM_COLORS = new Set(['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4']);
+
+function normalizeWorkout(workout: Workout): Workout {
+  return workout.gymId ? workout : { ...workout, gymId: 'gym-default' };
+}
+
+function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
+  const workout = normalizeWorkout(draft.workout);
+  return workout === draft.workout ? draft : { ...draft, workout };
+}
+
+function validateGymName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error('Gym name cannot be empty');
+  if ([...trimmed].length > 80) throw new Error('Gym name cannot exceed 80 characters');
+  return trimmed;
+}
+
+function validateGymColor(color: string): string {
+  if (!GYM_COLORS.has(color)) throw new Error('Invalid gym color');
+  return color;
 }
 
 export async function createWebStore(name: string = 'lifts_web_db', options?: WebStoreOptions): Promise<WebStore> {
@@ -109,7 +136,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (db) return db;
 
     return new Promise((resolve, reject) => {
-      const req = idb.open(name, 1);
+      const req = idb.open(name, 2);
 
       req.onupgradeneeded = () => {
         const d = req.result;
@@ -131,6 +158,17 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         if (!d.objectStoreNames.contains('metadata')) {
           d.createObjectStore('metadata', { keyPath: 'key' });
         }
+        if (!d.objectStoreNames.contains('gyms')) {
+          const gyms = d.createObjectStore('gyms', { keyPath: 'id' });
+          gyms.createIndex('isDefault', 'isDefault', { unique: false });
+        }
+        if (!d.objectStoreNames.contains('exercise_gym_scopes')) {
+          const scopes = d.createObjectStore('exercise_gym_scopes', { keyPath: 'exerciseId' });
+          scopes.createIndex('scopeType', 'scopeType', { unique: false });
+          scopes.createIndex('linkedGymIds', 'linkedGymIds', { unique: false, multiEntry: true });
+        }
+        const gyms = req.transaction!.objectStore('gyms');
+        gyms.put(DEFAULT_GYM);
       };
 
       req.onsuccess = () => {
@@ -218,6 +256,29 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await tryAcquireLease();
 
     if (!readOnlyMode) {
+      await new Promise<void>((resolve, reject) => {
+        const tx = database.transaction(['gyms', 'workouts', 'workout_drafts'], 'readwrite');
+        const gymStore = tx.objectStore('gyms');
+        const workoutStore = tx.objectStore('workouts');
+        const draftStore = tx.objectStore('workout_drafts');
+        if (!gymStore) return reject(new Error('Missing gyms store'));
+        const workoutsReq = workoutStore.getAll();
+        const draftsReq = draftStore.getAll();
+        workoutsReq.onsuccess = () => {
+          for (const workout of workoutsReq.result as Workout[]) {
+            const normalized = normalizeWorkout(workout);
+            if (normalized !== workout) workoutStore.put(normalized);
+          }
+        };
+        draftsReq.onsuccess = () => {
+          for (const draft of draftsReq.result as WorkoutDraft[]) {
+            const normalized = normalizeDraft(draft);
+            if (normalized !== draft) draftStore.put(normalized);
+          }
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
       // Seed default exercises if needed
       const exSeeded = await new Promise<boolean>((resolve, reject) => {
         const tx = database.transaction('metadata', 'readonly');
@@ -278,6 +339,104 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onerror = () => reject(req.error);
     });
   }
+
+  async function getGyms(): Promise<Gym[]> {
+    const database = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction('gyms', 'readonly');
+      const req = tx.objectStore('gyms').getAll();
+      req.onsuccess = () => resolve((req.result as Gym[]).sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function getDefaultGym(): Promise<Gym> {
+    const gyms = await getGyms();
+    const gym = gyms.find(g => g.isDefault) || gyms.find(g => g.id === 'gym-default');
+    if (!gym) throw new Error('No default gym exists');
+    return gym;
+  }
+
+  async function createGym(name: string, color: string = '#3B82F6'): Promise<Gym> {
+    const database = await openDb();
+    await verifyAndRenewLease(database);
+    const gym: Gym = { id: createScopedId('gym'), name: validateGymName(name), color: validateGymColor(color), isDefault: false, createdAt: new Date(getNow()).toISOString() };
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction('gyms', 'readwrite'); tx.objectStore('gyms').add(gym);
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+    });
+    return gym;
+  }
+
+  async function updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym> {
+    const database = await openDb(); await verifyAndRenewLease(database);
+    const name = updates.name === undefined ? undefined : validateGymName(updates.name);
+    const color = updates.color === undefined ? undefined : validateGymColor(updates.color);
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction('gyms', 'readwrite'); const store = tx.objectStore('gyms'); const req = store.get(id);
+      req.onsuccess = () => {
+        const current = req.result as Gym | undefined;
+        if (!current) return reject(new Error('Gym not found'));
+        store.put({ ...current, ...(name === undefined ? {} : { name }), ...(color === undefined ? {} : { color }) });
+      };
+      tx.oncomplete = async () => resolve((await getGyms()).find(g => g.id === id)!);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function setDefaultGym(id: string): Promise<void> {
+    const database = await openDb(); await verifyAndRenewLease(database);
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction('gyms', 'readwrite'); const store = tx.objectStore('gyms'); const all = store.getAll();
+      all.onsuccess = () => {
+        const gyms = all.result as Gym[]; if (!gyms.some(g => g.id === id)) return reject(new Error('Gym not found'));
+        gyms.forEach(g => store.put({ ...g, isDefault: g.id === id }));
+      };
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function deleteGym(id: string, replacementGymId: string): Promise<void> {
+    if (id === replacementGymId) throw new Error('Replacement gym must be different');
+    const database = await openDb(); await verifyAndRenewLease(database);
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction(['gyms', 'workouts', 'workout_drafts', 'exercise_gym_scopes'], 'readwrite');
+      const gyms = tx.objectStore('gyms'); const workouts = tx.objectStore('workouts'); const drafts = tx.objectStore('workout_drafts'); const scopes = tx.objectStore('exercise_gym_scopes');
+      const all = gyms.getAll();
+      all.onsuccess = () => {
+        const rows = all.result as Gym[]; const removed = rows.find(g => g.id === id); const replacement = rows.find(g => g.id === replacementGymId);
+        if (!removed) return reject(new Error('Gym not found')); if (!replacement) return reject(new Error('Replacement gym not found'));
+        for (const gym of rows) gyms.put({ ...gym, isDefault: removed.isDefault ? gym.id === replacementGymId : gym.isDefault });
+        gyms.delete(id);
+        const wr = workouts.getAll(); wr.onsuccess = () => (wr.result as Workout[]).forEach(w => { if (w.gymId === id) workouts.put({ ...w, gymId: replacementGymId }); });
+        const dr = drafts.getAll(); dr.onsuccess = () => (dr.result as WorkoutDraft[]).forEach(d => { const n = normalizeDraft(d); if (n.workout.gymId === id) drafts.put({ ...n, workout: { ...n.workout, gymId: replacementGymId } }); });
+        const sr = scopes.getAll(); sr.onsuccess = () => (sr.result as ExerciseGymScope[]).forEach(scope => {
+          if (!scope.linkedGymIds?.includes(id)) return;
+          const ids = scope.linkedGymIds.filter(g => g !== id);
+          if (ids.length === 0) scopes.delete(scope.exerciseId);
+          else scopes.put({ ...scope, scopeType: ids.length < 2 ? 'gym_specific' : 'linked_group', linkedGymIds: ids.length < 2 ? undefined : ids });
+        });
+      };
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error || new Error('Gym deletion aborted'));
+    });
+  }
+
+  async function getExerciseGymScopes(): Promise<ExerciseGymScope[]> {
+    const database = await openDb(); return new Promise((resolve, reject) => { const tx = database.transaction('exercise_gym_scopes', 'readonly'); const req = tx.objectStore('exercise_gym_scopes').getAll(); req.onsuccess = () => resolve(req.result as ExerciseGymScope[]); req.onerror = () => reject(req.error); });
+  }
+  async function getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null> {
+    const database = await openDb(); return new Promise((resolve, reject) => { const tx = database.transaction('exercise_gym_scopes', 'readonly'); const req = tx.objectStore('exercise_gym_scopes').get(exerciseId); req.onsuccess = () => resolve((req.result as ExerciseGymScope) || null); req.onerror = () => reject(req.error); });
+  }
+  async function saveExerciseGymScope(scope: ExerciseGymScope): Promise<void> {
+    const database = await openDb(); await verifyAndRenewLease(database);
+    if (!['global', 'gym_specific', 'linked_group'].includes(scope.scopeType)) throw new Error('Invalid scope type');
+    if (!(await getExerciseById(scope.exerciseId))) throw new Error('Exercise not found');
+    const gyms = await getGyms(); const ids = scope.linkedGymIds || [];
+    if (scope.scopeType === 'linked_group' && (ids.length < 2 || new Set(ids).size !== ids.length || ids.some(id => !gyms.some(g => g.id === id)))) throw new Error('Invalid linked gym scope');
+    if (scope.scopeType !== 'linked_group' && ids.length) throw new Error('Linked gym IDs are only valid for linked_group');
+    const database2 = await openDb(); await new Promise<void>((resolve, reject) => { const tx = database2.transaction('exercise_gym_scopes', 'readwrite'); tx.objectStore('exercise_gym_scopes').put(scope); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
+  }
+  async function deleteExerciseGymScope(exerciseId: string): Promise<void> { const database = await openDb(); await verifyAndRenewLease(database); await new Promise<void>((resolve, reject) => { const tx = database.transaction('exercise_gym_scopes', 'readwrite'); tx.objectStore('exercise_gym_scopes').delete(exerciseId); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); }
 
   async function searchExercises(query: string = '', muscle: string = 'All', equipment: string = 'All'): Promise<Exercise[]> {
     const all = await getAllExercises();
@@ -434,6 +593,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function finishWorkout(workout: Workout): Promise<void> {
+    workout = normalizeWorkout(workout);
     const database = await openDb();
     await verifyAndRenewLease(database);
 
@@ -471,7 +631,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
-        const workouts = req.result as Workout[];
+        const workouts = (req.result as Workout[]).map(normalizeWorkout);
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime));
         resolve(workouts.map(w => ({
           id: w.id,
@@ -484,6 +644,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
           totalSets: w.exercises.reduce((acc, e) => acc + e.sets.filter(s => s.isCompleted).length, 0),
           exerciseNames: w.exercises.map(e => e.exercise.name),
           notes: w.notes,
+          gymId: w.gymId,
         })));
       };
       req.onerror = () => reject(req.error);
@@ -495,7 +656,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').get(workoutId);
-      req.onsuccess = () => resolve((req.result as Workout) || null);
+      req.onsuccess = () => resolve(req.result ? normalizeWorkout(req.result as Workout) : null);
       req.onerror = () => reject(req.error);
     });
   }
@@ -590,6 +751,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
+    draft = normalizeDraft(draft);
     const database = await openDb();
     await verifyAndRenewLease(database);
 
@@ -610,7 +772,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const tx = database.transaction('workout_drafts', 'readonly');
       const req = tx.objectStore('workout_drafts').getAll();
       req.onsuccess = () => {
-        const drafts = req.result as WorkoutDraft[];
+        const drafts = (req.result as WorkoutDraft[]).map(normalizeDraft);
         drafts.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
         resolve(drafts);
       };
@@ -624,7 +786,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       return new Promise((resolve, reject) => {
         const tx = database.transaction('workout_drafts', 'readonly');
         const req = tx.objectStore('workout_drafts').get(id);
-        req.onsuccess = () => resolve((req.result as WorkoutDraft) || null);
+        req.onsuccess = () => resolve(req.result ? normalizeDraft(req.result as WorkoutDraft) : null);
         req.onerror = () => reject(req.error);
       });
     }
@@ -727,12 +889,16 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onerror = () => reject(req.error);
     });
 
+    const gyms = await getGyms();
+    const exerciseGymScopes = await getExerciseGymScopes();
     return {
       workouts,
       routines,
       exercises,
       drafts,
       settings,
+      gyms,
+      exerciseGymScopes,
     };
   }
 
@@ -740,8 +906,30 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const database = await openDb();
     await verifyAndRenewLease(database);
 
+    const destinationGyms = await getGyms();
+    const incomingGyms = snapshot.gyms || [];
+    const knownGymIds = new Set([...destinationGyms, ...incomingGyms].map(g => g.id));
+    if (incomingGyms.filter(g => g.isDefault).length > 1) throw new Error('Snapshot contains multiple default gyms');
+    for (const workout of snapshot.workouts) {
+      if (!knownGymIds.has(workout.gymId || 'gym-default')) throw new Error(`Workout references missing gym: ${workout.gymId}`);
+    }
+    for (const draft of snapshot.drafts) {
+      if (!knownGymIds.has(draft.workout.gymId || 'gym-default')) throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
+    }
+    for (const scope of snapshot.exerciseGymScopes || []) {
+      if (scope.linkedGymIds?.some(id => !knownGymIds.has(id))) throw new Error(`Scope references missing gym: ${scope.exerciseId}`);
+    }
+
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(['exercises', 'routines', 'workouts', 'workout_drafts', 'settings'], 'readwrite');
+      const tx = database.transaction(['exercises', 'routines', 'workouts', 'workout_drafts', 'settings', 'gyms', 'exercise_gym_scopes'], 'readwrite');
+
+      const gymStore = tx.objectStore('gyms');
+      for (const gym of incomingGyms) {
+        const destinationDefault = destinationGyms.find(g => g.isDefault);
+        gymStore.put(destinationDefault && gym.id !== destinationDefault.id ? { ...gym, isDefault: false } : gym);
+      }
+      const scopeStore = tx.objectStore('exercise_gym_scopes');
+      for (const scope of snapshot.exerciseGymScopes || []) scopeStore.put(scope);
 
       const exStore = tx.objectStore('exercises');
       for (const ex of snapshot.exercises) {
@@ -755,13 +943,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const wStore = tx.objectStore('workouts');
       for (const w of snapshot.workouts) {
-        wStore.put(w);
+        wStore.put(normalizeWorkout(w));
       }
 
       const dStore = tx.objectStore('workout_drafts');
       for (const d of snapshot.drafts) {
         dStore.put({
-          ...d,
+          ...normalizeDraft(d),
           id: d.workout.id,
         });
       }
@@ -844,6 +1032,16 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     searchExercises,
     getExerciseById,
     createCustomExercise,
+    getGyms,
+    getDefaultGym,
+    createGym,
+    updateGym,
+    setDefaultGym,
+    deleteGym,
+    getExerciseGymScopes,
+    getExerciseGymScope,
+    saveExerciseGymScope,
+    deleteExerciseGymScope,
     getSetting,
     setSetting,
     renameFolder,

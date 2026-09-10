@@ -69,4 +69,15 @@ export interface Store {
   setSetting(key: string, value: string): Promise<void>;
   renameFolder(oldName: string, newName: string): Promise<void>;
   deleteFolder(name: string): Promise<void>;
+
+  getGyms?(): Promise<Gym[]>;
+  getDefaultGym?(): Promise<Gym>;
+  createGym?(name: string, color?: string): Promise<Gym>;
+  updateGym?(id: string, updates: { name?: string; color?: string }): Promise<Gym>;
+  setDefaultGym?(id: string): Promise<void>;
+  deleteGym?(id: string, replacementGymId: string): Promise<void>;
+  getExerciseGymScopes?(): Promise<ExerciseGymScope[]>;
+  getExerciseGymScope?(exerciseId: string): Promise<ExerciseGymScope | null>;
+  saveExerciseGymScope?(scope: ExerciseGymScope): Promise<void>;
+  deleteExerciseGymScope?(exerciseId: string): Promise<void>;
 }

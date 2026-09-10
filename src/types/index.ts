@@ -11,6 +11,29 @@ export interface Exercise {
   isCustom?: boolean;
 }
 
+export interface Gym {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  color: string;
+  createdAt: string;
+}
+
+export type ExerciseScopeType = 'global' | 'gym_specific' | 'linked_group';
+
+export interface ExerciseGymScope {
+  exerciseId: string;
+  scopeType: ExerciseScopeType;
+  linkedGymIds?: string[];
+}
+
+export interface PreviousSetSuggestion {
+  weightKg: number;
+  reps: number;
+  sourceGymId?: string;
+  sourceGymName?: string;
+}
+
 export interface WorkoutSet {
   id: string;
   setNumber: number;
@@ -83,29 +106,6 @@ export interface WorkoutHistorySummary {
   totalSets: number;
   exerciseNames: string[];
   notes?: string;
-}
-
-export interface Gym {
-  id: string;
-  name: string;
-  isDefault: boolean;
-  color: string;
-  createdAt: string;
-}
-
-export type ExerciseScopeType = 'global' | 'gym_specific' | 'linked_group';
-
-export interface ExerciseGymScope {
-  exerciseId: string;
-  scopeType: ExerciseScopeType;
-  linkedGymIds?: string[];
-}
-
-export interface PreviousSetSuggestion {
-  weightKg: number;
-  reps: number;
-  sourceGymId?: string;
-  sourceGymName?: string;
 }
 
 export interface ExerciseStats {
