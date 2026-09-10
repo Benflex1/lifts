@@ -54,7 +54,7 @@
 - [x] Wall-clock accurate duration and rest timers across backgrounding and recovery.
 - [x] Strict 0 kg weight preservation and set completion validation.
 - [x] Cross-platform accessible confirmation dialogs replacing window.confirm/Alert.alert.
-- [x] Backup Schema v2: full export of workouts, routines, custom exercises, settings, and collision-resistant atomic restore.
+- [x] Backup compatibility and restore: Schema v2 remains import-compatible; current exports use Schema v3 for workouts, routines, custom exercises, settings, gyms, and scopes with collision-resistant atomic restore.
 - [x] Reachable kg/lb settings modal in Workout header with durable storage.
 - [x] History-derived statistics calculated strictly over completed workouts (`is_completed = 1`).
 - [x] "Perform Again" reconstructing full workout order, counts, and historical ghost suggestions.

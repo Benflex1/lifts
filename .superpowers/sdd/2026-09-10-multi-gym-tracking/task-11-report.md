@@ -41,3 +41,9 @@ Automated verification is green, but the multi-gym release gate must remain open
 - Corrected `REL-10` so it no longer describes current exports as JSON v2 or marks the v2/v3 release flow fully verified. It now records automated v2 import/v3 export coverage as verified while keeping manual cross-platform acceptance pending.
 - Clarified the `ROADMAP.md` backup entry: Schema v2 remains import-compatible and current exports use Schema v3.
 - Exact release status after this correction: automated verification passed; manual Android, iOS, browser, and cross-platform backup acceptance remain pending. Release readiness is not claimed.
+
+## Fix round 2
+
+- Corrected the remaining Phase 1 roadmap wording so it states that Schema v2 remains import-compatible and current exports use Schema v3.
+- Searched all roadmap schema/export references; no stale claim that current exports use v2 remains.
+- Exact release status is unchanged: automated verification is recorded, while manual Android, iOS, browser, and cross-platform acceptance remain pending. Release readiness is not claimed.
