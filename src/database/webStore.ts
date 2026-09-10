@@ -37,12 +37,14 @@ function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
 }
 
 function compareBinaryStrings(a: string, b: string): number {
-  const length = Math.min(a.length, b.length);
+  const aCodePoints = Array.from(a);
+  const bCodePoints = Array.from(b);
+  const length = Math.min(aCodePoints.length, bCodePoints.length);
   for (let index = 0; index < length; index++) {
-    const difference = a.charCodeAt(index) - b.charCodeAt(index);
+    const difference = aCodePoints[index].codePointAt(0)! - bCodePoints[index].codePointAt(0)!;
     if (difference !== 0) return difference;
   }
-  return a.length - b.length;
+  return aCodePoints.length - bCodePoints.length;
 }
 
 function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {

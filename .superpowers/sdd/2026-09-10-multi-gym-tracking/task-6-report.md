@@ -30,6 +30,28 @@ Implemented only Task 6 in the `multi-gym-tracking` worktree. Active session/UI 
 - `npx tsc --noEmit` — passed.
 - `git diff --check` — passed.
 
+## Fix round 3
+
+### Review finding addressed
+
+The fix-round 2 web comparator still compared UTF-16 code units, which disagrees with SQLite BINARY ordering for valid Unicode strings containing supplementary code points.
+
+### TDD evidence
+
+Added native/web parity regressions using `U+10000` supplementary IDs alongside `U+E000` BMP private-use IDs for both descending workout-ID selection and ascending set-ID ordering. Before the production change, native passed both tests while web selected weight `[40]` instead of `[50]` for the workout tie and returned `[20, 10]` instead of `[10, 20]` for the set tie. Existing ASCII/case-sensitive parity tests remain in place.
+
+### Fix
+
+The scoped web comparator now iterates Unicode code points lexicographically. For valid Unicode strings this has the same ordering as lexicographic UTF-8 bytes and SQLite BINARY, without locale-sensitive comparison or raw UTF-16 ordering. The existing descending workout-ID and ascending set-ID tie-break call sites are unchanged.
+
+### Fix-round verification
+
+- Focused history/native/web integration command — 57 passed, 0 failed.
+- `npm test` — 124 passed, 0 failed.
+- `npm run test:integration` — 85 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `git diff --check` — passed.
+
 ## Fix round 2
 
 ### Review finding addressed

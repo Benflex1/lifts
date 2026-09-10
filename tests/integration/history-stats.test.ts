@@ -465,6 +465,69 @@ describe('History-derived stats & previous set suggestions', () => {
       }
     });
 
+    it(`[${platform}] uses UTF-8 binary ordering for supplementary workout IDs`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('UTF-8 Workout ID Gym');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(machine);
+        const makeWorkout = (id: string, weightKg: number): Workout => ({
+          id,
+          name: id,
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: `${id}-occurrence`,
+            exerciseId: machine.id,
+            exercise: machine,
+            restTimerSeconds: 90,
+            sets: [{ id: `${id}-set`, setNumber: 1, type: 'normal', weightKg, reps: 8, isCompleted: true }],
+          }],
+        });
+        await fixture.store.finishWorkout(makeWorkout('\uE000-workout', 40));
+        await fixture.store.finishWorkout(makeWorkout('\u{10000}-workout', 50));
+
+        const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
+        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [50]);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
+    it(`[${platform}] uses UTF-8 binary ordering for supplementary set IDs`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const gym = await fixture.store.createGym('UTF-8 Set ID Gym');
+        const machine = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(machine);
+        await fixture.store.finishWorkout({
+          id: 'utf8-set-workout',
+          name: 'UTF-8 set IDs',
+          gymId: gym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: 'utf8-set-occurrence',
+            exerciseId: machine.id,
+            exercise: machine,
+            restTimerSeconds: 90,
+            sets: [
+              { id: '\uE000-set', setNumber: 1, type: 'normal', weightKg: 10, reps: 8, isCompleted: true },
+              { id: '\u{10000}-set', setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
+            ],
+          }],
+        });
+
+        const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
+        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [10, 20]);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
     it(`[${platform}] orders completed suggestion sets by set number`, async () => {
       const fixture = await createStoreFixture(platform);
       try {
