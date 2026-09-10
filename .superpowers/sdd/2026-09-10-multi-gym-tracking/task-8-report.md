@@ -23,3 +23,20 @@ Implemented the reusable gym picker, gym-profile management flow, gym-tracking s
 ## Concerns
 
 - The repository has no React component test renderer/testing-library dependency, so modal interaction coverage is limited to compiler/export verification and the existing store/policy tests. The async picker and management flows use the existing React Native and dialog contracts directly.
+
+## Fix round 1
+
+Addressed review findings:
+
+- Added an immediate in-flight selection guard to `GymPickerModal`. Backdrop, close-button, and platform-back dismissal are blocked while `onSelect` is pending; successful selection closes only after the awaited callback resolves, while rejection resets busy state and keeps the picker open.
+- Increased the `SettingsModal` close control to a minimum 44pt touch target while keeping the icon centered.
+- Updated the stale unit-setting error comment to refer to dialog notification.
+- Added `tests/unit/gym-picker.test.ts` covering the dismissal guard’s pure seam.
+
+Fix-round verification:
+
+- `npx tsx --test tests/unit/gym-picker.test.ts` — 1 passed, 0 failed.
+- `npx tsx --test tests/unit/gym-profile.test.ts tests/unit/settings.test.ts` — 4 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `npx expo export --platform web --output-dir /tmp/lifts-web-export-multi-gym-settings` — passed.
+- `git diff --check` — passed.

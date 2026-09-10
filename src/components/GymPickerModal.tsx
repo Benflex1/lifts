@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { Gym } from '../types';
+import { canDismissGymPicker } from '../utils/gym-picker';
 
 export interface GymPickerModalProps {
   visible: boolean;
@@ -30,9 +31,16 @@ export function GymPickerModal({
   onClose,
 }: GymPickerModalProps) {
   const [selectingGymId, setSelectingGymId] = useState<string | null>(null);
+  const selectingGymIdRef = useRef<string | null>(null);
+
+  const handleClose = () => {
+    if (!canDismissGymPicker(selectingGymIdRef.current)) return;
+    onClose();
+  };
 
   const handleSelect = async (gymId: string) => {
-    if (selectingGymId) return;
+    if (selectingGymIdRef.current) return;
+    selectingGymIdRef.current = gymId;
     setSelectingGymId(gymId);
     try {
       await onSelect(gymId);
@@ -40,6 +48,7 @@ export function GymPickerModal({
     } catch {
       // Keep the picker open so callers can recover from a save failure.
     } finally {
+      selectingGymIdRef.current = null;
       setSelectingGymId(null);
     }
   };
@@ -49,16 +58,16 @@ export function GymPickerModal({
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
       accessibilityViewIsModal
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={styles.overlay} onPress={handleClose}>
         <View style={styles.container} onStartShouldSetResponder={() => true}>
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={onClose}
+              onPress={handleClose}
               accessibilityRole="button"
               accessibilityLabel="Close gym picker"
               hitSlop={8}

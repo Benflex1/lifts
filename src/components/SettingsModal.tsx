@@ -31,7 +31,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     try {
       await setUnit(newUnit);
     } catch {
-      // Error handled by SettingsContext alert
+      // Error handled by SettingsContext notification.
     } finally {
       setIsSaving(false);
     }
@@ -224,7 +224,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   closeButton: {
-    padding: 6,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
     backgroundColor: '#262A34',
   },
