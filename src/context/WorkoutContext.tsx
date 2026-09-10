@@ -21,6 +21,7 @@ import {
   StartWorkoutOptions,
   switchWorkoutGym,
 } from '../workout/gym-session';
+import { resolveActiveGymAfterRefresh } from '../workout/gym-profile';
 import { useDialog } from './DialogContext';
 import {
   PAUSED_WORKOUT_CONFIRM_LABEL,
@@ -56,6 +57,7 @@ interface WorkoutContextType {
   ) => Promise<void>;
   gyms: Gym[];
   activeGym: Gym | null;
+  refreshGyms: () => Promise<void>;
   setActiveGym: (gymId: string) => Promise<void>;
   minimizeWorkout: () => void;
   maximizeWorkout: () => void;
@@ -117,6 +119,17 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {
       console.error('Failed to load workout drafts:', e);
     }
+  }, []);
+
+  const refreshGyms = useCallback(async () => {
+    const store = await getStore();
+    const [loadedGyms, defaultGym] = await Promise.all([
+      store.getGyms(),
+      store.getDefaultGym(),
+    ]);
+    const currentWorkout = controllerRef.current?.getState().workout;
+    setGyms(loadedGyms);
+    setActiveGymState(resolveActiveGymAfterRefresh(loadedGyms, defaultGym, currentWorkout?.gymId));
   }, []);
 
   // Initialize controller and subscribe
@@ -897,6 +910,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         availableDrafts,
         gyms,
         activeGym,
+        refreshGyms,
         isDraftModalOpen,
         openDraftModal: () => setIsDraftModalOpen(true),
         closeDraftModal: () => setIsDraftModalOpen(false),

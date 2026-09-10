@@ -8,6 +8,8 @@ import {
   validateGymColor,
   validateGymDeletion,
   validateWorkoutGymId,
+  isGymUsedByActiveWorkout,
+  resolveActiveGymAfterRefresh,
 } from '../../src/workout/gym-profile';
 
 const gyms: Gym[] = [
@@ -36,8 +38,21 @@ describe('gym profile validation', () => {
 
   it('requires a distinct replacement and at least two known gyms for deletion', () => {
     assert.doesNotThrow(() => validateGymDeletion('gym-default', 'gym-other', gyms));
+    assert.throws(
+      () => validateGymDeletion('gym-default', 'gym-other', gyms, 'gym-default'),
+      /active workout/i,
+    );
     assert.throws(() => validateGymDeletion('missing', 'gym-other', gyms), /unknown gym/);
     assert.throws(() => validateGymDeletion('gym-default', 'gym-default', gyms), /different/);
     assert.throws(() => validateGymDeletion('gym-default', 'gym-other', [gyms[0]]), /at least two/);
+  });
+
+  it('identifies the active workout gym and preserves its refreshed metadata', () => {
+    assert.equal(isGymUsedByActiveWorkout('gym-default', 'gym-default'), true);
+    assert.equal(isGymUsedByActiveWorkout('gym-default', null), false);
+
+    const renamedActiveGym = { ...gyms[0], name: 'Renamed Default' };
+    assert.equal(resolveActiveGymAfterRefresh([renamedActiveGym, gyms[1]], gyms[1], 'gym-default'), renamedActiveGym);
+    assert.equal(resolveActiveGymAfterRefresh([gyms[0], gyms[1]], gyms[1], null), gyms[1]);
   });
 });

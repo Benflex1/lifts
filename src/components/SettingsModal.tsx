@@ -12,6 +12,7 @@ import { X, Check } from 'lucide-react-native';
 import { useSettings } from '../context/SettingsContext';
 import { WeightUnit } from '../utils/units';
 import { GymProfilesModal } from './GymProfilesModal';
+import { useWorkout } from '../context/WorkoutContext';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -20,6 +21,7 @@ interface SettingsModalProps {
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { unit, setUnit, gymTrackingEnabled, setGymTrackingEnabled } = useSettings();
+  const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
   const [showGymProfiles, setShowGymProfiles] = useState(false);
 
@@ -190,6 +192,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
       <GymProfilesModal
         visible={showGymProfiles}
         onClose={() => setShowGymProfiles(false)}
+        activeWorkoutGymId={activeWorkout?.gymId}
+        onGymsChanged={refreshGyms}
       />
     </>
   );

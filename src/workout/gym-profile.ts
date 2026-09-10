@@ -16,9 +16,35 @@ export function validateGymColor(color: string): string {
   return color;
 }
 
-export function validateGymDeletion(gymId: string, replacementGymId: string, gyms: readonly Gym[]): void {
+export function isGymUsedByActiveWorkout(gymId: string, activeWorkoutGymId?: string | null): boolean {
+  return Boolean(activeWorkoutGymId) && gymId === activeWorkoutGymId;
+}
+
+export function resolveActiveGymAfterRefresh(
+  gyms: readonly Gym[],
+  defaultGym: Gym | null,
+  activeWorkoutGymId?: string | null,
+): Gym | null {
+  if (activeWorkoutGymId) {
+    return gyms.find((gym) => gym.id === activeWorkoutGymId) || null;
+  }
+  if (defaultGym) {
+    return gyms.find((gym) => gym.id === defaultGym.id) || gyms.find((gym) => gym.isDefault) || gyms[0] || null;
+  }
+  return gyms.find((gym) => gym.isDefault) || gyms[0] || null;
+}
+
+export function validateGymDeletion(
+  gymId: string,
+  replacementGymId: string,
+  gyms: readonly Gym[],
+  activeWorkoutGymId?: string | null,
+): void {
   if (gyms.length < 2) throw new Error('at least two gyms must exist before deletion');
   if (!gyms.some(gym => gym.id === gymId)) throw new Error(`unknown gym: ${gymId}`);
+  if (isGymUsedByActiveWorkout(gymId, activeWorkoutGymId)) {
+    throw new Error('cannot delete the gym used by an active workout');
+  }
   if (!replacementGymId || replacementGymId === gymId) throw new Error('replacement gym must be different');
   if (!gyms.some(gym => gym.id === replacementGymId)) throw new Error(`unknown replacement gym: ${replacementGymId}`);
 }

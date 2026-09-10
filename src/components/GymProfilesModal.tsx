@@ -12,20 +12,27 @@ import {
 import { Check, Edit2, Plus, Trash2, X } from 'lucide-react-native';
 import { createGym, deleteGym, getGyms, setDefaultGym, updateGym } from '../database/db';
 import { Gym } from '../types';
-import { GYM_COLOR_PALETTE, validateGymColor, validateGymName } from '../workout/gym-profile';
+import {
+  GYM_COLOR_PALETTE,
+  isGymUsedByActiveWorkout,
+  validateGymColor,
+  validateGymName,
+} from '../workout/gym-profile';
 import { useDialog } from '../context/DialogContext';
 import { GymPickerModal } from './GymPickerModal';
 
 export interface GymProfilesModalProps {
   visible: boolean;
   onClose: () => void;
+  activeWorkoutGymId?: string | null;
+  onGymsChanged?: () => void | Promise<void>;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-export function GymProfilesModal({ visible, onClose }: GymProfilesModalProps) {
+export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsChanged }: GymProfilesModalProps) {
   const { confirm, notify } = useDialog();
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,6 +86,7 @@ export function GymProfilesModal({ visible, onClose }: GymProfilesModalProps) {
         await createGym(validName, validColor);
       }
       await refreshGyms();
+      await onGymsChanged?.();
       resetForm();
     } catch (error) {
       await notify({ title: 'Gym Error', message: errorMessage(error, 'Failed to save gym.') });
@@ -99,6 +107,7 @@ export function GymProfilesModal({ visible, onClose }: GymProfilesModalProps) {
     try {
       await setDefaultGym(gym.id);
       await refreshGyms();
+      await onGymsChanged?.();
     } catch (error) {
       await notify({ title: 'Gym Error', message: errorMessage(error, 'Failed to set default gym.') });
     } finally {
@@ -108,6 +117,13 @@ export function GymProfilesModal({ visible, onClose }: GymProfilesModalProps) {
 
   const handleDelete = async (gym: Gym) => {
     if (saving) return;
+    if (isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)) {
+      await notify({
+        title: 'Gym In Use',
+        message: 'Finish or cancel the active workout before deleting its gym.',
+      });
+      return;
+    }
     const confirmed = await confirm({
       title: 'Delete Gym',
       message: `Delete "${gym.name}"? Its workouts and drafts will be moved to another gym.`,
@@ -122,11 +138,21 @@ export function GymProfilesModal({ visible, onClose }: GymProfilesModalProps) {
 
   const handleReplacementSelect = async (replacementGymId: string) => {
     if (!deletingGymId) return;
+    if (isGymUsedByActiveWorkout(deletingGymId, activeWorkoutGymId)) {
+      setReplacementPickerVisible(false);
+      setDeletingGymId(null);
+      await notify({
+        title: 'Gym In Use',
+        message: 'Finish or cancel the active workout before deleting its gym.',
+      });
+      return;
+    }
     try {
       await deleteGym(deletingGymId, replacementGymId);
       setReplacementPickerVisible(false);
       setDeletingGymId(null);
       await refreshGyms();
+      await onGymsChanged?.();
     } catch (error) {
       await notify({ title: 'Gym Error', message: errorMessage(error, 'Failed to delete gym.') });
       throw error;
@@ -221,6 +247,9 @@ export function GymProfilesModal({ visible, onClose }: GymProfilesModalProps) {
                     <View style={styles.gymDetails}>
                       <Text style={styles.gymName}>{gym.name}</Text>
                       {gym.isDefault && <Text style={styles.defaultText}>Default gym</Text>}
+                      {isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId) && (
+                        <Text style={styles.activeWorkoutText}>Active workout gym — finish before deleting</Text>
+                      )}
                     </View>
                     <View style={styles.rowActions}>
                       {!gym.isDefault && (
@@ -246,12 +275,25 @@ export function GymProfilesModal({ visible, onClose }: GymProfilesModalProps) {
                       <TouchableOpacity
                         style={styles.actionButton}
                         onPress={() => handleDelete(gym)}
-                        disabled={saving || gyms.length < 2}
+                        disabled={saving || gyms.length < 2 || isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)}
                         accessibilityRole="button"
-                        accessibilityLabel={`Delete ${gym.name}`}
-                        accessibilityState={{ disabled: saving || gyms.length < 2 }}
+                        accessibilityLabel={
+                          isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)
+                            ? `Cannot delete ${gym.name} while an active workout uses it`
+                            : `Delete ${gym.name}`
+                        }
+                        accessibilityState={{
+                          disabled: saving || gyms.length < 2 || isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId),
+                        }}
                       >
-                        <Trash2 size={18} color={gyms.length < 2 ? '#4B5563' : '#EF4444'} />
+                        <Trash2
+                          size={18}
+                          color={
+                            gyms.length < 2 || isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)
+                              ? '#4B5563'
+                              : '#EF4444'
+                          }
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -434,6 +476,11 @@ const styles = StyleSheet.create({
   defaultText: {
     marginTop: 2,
     color: '#9CA3AF',
+    fontSize: 12,
+  },
+  activeWorkoutText: {
+    marginTop: 2,
+    color: '#F59E0B',
     fontSize: 12,
   },
   rowActions: {
