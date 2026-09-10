@@ -11,6 +11,7 @@ import {
 import { Check, X } from 'lucide-react-native';
 import { deleteExerciseGymScope, saveExerciseGymScope } from '../database/db';
 import { Exercise, ExerciseGymScope, ExerciseScopeType, Gym } from '../types';
+import { canDismissExerciseScopeModal } from '../utils/gym-picker';
 import { defaultScopeForEquipment, validateExerciseGymScope } from '../workout/gym-scope';
 
 interface Props {
@@ -19,7 +20,7 @@ interface Props {
   gyms: Gym[];
   scope: ExerciseGymScope | null;
   onClose: () => void;
-  onSaved: (scope: ExerciseGymScope | null) => void;
+  onSaved: (scope: ExerciseGymScope | null) => void | Promise<void>;
 }
 
 const SCOPE_OPTIONS: Array<{ type: ExerciseScopeType; label: string; description: string }> = [
@@ -66,7 +67,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
       };
       validateExerciseGymScope(nextScope, new Set(gyms.map(gym => gym.id)));
       await saveExerciseGymScope(nextScope);
-      onSaved(nextScope);
+      await onSaved(nextScope);
       onClose();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to save exercise scope.');
@@ -81,7 +82,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
     setError(null);
     try {
       await deleteExerciseGymScope(exercise.id);
-      onSaved(null);
+      await onSaved(null);
       onClose();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Unable to remove exercise scope.');
@@ -91,7 +92,14 @@ export const ExerciseScopeModal: React.FC<Props> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => {
+        if (canDismissExerciseScopeModal(saving)) onClose();
+      }}
+    >
       <View style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>

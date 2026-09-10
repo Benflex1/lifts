@@ -7,6 +7,7 @@ import {
   validateGymName,
   validateGymColor,
   validateGymDeletion,
+  validateWorkoutGymId,
 } from '../../src/workout/gym-profile';
 
 const gyms: Gym[] = [
@@ -15,6 +16,13 @@ const gyms: Gym[] = [
 ];
 
 describe('gym profile validation', () => {
+  it('accepts only an existing non-whitespace workout gym ID', () => {
+    assert.equal(validateWorkoutGymId('gym-default', gyms), 'gym-default');
+    assert.throws(() => validateWorkoutGymId('  ', gyms), /gym ID cannot be empty/i);
+    assert.throws(() => validateWorkoutGymId(' gym-default ', gyms), /unknown gym/i);
+    assert.throws(() => validateWorkoutGymId('missing', gyms), /unknown gym/i);
+  });
+
   it('trims valid names and rejects empty or overly long names', () => {
     assert.equal(validateGymName('  Downtown Gym  '), 'Downtown Gym');
     assert.throws(() => validateGymName('   '), /empty/);

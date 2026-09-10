@@ -81,6 +81,30 @@ describe('webStore persistence and lease handling', () => {
     await store.close();
   });
 
+  it('rejects invalid completed-workout gym IDs before writing', async () => {
+    const dbName = `test-web-invalid-workout-gym-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    try {
+      const workout = (gymId: string) => ({
+        id: `invalid-gym-${gymId.trim() || 'empty'}`,
+        name: 'Invalid gym workout',
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 1,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
+      await assert.rejects(() => store.saveCompletedWorkout(workout('missing-gym')), /unknown gym/i);
+      await assert.rejects(() => store.saveCompletedWorkout(workout('  ')), /gym ID cannot be empty/i);
+      assert.equal(await store.getWorkoutDetail('invalid-gym-missing-gym'), null);
+      assert.equal(await store.getWorkoutDetail('invalid-gym-empty'), null);
+      assert.deepEqual(await store.getWorkoutHistory(), []);
+    } finally {
+      await store.close();
+    }
+  });
+
   it('rejects invalid scope references and all new writes in a read-only tab', async () => {
     const dbName = `test-web-gym-validation-${Date.now()}`;
     const first: any = await createWebStore(dbName, { idbFactory: indexedDB });

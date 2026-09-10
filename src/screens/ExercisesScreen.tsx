@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -86,44 +86,61 @@ export const ExercisesScreen: React.FC = () => {
   const [currentGym, setCurrentGym] = useState<Gym | null>(null);
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
   const [showScopeModal, setShowScopeModal] = useState(false);
+  const exerciseLoadRequestRef = useRef(0);
+
+  const loadExerciseDetails = useCallback(async (exercise: Exercise, clearBeforeLoad: boolean) => {
+    const requestId = ++exerciseLoadRequestRef.current;
+    if (clearBeforeLoad) {
+      setCurrentGym(null);
+      setExerciseScope(null);
+      setGyms([]);
+    }
+    setExerciseStats(null);
+
+    try {
+      const [gymList, defaultGym, scope] = await Promise.all([
+        getGyms(),
+        getDefaultGym(),
+        getExerciseGymScope(exercise.id),
+      ]);
+      const selectedGym = gymList.find(gym => gym.id === defaultGym.id) || gymList[0] || defaultGym;
+      const stats = await getExerciseStats(exercise.id, selectedGym.id);
+      if (requestId !== exerciseLoadRequestRef.current) return;
+      setGyms(gymList);
+      setCurrentGym(selectedGym);
+      setExerciseScope(scope);
+      setExerciseStats(stats);
+    } catch (e) {
+      if (requestId !== exerciseLoadRequestRef.current) return;
+      setCurrentGym(null);
+      setExerciseScope(null);
+      setExerciseStats(null);
+      console.error('Error loading exercise stats:', e);
+    }
+  }, []);
 
   useEffect(() => {
     if (!activeDetail) {
+      ++exerciseLoadRequestRef.current;
       setExerciseStats(null);
       setCurrentGym(null);
       setExerciseScope(null);
+      setGyms([]);
       setShowScopeModal(false);
       return;
     }
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const [gymList, defaultGym, scope] = await Promise.all([
-          getGyms(),
-          getDefaultGym(),
-          getExerciseGymScope(activeDetail.id),
-        ]);
-        const selectedGym = gymList.find(gym => gym.id === defaultGym.id) || gymList[0] || defaultGym;
-        const stats = await getExerciseStats(activeDetail.id, selectedGym.id);
-        if (cancelled) return;
-        setGyms(gymList);
-        setCurrentGym(selectedGym);
-        setExerciseScope(scope);
-        setExerciseStats(stats);
-      } catch (e) {
-        if (!cancelled) console.error('Error loading exercise stats:', e);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeDetail]);
+    void loadExerciseDetails(activeDetail, true);
+  }, [activeDetail, loadExerciseDetails]);
 
   useEffect(() => {
     if (!gymTrackingEnabled) setShowScopeModal(false);
   }, [gymTrackingEnabled]);
 
-  const handleScopeSaved = (scope: ExerciseGymScope | null) => {
+  const handleScopeSaved = async (scope: ExerciseGymScope | null) => {
     setExerciseScope(scope);
+    if (activeDetail) {
+      await loadExerciseDetails(activeDetail, false);
+    }
   };
 
   const statsCard = (label: string, stats: DualExerciseStats['global']) => (

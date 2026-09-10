@@ -102,6 +102,28 @@ describe('nativeStore and migration safety', () => {
     }
   });
 
+  it('rejects invalid completed-workout gym IDs before writing', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const workout = (gymId: string): Workout => ({
+        id: `invalid-gym-${gymId.trim() || 'empty'}`,
+        name: 'Invalid gym workout',
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 1,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
+      await assert.rejects(() => fixture.store.saveCompletedWorkout(workout('missing-gym')), /unknown gym/i);
+      await assert.rejects(() => fixture.store.saveCompletedWorkout(workout('  ')), /gym ID cannot be empty/i);
+      assert.equal(await fixture.store.getWorkoutDetail('invalid-gym-missing-gym'), null);
+      assert.equal(await fixture.store.getWorkoutDetail('invalid-gym-empty'), null);
+      assert.deepEqual(await fixture.store.getWorkoutHistory(), []);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
   it('rejects deletion when the default gym is the only gym', async () => {
     const fixture = await createStoreFixture('native');
     try {

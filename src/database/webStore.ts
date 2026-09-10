@@ -6,7 +6,7 @@ import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../
 import { calculateDualExerciseStats } from '../workout/gym-records';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
-import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName } from '../workout/gym-profile';
+import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName, validateWorkoutGymId } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 
 export interface WebStoreOptions {
@@ -621,31 +621,57 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function finishWorkout(workout: Workout): Promise<void> {
-    workout = normalizeWorkout(workout);
     const database = await openDb();
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(['workouts', 'routines', 'workout_drafts'], 'readwrite');
-      tx.objectStore('workouts').put(workout);
+      const tx = database.transaction(['gyms', 'workouts', 'routines', 'workout_drafts'], 'readwrite');
+      let validationError: unknown = null;
+      let settled = false;
+      const rejectOnce = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
 
-      if (workout.routineId) {
-        const rtStore = tx.objectStore('routines');
-        const getReq = rtStore.get(workout.routineId);
-        getReq.onsuccess = () => {
-          const r = getReq.result as Routine | undefined;
-          if (r) {
-            r.lastPerformedAt = workout.endTime || workout.startTime;
-            rtStore.put(r);
+      tx.oncomplete = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      tx.onerror = () => rejectOnce(tx.error);
+      tx.onabort = () => rejectOnce(validationError || tx.error || new Error('Workout save aborted'));
+
+      const gymRequest = tx.objectStore('gyms').getAll();
+      gymRequest.onerror = () => {
+        validationError = gymRequest.error;
+        tx.abort();
+      };
+      gymRequest.onsuccess = () => {
+        try {
+          const gymId = validateWorkoutGymId(workout.gymId, gymRequest.result as Gym[]);
+          const validatedWorkout = { ...workout, gymId };
+          tx.objectStore('workouts').put(validatedWorkout);
+
+          if (validatedWorkout.routineId) {
+            const rtStore = tx.objectStore('routines');
+            const getReq = rtStore.get(validatedWorkout.routineId);
+            getReq.onsuccess = () => {
+              const r = getReq.result as Routine | undefined;
+              if (r) {
+                r.lastPerformedAt = validatedWorkout.endTime || validatedWorkout.startTime;
+                rtStore.put(r);
+              }
+            };
           }
-        };
-      }
 
-      // Remove from drafts in same transaction
-      tx.objectStore('workout_drafts').delete(workout.id);
-
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+          // Remove from drafts in same transaction
+          tx.objectStore('workout_drafts').delete(validatedWorkout.id);
+        } catch (error) {
+          validationError = error;
+          tx.abort();
+        }
+      };
     });
   }
 

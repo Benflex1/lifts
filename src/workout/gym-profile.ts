@@ -22,3 +22,13 @@ export function validateGymDeletion(gymId: string, replacementGymId: string, gym
   if (!replacementGymId || replacementGymId === gymId) throw new Error('replacement gym must be different');
   if (!gyms.some(gym => gym.id === replacementGymId)) throw new Error(`unknown replacement gym: ${replacementGymId}`);
 }
+
+export function validateWorkoutGymId(gymId: unknown, gyms: readonly Gym[]): string {
+  if (typeof gymId !== 'string' || !gymId.trim()) {
+    throw new Error('gym ID cannot be empty');
+  }
+  if (!gyms.some(gym => gym.id === gymId)) {
+    throw new Error(`unknown gym: ${gymId}`);
+  }
+  return gymId;
+}

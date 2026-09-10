@@ -17,7 +17,7 @@ import { smartSearchExercises } from '../utils/search';
 import { buildDefaultRoutines } from './seedData';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
-import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName } from '../workout/gym-profile';
+import { DEFAULT_GYM_COLOR, validateGymColor, validateGymDeletion, validateGymName, validateWorkoutGymId } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
@@ -575,6 +575,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function finishWorkout(workout: Workout): Promise<void> {
     return writeQueue(async () => {
+      const gymId = validateWorkoutGymId(workout.gymId, await getGyms());
       await driver.withTransactionAsync(async () => {
         await driver.runAsync(
           `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress, gym_id)
@@ -587,7 +588,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           workout.durationSeconds,
           workout.totalVolumeKg,
           workout.notes || null,
-          workout.gymId || (await getDefaultGym()).id
+          gymId
         );
 
         await driver.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workout.id);
