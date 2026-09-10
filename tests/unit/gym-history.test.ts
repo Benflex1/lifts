@@ -62,4 +62,20 @@ describe('gym-aware previous-set resolution', () => {
     const [suggestion] = resolvePreviousSetsForExercise(machine, history, 'gym-c', scope);
     assert.equal(suggestion.sourceGymName, undefined);
   });
+
+  it('falls back to the first completed occurrence when the newest occurrence is empty', () => {
+    const emptyNewest = occurrence('w-new', '2026-09-11T10:00:00.000Z', 'gym-c', 'Other', 0, 0);
+    emptyNewest.sets = [];
+
+    const [suggestion] = resolvePreviousSetsForExercise(
+      machine,
+      [emptyNewest, history[1]],
+      'gym-c'
+    );
+
+    assert.equal(suggestion.weightKg, 45);
+    assert.equal(suggestion.reps, 8);
+    assert.equal(suggestion.sourceGymId, 'gym-a');
+    assert.equal(suggestion.sourceGymName, 'FitX');
+  });
 });
