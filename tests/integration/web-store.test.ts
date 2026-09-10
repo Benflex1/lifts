@@ -201,6 +201,22 @@ describe('webStore persistence and lease handling', () => {
     await store.close();
   });
 
+  it('rejects deleting the gym supplied as the active workout gym at the store boundary', async () => {
+    const dbName = `test-web-active-gym-delete-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    try {
+      const replacement = await store.createGym('Replacement');
+      await assert.rejects(
+        () => store.deleteGym('gym-default', replacement.id, 'gym-default'),
+        /active workout/i,
+      );
+      assert.deepEqual((await store.getGyms()).map((gym: any) => gym.id), ['gym-default', replacement.id]);
+    } finally {
+      await store.close();
+    }
+  });
+
   it('rejects read-only gym update, default, and delete mutations without changing state', async () => {
     const dbName = `test-web-gym-read-only-mutations-${Date.now()}`;
     const writer: any = await createWebStore(dbName, { idbFactory: indexedDB });

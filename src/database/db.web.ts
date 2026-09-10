@@ -116,7 +116,7 @@ export async function getDefaultGym(): Promise<Gym> { return (await getStore()).
 export async function createGym(name: string, color?: string): Promise<Gym> { return (await getStore()).createGym!(name, color); }
 export async function updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym> { return (await getStore()).updateGym!(id, updates); }
 export async function setDefaultGym(id: string): Promise<void> { return (await getStore()).setDefaultGym!(id); }
-export async function deleteGym(id: string, replacementGymId: string): Promise<void> { return (await getStore()).deleteGym!(id, replacementGymId); }
+export async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> { return (await getStore()).deleteGym!(id, replacementGymId, activeWorkoutGymId); }
 export async function getExerciseGymScopes(): Promise<ExerciseGymScope[]> { return (await getStore()).getExerciseGymScopes!(); }
 export async function getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null> { return (await getStore()).getExerciseGymScope!(exerciseId); }
 export async function saveExerciseGymScope(scope: ExerciseGymScope): Promise<void> { return (await getStore()).saveExerciseGymScope!(scope); }

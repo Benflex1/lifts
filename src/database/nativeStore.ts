@@ -189,10 +189,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
     }));
   }
 
-  async function deleteGym(id: string, replacementGymId: string): Promise<void> {
+  async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> {
     return writeQueue(() => driver.withTransactionAsync(async () => {
       const gyms = await getGyms();
-      validateGymDeletion(id, replacementGymId, gyms);
+      validateGymDeletion(id, replacementGymId, gyms, activeWorkoutGymId);
       const deleted = gyms.find(gym => gym.id === id)!;
       if (!gyms.some(gym => gym.id === replacementGymId)) throw new Error(`unknown replacement gym: ${replacementGymId}`);
       await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id = ?', replacementGymId, id);

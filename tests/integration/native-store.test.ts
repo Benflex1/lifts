@@ -133,6 +133,20 @@ describe('nativeStore and migration safety', () => {
     }
   });
 
+  it('rejects deleting the gym supplied as the active workout gym at the store boundary', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const replacement = await fixture.store.createGym('Replacement');
+      await assert.rejects(
+        () => fixture.store.deleteGym('gym-default', replacement.id, 'gym-default'),
+        /active workout/i,
+      );
+      assert.deepEqual((await fixture.store.getGyms()).map((gym) => gym.id), ['gym-default', replacement.id]);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
   it('includes gyms and scopes in native snapshots', async () => {
     const fixture = await createStoreFixture('native');
     try {

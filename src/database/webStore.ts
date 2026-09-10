@@ -424,17 +424,17 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
-  async function deleteGym(id: string, replacementGymId: string): Promise<void> {
+  async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> {
     if (id === replacementGymId) throw new Error('Replacement gym must be different');
     const database = await openDb(); await verifyAndRenewLease(database);
-    validateGymDeletion(id, replacementGymId, await getGyms());
+    validateGymDeletion(id, replacementGymId, await getGyms(), activeWorkoutGymId);
     await new Promise<void>((resolve, reject) => {
       const tx = database.transaction(['gyms', 'workouts', 'workout_drafts', 'exercise_gym_scopes'], 'readwrite');
       const gyms = tx.objectStore('gyms'); const workouts = tx.objectStore('workouts'); const drafts = tx.objectStore('workout_drafts'); const scopes = tx.objectStore('exercise_gym_scopes');
       const all = gyms.getAll();
       all.onsuccess = () => {
         const rows = all.result as Gym[];
-        validateGymDeletion(id, replacementGymId, rows);
+        validateGymDeletion(id, replacementGymId, rows, activeWorkoutGymId);
         const removed = rows.find(g => g.id === id)!;
         for (const gym of rows) gyms.put({ ...gym, isDefault: removed.isDefault ? gym.id === replacementGymId : gym.isDefault });
         const wr = workouts.getAll(); wr.onsuccess = () => (wr.result as Workout[]).forEach(w => { if (w.gymId === id) workouts.put({ ...w, gymId: replacementGymId }); });

@@ -61,7 +61,7 @@ export interface Store {
   createGym(name: string, color?: string): Promise<Gym>;
   updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym>;
   setDefaultGym(id: string): Promise<void>;
-  deleteGym(id: string, replacementGymId: string): Promise<void>;
+  deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void>;
   getExerciseGymScopes(): Promise<ExerciseGymScope[]>;
   getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null>;
   saveExerciseGymScope(scope: ExerciseGymScope): Promise<void>;

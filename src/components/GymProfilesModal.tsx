@@ -148,7 +148,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
       return;
     }
     try {
-      await deleteGym(deletingGymId, replacementGymId);
+      await deleteGym(deletingGymId, replacementGymId, activeWorkoutGymId);
       setReplacementPickerVisible(false);
       setDeletingGymId(null);
       await refreshGyms();
