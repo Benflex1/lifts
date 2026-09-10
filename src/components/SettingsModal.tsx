@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { X, Check } from 'lucide-react-native';
 import { useSettings } from '../context/SettingsContext';
 import { WeightUnit } from '../utils/units';
+import { GymProfilesModal } from './GymProfilesModal';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -17,8 +19,9 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const { unit, setUnit } = useSettings();
+  const { unit, setUnit, gymTrackingEnabled, setGymTrackingEnabled } = useSettings();
   const [isSaving, setIsSaving] = useState(false);
+  const [showGymProfiles, setShowGymProfiles] = useState(false);
 
   if (!visible) return null;
 
@@ -34,26 +37,74 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     }
   };
 
+  const handleGymTrackingChange = async (enabled: boolean) => {
+    if (isSaving || enabled === gymTrackingEnabled) return;
+    setIsSaving(true);
+    try {
+      await setGymTrackingEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    setShowGymProfiles(false);
+    onClose();
+  };
+
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      transparent={true}
-      onRequestClose={onClose}
-      accessibilityViewIsModal={true}
-    >
+    <>
+      <Modal
+        visible={visible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={handleClose}
+        accessibilityViewIsModal={true}
+      >
       <View style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Settings</Text>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={handleClose}
               style={styles.closeButton}
               accessibilityRole="button"
               accessibilityLabel="Close settings"
             >
               <X size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.settingHeaderRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.sectionTitle}>Gym Tracking</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Keep workout history and machine suggestions separated by gym.
+                </Text>
+              </View>
+              <Switch
+                value={gymTrackingEnabled}
+                onValueChange={handleGymTrackingChange}
+                disabled={isSaving}
+                trackColor={{ false: '#374151', true: '#2563EB' }}
+                thumbColor={gymTrackingEnabled ? '#FFFFFF' : '#9CA3AF'}
+                accessibilityLabel="Gym Tracking"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: gymTrackingEnabled, disabled: isSaving }}
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.manageButton}
+              onPress={() => setShowGymProfiles(true)}
+              disabled={isSaving}
+              accessibilityRole="button"
+              accessibilityLabel="Manage gyms"
+            >
+              <Text style={styles.manageButtonText}>Manage Gyms</Text>
             </TouchableOpacity>
           </View>
 
@@ -127,7 +178,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
           {/* Footer button */}
           <TouchableOpacity
             style={styles.doneButton}
-            onPress={onClose}
+            onPress={handleClose}
             accessibilityRole="button"
             accessibilityLabel="Done"
           >
@@ -135,7 +186,12 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
+      </Modal>
+      <GymProfilesModal
+        visible={showGymProfiles}
+        onClose={() => setShowGymProfiles(false)}
+      />
+    </>
   );
 }
 
@@ -175,6 +231,15 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 20,
   },
+  settingHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingTextContainer: {
+    flex: 1,
+    paddingRight: 12,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
@@ -189,6 +254,21 @@ const styles = StyleSheet.create({
   },
   unitOptions: {
     gap: 10,
+  },
+  manageButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#374151',
+    backgroundColor: '#262A34',
+  },
+  manageButtonText: {
+    color: '#D1D5DB',
+    fontSize: 14,
+    fontWeight: '600',
   },
   unitOption: {
     flexDirection: 'row',
