@@ -1,4 +1,4 @@
-import { Gym, PreviousSetSuggestion, Workout } from '../types';
+import { Gym, PreviousSetSuggestion, Workout, WorkoutSet } from '../types';
 import type { Store } from '../database/contract';
 
 export interface StartWorkoutOptions {
@@ -104,6 +104,27 @@ export function resolveRepeatSourceGym(
   return gyms.find((gym) => gym.id === workout.gymId);
 }
 
+export function clearSameGymProvenance<T extends Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>>(
+  set: T,
+  targetGymId: string,
+): T {
+  if (set.previousGymId !== targetGymId) return set;
+  return {
+    ...set,
+    previousGymId: undefined,
+    previousGymName: undefined,
+  };
+}
+
+export function copyPreviousSetProvenance(
+  set?: Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>,
+): Pick<WorkoutSet, 'previousGymId' | 'previousGymName'> {
+  return {
+    previousGymId: set?.previousGymId,
+    previousGymName: set?.previousGymName,
+  };
+}
+
 export function appendExercisesToCurrentWorkout(
   controller: GymSessionController,
   expected: WorkoutVersion,
@@ -185,8 +206,13 @@ export function rehydrateUntouchedSuggestions(
             ...set,
             previousWeightKg: suggestion?.weightKg,
             previousReps: suggestion?.reps,
-            previousGymId: suggestion?.sourceGymId,
-            previousGymName: suggestion?.sourceGymName,
+            ...clearSameGymProvenance(
+              {
+                previousGymId: suggestion?.sourceGymId,
+                previousGymName: suggestion?.sourceGymName,
+              },
+              workout.gymId,
+            ),
           };
         }),
       };

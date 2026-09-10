@@ -17,6 +17,8 @@ import {
   captureWorkoutVersion,
   appendExercisesToCurrentWorkout,
   loadSuggestionsForExercise,
+  clearSameGymProvenance,
+  copyPreviousSetProvenance,
   resolveStartGymId,
   StartWorkoutOptions,
   switchWorkoutGym,
@@ -326,12 +328,15 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (initialExercises && initialExercises.length > 0) {
       exercises = initialExercises.map((exercise) => ({
         ...exercise,
-        sets: exercise.sets.map((set) => ({
-          ...set,
-          previousGymName: set.previousGymId
-            ? (set.previousGymName || gymNames.get(set.previousGymId))
-            : set.previousGymName,
-        })),
+        sets: exercise.sets.map((set) => {
+          const normalizedSet = clearSameGymProvenance(set, gymId);
+          return {
+            ...normalizedSet,
+            previousGymName: normalizedSet.previousGymId
+              ? (normalizedSet.previousGymName || gymNames.get(normalizedSet.previousGymId))
+              : normalizedSet.previousGymName,
+          };
+        }),
       }));
     } else if (routine && routine.exercises.length > 0) {
       const occurrenceCounts: Record<string, number> = {};
@@ -709,6 +714,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isWeightEdited: false,
         previousWeightKg: ghostWeight,
         previousReps: ghostReps,
+        ...copyPreviousSetProvenance(lastSet),
       };
       return { ...ex, sets: [...ex.sets, newSet] };
     });

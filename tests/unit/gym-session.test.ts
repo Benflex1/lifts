@@ -7,6 +7,8 @@ import {
   appendExercisesToCurrentWorkout,
   isCurrentWorkoutVersion,
   rehydrateUntouchedSuggestions,
+  clearSameGymProvenance,
+  copyPreviousSetProvenance,
   resolveRepeatSourceGym,
   resolveStartGymId,
   switchWorkoutGym,
@@ -90,6 +92,33 @@ const workout: Workout = {
 };
 
 describe('gym session helpers', () => {
+  it('clears source provenance when a repeated suggestion is from the target gym', () => {
+    const set = {
+      previousWeightKg: 50,
+      previousReps: 8,
+      previousGymId: 'gym-default',
+      previousGymName: 'Default Gym',
+    };
+
+    assert.deepEqual(clearSameGymProvenance(set, 'gym-default'), {
+      previousWeightKg: 50,
+      previousReps: 8,
+      previousGymId: undefined,
+      previousGymName: undefined,
+    });
+    assert.deepEqual(clearSameGymProvenance(set, 'gym-other'), set);
+  });
+
+  it('preserves source provenance when adding a set from the prior set', () => {
+    assert.deepEqual(copyPreviousSetProvenance({
+      previousGymId: 'gym-old',
+      previousGymName: 'Old Gym',
+    }), {
+      previousGymId: 'gym-old',
+      previousGymName: 'Old Gym',
+    });
+  });
+
   it('rehydrates only untouched suggestion metadata without mutating the workout', () => {
     const original = structuredClone(workout);
     const suggestionsByExercise: Record<string, PreviousSetSuggestion[]> = {
