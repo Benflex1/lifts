@@ -51,3 +51,6 @@ temp-screenshots/
 # Build artifacts
 build-artifacts/
 *.apk
+
+# Local feature worktrees
+.worktrees/
