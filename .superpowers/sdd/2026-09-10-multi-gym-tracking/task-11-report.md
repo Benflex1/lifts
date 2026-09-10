@@ -35,3 +35,9 @@ The shell profile printed pre-existing warnings about `NPM_CONFIG_PREFIX` and a 
 - End-to-end manual multi-gym acceptance is pending for gym switching, draft/history behavior, reassignment, scope controls, v2→v3 restore, foreign labels, and toggle persistence.
 
 Automated verification is green, but the multi-gym release gate must remain open until the pending device/browser results are recorded in `docs/release-checklist.md`.
+
+## Fix round 1
+
+- Corrected `REL-10` so it no longer describes current exports as JSON v2 or marks the v2/v3 release flow fully verified. It now records automated v2 import/v3 export coverage as verified while keeping manual cross-platform acceptance pending.
+- Clarified the `ROADMAP.md` backup entry: Schema v2 remains import-compatible and current exports use Schema v3.
+- Exact release status after this correction: automated verification passed; manual Android, iOS, browser, and cross-platform backup acceptance remain pending. Release readiness is not claimed.

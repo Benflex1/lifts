@@ -32,7 +32,7 @@
 | **Plate Calculator** | Visual barbell plate calculator | Olympic kg/lb plate calculator | Completed (Color-coded kg & lb plates, 45lb/20kg bar presets) |
 | **Units (kg / lb)** | Locked or buggy conversions | Reachable, persistent kg / lb toggle | Completed (Persisted in storage with rollback guard) |
 | **1RM Calculator** | Locked in premium | Unlocked with Epley & Brzycki formulas | Completed (With suggested training loads table) |
-| **Data Ownership & Backup** | Locked / proprietary export | Full JSON schema v2 backup & restore | Completed (Atomic cross-platform backup and restore) |
+| **Data Ownership & Backup** | Locked / proprietary export | Schema v2 import compatibility with current Schema v3 export & restore | Completed (Atomic cross-platform backup and restore; v2 imports, v3 exports) |
 | **Crash Recovery & Drafts** | Cloud sync required | Local draft autosave & multi-draft recovery | Completed (3s periodic + background saves + recovery modal) |
 | **RPE Tracking** | Premium feature | Interactive RPE cycle badge (5–10) | Completed (Active workout badge + history breakdown) |
 | **Supersets & Giant Sets** | Premium feature | Planned Phase 3 | Backlog |

@@ -66,7 +66,7 @@ This document details the environment requirements, build procedures, and device
 | **REL-07** | Repeated Exercises | Routine containing same exercise twice | Occurrence indices map deterministically to past ghost sets | Verified |
 | **REL-08** | Routine Rep Targets | Start routine with `6-8`, `10, 8, 6`, and `AMRAP` | Inputs prefill with expected initial values and labels | Verified |
 | **REL-09** | Unit Switcher | Switch between kg and lb in Settings | Persisted; existing stored weights intact; plate calc adjusts | Verified |
-| **REL-10** | Backup Export & Restore | Export JSON v2 from web; restore to native | Full workout exercises, sets, routines, settings imported | Verified |
+| **REL-10** | Backup v2 import / v3 export | Import a Schema v2 backup, export the restored data as Schema v3, and restore cross-platform | v2 remains import-compatible; current exports contain v3 gyms/scopes and restore without data loss or partial writes | **Automated coverage verified; manual cross-platform acceptance pending** |
 | **REL-11** | Restore Collision Safety | Restore backup containing conflicting workout ID | Aborts transaction cleanly with user notification; no partial writes | Verified |
 | **REL-12** | Destructive Confirmations| Confirm and cancel routine/workout deletions | Cancellation changes nothing; confirmation commits delete | Verified |
 | **REL-13** | Completion Modal | Finish workout | Summary modal displays total volume, sets, and duration | Verified |
