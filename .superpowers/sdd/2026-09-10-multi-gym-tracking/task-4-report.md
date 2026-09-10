@@ -48,13 +48,19 @@
 - Added web integration coverage for last-gym, same-replacement, and missing-replacement deletion rejection; default-gym reassignment keeps exactly one default and updates completed workout/draft references.
 - Added read-only mutation coverage for `updateGym`, `setDefaultGym`, and `deleteGym`, asserting gym state remains unchanged.
 - Fixed web deletion preflight to return canonical validation errors before opening the multi-store mutation transaction while retaining in-transaction validation.
-- Current verification is 18 web tests, 34 focused web/native tests, 118 unit tests, and 59 full integration tests passing. Typecheck still has only the two known Task 5 backup/restore diagnostics at `src/utils/backup.ts:399` and `src/utils/restore.ts:202`.
+- Earlier fix-round verification was 18 web tests, 34 focused web/native tests, 118 unit tests, and 59 full integration tests passing. Typecheck still has only the two known Task 5 backup/restore diagnostics at `src/utils/backup.ts:399` and `src/utils/restore.ts:202`.
 
 ## Fix-round note (correct integration worktree)
 
 This report was corrected in `/workspace/lifts/.worktrees/multi-gym-tracking` after the Task 4 commit was cherry-picked into the reviewed integration branch. The cherry-pick had combined the required Task 1 gym/scope declarations with duplicate optional declarations and had promoted previous-set/stat signatures to their Task 6 forms. The contract now has exactly one required declaration for each gym/profile/scope method, while `getPreviousSetsForExercise(exerciseId, occurrenceIndex?)` returns legacy `WorkoutSet[]` and `getExerciseStats(exerciseId)` returns the existing flat stats. Web/native wrappers remain legacy through Task 5; gym-aware query algorithms are deferred to Task 6.
 
-The corrected worktree verification produced 29 passing focused web/native integration tests. `npx tsc --noEmit` is otherwise clean; the remaining two diagnostics are the expected Task 5 backup/restore construction errors caused by the now-required snapshot gym/scope arrays:
+The earlier corrected-worktree verification produced 34 focused web/native integration tests. `npx tsc --noEmit` is otherwise clean; the remaining two diagnostics are the expected Task 5 backup/restore construction errors caused by the now-required snapshot gym/scope arrays:
 
 - `src/utils/backup.ts:399` — legacy `BackupV2` construction lacks Task 5 gym/scope fields.
 - `src/utils/restore.ts:202` — legacy restore snapshot construction lacks Task 5 gym/scope fields.
+
+## Fix-round 3
+
+- Added an independent web test that attempts to delete the sole `gym-default` using a distinct missing replacement ID and asserts the canonical last-gym rejection plus unchanged gym state.
+- Kept same-replacement rejection in the multi-gym deletion test, separate from the last-gym invariant.
+- Fix-round verification is 19 web tests, 35 focused web/native tests, 118 unit tests, and 60 full integration tests passing. The two known Task 5 typecheck diagnostics remain explicitly qualified above.
