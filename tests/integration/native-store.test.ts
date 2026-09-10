@@ -125,6 +125,31 @@ describe('nativeStore and migration safety', () => {
     }
   });
 
+  it('orders equal-timestamp history by descending SQLite-binary workout ID', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const startTime = '2026-09-10T08:00:00.000Z';
+      for (const id of ['history-a', 'history-z', 'history-Ω', 'history-😀']) {
+        await fixture.store.saveCompletedWorkout({
+          id,
+          name: id,
+          gymId: 'gym-default',
+          startTime,
+          durationSeconds: 1,
+          totalVolumeKg: 0,
+          exercises: [],
+        });
+      }
+
+      assert.deepEqual(
+        (await fixture.store.getWorkoutHistory()).map(workout => workout.id),
+        ['history-😀', 'history-Ω', 'history-z', 'history-a'],
+      );
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
   it('rejects deletion when the default gym is the only gym', async () => {
     const fixture = await createStoreFixture('native');
     try {

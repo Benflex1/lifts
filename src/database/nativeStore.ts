@@ -649,7 +649,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
        LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
        WHERE w.in_progress = 0
        GROUP BY w.id
-       ORDER BY w.start_time DESC`
+       ORDER BY w.start_time DESC, w.id DESC`
     );
 
     const namesByWorkout = new Map<string, string[]>();

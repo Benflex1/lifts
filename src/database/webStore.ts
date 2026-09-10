@@ -722,7 +722,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
         const workouts = (req.result as Workout[]).map(normalizeWorkout);
-        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime));
+        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         resolve(workouts.map(w => ({
           id: w.id,
           name: w.name,
