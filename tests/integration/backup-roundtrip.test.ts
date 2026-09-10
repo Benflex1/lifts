@@ -444,6 +444,58 @@ describe('Backup Roundtrip & Merge Safety', () => {
   });
 
   for (const platform of ['native', 'web'] as const) {
+    it(`rejects duplicate set IDs across exercises in direct ${platform} workout and draft merges`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const exercise = before.exercises[0];
+      const duplicateSetId = `duplicate-set-${platform}`;
+      const makeExercise = (id: string): any => ({
+        id,
+        exerciseId: exercise.id,
+        exercise,
+        restTimerSeconds: 90,
+        sets: [{ id: duplicateSetId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+      });
+      const workout: Workout = {
+        id: `duplicate-set-workout-${platform}`,
+        name: 'Duplicate Set Workout',
+        gymId: before.gyms[0].id,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 60,
+        totalVolumeKg: 320,
+        exercises: [makeExercise('duplicate-exercise-1'), makeExercise('duplicate-exercise-2')],
+      };
+      const draft: WorkoutDraft = {
+        version: 1,
+        workout: {
+          ...workout,
+          id: `duplicate-set-draft-${platform}`,
+          name: 'Duplicate Set Draft',
+          exercises: [makeExercise('duplicate-draft-exercise-1'), makeExercise('duplicate-draft-exercise-2')],
+        },
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+      };
+      const merge = (candidate: { workouts: Workout[]; drafts: WorkoutDraft[] }) => fixture.store.mergeSnapshot({
+        exercises: [],
+        routines: [],
+        workouts: candidate.workouts,
+        drafts: candidate.drafts,
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      await assert.rejects(() => merge({ workouts: [workout], drafts: [] }), /Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+      await assert.rejects(() => merge({ workouts: [], drafts: [draft] }), /Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+      await fixture.dispose();
+    });
+  }
+
+  for (const platform of ['native', 'web'] as const) {
     for (const [field, value] of [
       ['id', undefined],
       ['setNumber', '1'],

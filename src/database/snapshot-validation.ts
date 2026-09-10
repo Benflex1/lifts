@@ -103,6 +103,7 @@ function validateActiveExerciseRecord(
   value: unknown,
   label: string,
   knownExerciseIds: ReadonlySet<string>,
+  setIds: Set<string>,
 ): asserts value is ActiveExercise {
   if (!isRecord(value)) throw new Error(`Invalid ${label}: expected object`);
   requireString(value.id, `${label}.id`);
@@ -111,7 +112,6 @@ function validateActiveExerciseRecord(
   validateExerciseRecord(value.exercise, `${label}.exercise`);
   if (value.exercise.id !== value.exerciseId) throw new Error(`Invalid ${label}.exercise.id: must match exerciseId`);
   if (!Array.isArray(value.sets)) throw new Error(`Invalid ${label}.sets: expected array`);
-  const setIds = new Set<string>();
   value.sets.forEach((set: unknown, index: number) => {
     validateWorkoutSetRecord(set, `${label}.sets[${index}]`);
     if (setIds.has(set.id)) throw new Error(`Duplicate set ID in ${label}: ${set.id}`);
@@ -176,8 +176,9 @@ function validateWorkoutRecord(
   requireOptionalString(value.notes, `${label}.notes`, true);
   if (!Array.isArray(value.exercises)) throw new Error(`Invalid exercises in ${label}: expected array`);
   const exerciseInstanceIds = new Set<string>();
+  const setIds = new Set<string>();
   value.exercises.forEach((exercise: unknown, index: number) => {
-    validateActiveExerciseRecord(exercise, `${label}.exercises[${index}]`, knownExerciseIds);
+    validateActiveExerciseRecord(exercise, `${label}.exercises[${index}]`, knownExerciseIds, setIds);
     if (exerciseInstanceIds.has(exercise.id)) throw new Error(`Duplicate active exercise ID in ${label}: ${exercise.id}`);
     exerciseInstanceIds.add(exercise.id);
   });
