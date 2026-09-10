@@ -1,16 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, StyleSheet, View } from 'react-native';
 import { GripVertical } from 'lucide-react-native';
-import type { PanResponderInstance } from 'react-native';
 import type { ExerciseLayout } from '../workout/active-exercises';
 
 const DRAG_ACTIVATION_MS = 350;
 const DRAG_CANCEL_DISTANCE = 10;
-
-export interface DragHandleRenderProps {
-  panHandlers: PanResponderInstance['panHandlers'];
-  isDragging: boolean;
-}
 
 interface DraggableExerciseCardProps {
   itemId: string;
@@ -138,6 +132,7 @@ export function DraggableExerciseCard({
 const styles = StyleSheet.create({
   card: {
     position: 'relative',
+    alignSelf: 'stretch',
   },
   draggingCard: {
     zIndex: 10,
