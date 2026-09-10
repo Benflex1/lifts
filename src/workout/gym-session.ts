@@ -133,6 +133,9 @@ export async function switchWorkoutGym(
   if (!gym) {
     throw new Error(`Cannot switch workout gym: unknown gym ${gymId}`);
   }
+  if (!isRequestCurrent()) {
+    return { gyms, gym, applied: false, cancelled: true };
+  }
 
   const initialState = controller.getState();
   const expectedVersion = captureWorkoutVersion(initialState);

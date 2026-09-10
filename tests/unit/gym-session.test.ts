@@ -327,6 +327,42 @@ describe('gym session helpers', () => {
     };
     assert.equal(appendExercisesToCurrentWorkout(staleController, expected, [addedExercise]), false);
   });
+
+  it('cancels an older idle gym switch when requests resolve out of order', async () => {
+    const gymLoads: Array<Promise<ReturnType<typeof workoutGym>[]>> = [];
+    const releases: Array<() => void> = [];
+    const store = {
+      getGyms: () => {
+        const gyms = new Promise<ReturnType<typeof workoutGym>[]>((resolve) => {
+          releases.push(() => resolve([workoutGym('gym-default'), workoutGym('gym-new')]));
+        });
+        gymLoads.push(gyms);
+        return gyms;
+      },
+      getPreviousSetsForExercise: async () => [],
+    };
+    const controller = {
+      getState: () => ({ phase: 'idle' as const, revision: 0, workout: null, restTimer: null }),
+      update: () => {
+        throw new Error('idle switch must not update a workout');
+      },
+      flush: async () => {},
+    };
+    let latestRequest = 0;
+    const firstRequest = ++latestRequest;
+    const first = switchWorkoutGym(controller, store, 'gym-new', () => firstRequest === latestRequest);
+    const secondRequest = ++latestRequest;
+    const second = switchWorkoutGym(controller, store, 'gym-default', () => secondRequest === latestRequest);
+
+    assert.equal(gymLoads.length, 2);
+    releases[1]();
+    const secondResult = await second;
+    releases[0]();
+    const firstResult = await first;
+
+    assert.equal(secondResult.cancelled, false);
+    assert.equal(firstResult.cancelled, true);
+  });
 });
 
 function workoutGym(id: string) {

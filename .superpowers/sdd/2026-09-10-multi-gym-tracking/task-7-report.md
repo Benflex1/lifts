@@ -63,3 +63,19 @@ There is no existing React provider test-renderer harness in this repository, so
 - `git diff --check` — passed.
 
 No picker, settings, or history-filter UI was added.
+
+## Fix Round 2
+
+### Review finding addressed
+
+`switchWorkoutGym` now checks the request token immediately after the asynchronous gym load and before the idle-workout early return. Since `WorkoutContext.setActiveGym` increments the shared request token before its first `await`, an older idle request is cancelled and cannot commit a stale `activeGym` selection after a newer request resolves.
+
+Added a deterministic deferred-load regression that starts two idle switches, resolves the newer request first, and asserts the older request is cancelled. Existing active-workout race, timer metadata, autosave, and untouched-set tests remain in place.
+
+### Fix-round verification
+
+- `npx tsx --test tests/unit/gym-session.test.ts tests/integration/completion-lifecycle.test.ts tests/integration/draft-lifecycle.test.ts` — 22 passed, 0 failed.
+- `npm test` — 133 passed, 0 failed.
+- `npm run test:integration` — 85 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `git diff --check` — passed.
