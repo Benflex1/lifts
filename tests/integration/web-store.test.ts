@@ -144,6 +144,47 @@ describe('webStore persistence and lease handling', () => {
     assert.deepEqual(after, before);
     await store.close();
   });
+
+  it('enforces web gym deletion invariants and preserves default references', async () => {
+    const dbName = `test-web-gym-deletion-invariants-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    const onlyGymBefore = await store.getGyms();
+    await assert.rejects(() => store.deleteGym('gym-default', 'gym-default'), /at least two gyms|replacement gym must be different/i);
+    assert.deepEqual(await store.getGyms(), onlyGymBefore);
+
+    const secondary = await store.createGym('Secondary');
+    const workout = { id: 'default-gym-workout', name: 'Default gym workout', gymId: 'gym-default', startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [] };
+    await store.saveCompletedWorkout(workout);
+    await store.saveDraft({ version: 1, workout: { ...workout, id: 'default-gym-draft' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
+    const beforeInvalidDelete = await store.readSnapshot();
+    await assert.rejects(() => store.deleteGym('gym-default', 'missing-gym'), /unknown replacement gym/i);
+    assert.deepEqual(await store.readSnapshot(), beforeInvalidDelete);
+    await assert.rejects(() => store.deleteGym(secondary.id, secondary.id), /replacement gym must be different/i);
+
+    await store.deleteGym('gym-default', secondary.id);
+    const gyms = await store.getGyms();
+    assert.equal(gyms.filter((gym: any) => gym.isDefault).length, 1);
+    assert.equal(gyms.find((gym: any) => gym.id === secondary.id).isDefault, true);
+    assert.equal((await store.getWorkoutDetail(workout.id)).gymId, secondary.id);
+    assert.equal((await store.getWorkoutDraft('default-gym-draft')).workout.gymId, secondary.id);
+    await store.close();
+  });
+
+  it('rejects read-only gym update, default, and delete mutations without changing state', async () => {
+    const dbName = `test-web-gym-read-only-mutations-${Date.now()}`;
+    const writer: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await writer.init();
+    const secondary = await writer.createGym('Secondary');
+    const before = await writer.getGyms();
+    const reader: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await reader.init();
+    await assert.rejects(() => reader.updateGym(secondary.id, { name: 'Changed' }), /read-only mode/);
+    await assert.rejects(() => reader.setDefaultGym(secondary.id), /read-only mode/);
+    await assert.rejects(() => reader.deleteGym(secondary.id, 'gym-default'), /read-only mode/);
+    assert.deepEqual(await writer.getGyms(), before);
+    await writer.close(); await reader.close();
+  });
   it('persists every user record type across store recreation and matches snapshot', async () => {
     const fixture = await createStoreFixture('web');
 

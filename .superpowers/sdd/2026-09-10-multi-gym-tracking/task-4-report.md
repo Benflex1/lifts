@@ -23,10 +23,10 @@
 
 ## Verification
 
-- `npx tsx --test tests/integration/web-store.test.ts` — 16 passed.
-- `npx tsx --test tests/integration/web-store.test.ts tests/integration/native-store.test.ts` — 32 passed.
+- `npx tsx --test tests/integration/web-store.test.ts` — 18 passed.
+- `npx tsx --test tests/integration/web-store.test.ts tests/integration/native-store.test.ts` — 34 passed.
 - `npm test` — 118 passed.
-- `npm run test:integration` — 57 passed.
+- `npm run test:integration` — 59 passed.
 - `npx tsc --noEmit` — two known Task 5 diagnostics remain at `src/utils/backup.ts:399` and `src/utils/restore.ts:202`; no Task 4 diagnostics remain.
 - `git diff --check` — passed.
 
@@ -41,7 +41,14 @@
 - Added merge preflight validation for duplicate gym/scope IDs, gym profile values, exercise existence, scope type/cardinality, and all referenced gyms before any IndexedDB writes.
 - Matched native default-first/name ordering in `getGyms()` and issued the gym deletion request after reference updates are scheduled.
 - Added focused tests for exact validation parity, ordering, repeated upgrade persistence, read-only legacy reads, invalid merge atomicity, and invalid scope types.
-- The corrected branch verification is 32 focused integration passes, 118 unit passes, and 57 full integration passes. Typecheck remains limited to the two expected Task 5 backup/restore diagnostics listed above.
+- The corrected branch verification is now 34 focused integration passes, 118 unit passes, and 59 full integration passes. Typecheck remains limited to the two expected Task 5 backup/restore diagnostics listed above.
+
+## Fix-round 2
+
+- Added web integration coverage for last-gym, same-replacement, and missing-replacement deletion rejection; default-gym reassignment keeps exactly one default and updates completed workout/draft references.
+- Added read-only mutation coverage for `updateGym`, `setDefaultGym`, and `deleteGym`, asserting gym state remains unchanged.
+- Fixed web deletion preflight to return canonical validation errors before opening the multi-store mutation transaction while retaining in-transaction validation.
+- Current verification is 18 web tests, 34 focused web/native tests, 118 unit tests, and 59 full integration tests passing. Typecheck still has only the two known Task 5 backup/restore diagnostics at `src/utils/backup.ts:399` and `src/utils/restore.ts:202`.
 
 ## Fix-round note (correct integration worktree)
 

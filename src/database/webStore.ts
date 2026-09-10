@@ -391,6 +391,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   async function deleteGym(id: string, replacementGymId: string): Promise<void> {
     if (id === replacementGymId) throw new Error('Replacement gym must be different');
     const database = await openDb(); await verifyAndRenewLease(database);
+    validateGymDeletion(id, replacementGymId, await getGyms());
     await new Promise<void>((resolve, reject) => {
       const tx = database.transaction(['gyms', 'workouts', 'workout_drafts', 'exercise_gym_scopes'], 'readwrite');
       const gyms = tx.objectStore('gyms'); const workouts = tx.objectStore('workouts'); const drafts = tx.objectStore('workout_drafts'); const scopes = tx.objectStore('exercise_gym_scopes');
