@@ -809,16 +809,17 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
-  async function getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats> {
+  async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
     const database = await openDb();
     const [scope] = await Promise.all([getExerciseGymScope(exerciseId)]);
+    const gymId = currentGymId || (await getDefaultGym()).id;
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
         const workouts = (req.result as Workout[]).map(normalizeWorkout)
           .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
-        resolve(calculateDualExerciseStats(workouts, exerciseId, currentGymId, scope || undefined));
+        resolve(calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined));
       };
       req.onerror = () => reject(req.error);
     });

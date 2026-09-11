@@ -184,7 +184,7 @@ getPreviousSetsForExercise(
   occurrenceIndex?: number,
   currentGymId?: string
 ): Promise<PreviousSetSuggestion[]>;
-getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats>;
+getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats>;
 ```
 
 In the listed test files, add `gymId: 'gym-default'` to every `Workout` and `WorkoutDraft.workout` fixture, and add `gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }]` plus `exerciseGymScopes: []` to every `DataSnapshot` literal. Extend the `tests/unit/session.test.ts` Store stub with no-op/default implementations of the new gym and scope methods, returning the same canonical default data.
@@ -789,7 +789,7 @@ Native should query completed workouts/exercise occurrences ordered by `w.start_
 
 Native loads only completed workout fragments for the requested exercise; web filters completed workout objects. Both call `calculateDualExerciseStats` and return zero-filled global/gym records. Keep `getExerciseStats` draft-free and make `maxSetVolumeKg` available to later PR-badge work.
 
-Update the public wrappers in `src/database/db.native.ts` and `src/database/db.web.ts` to accept `currentGymId` and return `PreviousSetSuggestion[]`/`DualExerciseStats`; retain the optional current-gym argument only on `getPreviousSetsForExercise` and require it for `getExerciseStats` at the Store boundary.
+Update the public wrappers in `src/database/db.native.ts` and `src/database/db.web.ts` to accept `currentGymId` and return `PreviousSetSuggestion[]`/`DualExerciseStats`; keep `currentGymId` optional for both methods and resolve the default gym when callers omit it.
 
 - [ ] **Step 5: Run platform parity and existing suites.**
 

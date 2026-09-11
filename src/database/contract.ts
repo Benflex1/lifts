@@ -71,7 +71,7 @@ export interface Store {
     occurrenceIndex?: number,
     currentGymId?: string,
   ): Promise<PreviousSetSuggestion[]>;
-  getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats>;
+  getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats>;
 
   getAllExercises(): Promise<Exercise[]>;
   searchExercises(query?: string, muscle?: string, equipment?: string): Promise<Exercise[]>;

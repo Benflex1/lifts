@@ -182,6 +182,44 @@ describe('History-derived stats & previous set suggestions', () => {
   }
 
   for (const platform of ['native', 'web'] as const) {
+    it(`[${platform}] defaults omitted exercise stats to the default gym`, async () => {
+      const fixture = await createStoreFixture(platform);
+      try {
+        const defaultGym = await fixture.store.getDefaultGym();
+        const exercise = await fixture.store.getExerciseById('Ab_Crunch_Machine');
+        assert.ok(exercise);
+
+        await fixture.store.finishWorkout({
+          id: `${platform}-default-stats-workout`,
+          name: 'Default stats workout',
+          gymId: defaultGym.id,
+          startTime: '2026-09-10T10:00:00.000Z',
+          durationSeconds: 600,
+          totalVolumeKg: 360,
+          exercises: [{
+            id: `${platform}-default-stats-occurrence`,
+            exerciseId: exercise.id,
+            exercise,
+            restTimerSeconds: 90,
+            sets: [{
+              id: `${platform}-default-stats-set`,
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 45,
+              reps: 8,
+              isCompleted: true,
+            }],
+          }],
+        });
+
+        const explicit = await fixture.store.getExerciseStats(exercise.id, defaultGym.id);
+        const omitted = await fixture.store.getExerciseStats(exercise.id);
+        assert.deepEqual(omitted, explicit);
+      } finally {
+        await fixture.dispose();
+      }
+    });
+
     it(`[${platform}] chooses gym-aware completed history and returns dual stats`, async () => {
       const fixture = await createStoreFixture(platform);
       try {

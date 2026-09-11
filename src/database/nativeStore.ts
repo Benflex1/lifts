@@ -878,10 +878,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return Array.from(workouts.values());
   }
 
-  async function getExerciseStats(exerciseId: string, currentGymId: string): Promise<DualExerciseStats> {
+  async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
     const workouts = await loadCompletedWorkoutsForExercise(exerciseId);
     const scope = await getExerciseGymScope(exerciseId);
-    return calculateDualExerciseStats(workouts, exerciseId, currentGymId, scope || undefined);
+    const gymId = currentGymId || (await getDefaultGym()).id;
+    return calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined);
   }
 
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
