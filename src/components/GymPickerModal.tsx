@@ -18,6 +18,7 @@ export interface GymPickerModalProps {
   gyms: Gym[];
   selectedGymId?: string;
   title?: string;
+  description?: string;
   onSelect: (gymId: string) => void | Promise<void>;
   onClose: () => void;
 }
@@ -27,6 +28,7 @@ export function GymPickerModal({
   gyms,
   selectedGymId,
   title = 'Select Gym',
+  description,
   onSelect,
   onClose,
 }: GymPickerModalProps) {
@@ -64,7 +66,10 @@ export function GymPickerModal({
       <Pressable style={styles.overlay} onPress={handleClose}>
         <View style={styles.container} onStartShouldSetResponder={() => true}>
           <View style={styles.header}>
-            <Text style={styles.title}>{title}</Text>
+            <View style={styles.headerCopy}>
+              <Text style={styles.title}>{title}</Text>
+              {description && <Text style={styles.description}>{description}</Text>}
+            </View>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={handleClose}
@@ -134,14 +139,24 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 14,
+  },
+  headerCopy: {
+    flex: 1,
+    marginRight: 12,
   },
   title: {
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
+  },
+  description: {
+    marginTop: 4,
+    color: '#9CA3AF',
+    fontSize: 12,
+    lineHeight: 17,
   },
   closeButton: {
     minWidth: 44,

@@ -89,3 +89,10 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
     totalVolumeKg,
   };
 }
+
+export function reassignWorkoutGym(workout: Workout, gymId: string): Workout {
+  return applyWorkoutEdits(workout, {
+    gymId,
+    sets: [],
+  });
+}

@@ -43,6 +43,10 @@ export function resolveStartGymId(
   return options?.gymId || defaultGym.id;
 }
 
+export function resolveInitialStartGymId(gyms: readonly Gym[]): string | undefined {
+  return gyms.find((gym) => gym.isDefault)?.id || gyms[0]?.id;
+}
+
 export async function loadSuggestionsForWorkout(
   store: SuggestionStore,
   workout: Workout,

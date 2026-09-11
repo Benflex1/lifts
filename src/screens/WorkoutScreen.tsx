@@ -25,10 +25,14 @@ import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
 import { SettingsModal } from '../components/SettingsModal';
+import { WorkoutStartModal } from '../components/WorkoutStartModal';
+import { resolveInitialStartGymId } from '../workout/gym-session';
+import { useSettings } from '../context/SettingsContext';
 import { useDialog } from '../context/DialogContext';
 
 export const WorkoutScreen: React.FC = () => {
-  const { startWorkout } = useWorkout();
+  const { startWorkout, gyms, refreshGyms } = useWorkout();
+  const { gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('All');
@@ -36,6 +40,10 @@ export const WorkoutScreen: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [routineToEdit, setRoutineToEdit] = useState<Routine | null>(null);
   const [showFolderManage, setShowFolderManage] = useState(false);
+  const [pendingStart, setPendingStart] = useState<{
+    routine?: Routine;
+    customName: string;
+  } | null>(null);
 
   useEffect(() => {
     loadRoutines();
@@ -46,19 +54,55 @@ export const WorkoutScreen: React.FC = () => {
     setRoutines(list);
   };
 
-  const handleStartEmpty = async () => {
+  const openStartModal = async (routine?: Routine, customName = 'Empty Workout') => {
+    if (!gymTrackingEnabled) {
+      try {
+        await startWorkout(routine, customName);
+      } catch (e) {
+        await notify({
+          title: 'Error',
+          message: routine ? `Failed to start "${routine.name}".` : 'Failed to start workout.',
+        });
+      }
+      return;
+    }
+
     try {
-      await startWorkout(undefined, 'Empty Workout');
+      await refreshGyms();
+      setPendingStart({ routine, customName });
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to start workout.' });
     }
   };
 
+  const handleStartEmpty = async () => {
+    await openStartModal(undefined, 'Empty Workout');
+  };
+
   const handleStartRoutine = async (routine: Routine) => {
+    await openStartModal(routine, routine.name);
+  };
+
+  const handleConfirmStart = async (gymId: string) => {
+    if (!pendingStart) return false;
+
     try {
-      await startWorkout(routine);
+      const started = await startWorkout(
+        pendingStart.routine,
+        pendingStart.customName,
+        undefined,
+        { gymId },
+      );
+      if (started) setPendingStart(null);
+      return started;
     } catch (e) {
-      await notify({ title: 'Error', message: `Failed to start "${routine.name}".` });
+      await notify({
+        title: 'Error',
+        message: pendingStart.routine
+          ? `Failed to start "${pendingStart.routine.name}".`
+          : 'Failed to start workout.',
+      });
+      throw e;
     }
   };
 
@@ -303,6 +347,15 @@ export const WorkoutScreen: React.FC = () => {
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
+      />
+
+      <WorkoutStartModal
+        visible={pendingStart !== null}
+        workoutName={pendingStart?.customName || 'Workout'}
+        gyms={gyms}
+        selectedGymId={resolveInitialStartGymId(gyms)}
+        onStart={handleConfirmStart}
+        onClose={() => setPendingStart(null)}
       />
     </View>
   );

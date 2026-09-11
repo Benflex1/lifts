@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { Workout } from '../../src/types';
-import { applyWorkoutEdits } from '../../src/workout/workout-edit';
+import { applyWorkoutEdits, reassignWorkoutGym } from '../../src/workout/workout-edit';
 
 const workoutFixture = (): Workout => ({
   id: 'workout-1',
@@ -47,6 +47,18 @@ const workoutFixture = (): Workout => ({
 });
 
 describe('applyWorkoutEdits', () => {
+  it('reassigns a completed workout gym without changing its recorded work', () => {
+    const original = workoutFixture();
+
+    const updated = reassignWorkoutGym(original, 'gym-b');
+
+    assert.equal(updated.id, original.id);
+    assert.equal(updated.gymId, 'gym-b');
+    assert.equal(updated.totalVolumeKg, original.totalVolumeKg);
+    assert.deepEqual(updated.exercises, original.exercises);
+    assert.equal(original.gymId, 'gym-default');
+  });
+
   it('reassigns only the workout gym while preserving the completed workout ID', () => {
     const original = workoutFixture();
 

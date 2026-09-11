@@ -10,6 +10,7 @@ import {
   clearSameGymProvenance,
   copyPreviousSetProvenance,
   resolveRepeatSourceGym,
+  resolveInitialStartGymId,
   resolveStartGymId,
   switchWorkoutGym,
 } from '../../src/workout/gym-session';
@@ -169,6 +170,17 @@ describe('gym session helpers', () => {
     assert.equal(resolveStartGymId(defaultGym), 'gym-default');
     assert.equal(resolveStartGymId(defaultGym, {}), 'gym-default');
     assert.equal(resolveStartGymId(defaultGym, { gymId: 'gym-other' }), 'gym-other');
+  });
+
+  it('preselects the saved default gym for a new workout', () => {
+    const gyms = [
+      workoutGym('gym-other'),
+      { ...workoutGym('gym-default'), isDefault: true },
+    ];
+
+    assert.equal(resolveInitialStartGymId(gyms), 'gym-default');
+    assert.equal(resolveInitialStartGymId(gyms.slice(0, 1)), 'gym-other');
+    assert.equal(resolveInitialStartGymId([]), undefined);
   });
 
   it('uses the loaded workout detail gym for repeat source metadata', () => {

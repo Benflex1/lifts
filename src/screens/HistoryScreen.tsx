@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,10 +34,22 @@ import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { useDialog } from '../context/DialogContext';
 import { resolveHistoricalTargetReps } from '../workout/sets';
-import { resolveRepeatSourceGym } from '../workout/gym-session';
+import { resolveInitialStartGymId, resolveRepeatSourceGym } from '../workout/gym-session';
+import { updateWorkoutHistorySummary } from '../workout/history-summary';
 import { WorkoutEditModal } from '../components/WorkoutEditModal';
+import { WorkoutStartModal } from '../components/WorkoutStartModal';
 
-export const HistoryScreen: React.FC = () => {
+interface HistoryScreenProps {
+  workoutUpdate?: Workout | null;
+}
+
+interface PendingRepeatWorkout {
+  routine?: Routine;
+  name: string;
+  initialExercises: ActiveExercise[];
+}
+
+export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = null }) => {
   const { startWorkout } = useWorkout();
   const { unit, gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
@@ -49,6 +61,8 @@ export const HistoryScreen: React.FC = () => {
   const [workoutDetails, setWorkoutDetails] = useState<Record<string, Workout>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
+  const [pendingRepeat, setPendingRepeat] = useState<PendingRepeatWorkout | null>(null);
+  const historyLoadRequestRef = useRef(0);
 
   useEffect(() => {
     loadHistory();
@@ -65,17 +79,27 @@ export const HistoryScreen: React.FC = () => {
   }, [gymTrackingEnabled, gyms, selectedGymId]);
 
   const loadHistory = async () => {
+    const requestId = ++historyLoadRequestRef.current;
     setLoading(true);
     try {
       const [list, gymList] = await Promise.all([getWorkoutHistory(), getGyms()]);
+      if (requestId !== historyLoadRequestRef.current) return;
       setHistory(list);
       setGyms(gymList);
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (requestId === historyLoadRequestRef.current) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!workoutUpdate) return;
+
+    setHistory(previous => updateWorkoutHistorySummary(previous, workoutUpdate));
+    setWorkoutDetails(previous => ({ ...previous, [workoutUpdate.id]: workoutUpdate }));
+    void loadHistory();
+  }, [workoutUpdate]);
 
   const filteredHistory = useMemo(
     () => selectedGymId ? history.filter(item => item.gymId === selectedGymId) : history,
@@ -133,8 +157,9 @@ export const HistoryScreen: React.FC = () => {
       }
 
       const newWorkoutPrefix = `wo-again-${Crypto.randomUUID().slice(0, 8)}`;
-      const gyms = await getGyms();
-      const sourceGym = resolveRepeatSourceGym(detail, gyms);
+      const loadedGyms = await getGyms();
+      setGyms(loadedGyms);
+      const sourceGym = resolveRepeatSourceGym(detail, loadedGyms);
       const initialExercises: ActiveExercise[] = detail.exercises.map((ex, exIdx) => {
         const activeExId = `ae-${newWorkoutPrefix}-${ex.exerciseId}-occ${exIdx}-${Crypto.randomUUID().slice(0, 6)}`;
         return {
@@ -169,9 +194,36 @@ export const HistoryScreen: React.FC = () => {
         }
       }
 
-      await startWorkout(routine, item.name, initialExercises);
+      if (!gymTrackingEnabled) {
+        await startWorkout(routine, item.name, initialExercises);
+        return;
+      }
+
+      setPendingRepeat({
+        routine,
+        name: item.name,
+        initialExercises,
+      });
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to start workout.' });
+    }
+  };
+
+  const handleStartRepeat = async (gymId: string) => {
+    if (!pendingRepeat) return false;
+
+    try {
+      const started = await startWorkout(
+        pendingRepeat.routine,
+        pendingRepeat.name,
+        pendingRepeat.initialExercises,
+        { gymId },
+      );
+      if (started) setPendingRepeat(null);
+      return started;
+    } catch (e) {
+      await notify({ title: 'Error', message: 'Failed to start workout.' });
+      throw e;
     }
   };
 
@@ -440,6 +492,15 @@ export const HistoryScreen: React.FC = () => {
         unit={unit}
         onClose={() => setEditingWorkout(null)}
         onSave={handleSaveEditedWorkout}
+      />
+
+      <WorkoutStartModal
+        visible={pendingRepeat !== null}
+        workoutName={pendingRepeat?.name || 'Workout'}
+        gyms={gyms}
+        selectedGymId={resolveInitialStartGymId(gyms)}
+        onStart={handleStartRepeat}
+        onClose={() => setPendingRepeat(null)}
       />
     </View>
   );

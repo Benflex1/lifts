@@ -22,6 +22,7 @@ import {
   FileText,
   Timer,
   MoreVertical,
+  MapPin,
   Dumbbell,
   CheckCircle2,
   ArrowUp,
@@ -373,24 +374,6 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           </TouchableOpacity>
         </View>
       </View>
-
-      {gymTrackingEnabled && displayedActiveGym && (
-        <View style={styles.gymSelectorContainer}>
-          <TouchableOpacity
-            style={styles.gymSelector}
-            onPress={() => setShowGymPicker(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Workout gym: ${displayedActiveGym.name}`}
-            accessibilityHint="Opens the gym picker"
-          >
-            <View style={[styles.gymSelectorSwatch, { backgroundColor: displayedActiveGym.color }]} />
-            <Text style={styles.gymSelectorText} numberOfLines={1}>
-              {displayedActiveGym.name}
-            </Text>
-            <Text style={styles.gymSelectorChevron}>▾</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* Top Metrics Card - Lyfta Screenshot 2 Style */}
       <View style={styles.metricsContainer}>
@@ -772,6 +755,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         visible={gymTrackingEnabled && showGymPicker}
         gyms={gyms}
         selectedGymId={displayedActiveGym?.id}
+        title="Change Workout Gym"
+        description="Unfinished sets stay intact. New previous-set suggestions will use the selected gym."
         onSelect={handleGymSelect}
         onClose={() => setShowGymPicker(false)}
       />
@@ -1123,6 +1108,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Text style={styles.menuItemText}>Collapse All Exercises</Text>
             </TouchableOpacity>
 
+            {gymTrackingEnabled && displayedActiveGym && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowWorkoutMenu(false);
+                  setShowGymPicker(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Change workout gym, currently ${displayedActiveGym.name}`}
+              >
+                <MapPin size={18} color="#38BDF8" />
+                <Text style={styles.menuItemText} numberOfLines={1}>
+                  Change Gym · {displayedActiveGym.name}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
@@ -1167,50 +1169,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#20242E',
   },
-  gymSelectorContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    backgroundColor: '#14171F',
-  },
-  gymSelector: {
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    maxWidth: '100%',
-    minHeight: 44,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: '#1E232E',
-    borderWidth: 1,
-    borderColor: '#2D3748',
-  },
-  gymSelectorSwatch: {
-    width: 10,
-    height: 10,
-    marginRight: 7,
-    borderRadius: 5,
-  },
-  gymSelectorText: {
-    maxWidth: 240,
-    color: '#F3F4F6',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  gymSelectorChevron: {
-    marginLeft: 6,
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E232E',
-  },
   timerWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1227,6 +1185,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E232E',
   },
   topRightWrap: {
     flexDirection: 'row',

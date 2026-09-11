@@ -56,7 +56,7 @@ interface WorkoutContextType {
     customName?: string,
     initialExercises?: ActiveExercise[],
     options?: StartWorkoutOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   gyms: Gym[];
   activeGym: Gym | null;
   refreshGyms: () => Promise<void>;
@@ -415,8 +415,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
       if (shouldResume) {
         maximizeWorkout();
+        return true;
       }
-      return;
+      return false;
     }
 
     if (availableDrafts.length > 0) {
@@ -432,11 +433,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } else {
           setIsDraftModalOpen(true);
         }
+        return true;
       }
-      return;
+      return false;
     }
 
     await executeStartWorkout(routine, customName, initialExercises, options);
+    return true;
   };
 
   const resumeDraft = (draft?: WorkoutDraft) => {
