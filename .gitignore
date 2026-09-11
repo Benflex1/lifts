@@ -44,6 +44,7 @@ yarn-error.*
 .claude/
 CLAUDE.md
 AGENTS.md
+.superpowers/
 
 # Temporary user assets
 temp-screenshots/
