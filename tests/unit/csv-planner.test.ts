@@ -85,4 +85,19 @@ describe('CSV Import Planner', () => {
     // 100 kg * 8 reps = 800 kg
     assert.equal(firstWorkout?.totalVolumeKg, 800);
   });
+
+  it('detects in-file duplicate workouts within the same CSV', () => {
+    const csvWithInFileDup = `"title","start_time","end_time","description","exercise_title","set_index","set_type","weight_kg","reps","rpe"
+"Morning Session A","2024-08-01T08:00:00.000Z","2024-08-01T09:00:00.000Z","","Squat (Barbell)",1,"normal",120,5,8
+"Morning Session B","2024-08-01T08:00:00.000Z","2024-08-01T09:00:00.000Z","","Squat (Barbell)",1,"normal",120,5,8`;
+
+    const plan = computeCsvImportPlan(csvWithInFileDup, { ...baseSnapshot, workouts: [] }, {
+      skipExistingWorkouts: true,
+    });
+
+    assert.equal(plan.totalWorkouts, 2);
+    assert.equal(plan.duplicateWorkoutsCount, 1);
+    assert.equal(plan.newWorkoutsCount, 1);
+    assert.equal(plan.snapshotToMerge.workouts.length, 1);
+  });
 });

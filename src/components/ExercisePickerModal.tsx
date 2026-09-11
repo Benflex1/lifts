@@ -46,6 +46,73 @@ const EQUIPMENT_LIST = [
   'Body Only',
 ];
 
+const CUSTOM_MUSCLE_OPTIONS = [
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Biceps',
+  'Triceps',
+  'Quadriceps',
+  'Hamstrings',
+  'Glutes',
+  'Abdominals',
+  'Calves',
+];
+
+const CUSTOM_EQUIPMENT_OPTIONS = [
+  'Barbell',
+  'Dumbbell',
+  'Machine',
+  'Cable',
+  'Bodyweight',
+];
+
+const MUSCLE_ALIAS_MAP: Record<string, string> = {
+  lats: 'Back',
+  lat: 'Back',
+  traps: 'Back',
+  trap: 'Back',
+  rhomboids: 'Back',
+  lower_back: 'Back',
+  'lower back': 'Back',
+  quads: 'Quadriceps',
+  quad: 'Quadriceps',
+  quadriceps: 'Quadriceps',
+  hamstrings: 'Hamstrings',
+  hamstring: 'Hamstrings',
+  glutes: 'Glutes',
+  glute: 'Glutes',
+  abs: 'Abdominals',
+  core: 'Abdominals',
+  abdominals: 'Abdominals',
+  calves: 'Calves',
+  calf: 'Calves',
+  chest: 'Chest',
+  pectorals: 'Chest',
+  shoulders: 'Shoulders',
+  delts: 'Shoulders',
+  deltoids: 'Shoulders',
+  biceps: 'Biceps',
+  triceps: 'Triceps',
+};
+
+const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
+  barbell: 'Barbell',
+  bb: 'Barbell',
+  dumbbell: 'Dumbbell',
+  db: 'Dumbbell',
+  machine: 'Machine',
+  'smith machine': 'Machine',
+  cable: 'Cable',
+  bodyweight: 'Bodyweight',
+  'body weight': 'Bodyweight',
+  'body only': 'Bodyweight',
+  body: 'Bodyweight',
+  kettlebell: 'Dumbbell',
+  bands: 'Cable',
+  band: 'Cable',
+};
+
 const QUICK_SUGGESTIONS = [
   'Bench',
   'Squat',
@@ -145,16 +212,21 @@ export const ExercisePickerModal: React.FC<Props> = ({
     setEditingExercise(exercise);
     setCustomName(exercise.name);
 
-    const rawMuscle = exercise.primaryMuscles?.[0] || 'chest';
-    const matchedMuscle = MUSCLE_GROUPS.find(
-      m => m.toLowerCase() === rawMuscle.toLowerCase()
-    ) || 'Chest';
-    setCustomMuscle(matchedMuscle === 'All' ? 'Chest' : matchedMuscle);
+    const rawMuscle = (exercise.primaryMuscles?.[0] || '').toLowerCase().trim();
+    const matchedMuscle =
+      CUSTOM_MUSCLE_OPTIONS.find(m => m.toLowerCase() === rawMuscle) ||
+      MUSCLE_ALIAS_MAP[rawMuscle] ||
+      'Chest';
+    setCustomMuscle(matchedMuscle);
 
-    const rawEquip = exercise.equipment || 'barbell';
-    const matchedEquip = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'].find(
-      eq => eq.toLowerCase() === rawEquip.toLowerCase() || (eq === 'Bodyweight' && rawEquip.toLowerCase().includes('body'))
-    ) || 'Barbell';
+    const rawEquip = (exercise.equipment || '').toLowerCase().trim();
+    const matchedEquip =
+      CUSTOM_EQUIPMENT_OPTIONS.find(eq => eq.toLowerCase() === rawEquip) ||
+      EQUIPMENT_ALIAS_MAP[rawEquip] ||
+      (['kettlebell', 'db'].some(k => rawEquip.includes(k)) ? 'Dumbbell' :
+       rawEquip.includes('body') ? 'Bodyweight' :
+       rawEquip.includes('cable') || rawEquip.includes('band') ? 'Cable' :
+       rawEquip.includes('smith') || rawEquip.includes('machine') ? 'Machine' : 'Barbell');
     setCustomEquipment(matchedEquip);
 
     setShowCustomModal(true);
@@ -333,36 +405,37 @@ export const ExercisePickerModal: React.FC<Props> = ({
             renderItem={({ item }) => {
               const isSelected = selectedExercises.has(item.id);
               return (
-                <TouchableOpacity
-                  style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}
-                  onPress={() => handleItemPress(item)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.iconThumb, isSelected && styles.iconThumbSelected]}>
-                    <Dumbbell size={20} color={isSelected ? '#10B981' : '#3B82F6'} />
-                  </View>
-                  <View style={styles.itemInfo}>
-                    <View style={styles.itemNameRow}>
-                      <Text style={[styles.itemName, isSelected && styles.itemNameSelected]}>{item.name}</Text>
-                      {item.isCustom && (
-                        <View style={styles.listCustomBadge}>
-                          <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
-                        </View>
-                      )}
+                <View style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}>
+                  <TouchableOpacity
+                    style={styles.exerciseItemMain}
+                    onPress={() => handleItemPress(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.iconThumb, isSelected && styles.iconThumbSelected]}>
+                      <Dumbbell size={20} color={isSelected ? '#10B981' : '#3B82F6'} />
                     </View>
-                    <View style={styles.tagRow}>
-                      <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
-                      <Text style={styles.tagDot}>•</Text>
-                      <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                    <View style={styles.itemInfo}>
+                      <View style={styles.itemNameRow}>
+                        <Text style={[styles.itemName, isSelected && styles.itemNameSelected]} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        {item.isCustom && (
+                          <View style={styles.listCustomBadge}>
+                            <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.tagRow}>
+                        <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
+                        <Text style={styles.tagDot}>•</Text>
+                        <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                   {item.isCustom && (
                     <TouchableOpacity
                       style={styles.itemEditBtn}
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        handleOpenEditCustom(item);
-                      }}
+                      onPress={() => handleOpenEditCustom(item)}
                       accessibilityRole="button"
                       accessibilityLabel={`Edit ${item.name}`}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -371,11 +444,18 @@ export const ExercisePickerModal: React.FC<Props> = ({
                     </TouchableOpacity>
                   )}
                   {multiSelect && (
-                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
+                    <TouchableOpacity
+                      style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}
+                      onPress={() => handleItemPress(item)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isSelected }}
+                      accessibilityLabel={`Select ${item.name}`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
                       {isSelected && <Check size={16} color="#000000" strokeWidth={3} />}
-                    </View>
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+                </View>
               );
             }}
             ListEmptyComponent={
@@ -444,7 +524,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
 
               <Text style={styles.fieldLabel}>Primary Muscle</Text>
               <View style={styles.modalPills}>
-                {['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quadriceps', 'Hamstrings', 'Glutes', 'Abdominals'].map(m => (
+                {CUSTOM_MUSCLE_OPTIONS.map(m => (
                   <TouchableOpacity
                     key={m}
                     style={[styles.modalPill, customMuscle === m && styles.modalPillActive]}
@@ -459,7 +539,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
 
               <Text style={styles.fieldLabel}>Equipment</Text>
               <View style={styles.modalPills}>
-                {['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'].map(eq => (
+                {CUSTOM_EQUIPMENT_OPTIONS.map(eq => (
                   <TouchableOpacity
                     key={eq}
                     style={[styles.modalPill, customEquipment === eq && styles.modalPillActive]}
@@ -643,6 +723,12 @@ const styles = StyleSheet.create({
     borderColor: '#20242E',
     gap: 14,
   },
+  exerciseItemMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
   exerciseItemSelected: {
     borderColor: '#10B981',
     backgroundColor: '#132822',
@@ -668,6 +754,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   itemName: {
+    flexShrink: 1,
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',

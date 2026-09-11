@@ -43,5 +43,7 @@ describe('CSV Date & Duration Parser', () => {
     assert.equal(parseDurationSeconds('45:00'), 2700);
     assert.equal(parseDurationSeconds('4200'), 4200);
     assert.equal(parseDurationSeconds('45'), 2700); // 45 minutes
+    assert.equal(parseDurationSeconds('240', 'seconds'), 240); // Respects seconds hint
+    assert.equal(parseDurationSeconds('45', 'minutes'), 2700);
   });
 });

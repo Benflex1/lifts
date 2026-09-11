@@ -49,6 +49,73 @@ const EQUIPMENT_LIST = [
   'Body Only',
 ];
 
+const CUSTOM_MUSCLE_OPTIONS = [
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Biceps',
+  'Triceps',
+  'Quadriceps',
+  'Hamstrings',
+  'Glutes',
+  'Abdominals',
+  'Calves',
+];
+
+const CUSTOM_EQUIPMENT_OPTIONS = [
+  'Barbell',
+  'Dumbbell',
+  'Machine',
+  'Cable',
+  'Bodyweight',
+];
+
+const MUSCLE_ALIAS_MAP: Record<string, string> = {
+  lats: 'Back',
+  lat: 'Back',
+  traps: 'Back',
+  trap: 'Back',
+  rhomboids: 'Back',
+  lower_back: 'Back',
+  'lower back': 'Back',
+  quads: 'Quadriceps',
+  quad: 'Quadriceps',
+  quadriceps: 'Quadriceps',
+  hamstrings: 'Hamstrings',
+  hamstring: 'Hamstrings',
+  glutes: 'Glutes',
+  glute: 'Glutes',
+  abs: 'Abdominals',
+  core: 'Abdominals',
+  abdominals: 'Abdominals',
+  calves: 'Calves',
+  calf: 'Calves',
+  chest: 'Chest',
+  pectorals: 'Chest',
+  shoulders: 'Shoulders',
+  delts: 'Shoulders',
+  deltoids: 'Shoulders',
+  biceps: 'Biceps',
+  triceps: 'Triceps',
+};
+
+const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
+  barbell: 'Barbell',
+  bb: 'Barbell',
+  dumbbell: 'Dumbbell',
+  db: 'Dumbbell',
+  machine: 'Machine',
+  'smith machine': 'Machine',
+  cable: 'Cable',
+  bodyweight: 'Bodyweight',
+  'body weight': 'Bodyweight',
+  'body only': 'Bodyweight',
+  body: 'Bodyweight',
+  kettlebell: 'Dumbbell',
+  bands: 'Cable',
+  band: 'Cable',
+};
+
 const QUICK_SUGGESTIONS = [
   'Bench',
   'Squat',
@@ -217,16 +284,21 @@ export const ExercisesScreen: React.FC = () => {
     setEditingExercise(exercise);
     setCustomName(exercise.name);
 
-    const rawMuscle = exercise.primaryMuscles?.[0] || 'chest';
-    const matchedMuscle = MUSCLE_GROUPS.find(
-      m => m.toLowerCase() === rawMuscle.toLowerCase()
-    ) || 'Chest';
-    setCustomMuscle(matchedMuscle === 'All' ? 'Chest' : matchedMuscle);
+    const rawMuscle = (exercise.primaryMuscles?.[0] || '').toLowerCase().trim();
+    const matchedMuscle =
+      CUSTOM_MUSCLE_OPTIONS.find(m => m.toLowerCase() === rawMuscle) ||
+      MUSCLE_ALIAS_MAP[rawMuscle] ||
+      'Chest';
+    setCustomMuscle(matchedMuscle);
 
-    const rawEquip = exercise.equipment || 'barbell';
-    const matchedEquip = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'].find(
-      eq => eq.toLowerCase() === rawEquip.toLowerCase() || (eq === 'Bodyweight' && rawEquip.toLowerCase().includes('body'))
-    ) || 'Barbell';
+    const rawEquip = (exercise.equipment || '').toLowerCase().trim();
+    const matchedEquip =
+      CUSTOM_EQUIPMENT_OPTIONS.find(eq => eq.toLowerCase() === rawEquip) ||
+      EQUIPMENT_ALIAS_MAP[rawEquip] ||
+      (['kettlebell', 'db'].some(k => rawEquip.includes(k)) ? 'Dumbbell' :
+       rawEquip.includes('body') ? 'Bodyweight' :
+       rawEquip.includes('cable') || rawEquip.includes('band') ? 'Cable' :
+       rawEquip.includes('smith') || rawEquip.includes('machine') ? 'Machine' : 'Barbell');
     setCustomEquipment(matchedEquip);
 
     setShowCustomModal(true);
@@ -384,51 +456,51 @@ export const ExercisesScreen: React.FC = () => {
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.exerciseCard}
-              onPress={() => setActiveDetail(item)}
-            >
-              <View style={styles.iconWrap}>
-                <Dumbbell size={20} color="#3B82F6" />
-              </View>
-
-              <View style={styles.itemInfo}>
-                <View style={styles.itemNameRow}>
-                  <Text style={styles.itemName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  {item.isCustom && (
-                    <View style={styles.listCustomBadge}>
-                      <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
-                    </View>
-                  )}
+            <View style={styles.exerciseCard}>
+              <TouchableOpacity
+                style={styles.exerciseCardMain}
+                onPress={() => setActiveDetail(item)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.iconWrap}>
+                  <Dumbbell size={20} color="#3B82F6" />
                 </View>
-                <View style={styles.tagRow}>
-                  <Text style={styles.tagMuscle}>
-                    {item.primaryMuscles.join(', ') || 'General'}
-                  </Text>
-                  <Text style={styles.tagDot}>•</Text>
-                  <Text style={styles.tagEquipment}>{item.equipment}</Text>
-                </View>
-              </View>
 
-              {item.isCustom ? (
+                <View style={styles.itemInfo}>
+                  <View style={styles.itemNameRow}>
+                    <Text style={styles.itemName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    {item.isCustom && (
+                      <View style={styles.listCustomBadge}>
+                        <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.tagRow}>
+                    <Text style={styles.tagMuscle}>
+                      {item.primaryMuscles.join(', ') || 'General'}
+                    </Text>
+                    <Text style={styles.tagDot}>•</Text>
+                    <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                  </View>
+                </View>
+
+                {!item.isCustom && <ChevronRight size={18} color="#4B5563" />}
+              </TouchableOpacity>
+
+              {item.isCustom && (
                 <TouchableOpacity
                   style={styles.itemEditBtn}
-                  onPress={(e) => {
-                    e.stopPropagation?.();
-                    handleOpenEditCustom(item);
-                  }}
+                  onPress={() => handleOpenEditCustom(item)}
                   accessibilityRole="button"
                   accessibilityLabel={`Edit ${item.name}`}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Edit2 size={16} color="#3B82F6" />
                 </TouchableOpacity>
-              ) : (
-                <ChevronRight size={18} color="#4B5563" />
               )}
-            </TouchableOpacity>
+            </View>
           )}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -616,7 +688,7 @@ export const ExercisesScreen: React.FC = () => {
 
             <Text style={[styles.fieldLabel, { marginTop: 14 }]}>PRIMARY MUSCLE</Text>
             <View style={styles.modalPills}>
-              {['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quadriceps', 'Hamstrings', 'Glutes', 'Abdominals'].map(m => (
+              {CUSTOM_MUSCLE_OPTIONS.map(m => (
                 <TouchableOpacity
                   key={m}
                   style={[styles.modalPill, customMuscle === m && styles.modalPillActive]}
@@ -631,7 +703,7 @@ export const ExercisesScreen: React.FC = () => {
 
             <Text style={[styles.fieldLabel, { marginTop: 14 }]}>EQUIPMENT</Text>
             <View style={styles.modalPills}>
-              {['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'].map(eq => (
+              {CUSTOM_EQUIPMENT_OPTIONS.map(eq => (
                 <TouchableOpacity
                   key={eq}
                   style={[styles.modalPill, customEquipment === eq && styles.modalPillActive]}
@@ -799,6 +871,12 @@ const styles = StyleSheet.create({
     borderColor: '#262A34',
     gap: 12,
   },
+  exerciseCardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   iconWrap: {
     width: 40,
     height: 40,
@@ -820,6 +898,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+    flexShrink: 1,
   },
   listCustomBadge: {
     backgroundColor: '#3B82F620',

@@ -45,6 +45,7 @@ export function computeCsvImportPlan(
         continue;
       }
     }
+    existingStartTimeSet.add(session.startTime);
 
     const workoutId = createScopedId('w');
     let workoutVolumeKg = 0;

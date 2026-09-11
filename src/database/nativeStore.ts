@@ -468,7 +468,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
     for (const r of routines) {
       const reRows = await driver.getAllAsync<any>(
         `SELECT re.*, e.name as ex_name, e.category as ex_category, e.equipment as ex_equipment,
-                e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst
+                e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst,
+                e.is_custom as ex_is_custom
          FROM routine_exercises re
          JOIN exercises e ON re.exercise_id = e.id
          WHERE re.routine_id = ?
@@ -494,6 +495,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             primaryMuscles: JSON.parse(row.ex_primary || '[]'),
             secondaryMuscles: JSON.parse(row.ex_secondary || '[]'),
             instructions: JSON.parse(row.ex_inst || '[]'),
+            isCustom: Boolean(row.ex_is_custom),
           },
           orderIndex: row.order_index,
           targetSets: row.target_sets,
@@ -512,7 +514,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
     const reRows = await driver.getAllAsync<any>(
       `SELECT re.*, e.name as ex_name, e.category as ex_category, e.equipment as ex_equipment,
-              e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst
+              e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst,
+              e.is_custom as ex_is_custom
        FROM routine_exercises re
        JOIN exercises e ON re.exercise_id = e.id
        WHERE re.routine_id = ?
@@ -538,6 +541,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           primaryMuscles: JSON.parse(row.ex_primary || '[]'),
           secondaryMuscles: JSON.parse(row.ex_secondary || '[]'),
           instructions: JSON.parse(row.ex_inst || '[]'),
+          isCustom: Boolean(row.ex_is_custom),
         },
         orderIndex: row.order_index,
         targetSets: row.target_sets,

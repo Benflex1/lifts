@@ -118,13 +118,19 @@ export function parseWorkoutDate(dateStr: string): string {
  * - HH:MM:SS, MM:SS ("01:15:30", "45:00")
  * - Numeric strings ("3600" -> 3600, "45" -> 2700 if interpreted as minutes)
  */
-export function parseDurationSeconds(str?: string | null): number {
+export function parseDurationSeconds(
+  str?: string | null,
+  unitHint?: 'seconds' | 'minutes' | 'auto'
+): number {
   if (!str || !str.trim()) return 3600; // default 1 hour
   const raw = str.trim();
 
-  // Pure digits: if small (< 300), treat as minutes; otherwise seconds
+  // Pure digits: check unit hint first
   if (/^\d+$/.test(raw)) {
     const num = parseInt(raw, 10);
+    if (unitHint === 'seconds') return num;
+    if (unitHint === 'minutes') return num * 60;
+    // Default auto heuristic: if small (< 300), treat as minutes; otherwise seconds
     return num > 300 ? num : num * 60;
   }
 

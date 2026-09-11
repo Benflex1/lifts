@@ -15,15 +15,16 @@ import {
 const LB_TO_KG = 0.45359237;
 
 export function normalizeSetType(rawType?: string, notes?: string): SetType {
-  const combined = `${rawType || ''} ${notes || ''}`.toLowerCase().trim();
-  if (combined.includes('warmup') || combined.includes('warm up') || combined === 'w') {
-    return 'warmup';
-  }
-  if (combined.includes('dropset') || combined.includes('drop set') || combined.includes('drop') || combined === 'd') {
-    return 'drop';
-  }
-  if (combined.includes('failure') || combined === 'f') {
-    return 'failure';
+  const typeStr = (rawType || '').toLowerCase().trim();
+  if (typeStr === 'warmup' || typeStr === 'warm up' || typeStr === 'w') return 'warmup';
+  if (typeStr === 'dropset' || typeStr === 'drop set' || typeStr === 'drop' || typeStr === 'd') return 'drop';
+  if (typeStr === 'failure' || typeStr === 'f') return 'failure';
+
+  if (notes) {
+    const notesLower = notes.toLowerCase().trim();
+    if (/\b(warmup|warm up)\b/.test(notesLower)) return 'warmup';
+    if (/\b(drop set|dropset)\b/.test(notesLower)) return 'drop';
+    if (/\b(to failure|till failure|until failure|failure set)\b/.test(notesLower)) return 'failure';
   }
   return 'normal';
 }
@@ -63,6 +64,7 @@ interface ColumnIndices {
   startTime: number;
   endTime: number;
   duration: number;
+  durationUnit?: 'seconds' | 'minutes' | 'auto';
   exerciseName: number;
   category: number;
   setIndex: number;
@@ -116,6 +118,11 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
     // Duration
     if (indices.duration === -1 && (h.includes('duration') || h === 'workout duration' || h === 'total time' || h === 'time')) {
       indices.duration = idx;
+      if (h.includes('second') || h === 'duration_seconds' || h.endsWith('_s')) {
+        indices.durationUnit = 'seconds';
+      } else if (h.includes('minute') || h === 'duration_minutes' || h.endsWith('_m')) {
+        indices.durationUnit = 'minutes';
+      }
     }
     // Exercise Name
     if (indices.exerciseName === -1 && (h === 'exercise title' || h === 'exercise name' || h === 'exercise' || h === 'ename' || h === 'movement')) {
@@ -281,7 +288,7 @@ export function parseWorkoutCsv(
   for (const key of workoutOrder) {
     const group = workoutMap.get(key)!;
     const startTimeIso = parseWorkoutDate(group.startTimeStr || group.dateStr);
-    const durationSeconds = parseDurationSeconds(group.durationStr);
+    const durationSeconds = parseDurationSeconds(group.durationStr, indices.durationUnit);
 
     let endTimeIso: string | undefined;
     if (group.endTimeStr) {

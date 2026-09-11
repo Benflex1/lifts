@@ -84,12 +84,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   });
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={isImporting ? undefined : onClose}
-    >
+    <>
+      <Modal
+        visible={visible && pickerTargetRawName === null}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={isImporting ? undefined : onClose}
+      >
       <View style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
@@ -483,6 +484,8 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
         </View>
       </View>
 
+      </Modal>
+
       {/* Exercise Picker Modal for manual exercise selection */}
       {pickerTargetRawName && onAssignExercise && (
         <ExercisePickerModal
@@ -496,7 +499,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
           }}
         />
       )}
-    </Modal>
+    </>
   );
 };
 

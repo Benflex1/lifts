@@ -58,4 +58,24 @@ describe('CSV Tracker Format Detector', () => {
     const result = detectTrackerFormat(genericHeader);
     assert.equal(result.format, 'generic');
   });
+
+  it('normalizes set types without false positive drop classification on notes', async () => {
+    const { normalizeSetType } = await import('../../src/utils/importer/csv-parser');
+    assert.equal(normalizeSetType('warmup'), 'warmup');
+    assert.equal(normalizeSetType('w'), 'warmup');
+    assert.equal(normalizeSetType('dropset'), 'drop');
+    assert.equal(normalizeSetType('d'), 'drop');
+    assert.equal(normalizeSetType('failure'), 'failure');
+    assert.equal(normalizeSetType('f'), 'failure');
+
+    // Avoid false drops on common note phrases
+    assert.equal(normalizeSetType(undefined, "Don't drop weights"), 'normal');
+    assert.equal(normalizeSetType(undefined, 'Drop hips lower on setup'), 'normal');
+    assert.equal(normalizeSetType(undefined, 'Slow descent on drop'), 'normal');
+
+    // Valid drop set note detection
+    assert.equal(normalizeSetType(undefined, 'last set drop set'), 'drop');
+    assert.equal(normalizeSetType(undefined, 'warm up'), 'warmup');
+    assert.equal(normalizeSetType(undefined, 'pushed until failure'), 'failure');
+  });
 });
