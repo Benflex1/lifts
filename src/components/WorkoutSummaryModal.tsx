@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
@@ -8,24 +8,49 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Award, Clock, Dumbbell, Flame, Check } from 'lucide-react-native';
-import { Workout } from '../types';
+import { Award, Check, Clock, Dumbbell, Flame, MapPin } from 'lucide-react-native';
+import { Gym, Workout } from '../types';
 import { formatDuration } from '../utils/calculator';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
+import { GymPickerModal } from './GymPickerModal';
+import { useDialog } from '../context/DialogContext';
+import { reassignWorkoutGym } from '../workout/workout-edit';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
   visible: boolean;
+  gyms: Gym[];
+  onUpdate: (workout: Workout) => Promise<void>;
   onDismiss: () => void;
 }
 
 export function WorkoutSummaryModal({
   workout,
   visible,
+  gyms,
+  onUpdate,
   onDismiss,
 }: WorkoutSummaryModalProps) {
-  const { unit } = useSettings();
+  const { unit, gymTrackingEnabled } = useSettings();
+  const { notify } = useDialog();
+  const [showGymPicker, setShowGymPicker] = useState(false);
+
+  const currentGym = workout ? gyms.find((gym) => gym.id === workout.gymId) : null;
+
+  const handleGymSelect = async (gymId: string) => {
+    if (!workout) return;
+
+    try {
+      await onUpdate(reassignWorkoutGym(workout, gymId));
+    } catch (error: any) {
+      await notify({
+        title: 'Gym Error',
+        message: error?.message || 'Failed to update the workout gym.',
+      });
+      throw error;
+    }
+  };
 
   if (!visible || !workout) return null;
 
@@ -44,12 +69,13 @@ export function WorkoutSummaryModal({
   );
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onDismiss}
-    >
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onDismiss}
+      >
       <SafeAreaView style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
@@ -85,6 +111,28 @@ export function WorkoutSummaryModal({
               <Text style={styles.metricLabel}>Sets ({totalCompletedReps} reps)</Text>
             </View>
           </View>
+
+          {gymTrackingEnabled && currentGym && (
+            <View style={styles.gymRow}>
+              <View style={styles.gymRowInfo}>
+                <View style={[styles.gymIcon, { backgroundColor: `${currentGym.color}22` }]}>
+                  <MapPin size={16} color={currentGym.color} />
+                </View>
+                <View style={styles.gymCopy}>
+                  <Text style={styles.gymLabel}>Gym</Text>
+                  <Text style={styles.gymName} numberOfLines={1}>{currentGym.name}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.changeGymButton}
+                onPress={() => setShowGymPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Change workout gym, currently ${currentGym.name}`}
+              >
+                <Text style={styles.changeGymText}>Change</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Exercise Breakdown */}
           <Text style={styles.breakdownTitle}>Exercise Summary</Text>
@@ -124,8 +172,19 @@ export function WorkoutSummaryModal({
             <Text style={styles.doneButtonText}>Done</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
-    </Modal>
+        </SafeAreaView>
+      </Modal>
+
+      <GymPickerModal
+        visible={gymTrackingEnabled && showGymPicker}
+        gyms={gyms}
+        selectedGymId={workout.gymId}
+        title="Change Workout Gym"
+        description="Update where this completed workout is recorded."
+        onSelect={handleGymSelect}
+        onClose={() => setShowGymPicker(false)}
+      />
+    </>
   );
 }
 
@@ -194,6 +253,59 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 11,
     color: '#9CA3AF',
+  },
+  gymRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#2D3442',
+    borderRadius: 12,
+    backgroundColor: '#1E232E',
+  },
+  gymRowInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  gymIcon: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    borderRadius: 9,
+  },
+  gymCopy: {
+    flex: 1,
+  },
+  gymLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  gymName: {
+    marginTop: 3,
+    color: '#F3F4F6',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  changeGymButton: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 9,
+    backgroundColor: '#263B67',
+  },
+  changeGymText: {
+    color: '#7DD3FC',
+    fontSize: 13,
+    fontWeight: '700',
   },
   breakdownTitle: {
     fontSize: 14,

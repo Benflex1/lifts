@@ -1,11 +1,12 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { Workout } from '../../src/types';
-import { applyWorkoutEdits } from '../../src/workout/workout-edit';
+import { applyWorkoutEdits, reassignWorkoutGym } from '../../src/workout/workout-edit';
 
 const workoutFixture = (): Workout => ({
   id: 'workout-1',
   name: 'Original Workout',
+  gymId: 'gym-default',
   startTime: '2026-09-08T09:00:00.000Z',
   endTime: '2026-09-08T10:00:00.000Z',
   durationSeconds: 3600,
@@ -46,6 +47,41 @@ const workoutFixture = (): Workout => ({
 });
 
 describe('applyWorkoutEdits', () => {
+  it('reassigns a completed workout gym without changing its recorded work', () => {
+    const original = workoutFixture();
+
+    const updated = reassignWorkoutGym(original, 'gym-b');
+
+    assert.equal(updated.id, original.id);
+    assert.equal(updated.gymId, 'gym-b');
+    assert.equal(updated.totalVolumeKg, original.totalVolumeKg);
+    assert.deepEqual(updated.exercises, original.exercises);
+    assert.equal(original.gymId, 'gym-default');
+  });
+
+  it('reassigns only the workout gym while preserving the completed workout ID', () => {
+    const original = workoutFixture();
+
+    const updated = applyWorkoutEdits(original, {
+      gymId: 'gym-b',
+      sets: [],
+    });
+
+    assert.equal(updated.id, original.id);
+    assert.equal(updated.gymId, 'gym-b');
+    assert.equal(updated.name, original.name);
+    assert.equal(updated.totalVolumeKg, original.totalVolumeKg);
+    assert.deepEqual(updated.exercises, original.exercises);
+    assert.equal(original.gymId, 'gym-default');
+  });
+
+  it('rejects an empty gym reassignment', () => {
+    assert.throws(() => applyWorkoutEdits(workoutFixture(), {
+      gymId: '  ',
+      sets: [],
+    }), /Gym ID cannot be empty/);
+  });
+
   it('updates selected sets, keeps IDs and metadata, and recalculates volume', () => {
     const original = workoutFixture();
 

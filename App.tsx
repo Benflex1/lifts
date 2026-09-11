@@ -25,23 +25,33 @@ import { ReadOnlyBanner } from './src/components/ReadOnlyBanner';
 import { DialogProvider } from './src/context/DialogContext';
 import { WorkoutSummaryModal } from './src/components/WorkoutSummaryModal';
 import { Workout } from './src/types';
+import { saveCompletedWorkout } from './src/database/db';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
 function MainAppContent() {
-  const { isWorkingOut, isMinimized } = useWorkout();
+  const { isWorkingOut, isMinimized, gyms } = useWorkout();
   const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
   const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
+  const [historyWorkoutUpdate, setHistoryWorkoutUpdate] = useState<Workout | null>(null);
 
   const handleWorkoutCompleted = (workout: Workout) => {
     setCompletedWorkout(workout);
+    setHistoryWorkoutUpdate(null);
     setCurrentTab('history');
   };
 
   const handleSummaryDismissed = () => {
     setCompletedWorkout(null);
+    setHistoryWorkoutUpdate(null);
     setCurrentTab('history');
+  };
+
+  const handleSummaryWorkoutUpdate = async (updated: Workout) => {
+    await saveCompletedWorkout(updated);
+    setCompletedWorkout(updated);
+    setHistoryWorkoutUpdate(updated);
   };
 
   return (
@@ -52,6 +62,8 @@ function MainAppContent() {
       <WorkoutSummaryModal
         workout={completedWorkout}
         visible={completedWorkout !== null}
+        gyms={gyms}
+        onUpdate={handleSummaryWorkoutUpdate}
         onDismiss={handleSummaryDismissed}
       />
 
@@ -66,7 +78,7 @@ function MainAppContent() {
           <View style={styles.screenContent}>
             <ReadOnlyBanner />
             {currentTab === 'workout' && <WorkoutScreen />}
-            {currentTab === 'history' && <HistoryScreen />}
+            {currentTab === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
             {currentTab === 'exercises' && <ExercisesScreen />}
             {currentTab === 'analytics' && <AnalyticsScreen />}
           </View>

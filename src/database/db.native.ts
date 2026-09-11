@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { DualExerciseStats, Exercise, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { createNativeStore, SqliteDriver } from './nativeStore';
 import { Store, WorkoutDraft, DataSnapshot } from './contract';
 
@@ -89,20 +89,30 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   return store.deleteWorkout(workoutId);
 }
 
-export async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
+export async function getPreviousSetsForExercise(
+  exerciseId: string,
+  occurrenceIndex: number = 0,
+  currentGymId?: string,
+): Promise<PreviousSetSuggestion[]> {
   const store = await getStore();
-  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
+  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex, currentGymId);
 }
 
-export async function getExerciseStats(exerciseId: string): Promise<{
-  maxWeightKg: number;
-  maxReps: number;
-  estimated1RM: number;
-  sessionCount: number;
-}> {
+export async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
   const store = await getStore();
-  return store.getExerciseStats(exerciseId);
+  return store.getExerciseStats(exerciseId, currentGymId);
 }
+
+export async function getGyms() { return (await getStore()).getGyms(); }
+export async function getDefaultGym() { return (await getStore()).getDefaultGym(); }
+export async function createGym(name: string, color?: string) { return (await getStore()).createGym(name, color); }
+export async function updateGym(id: string, updates: { name?: string; color?: string }) { return (await getStore()).updateGym(id, updates); }
+export async function setDefaultGym(id: string) { return (await getStore()).setDefaultGym(id); }
+export async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null) { return (await getStore()).deleteGym(id, replacementGymId, activeWorkoutGymId); }
+export async function getExerciseGymScopes() { return (await getStore()).getExerciseGymScopes(); }
+export async function getExerciseGymScope(exerciseId: string) { return (await getStore()).getExerciseGymScope(exerciseId); }
+export async function saveExerciseGymScope(scope: import('../types').ExerciseGymScope) { return (await getStore()).saveExerciseGymScope(scope); }
+export async function deleteExerciseGymScope(exerciseId: string) { return (await getStore()).deleteExerciseGymScope(exerciseId); }
 
 export async function getAllExercises(): Promise<Exercise[]> {
   const store = await getStore();

@@ -22,6 +22,7 @@ import {
   FileText,
   Timer,
   MoreVertical,
+  MapPin,
   Dumbbell,
   CheckCircle2,
   ArrowUp,
@@ -38,6 +39,7 @@ import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { DraggableExerciseCard } from '../components/DraggableExerciseCard';
+import { GymPickerModal } from '../components/GymPickerModal';
 import { WeightInput } from '../components/WeightInput';
 import { RepsInput } from '../components/RepsInput';
 import { SwipeableSetRow } from '../components/SwipeableSetRow';
@@ -47,6 +49,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
 import { getExerciseDropIndex } from '../workout/active-exercises';
 import type { ExerciseLayout } from '../workout/active-exercises';
+import { formatPreviousMetric } from '../workout/gym-display';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -70,11 +73,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
+    gyms,
+    activeGym,
+    setActiveGym,
   } = useWorkout();
-  const { unit } = useSettings();
+  const { unit, gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [showGymPicker, setShowGymPicker] = useState(false);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
   const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
   const [plateCalcWeight, setPlateCalcWeight] = useState<number | null>(null);
@@ -167,6 +174,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     return () => subscription.remove();
   }, [minimizeWorkout]);
 
+  useEffect(() => {
+    if (!gymTrackingEnabled) {
+      setShowGymPicker(false);
+    }
+  }, [gymTrackingEnabled]);
+
   if (!activeWorkout) {
     return null;
   }
@@ -189,6 +202,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
     return { liveVolume: volume, completedSetsCount: completed, totalSetsCount: total };
   }, [activeWorkout.exercises]);
+
+  const displayedActiveGym = activeGym || gyms.find((gym) => gym.id === activeWorkout.gymId) || null;
 
   const menuExerciseIndex = menuActiveExercise
     ? activeWorkout.exercises.findIndex(exercise => exercise.id === menuActiveExercise.id)
@@ -265,6 +280,18 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     });
     if (shouldDiscard) {
       cancelWorkout();
+    }
+  };
+
+  const handleGymSelect = async (gymId: string) => {
+    try {
+      await setActiveGym(gymId);
+    } catch (error: any) {
+      await notify({
+        title: 'Gym Error',
+        message: error?.message || 'Failed to switch gym.',
+      });
+      throw error;
     }
   };
 
@@ -575,7 +602,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       <View style={styles.previousCell}>
                         {set.previousWeightKg !== undefined ? (
                           <Text style={styles.previousText}>
-                            {kgToDisplay(set.previousWeightKg, unit)} {unit} × {set.previousReps}
+                            {formatPreviousMetric(
+                              {
+                                weightKg: set.previousWeightKg,
+                                reps: set.previousReps ?? 0,
+                                sourceGymId: set.previousGymId,
+                                sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
+                              },
+                              unit,
+                            )}
                           </Text>
                         ) : (
                           <Text style={styles.previousPlaceholder}>—</Text>
@@ -713,6 +748,17 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             addExercisesToWorkout(exs);
           }
         }}
+      />
+
+      {/* Active Workout Gym Picker */}
+      <GymPickerModal
+        visible={gymTrackingEnabled && showGymPicker}
+        gyms={gyms}
+        selectedGymId={displayedActiveGym?.id}
+        title="Change Workout Gym"
+        description="Unfinished sets stay intact. New previous-set suggestions will use the selected gym."
+        onSelect={handleGymSelect}
+        onClose={() => setShowGymPicker(false)}
       />
 
       {/* Plate Calculator Modal */}
@@ -1062,6 +1108,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Text style={styles.menuItemText}>Collapse All Exercises</Text>
             </TouchableOpacity>
 
+            {gymTrackingEnabled && displayedActiveGym && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setShowWorkoutMenu(false);
+                  setShowGymPicker(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Change workout gym, currently ${displayedActiveGym.name}`}
+              >
+                <MapPin size={18} color="#38BDF8" />
+                <Text style={styles.menuItemText} numberOfLines={1}>
+                  Change Gym · {displayedActiveGym.name}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
@@ -1106,14 +1169,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#20242E',
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E232E',
-  },
   timerWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1130,6 +1185,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E232E',
   },
   topRightWrap: {
     flexDirection: 'row',

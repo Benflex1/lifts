@@ -14,6 +14,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const initialWorkout: Workout = {
         id: `w-push-${platform}-1`,
         name: 'Push Day',
+        gymId: 'gym-default',
         startTime: new Date(currentTime).toISOString(),
         durationSeconds: 0,
         totalVolumeKg: 0,
@@ -77,6 +78,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const history = await fixture.store.getWorkoutHistory();
       assert.equal(history.length, 1);
       assert.equal(history[0].name, 'Push Day');
+      assert.equal(history[0].gymId, 'gym-default');
       assert.equal(history[0].totalVolumeKg, 1640);
 
       await fixture.dispose();
@@ -95,6 +97,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const initialWorkout: Workout = {
         id: `w-leg-${platform}-1`,
         name: 'Leg Day',
+        gymId: 'gym-default',
         startTime: new Date(currentTime).toISOString(),
         durationSeconds: 0,
         totalVolumeKg: 0,

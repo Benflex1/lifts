@@ -7,7 +7,269 @@ import { createSessionController } from '../../src/workout/session';
 import { restoreBackup } from '../../src/utils/restore';
 import { getBundledExercise } from '../../src/database/seedData';
 
+function openLegacyVersionOneDatabase(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      for (const [storeName, keyPath] of [
+        ['exercises', 'id'], ['routines', 'id'], ['workouts', 'id'],
+        ['workout_drafts', 'id'], ['settings', 'key'], ['metadata', 'key'],
+      ] as [string, string][]) {
+        db.createObjectStore(storeName, { keyPath });
+      }
+      const upgradeTx = request.transaction!;
+      upgradeTx.objectStore('workouts').put({
+        id: 'legacy-workout', name: 'Legacy', startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 10, totalVolumeKg: 0, exercises: [],
+      });
+      upgradeTx.objectStore('workout_drafts').put({
+        id: 'legacy-draft', version: 1, savedAt: '2026-09-10T08:01:00.000Z', revision: 1,
+        restTimer: null, workout: {
+          id: 'legacy-draft', name: 'Draft', startTime: '2026-09-10T08:00:00.000Z',
+          durationSeconds: 10, totalVolumeKg: 0, exercises: [],
+        },
+      });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 describe('webStore persistence and lease handling', () => {
+  it('upgrades legacy records and exposes multi-gym CRUD, scopes, and snapshot arrays', async () => {
+    const dbName = `test-web-v2-${Date.now()}`;
+    const legacy = await openLegacyVersionOneDatabase(dbName);
+    legacy.close();
+
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    assert.deepEqual((await store.getGyms()).map((gym: any) => gym.id), ['gym-default']);
+    assert.equal((await store.getWorkoutDetail('legacy-workout')).gymId, 'gym-default');
+    assert.equal((await store.getWorkoutDrafts())[0].workout.gymId, 'gym-default');
+
+    const gym = await store.createGym('Downtown', '#10B981');
+    assert.equal(gym.name, 'Downtown');
+    await store.updateGym(gym.id, { name: 'Downtown 2' });
+    await store.setDefaultGym(gym.id);
+    await assert.rejects(() => store.deleteGym(gym.id, gym.id), /Replacement gym must be different/);
+    await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'global' });
+    assert.equal((await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType, 'global');
+    const snapshot = await store.readSnapshot();
+    assert.deepEqual(snapshot.gyms.map((g: any) => g.id), [gym.id, 'gym-default']);
+    assert.equal(snapshot.exerciseGymScopes.length, 1);
+    await store.close();
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(dbName);
+      req.onsuccess = () => resolve(); req.onerror = () => reject(req.error);
+    });
+  });
+
+  it('deletes a gym atomically by reassigning workouts, drafts, and linked scopes', async () => {
+    const dbName = `test-web-gym-delete-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    const gym = await store.createGym('Temporary');
+    const workout = { id: 'gym-workout', name: 'Gym workout', gymId: gym.id, startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [] };
+    await store.saveCompletedWorkout(workout);
+    await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-draft', endTime: '2026-09-10T09:00:00.000Z' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
+    await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'linked_group', linkedGymIds: [gym.id, 'gym-default'] });
+    await store.deleteGym(gym.id, 'gym-default');
+    assert.equal((await store.getWorkoutDetail('gym-workout')).gymId, 'gym-default');
+    assert.equal((await store.getWorkoutDraft('gym-draft')).workout.gymId, 'gym-default');
+    assert.equal((await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType, 'gym_specific');
+    await store.close();
+  });
+
+  it('rejects invalid completed-workout gym IDs before writing', async () => {
+    const dbName = `test-web-invalid-workout-gym-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    try {
+      const workout = (gymId: string) => ({
+        id: `invalid-gym-${gymId.trim() || 'empty'}`,
+        name: 'Invalid gym workout',
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 1,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
+      await assert.rejects(() => store.saveCompletedWorkout(workout('missing-gym')), /unknown gym/i);
+      await assert.rejects(() => store.saveCompletedWorkout(workout('  ')), /gym ID cannot be empty/i);
+      assert.equal(await store.getWorkoutDetail('invalid-gym-missing-gym'), null);
+      assert.equal(await store.getWorkoutDetail('invalid-gym-empty'), null);
+      assert.deepEqual(await store.getWorkoutHistory(), []);
+    } finally {
+      await store.close();
+    }
+  });
+
+  it('orders equal-timestamp history by descending code-point workout ID', async () => {
+    const dbName = `test-web-history-order-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    try {
+      const startTime = '2026-09-10T08:00:00.000Z';
+      for (const id of ['history-a', 'history-z', 'history-Ω', 'history-😀']) {
+        await store.saveCompletedWorkout({
+          id,
+          name: id,
+          gymId: 'gym-default',
+          startTime,
+          durationSeconds: 1,
+          totalVolumeKg: 0,
+          exercises: [],
+        });
+      }
+
+      assert.deepEqual(
+        (await store.getWorkoutHistory()).map((workout: { id: string }) => workout.id),
+        ['history-😀', 'history-Ω', 'history-z', 'history-a'],
+      );
+    } finally {
+      await store.close();
+    }
+  });
+
+  it('rejects invalid scope references and all new writes in a read-only tab', async () => {
+    const dbName = `test-web-gym-validation-${Date.now()}`;
+    const first: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await first.init();
+    const second: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await second.init();
+    await assert.rejects(() => first.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }), /Exercise not found/);
+    await assert.rejects(() => first.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'invalid' }), /scope type/i);
+    await assert.rejects(() => second.createGym('Read only'), /read-only mode/);
+    await assert.rejects(() => second.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }), /read-only mode/);
+    await first.close(); await second.close();
+  });
+
+  it('matches canonical gym validation and default-first name ordering', async () => {
+    const dbName = `test-web-gym-policy-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    await assert.rejects(() => store.createGym('  '), /gym name cannot be empty/i);
+    await assert.rejects(() => store.createGym('valid', '#06B6D4'), /approved palette/);
+    const zulu = await store.createGym('Zulu');
+    const alpha = await store.createGym('Alpha');
+    await store.setDefaultGym(zulu.id);
+    assert.deepEqual((await store.getGyms()).map((gym: any) => gym.name), ['Zulu', 'Alpha', 'Default Gym']);
+    await store.close();
+  });
+
+  it('persists v2 normalization across reopen and allows read-only legacy reads', async () => {
+    const dbName = `test-web-v2-repeat-${Date.now()}`;
+    const legacy = await openLegacyVersionOneDatabase(dbName);
+    legacy.close();
+    const writer: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await writer.init();
+    await writer.close();
+    const reopened: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await reopened.init();
+    const readOnly: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await readOnly.init();
+    const raw = await new Promise<any>((resolve, reject) => {
+      const req = (indexedDB as any).open(dbName, 2);
+      req.onsuccess = () => { const db = req.result; const tx = db.transaction('workouts', 'readonly'); const get = tx.objectStore('workouts').get('legacy-workout'); get.onsuccess = () => { db.close(); resolve(get.result); }; get.onerror = () => reject(get.error); };
+      req.onerror = () => reject(req.error);
+    });
+    assert.equal(raw.gymId, 'gym-default');
+    assert.equal((await readOnly.getWorkoutDetail('legacy-workout')).gymId, 'gym-default');
+    assert.equal((await reopened.getGyms()).filter((gym: any) => gym.isDefault).length, 1);
+    await reopened.close(); await readOnly.close();
+  });
+
+  it('rejects invalid snapshot scopes without partially merging any data', async () => {
+    const dbName = `test-web-merge-validation-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    const before = await store.readSnapshot();
+    await assert.rejects(() => store.mergeSnapshot({
+      ...before,
+      exercises: [...before.exercises, { id: 'new-exercise', name: 'New', category: 'Test', equipment: 'barbell', primaryMuscles: [] }],
+      gyms: [...before.gyms, { id: 'gym-new', name: 'New Gym', color: '#10B981', isDefault: false, createdAt: '2026-09-10T00:00:01.000Z' }],
+      exerciseGymScopes: [{ exerciseId: 'missing-exercise', scopeType: 'linked_group', linkedGymIds: ['gym-new', 'gym-new'] }],
+    }), /duplicate|unknown exercise|at least two/i);
+    const after = await store.readSnapshot();
+    assert.deepEqual(after, before);
+    await store.close();
+  });
+
+  it('enforces web gym deletion invariants and preserves default references', async () => {
+    const dbName = `test-web-gym-deletion-invariants-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    const secondary = await store.createGym('Secondary');
+    const workout = { id: 'default-gym-workout', name: 'Default gym workout', gymId: 'gym-default', startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [] };
+    await store.saveCompletedWorkout(workout);
+    await store.saveDraft({ version: 1, workout: { ...workout, id: 'default-gym-draft', endTime: '2026-09-10T09:00:00.000Z' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
+    const beforeInvalidDelete = await store.readSnapshot();
+    await assert.rejects(() => store.deleteGym('gym-default', 'missing-gym'), /unknown replacement gym/i);
+    assert.deepEqual(await store.readSnapshot(), beforeInvalidDelete);
+    await assert.rejects(() => store.deleteGym(secondary.id, secondary.id), /replacement gym must be different/i);
+
+    await store.deleteGym('gym-default', secondary.id);
+    const gyms = await store.getGyms();
+    assert.equal(gyms.filter((gym: any) => gym.isDefault).length, 1);
+    assert.equal(gyms.find((gym: any) => gym.id === secondary.id).isDefault, true);
+    assert.equal((await store.getWorkoutDetail(workout.id)).gymId, secondary.id);
+    assert.equal((await store.getWorkoutDraft('default-gym-draft')).workout.gymId, secondary.id);
+    await store.close();
+  });
+
+  it('rejects deleting the only gym with a distinct replacement ID', async () => {
+    const dbName = `test-web-last-gym-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    const before = await store.getGyms();
+    await assert.rejects(() => store.deleteGym('gym-default', 'replacement-that-does-not-exist'), /at least two gyms/i);
+    assert.deepEqual(await store.getGyms(), before);
+    await store.close();
+  });
+
+  it('rejects deleting a gym used by an active draft without a caller-supplied gym ID', async () => {
+    const dbName = `test-web-active-gym-delete-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    try {
+      const replacement = await store.createGym('Replacement');
+      const controller = createSessionController(store);
+      await controller.start({
+        id: 'active-web-delete-guard',
+        name: 'Active workout',
+        gymId: 'gym-default',
+        startTime: new Date().toISOString(),
+        durationSeconds: 0,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
+      await assert.rejects(
+        () => store.deleteGym('gym-default', replacement.id),
+        /active workout/i,
+      );
+      assert.deepEqual((await store.getGyms()).map((gym: any) => gym.id), ['gym-default', replacement.id]);
+      assert.equal((await store.getWorkoutDraft('active-web-delete-guard'))?.workout.gymId, 'gym-default');
+      await controller.discard();
+    } finally {
+      await store.close();
+    }
+  });
+
+  it('rejects read-only gym update, default, and delete mutations without changing state', async () => {
+    const dbName = `test-web-gym-read-only-mutations-${Date.now()}`;
+    const writer: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await writer.init();
+    const secondary = await writer.createGym('Secondary');
+    const before = await writer.getGyms();
+    const reader: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await reader.init();
+    await assert.rejects(() => reader.updateGym(secondary.id, { name: 'Changed' }), /read-only mode/);
+    await assert.rejects(() => reader.setDefaultGym(secondary.id), /read-only mode/);
+    await assert.rejects(() => reader.deleteGym(secondary.id, 'gym-default'), /read-only mode/);
+    assert.deepEqual(await writer.getGyms(), before);
+    await writer.close(); await reader.close();
+  });
   it('persists every user record type across store recreation and matches snapshot', async () => {
     const fixture = await createStoreFixture('web');
 
@@ -38,6 +300,7 @@ describe('webStore persistence and lease handling', () => {
       id: 'workout-web-1',
       routineId,
       name: 'Upper Power Session',
+      gymId: 'gym-default',
       startTime: '2026-09-07T08:00:00.000Z',
       endTime: '2026-09-07T09:00:00.000Z',
       durationSeconds: 3600,
@@ -71,6 +334,7 @@ describe('webStore persistence and lease handling', () => {
       workout: {
         id: 'draft-web-1',
         name: 'In-Progress Web Session',
+        gymId: 'gym-default',
         startTime: '2026-09-07T10:00:00.000Z',
         durationSeconds: 500,
         totalVolumeKg: 300,
@@ -212,12 +476,15 @@ describe('webStore persistence and lease handling', () => {
           workout: {
             id: 'corrupt-draft',
             name: 'Corrupt Draft',
+            gymId: 'gym-default',
             startTime: 'bad-date',
             exercises: null,
           },
         },
       ],
       settings: {},
+      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      exerciseGymScopes: [],
     });
 
     await assert.rejects(async () => {
@@ -232,6 +499,7 @@ describe('webStore persistence and lease handling', () => {
     const workout = {
       id: 'browser-workout-1',
       name: 'Chest & Triceps',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -356,6 +624,7 @@ describe('webStore persistence and lease handling', () => {
     const initialWorkout = {
       id: 'w-browser-rapid-1',
       name: 'Rapid Typing Session',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -440,6 +709,7 @@ describe('webStore persistence and lease handling', () => {
         {
           id: 'w-legacy-browser-1',
           name: 'Legacy Workout',
+          gymId: 'gym-default',
           startTime: '2026-09-07T08:00:00.000Z',
           endTime: '2026-09-07T09:00:00.000Z',
           durationSeconds: 3600,
@@ -492,6 +762,8 @@ describe('webStore persistence and lease handling', () => {
       exercises: [],
       drafts: [],
       settings: { weight_unit: 'kg' },
+      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      exerciseGymScopes: [],
     });
 
     // Should successfully restore without rejecting legacy targetReps
@@ -554,6 +826,7 @@ describe('webStore persistence and lease handling', () => {
     const initialWorkout = {
       id: 'w-browser-multi-1',
       name: 'Full Body Session',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -734,6 +1007,7 @@ describe('webStore persistence and lease handling', () => {
     const workout = {
       id: 'w-browser-concurrent-1',
       name: 'Concurrent Add Session',
+      gymId: 'gym-default',
       startTime: new Date(currentTime).toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,

@@ -2,9 +2,107 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { createStoreFixture } from '../helpers/storeFixture';
 import { buildBackupJson } from '../../src/utils/backup';
-import { restoreBackup } from '../../src/utils/restore';
+import { computeRestorePlan, restoreBackup } from '../../src/utils/restore';
 import { Exercise, Routine, Workout } from '../../src/types';
-import { WorkoutDraft } from '../../src/database/contract';
+import { DataSnapshot, Store, WorkoutDraft } from '../../src/database/contract';
+import { NodeSqliteDriver } from '../helpers/storeFixture';
+import { indexedDB } from 'fake-indexeddb';
+import { createWebStore } from '../../src/database/webStore';
+import { createNativeStore, SqliteDriver } from '../../src/database/nativeStore';
+
+class FailingSqliteDriver implements SqliteDriver {
+  private calls = 0;
+  public armed = false;
+
+  constructor(private readonly inner: NodeSqliteDriver, private readonly failAfter: number) {}
+
+  execAsync(sql: string): Promise<void> { return this.inner.execAsync(sql); }
+  getFirstAsync<T>(sql: string, ...params: any[]): Promise<T | null> { return this.inner.getFirstAsync<T>(sql, ...params); }
+  getAllAsync<T>(sql: string, ...params: any[]): Promise<T[]> { return this.inner.getAllAsync<T>(sql, ...params); }
+  async runAsync(sql: string, ...params: any[]): Promise<{ changes: number; lastInsertRowId: number }> {
+    const result = await this.inner.runAsync(sql, ...params);
+    if (this.armed && ++this.calls === this.failAfter) throw new Error('Injected merge failure');
+    return result;
+  }
+  withTransactionAsync(task: () => Promise<void>): Promise<void> { return this.inner.withTransactionAsync(task); }
+  close(): void { this.inner.close(); }
+}
+
+function createFailingIdbFactory(failAfterWrites: number): { factory: IDBFactory; arm: () => void } {
+  let enabled = false;
+  let writes = 0;
+
+  const wrapStore = (store: any, transaction: any): any => new Proxy(store, {
+    get(target, property, receiver) {
+      if (['add', 'clear', 'delete', 'put'].includes(String(property))) {
+        return (...args: any[]) => {
+          const result = target[property](...args);
+          if (enabled && ++writes === failAfterWrites) transaction.abort();
+          return result;
+        };
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  const wrapTransaction = (transaction: any): any => new Proxy(transaction, {
+    get(target, property, receiver) {
+      if (property === 'objectStore') return (name: string) => wrapStore(target.objectStore(name), target);
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  const wrapDatabase = (database: any): any => new Proxy(database, {
+    get(target, property, receiver) {
+      if (property === 'transaction') return (...args: any[]) => wrapTransaction(target.transaction(...args));
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+  const factory = {
+    open(name: string, version?: number): IDBOpenDBRequest {
+      const request = indexedDB.open(name, version);
+      return new Proxy(request, {
+        get(target, property, receiver) {
+          if (property === 'result') return target.result ? wrapDatabase(target.result) : target.result;
+          return Reflect.get(target, property, receiver);
+        },
+      });
+    },
+  } as unknown as IDBFactory;
+
+  return {
+    factory,
+    arm: () => { writes = 0; enabled = true; },
+  };
+}
+
+function buildFailureSnapshot(before: DataSnapshot): DataSnapshot {
+  const gym = {
+    id: 'gym-merge-failure', name: 'Merge Failure Gym', color: '#10B981', isDefault: false,
+    createdAt: '2026-09-10T00:00:00.000Z',
+  };
+  const workout: Workout = {
+    id: 'merge-failure-workout', name: 'Merge Failure Workout', gymId: gym.id,
+    startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [],
+  };
+  return {
+    exercises: [],
+    routines: [],
+    workouts: [workout],
+    drafts: [{ version: 1, workout: { ...workout, id: 'merge-failure-draft' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null }],
+    settings: { 'merge-failure-setting': 'present' },
+    gyms: [...before.gyms, gym],
+    exerciseGymScopes: [...before.exerciseGymScopes, {
+      exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+      scopeType: 'linked_group',
+      linkedGymIds: ['gym-default', gym.id],
+    }],
+  };
+}
 
 describe('Backup Roundtrip & Merge Safety', () => {
   async function populateSourceStore(store: any) {
@@ -22,6 +120,12 @@ describe('Backup Roundtrip & Merge Safety', () => {
       secondaryMuscles: ['glutes'],
     };
     await store.createCustomExercise(customEx);
+    const sourceGym = await store.createGym('Satellite Gym', '#10B981');
+    await store.saveExerciseGymScope({
+      exerciseId: customEx.id,
+      scopeType: 'linked_group',
+      linkedGymIds: ['gym-default', sourceGym.id],
+    });
 
     // 2. Create routine with targets
     const routineId = await store.saveRoutine(
@@ -48,6 +152,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
       id: 'w-roundtrip-1',
       routineId,
       name: 'Upper Body Blast',
+      gymId: 'gym-default',
       startTime: '2026-09-07T08:00:00.000Z',
       endTime: '2026-09-07T09:15:00.000Z',
       durationSeconds: 4500,
@@ -108,6 +213,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
       workout: {
         id: 'draft-active-1',
         name: 'In-Progress Session',
+        gymId: 'gym-default',
         startTime: '2026-09-07T09:20:00.000Z',
         durationSeconds: 600,
         totalVolumeKg: 200,
@@ -117,6 +223,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
             exerciseId: 'custom-pause-squat',
             orderIndex: 0,
             exercise: customEx,
+            restTimerSeconds: 0,
             sets: [
               { id: 'ds1', setNumber: 1, type: 'normal', weightKg: 100, reps: 2, isCompleted: true },
             ],
@@ -144,6 +251,10 @@ describe('Backup Roundtrip & Merge Safety', () => {
 
       // Export snapshot
       const backupJson = await buildBackupJson(sourceFixture.store);
+      const exportedBackup = JSON.parse(backupJson);
+      assert.equal(exportedBackup.version, 3);
+      assert.ok(Array.isArray(exportedBackup.gyms));
+      assert.ok(Array.isArray(exportedBackup.exerciseGymScopes));
 
       // Restore into empty destination
       await restoreBackup(backupJson, destFixture.store);
@@ -176,6 +287,13 @@ describe('Backup Roundtrip & Merge Safety', () => {
       // Compare drafts
       assert.equal(destSnap.drafts.length, sourceSnap.drafts.length);
       assert.equal(destSnap.drafts[0].workout.id, sourceSnap.drafts[0].workout.id);
+
+      // Compare multi-gym snapshot data
+      assert.deepEqual(
+        destSnap.gyms.filter((gym) => !gym.isDefault),
+        sourceSnap.gyms.filter((gym) => !gym.isDefault),
+      );
+      assert.deepEqual(destSnap.exerciseGymScopes, sourceSnap.exerciseGymScopes);
 
       // Compare settings
       assert.equal(destSnap.settings.unit, 'lb');
@@ -273,5 +391,369 @@ describe('Backup Roundtrip & Merge Safety', () => {
     assert.equal(snap.workouts[0].exercises[0].sets[0].rpe, 5);
 
     await fixture.dispose();
+  });
+
+  for (const destinationPlatform of ['native', 'web'] as const) {
+    it(`remaps colliding gym IDs without overwriting ${destinationPlatform} destination records`, async () => {
+    const sourceFixture = await createStoreFixture('native');
+    const destinationFixture = await createStoreFixture(destinationPlatform);
+    await populateSourceStore(sourceFixture.store);
+    const destinationGym = await destinationFixture.store.createGym('Destination Gym', '#F59E0B');
+
+    const parsed = JSON.parse(await buildBackupJson(sourceFixture.store));
+    const sourceGym = parsed.gyms.find((gym: any) => gym.name === 'Satellite Gym');
+    sourceGym.id = destinationGym.id;
+    parsed.workouts[0].gymId = destinationGym.id;
+    parsed.drafts[0].workout.gymId = destinationGym.id;
+    parsed.exerciseGymScopes[0].linkedGymIds[1] = destinationGym.id;
+
+    const { preview, snapshotToMerge } = await computeRestorePlan(parsed, destinationFixture.store);
+    assert.equal(preview.gymsCount, 1);
+    assert.equal(preview.scopeOverridesCount, 1);
+    const importedGym = snapshotToMerge.gyms[0];
+    assert.match(importedGym.id, /^gym-import-restore-/);
+    assert.equal(snapshotToMerge.workouts[0].gymId, importedGym.id);
+    assert.equal(snapshotToMerge.drafts[0].workout.gymId, importedGym.id);
+    assert.deepEqual(snapshotToMerge.exerciseGymScopes[0].linkedGymIds, ['gym-default', importedGym.id]);
+
+    await destinationFixture.store.mergeSnapshot(snapshotToMerge);
+    const destinationSnapshot = await destinationFixture.store.readSnapshot();
+    assert.equal(destinationSnapshot.gyms.find((gym) => gym.id === destinationGym.id)?.name, 'Destination Gym');
+    assert.equal(destinationSnapshot.workouts[0].gymId, importedGym.id);
+    assert.equal(destinationSnapshot.drafts[0].workout.gymId, importedGym.id);
+    assert.deepEqual(destinationSnapshot.exerciseGymScopes[0].linkedGymIds, ['gym-default', importedGym.id]);
+
+    await sourceFixture.dispose();
+    await destinationFixture.dispose();
+    });
+  }
+
+  it('aborts a conflicting exercise scope before writing any restore data', async () => {
+    const fixture = await createStoreFixture('native');
+    await populateSourceStore(fixture.store);
+    const parsed = JSON.parse(await buildBackupJson(fixture.store));
+    parsed.exerciseGymScopes[0] = {
+      exerciseId: parsed.exerciseGymScopes[0].exerciseId,
+      scopeType: 'global',
+    };
+    const before = await fixture.store.readSnapshot();
+
+    await assert.rejects(() => restoreBackup(JSON.stringify(parsed), fixture.store), /Conflicting exercise gym scope/);
+    assert.deepEqual(await fixture.store.readSnapshot(), before);
+    await fixture.dispose();
+  });
+
+  for (const platform of ['native', 'web'] as const) {
+    it(`rejects duplicate set IDs across exercises in direct ${platform} workout and draft merges`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const exercise = before.exercises[0];
+      const duplicateSetId = `duplicate-set-${platform}`;
+      const makeExercise = (id: string): any => ({
+        id,
+        exerciseId: exercise.id,
+        exercise,
+        restTimerSeconds: 90,
+        sets: [{ id: duplicateSetId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+      });
+      const workout: Workout = {
+        id: `duplicate-set-workout-${platform}`,
+        name: 'Duplicate Set Workout',
+        gymId: before.gyms[0].id,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 60,
+        totalVolumeKg: 320,
+        exercises: [makeExercise('duplicate-exercise-1'), makeExercise('duplicate-exercise-2')],
+      };
+      const draft: WorkoutDraft = {
+        version: 1,
+        workout: {
+          ...workout,
+          id: `duplicate-set-draft-${platform}`,
+          name: 'Duplicate Set Draft',
+          exercises: [makeExercise('duplicate-draft-exercise-1'), makeExercise('duplicate-draft-exercise-2')],
+        },
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+      };
+      const merge = (candidate: { workouts: Workout[]; drafts: WorkoutDraft[] }) => fixture.store.mergeSnapshot({
+        exercises: [],
+        routines: [],
+        workouts: candidate.workouts,
+        drafts: candidate.drafts,
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      await assert.rejects(() => merge({ workouts: [workout], drafts: [] }), /Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+      await assert.rejects(() => merge({ workouts: [], drafts: [draft] }), /Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+      await fixture.dispose();
+    });
+  }
+
+  for (const platform of ['native', 'web'] as const) {
+    it(`rejects globally duplicate nested IDs in direct ${platform} merges without mutation`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const exercise = before.exercises[0];
+      const gymId = before.gyms[0].id;
+      const makeExercise = (id: string, setId: string): any => ({
+        id,
+        exerciseId: exercise.id,
+        exercise,
+        restTimerSeconds: 90,
+        sets: [{ id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+      });
+      const makeWorkout = (id: string, exerciseId: string, setId: string): Workout => ({
+        id,
+        name: id,
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 60,
+        totalVolumeKg: 160,
+        exercises: [makeExercise(exerciseId, setId)],
+      });
+      const makeRoutine = (id: string, exerciseInstanceId: string): Routine => ({
+        id,
+        name: id,
+        createdAt: '2026-09-10T08:00:00.000Z',
+        exercises: [{
+          id: exerciseInstanceId,
+          exerciseId: exercise.id,
+          exercise,
+          orderIndex: 0,
+          targetSets: 1,
+          targetReps: '8',
+          restTimerSeconds: 90,
+        }],
+      });
+      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) => fixture.store.mergeSnapshot({
+        exercises: [],
+        routines,
+        workouts,
+        drafts,
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      await assert.rejects(() => merge([
+        makeWorkout('duplicate-workout-1', 'duplicate-workout-exercise', 'duplicate-workout-set-1'),
+        makeWorkout('duplicate-workout-2', 'duplicate-workout-exercise', 'duplicate-workout-set-2'),
+      ], []), /Duplicate workout exercise ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+
+      await assert.rejects(() => merge([
+        makeWorkout('duplicate-set-workout-1', 'duplicate-set-exercise-1', 'duplicate-set-id'),
+        makeWorkout('duplicate-set-workout-2', 'duplicate-set-exercise-2', 'duplicate-set-id'),
+      ], []), /Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+
+      await assert.rejects(() => merge([
+        makeWorkout('duplicate-cross-parent-workout', 'duplicate-cross-parent-exercise', 'duplicate-cross-parent-set'),
+      ], [], [{
+        version: 1,
+        workout: makeWorkout('duplicate-cross-parent-draft', 'duplicate-cross-parent-exercise', 'duplicate-cross-parent-set'),
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+      }]), /Duplicate workout exercise ID|Duplicate set ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+
+      await assert.rejects(() => merge([], [
+        makeRoutine('duplicate-routine-1', 'duplicate-routine-exercise'),
+        makeRoutine('duplicate-routine-2', 'duplicate-routine-exercise'),
+      ]), /Duplicate routine exercise ID/);
+      assert.deepEqual(await fixture.store.readSnapshot(), before);
+      await fixture.dispose();
+    });
+  }
+
+  for (const platform of ['native', 'web'] as const) {
+    it(`rejects destination nested-ID collisions for new ${platform} parents without mutation`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const exercise = before.exercises[0];
+      const gymId = before.gyms[0].id;
+      const makeExercise = (id: string, setId: string): any => ({
+        id,
+        exerciseId: exercise.id,
+        exercise,
+        restTimerSeconds: 90,
+        sets: [{ id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+      });
+      const makeWorkout = (id: string, exerciseId: string, setId: string): Workout => ({
+        id,
+        name: id,
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 60,
+        totalVolumeKg: 160,
+        exercises: [makeExercise(exerciseId, setId)],
+      });
+      const makeRoutine = (id: string, exerciseInstanceId: string): Routine => ({
+        id,
+        name: id,
+        createdAt: '2026-09-10T08:00:00.000Z',
+        exercises: [{
+          id: exerciseInstanceId,
+          exerciseId: exercise.id,
+          exercise,
+          orderIndex: 0,
+          targetSets: 1,
+          targetReps: '8',
+          restTimerSeconds: 90,
+        }],
+      });
+      const existingWorkout = makeWorkout('destination-workout', 'destination-workout-exercise', 'destination-workout-set');
+      const existingRoutine = makeRoutine('destination-routine', 'destination-routine-exercise');
+      const existingDraft: WorkoutDraft = {
+        version: 1,
+        workout: makeWorkout('destination-draft', 'destination-draft-exercise', 'destination-draft-set'),
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+      };
+      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) => fixture.store.mergeSnapshot({
+        exercises: [],
+        routines,
+        workouts,
+        drafts,
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      await merge([existingWorkout], [existingRoutine], [existingDraft]);
+      const seeded = await fixture.store.readSnapshot();
+
+      await assert.rejects(() => merge([
+        makeWorkout('new-workout-parent', 'destination-workout-exercise', 'destination-workout-set'),
+      ], []), /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i);
+      assert.deepEqual(await fixture.store.readSnapshot(), seeded);
+
+      await assert.rejects(() => merge([], [
+        makeRoutine('new-routine-parent', 'destination-routine-exercise'),
+      ]), /existing|collision|Duplicate routine exercise ID/i);
+      assert.deepEqual(await fixture.store.readSnapshot(), seeded);
+
+      await assert.rejects(() => merge([], [], [{
+        version: 1,
+        workout: makeWorkout('new-draft-parent', 'destination-draft-exercise', 'destination-draft-set'),
+        savedAt: '2026-09-10T08:02:00.000Z',
+        revision: 1,
+        restTimer: null,
+      }]), /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i);
+      assert.deepEqual(await fixture.store.readSnapshot(), seeded);
+      await fixture.dispose();
+    });
+  }
+
+  for (const platform of ['native', 'web'] as const) {
+    for (const [field, value] of [
+      ['id', undefined],
+      ['setNumber', '1'],
+      ['isCompleted', 'true'],
+      ['completedAt', 1234567890],
+    ] as const) {
+      it(`rejects malformed ${field} in a direct ${platform} snapshot merge without mutation`, async () => {
+        const fixture = await createStoreFixture(platform);
+        const before = await fixture.store.readSnapshot();
+        const exercise = before.exercises[0];
+        const set: any = { id: 'merge-set-1', setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true };
+        if (value === undefined) delete set[field];
+        else set[field] = value;
+        const workout: Workout = {
+          id: `malformed-${platform}-${field}`,
+          name: 'Malformed Snapshot',
+          gymId: before.gyms[0].id,
+          startTime: '2026-09-10T08:00:00.000Z',
+          durationSeconds: 60,
+          totalVolumeKg: 160,
+          exercises: [{
+            id: 'merge-exercise-1',
+            exerciseId: exercise.id,
+            exercise,
+            sets: [set],
+            restTimerSeconds: 90,
+          }],
+        };
+
+        await assert.rejects(() => fixture.store.mergeSnapshot({
+          exercises: [],
+          routines: [],
+          workouts: [workout],
+          drafts: [],
+          settings: {},
+          gyms: [],
+          exerciseGymScopes: [],
+        }), new RegExp(field));
+        assert.deepEqual(await fixture.store.readSnapshot(), before);
+        await fixture.dispose();
+      });
+    }
+  }
+
+  for (const platform of ['native', 'web'] as const) {
+    it(`canonicalizes gym names and rejects invalid timestamps during ${platform} snapshot merge`, async () => {
+      const fixture = await createStoreFixture(platform);
+      const before = await fixture.store.readSnapshot();
+      const trimmedGym = {
+        id: `gym-trim-${platform}`, name: '  Trimmed Gym  ', color: '#10B981', isDefault: false,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      };
+      await fixture.store.mergeSnapshot({
+        ...before,
+        gyms: [...before.gyms, trimmedGym],
+      });
+      assert.equal((await fixture.store.getGyms()).find((gym) => gym.id === trimmedGym.id)?.name, 'Trimmed Gym');
+
+      const afterTrim = await fixture.store.readSnapshot();
+      for (const createdAt of [1234567890, 'not-a-timestamp'] as const) {
+        await assert.rejects(() => fixture.store.mergeSnapshot({
+          ...afterTrim,
+          gyms: [...afterTrim.gyms, {
+            id: `gym-invalid-${String(createdAt)}`, name: 'Invalid Timestamp', color: '#F59E0B', isDefault: false,
+            createdAt,
+          }],
+        } as any), /createdAt timestamp/);
+      }
+      assert.deepEqual(await fixture.store.readSnapshot(), afterTrim);
+      await fixture.dispose();
+    });
+  }
+
+  it('rolls back a mid-merge native transaction failure with no partial snapshot changes', async () => {
+    const driver = new FailingSqliteDriver(new NodeSqliteDriver(), 2);
+    const store = createNativeStore(driver);
+    await store.init();
+    const before = await store.readSnapshot();
+    driver.armed = true;
+
+    await assert.rejects(() => store.mergeSnapshot(buildFailureSnapshot(before)), /Injected merge failure/);
+    assert.deepEqual(await store.readSnapshot(), before);
+    driver.close();
+  });
+
+  it('rolls back a mid-merge web transaction failure with no partial snapshot changes', async () => {
+    const dbName = `test-backup-merge-failure-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const failingIdb = createFailingIdbFactory(2);
+    const store = await createWebStore(dbName, { idbFactory: failingIdb.factory });
+    await store.init();
+    const before = await store.readSnapshot();
+    failingIdb.arm();
+
+    await assert.rejects(() => store.mergeSnapshot(buildFailureSnapshot(before)), /AbortError|TransactionInactiveError|merge failure/i);
+    assert.deepEqual(await store.readSnapshot(), before);
+    await store.close();
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(dbName);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   });
 });

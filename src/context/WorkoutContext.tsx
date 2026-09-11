@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { Platform, AppState, AppStateStatus } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
-import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../types';
-import { getStore, getPreviousSetsForExercise } from '../database/db';
+import { ActiveExercise, Exercise, Gym, Routine, SetType, Workout, WorkoutSet } from '../types';
+import { getStore } from '../database/db';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
@@ -13,6 +13,17 @@ import {
   moveActiveExerciseToIndex,
   replaceActiveExercise,
 } from '../workout/active-exercises';
+import {
+  captureWorkoutVersion,
+  appendExercisesToCurrentWorkout,
+  loadSuggestionsForExercise,
+  clearSameGymProvenance,
+  copyPreviousSetProvenance,
+  resolveStartGymId,
+  StartWorkoutOptions,
+  switchWorkoutGym,
+} from '../workout/gym-session';
+import { resolveActiveGymAfterRefresh } from '../workout/gym-profile';
 import { useDialog } from './DialogContext';
 import {
   PAUSED_WORKOUT_CONFIRM_LABEL,
@@ -40,7 +51,16 @@ interface WorkoutContextType {
   closeDraftModal: () => void;
   resumeDraft: (draft?: WorkoutDraft) => void;
   discardDraft: (draftId?: string) => Promise<void>;
-  startWorkout: (routine?: Routine, customName?: string, initialExercises?: ActiveExercise[]) => Promise<void>;
+  startWorkout: (
+    routine?: Routine,
+    customName?: string,
+    initialExercises?: ActiveExercise[],
+    options?: StartWorkoutOptions,
+  ) => Promise<boolean>;
+  gyms: Gym[];
+  activeGym: Gym | null;
+  refreshGyms: () => Promise<void>;
+  setActiveGym: (gymId: string) => Promise<void>;
   minimizeWorkout: () => void;
   maximizeWorkout: () => void;
   addExerciseToWorkout: (exercise: Exercise) => Promise<void>;
@@ -75,6 +95,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   const [availableDrafts, setAvailableDrafts] = useState<WorkoutDraft[]>([]);
+  const [gyms, setGyms] = useState<Gym[]>([]);
+  const [activeGym, setActiveGymState] = useState<Gym | null>(null);
   const [isDraftModalOpen, setIsDraftModalOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -89,6 +111,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gymSwitchRequestRef = useRef(0);
 
   const refreshDrafts = useCallback(async () => {
     try {
@@ -98,6 +121,17 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {
       console.error('Failed to load workout drafts:', e);
     }
+  }, []);
+
+  const refreshGyms = useCallback(async () => {
+    const store = await getStore();
+    const [loadedGyms, defaultGym] = await Promise.all([
+      store.getGyms(),
+      store.getDefaultGym(),
+    ]);
+    const currentWorkout = controllerRef.current?.getState().workout;
+    setGyms(loadedGyms);
+    setActiveGymState(resolveActiveGymAfterRefresh(loadedGyms, defaultGym, currentWorkout?.gymId));
   }, []);
 
   // Initialize controller and subscribe
@@ -117,6 +151,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         });
 
+        const [loadedGyms, defaultGym] = await Promise.all([
+          store.getGyms(),
+          store.getDefaultGym(),
+        ]);
+        if (!isMounted) return;
+        setGyms(loadedGyms);
+        setActiveGymState(defaultGym);
         await refreshDrafts();
       } catch (err) {
         console.error('Failed to initialize session controller:', err);
@@ -260,7 +301,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const executeStartWorkout = async (
     routine?: Routine,
     customName?: string,
-    initialExercises?: ActiveExercise[]
+    initialExercises?: ActiveExercise[],
+    options?: StartWorkoutOptions,
   ) => {
     const ctrl = controllerRef.current;
     if (!ctrl) {
@@ -269,18 +311,40 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const workoutId = `wo-${Crypto.randomUUID()}`;
     const name = customName || (routine ? routine.name : 'Quick Workout');
+    const store = await getStore();
+    const [loadedGyms, defaultGym] = await Promise.all([
+      store.getGyms(),
+      store.getDefaultGym(),
+    ]);
+    const gymId = resolveStartGymId(defaultGym, options);
+    const selectedGym = loadedGyms.find((gym) => gym.id === gymId);
+    if (!selectedGym) {
+      throw new Error(`Cannot start workout: unknown gym ${gymId}`);
+    }
+    const gymNames = new Map(loadedGyms.map((gym) => [gym.id, gym.name]));
 
     let exercises: ActiveExercise[] = [];
 
     if (initialExercises && initialExercises.length > 0) {
-      exercises = initialExercises;
+      exercises = initialExercises.map((exercise) => ({
+        ...exercise,
+        sets: exercise.sets.map((set) => {
+          const normalizedSet = clearSameGymProvenance(set, gymId);
+          return {
+            ...normalizedSet,
+            previousGymName: normalizedSet.previousGymId
+              ? (normalizedSet.previousGymName || gymNames.get(normalizedSet.previousGymId))
+              : normalizedSet.previousGymName,
+          };
+        }),
+      }));
     } else if (routine && routine.exercises.length > 0) {
       const occurrenceCounts: Record<string, number> = {};
       for (let ord = 0; ord < routine.exercises.length; ord++) {
         const item = routine.exercises[ord];
         const occ = occurrenceCounts[item.exerciseId] || 0;
         occurrenceCounts[item.exerciseId] = occ + 1;
-        const prevSets = await getPreviousSetsForExercise(item.exerciseId, occ);
+        const prevSets = await loadSuggestionsForExercise(store, item.exerciseId, occ, gymId);
         const count = item.targetSets || 3;
         const activeExId = `ae-${workoutId}-${item.exerciseId}-occ${occ}-${Crypto.randomUUID().slice(0, 6)}`;
         const sets: WorkoutSet[] = [];
@@ -299,6 +363,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             isWeightEdited: false,
             previousWeightKg: ghost ? ghost.weightKg : undefined,
             previousReps: ghost ? ghost.reps : undefined,
+            previousGymId: ghost ? ghost.sourceGymId : undefined,
+            previousGymName: ghost ? ghost.sourceGymName : undefined,
           });
         }
 
@@ -318,6 +384,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: workoutId,
       name,
       routineId: routine?.id,
+      gymId,
       startTime: new Date().toISOString(),
       durationSeconds: 0,
       totalVolumeKg: 0,
@@ -325,6 +392,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     await ctrl.start(newWorkout);
+    setGyms(loadedGyms);
+    setActiveGymState(selectedGym);
     setIsMinimized(false);
     await refreshDrafts();
   };
@@ -332,7 +401,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const startWorkout = async (
     routine?: Routine,
     customName?: string,
-    initialExercises?: ActiveExercise[]
+    initialExercises?: ActiveExercise[],
+    options?: StartWorkoutOptions,
   ) => {
     const ctrl = controllerRef.current;
     const currentState = ctrl ? ctrl.getState() : sessionState;
@@ -345,8 +415,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
       if (shouldResume) {
         maximizeWorkout();
+        return true;
       }
-      return;
+      return false;
     }
 
     if (availableDrafts.length > 0) {
@@ -362,11 +433,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } else {
           setIsDraftModalOpen(true);
         }
+        return true;
       }
-      return;
+      return false;
     }
 
-    await executeStartWorkout(routine, customName, initialExercises);
+    await executeStartWorkout(routine, customName, initialExercises, options);
+    return true;
   };
 
   const resumeDraft = (draft?: WorkoutDraft) => {
@@ -377,6 +450,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!targetDraft) return;
 
     ctrl.resume(targetDraft);
+    setActiveGymState(gyms.find((gym) => gym.id === targetDraft.workout.gymId) || null);
     setIsMinimized(false);
     setIsDraftModalOpen(false);
 
@@ -392,6 +466,25 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     refreshDrafts().catch(console.error);
+  };
+
+  const setActiveGym = async (gymId: string): Promise<void> => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) {
+      throw new Error('Controller not initialized');
+    }
+
+    const requestId = ++gymSwitchRequestRef.current;
+    const store = await getStore();
+    const result = await switchWorkoutGym(
+      ctrl,
+      store,
+      gymId,
+      () => requestId === gymSwitchRequestRef.current,
+    );
+    if (result.cancelled) return;
+    setGyms(result.gyms);
+    setActiveGymState(result.gym);
   };
 
   const discardDraft = async (draftId?: string) => {
@@ -454,6 +547,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!ctrl || exercises.length === 0) return;
     const currentState = ctrl.getState();
     if (currentState.phase !== 'active' || !currentState.workout) return;
+    const expectedVersion = captureWorkoutVersion(currentState);
+    if (!expectedVersion) return;
+    const store = await getStore();
 
     // Track occurrences across existing exercises and the batch
     const currentWorkout = currentState.workout;
@@ -468,7 +564,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exerciseCounts.set(exercise.id, occurrenceIndex + 1);
 
       const activeExId = `ae-${currentWorkout.id}-${exercise.id}-occ${occurrenceIndex}-${Crypto.randomUUID().slice(0, 6)}`;
-      const prevSets = await getPreviousSetsForExercise(exercise.id, occurrenceIndex);
+      const prevSets = await loadSuggestionsForExercise(
+        store,
+        exercise.id,
+        occurrenceIndex,
+        currentWorkout.gymId,
+      );
       const initialSets: WorkoutSet[] = [];
       const count = 3;
 
@@ -486,6 +587,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           isWeightEdited: false,
           previousWeightKg: ghost ? ghost.weightKg : undefined,
           previousReps: ghost ? ghost.reps : undefined,
+          previousGymId: ghost ? ghost.sourceGymId : undefined,
+          previousGymName: ghost ? ghost.sourceGymName : undefined,
         });
       }
 
@@ -500,20 +603,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
     }
 
-    // Re-read latest controller state after asynchronous lookups
-    const latestState = ctrl.getState();
-    if (latestState.phase !== 'active' || !latestState.workout) return;
-
-    const updated: Workout = {
-      ...latestState.workout,
-      exercises: [...latestState.workout.exercises, ...newActiveExercises],
-    };
-    ctrl.update(
-      updated,
-      restTimer.isActive && restTimer.endsAt
-        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
-    );
+    appendExercisesToCurrentWorkout(ctrl, expectedVersion, newActiveExercises);
   };
 
   const addExerciseToWorkout = async (exercise: Exercise) => {
@@ -627,6 +717,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isWeightEdited: false,
         previousWeightKg: ghostWeight,
         previousReps: ghostReps,
+        ...copyPreviousSetProvenance(lastSet),
       };
       return { ...ex, sets: [...ex.sets, newSet] };
     });
@@ -826,12 +917,16 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         restTimer,
         draftAvailable: availableDrafts.length > 0 ? availableDrafts[0].workout : null,
         availableDrafts,
+        gyms,
+        activeGym,
+        refreshGyms,
         isDraftModalOpen,
         openDraftModal: () => setIsDraftModalOpen(true),
         closeDraftModal: () => setIsDraftModalOpen(false),
         resumeDraft,
         discardDraft,
         startWorkout,
+        setActiveGym,
         minimizeWorkout,
         maximizeWorkout,
         addExerciseToWorkout,

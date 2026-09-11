@@ -1,8 +1,12 @@
 import { Store, DataSnapshot, WorkoutDraft } from '../database/contract';
-import { parseBackup, BackupV2 } from './backup';
-import { Exercise, Routine, Workout } from '../types';
+import { parseBackup, BackupV3 } from './backup';
+import { Exercise, ExerciseGymScope, Routine, Workout } from '../types';
+import { buildGymRestoreMapping, remapGymReferences } from './gym-restore';
+import { validateExerciseGymScope } from '../workout/gym-scope';
 
 export interface RestorePreview {
+  gymsCount: number;
+  scopeOverridesCount: number;
   workoutsCount: number;
   routinesCount: number;
   customExercisesCount: number;
@@ -51,9 +55,18 @@ function isIdenticalRoutine(a: Routine, b: Routine): boolean {
   return true;
 }
 
+function isIdenticalScope(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
+  return (
+    a.exerciseId === b.exerciseId &&
+    a.scopeType === b.scopeType &&
+    JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort())
+  );
+}
+
 function isIdenticalWorkout(a: Workout, b: Workout): boolean {
   if (
     a.id !== b.id ||
+    a.gymId !== b.gymId ||
     (a.routineId || '') !== (b.routineId || '') ||
     a.name !== b.name ||
     a.startTime !== b.startTime ||
@@ -117,10 +130,41 @@ function isIdenticalDraft(a: WorkoutDraft, b: WorkoutDraft): boolean {
 }
 
 export async function computeRestorePlan(
-  backup: BackupV2,
+  backup: BackupV3,
   store: Store
 ): Promise<{ snapshotToMerge: DataSnapshot; preview: RestorePreview }> {
   const existing = await store.readSnapshot();
+
+  const gymMapping = buildGymRestoreMapping(backup.gyms, existing.gyms);
+  const remappedBackup = remapGymReferences(backup, gymMapping.idMap);
+  const knownGymIds = new Set([
+    ...existing.gyms.map((gym) => gym.id),
+    ...gymMapping.gymsToInsert.map((gym) => gym.id),
+  ]);
+  for (const workout of remappedBackup.workouts) {
+    if (!knownGymIds.has(workout.gymId)) {
+      throw new Error(`Workout references missing gym: ${workout.gymId}`);
+    }
+  }
+  for (const draft of remappedBackup.drafts) {
+    if (!knownGymIds.has(draft.workout.gymId)) {
+      throw new Error(`Draft references missing gym: ${draft.workout.gymId}`);
+    }
+  }
+
+  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
+  const scopesToInsert: ExerciseGymScope[] = [];
+  for (const scope of remappedBackup.exerciseGymScopes) {
+    validateExerciseGymScope(scope, knownGymIds);
+    const existingScope = existingScopes.get(scope.exerciseId);
+    if (existingScope) {
+      if (!isIdenticalScope(scope, existingScope)) {
+        throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
+      }
+    } else {
+      scopesToInsert.push(scope);
+    }
+  }
 
   const existingWorkouts = new Map(existing.workouts.map((w) => [w.id, w]));
   const existingRoutines = new Map(existing.routines.map((r) => [r.id, r]));
@@ -129,7 +173,7 @@ export async function computeRestorePlan(
 
   const workoutsToInsert: Workout[] = [];
   let skippedWorkoutsCount = 0;
-  for (const w of backup.workouts) {
+  for (const w of remappedBackup.workouts) {
     const exW = existingWorkouts.get(w.id);
     if (exW) {
       if (isIdenticalWorkout(w, exW)) {
@@ -146,7 +190,7 @@ export async function computeRestorePlan(
 
   const routinesToInsert: Routine[] = [];
   let skippedRoutinesCount = 0;
-  for (const r of backup.routines) {
+  for (const r of remappedBackup.routines) {
     const exR = existingRoutines.get(r.id);
     if (exR) {
       if (isIdenticalRoutine(r, exR)) {
@@ -162,7 +206,7 @@ export async function computeRestorePlan(
   }
 
   const exercisesToInsert: Exercise[] = [];
-  for (const ex of backup.exercises) {
+  for (const ex of remappedBackup.exercises) {
     const exE = existingExercises.get(ex.id);
     if (exE) {
       if (!isIdenticalExercise(ex, exE)) {
@@ -176,7 +220,7 @@ export async function computeRestorePlan(
   }
 
   const draftsToInsert: WorkoutDraft[] = [];
-  for (const d of backup.drafts) {
+  for (const d of remappedBackup.drafts) {
     const exD = existingDrafts.get(d.workout.id);
     if (exD) {
       if (!isIdenticalDraft(d, exD)) {
@@ -192,7 +236,7 @@ export async function computeRestorePlan(
   // Preserve existing settings, import only missing setting keys
   const settingsToInsert: Record<string, string> = {};
   let newSettingsCount = 0;
-  for (const [k, v] of Object.entries(backup.settings || {})) {
+  for (const [k, v] of Object.entries(remappedBackup.settings || {})) {
     if (existing.settings[k] === undefined) {
       settingsToInsert[k] = v;
       newSettingsCount++;
@@ -205,9 +249,13 @@ export async function computeRestorePlan(
     workouts: workoutsToInsert,
     drafts: draftsToInsert,
     settings: settingsToInsert,
+    gyms: gymMapping.gymsToInsert,
+    exerciseGymScopes: scopesToInsert,
   };
 
   const preview: RestorePreview = {
+    gymsCount: gymMapping.gymsToInsert.length,
+    scopeOverridesCount: scopesToInsert.length,
     workoutsCount: workoutsToInsert.length,
     routinesCount: routinesToInsert.length,
     customExercisesCount: exercisesToInsert.filter((e) => e.isCustom).length,

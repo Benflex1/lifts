@@ -10,13 +10,15 @@ import {
   View,
 } from 'react-native';
 import { Check, X } from 'lucide-react-native';
-import { Workout } from '../types';
+import { Gym, Workout } from '../types';
 import { WeightUnit, displayToKg, kgToDisplay } from '../utils/units';
 import { applyWorkoutEdits } from '../workout/workout-edit';
 
 interface Props {
   visible: boolean;
   workout: Workout | null;
+  gyms: Gym[];
+  gymTrackingEnabled: boolean;
   unit: WeightUnit;
   onClose: () => void;
   onSave: (workout: Workout) => Promise<void>;
@@ -32,12 +34,15 @@ const draftKey = (exerciseId: string, setId: string) => `${exerciseId}:${setId}`
 export const WorkoutEditModal: React.FC<Props> = ({
   visible,
   workout,
+  gyms,
+  gymTrackingEnabled,
   unit,
   onClose,
   onSave,
 }) => {
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
+  const [selectedGymId, setSelectedGymId] = useState('');
   const [draftSets, setDraftSets] = useState<Record<string, DraftSet>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +63,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
 
     setName(workout.name);
     setNotes(workout.notes || '');
+    setSelectedGymId(workout.gymId);
     setDraftSets(nextDraftSets);
     setError(null);
   }, [visible, workout, unit]);
@@ -71,6 +77,11 @@ export const WorkoutEditModal: React.FC<Props> = ({
 
   const handleSave = async () => {
     if (!workout) return;
+
+    if (gymTrackingEnabled && !gyms.some(gym => gym.id === selectedGymId)) {
+      setError('Please select a valid gym.');
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -95,6 +106,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
       const updated = applyWorkoutEdits(workout, {
         name,
         notes,
+        gymId: gymTrackingEnabled ? selectedGymId : workout.gymId,
         sets: edits,
       });
       await onSave(updated);
@@ -138,6 +150,30 @@ export const WorkoutEditModal: React.FC<Props> = ({
               multiline
               editable={!saving}
             />
+
+            {gymTrackingEnabled && (
+              <>
+                <Text style={styles.label}>GYM</Text>
+                <View style={styles.gymOptions}>
+                  {gyms.map(gym => (
+                    <TouchableOpacity
+                      key={gym.id}
+                      style={[styles.gymOption, selectedGymId === gym.id && styles.gymOptionSelected]}
+                      onPress={() => setSelectedGymId(gym.id)}
+                      disabled={saving}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Assign workout to ${gym.name}`}
+                      accessibilityState={{ selected: selectedGymId === gym.id }}
+                    >
+                      <View style={[styles.gymSwatch, { backgroundColor: gym.color }]} />
+                      <Text style={[styles.gymOptionText, selectedGymId === gym.id && styles.gymOptionTextSelected]}>
+                        {gym.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
 
             <Text style={styles.sectionTitle}>COMPLETED SETS</Text>
             {workout?.exercises.map(exercise => {
@@ -247,6 +283,40 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 70,
     textAlignVertical: 'top',
+  },
+  gymOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  gymOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#262A34',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  gymOptionSelected: {
+    backgroundColor: 'rgba(59, 130, 246, 0.16)',
+    borderColor: '#3B82F6',
+  },
+  gymSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 7,
+  },
+  gymOptionText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  gymOptionTextSelected: {
+    color: '#FFFFFF',
   },
   sectionTitle: {
     color: '#9CA3AF',

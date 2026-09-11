@@ -36,6 +36,7 @@ const makeWorkout = (
 ): Workout => ({
   id,
   name: id,
+  gymId: 'gym-default',
   startTime,
   endTime: startTime,
   durationSeconds: 3600,

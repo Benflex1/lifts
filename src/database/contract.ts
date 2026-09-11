@@ -1,4 +1,13 @@
-import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import {
+  DualExerciseStats,
+  Exercise,
+  ExerciseGymScope,
+  Gym,
+  PreviousSetSuggestion,
+  Routine,
+  Workout,
+  WorkoutHistorySummary,
+} from '../types';
 
 export interface WorkoutDraft {
   version: 1;
@@ -14,6 +23,8 @@ export interface DataSnapshot {
   exercises: Exercise[];
   drafts: WorkoutDraft[];
   settings: Record<string, string>;
+  gyms: Gym[];
+  exerciseGymScopes: ExerciseGymScope[];
 }
 
 export interface Store {
@@ -45,13 +56,22 @@ export interface Store {
   getWorkoutHistory(): Promise<WorkoutHistorySummary[]>;
   getWorkoutDetail(workoutId: string): Promise<Workout | null>;
   deleteWorkout(workoutId: string): Promise<void>;
-  getPreviousSetsForExercise(exerciseId: string, occurrenceIndex?: number): Promise<WorkoutSet[]>;
-  getExerciseStats(exerciseId: string): Promise<{
-    maxWeightKg: number;
-    maxReps: number;
-    estimated1RM: number;
-    sessionCount: number;
-  }>;
+  getGyms(): Promise<Gym[]>;
+  getDefaultGym(): Promise<Gym>;
+  createGym(name: string, color?: string): Promise<Gym>;
+  updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym>;
+  setDefaultGym(id: string): Promise<void>;
+  deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void>;
+  getExerciseGymScopes(): Promise<ExerciseGymScope[]>;
+  getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null>;
+  saveExerciseGymScope(scope: ExerciseGymScope): Promise<void>;
+  deleteExerciseGymScope(exerciseId: string): Promise<void>;
+  getPreviousSetsForExercise(
+    exerciseId: string,
+    occurrenceIndex?: number,
+    currentGymId?: string,
+  ): Promise<PreviousSetSuggestion[]>;
+  getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats>;
 
   getAllExercises(): Promise<Exercise[]>;
   searchExercises(query?: string, muscle?: string, equipment?: string): Promise<Exercise[]>;
@@ -62,4 +82,5 @@ export interface Store {
   setSetting(key: string, value: string): Promise<void>;
   renameFolder(oldName: string, newName: string): Promise<void>;
   deleteFolder(name: string): Promise<void>;
+
 }

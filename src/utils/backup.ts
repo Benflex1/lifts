@@ -1,16 +1,82 @@
 import { DataSnapshot, Store } from '../database/contract';
 import { DEFAULT_EXERCISES } from '../database/seedData';
-import { Exercise, Routine, Workout, WorkoutSet } from '../types';
+import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutSet } from '../types';
+import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
+import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateTargetReps } from '../workout/sets';
+import { validateSnapshotStructure } from '../database/snapshot-validation';
 
 export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 
-export interface BackupV2 extends DataSnapshot {
+export interface BackupV2 {
   version: 2;
+  exportedAt: string;
+  workouts: Workout[];
+  routines: Routine[];
+  exercises: Exercise[];
+  drafts: import('../database/contract').WorkoutDraft[];
+  settings: Record<string, string>;
+}
+
+export interface BackupV3 extends DataSnapshot {
+  version: 3;
   exportedAt: string;
 }
 
-export function parseBackup(json: string): BackupV2 {
+function validateGymId(id: unknown): asserts id is string {
+  if (typeof id !== 'string' || !id.trim() || id !== id.trim()) {
+    throw new Error(`Invalid gym ID: ${String(id)}`);
+  }
+}
+
+function validateGyms(gyms: unknown): asserts gyms is Gym[] {
+  if (!Array.isArray(gyms)) throw new Error('Invalid gyms format: expected array');
+  const ids = new Set<string>();
+  let defaultCount = 0;
+  for (const gym of gyms) {
+    if (!gym || typeof gym !== 'object') throw new Error('Invalid gym in backup: expected object');
+    const candidate = gym as Gym;
+    validateGymId(candidate.id);
+    if (ids.has(candidate.id)) throw new Error(`Duplicate gym ID in backup: ${candidate.id}`);
+    ids.add(candidate.id);
+    if (typeof candidate.isDefault !== 'boolean') {
+      throw new Error(`Invalid isDefault in gym: ${candidate.id}`);
+    }
+    candidate.name = validateGymName(candidate.name);
+    validateGymColor(candidate.color);
+    if (typeof candidate.createdAt !== 'string' || !candidate.createdAt || isNaN(Date.parse(candidate.createdAt))) {
+      throw new Error(`Invalid createdAt timestamp in gym: ${candidate.id}`);
+    }
+    if (candidate.isDefault) defaultCount++;
+  }
+  if (defaultCount !== 1) throw new Error('Backup must contain exactly one default gym');
+}
+
+function validateScopes(scopes: unknown, gyms: readonly Gym[], knownExerciseIds: ReadonlySet<string>): void {
+  if (!Array.isArray(scopes)) throw new Error('Invalid exerciseGymScopes format: expected array');
+  const scopeExerciseIds = new Set<string>();
+  const knownGymIds = new Set(gyms.map((gym) => gym.id));
+  for (const scope of scopes) {
+    if (!scope || typeof scope !== 'object') throw new Error('Invalid exercise gym scope in backup');
+    const candidate = scope as ExerciseGymScope;
+    if (scopeExerciseIds.has(candidate.exerciseId)) {
+      throw new Error(`Duplicate exercise scope ID in backup: ${candidate.exerciseId}`);
+    }
+    scopeExerciseIds.add(candidate.exerciseId);
+    if (!knownExerciseIds.has(candidate.exerciseId)) {
+      throw new Error(`Missing exercise definition for scope: ${candidate.exerciseId}`);
+    }
+    if (candidate.linkedGymIds !== undefined) {
+      if (!Array.isArray(candidate.linkedGymIds) || candidate.linkedGymIds.some((id) => typeof id !== 'string')) {
+        throw new Error(`Invalid linked gym IDs in scope: ${candidate.exerciseId}`);
+      }
+      candidate.linkedGymIds.forEach(validateGymId);
+    }
+    validateExerciseGymScope(candidate, knownGymIds);
+  }
+}
+
+export function parseBackup(json: string): BackupV3 {
   if (typeof json !== 'string') {
     throw new Error('Invalid backup payload: expected string');
   }
@@ -36,11 +102,11 @@ export function parseBackup(json: string): BackupV2 {
     );
   }
 
-  if (parsed.version !== 2) {
+  if (parsed.version !== 2 && parsed.version !== 3) {
     throw new Error(`Unsupported backup version: ${parsed.version}`);
   }
 
-  if (!parsed.exportedAt || isNaN(Date.parse(parsed.exportedAt))) {
+  if (typeof parsed.exportedAt !== 'string' || !parsed.exportedAt || isNaN(Date.parse(parsed.exportedAt))) {
     throw new Error('Invalid exportedAt timestamp in backup file');
   }
 
@@ -56,9 +122,75 @@ export function parseBackup(json: string): BackupV2 {
   if (!Array.isArray(parsed.drafts)) {
     throw new Error('Invalid drafts format: expected array');
   }
-  if (!parsed.settings || typeof parsed.settings !== 'object') {
+  if (!parsed.settings || typeof parsed.settings !== 'object' || Array.isArray(parsed.settings)) {
     throw new Error('Invalid settings format: expected object');
   }
+
+  const isLegacyV2 = parsed.version === 2;
+  if (isLegacyV2) {
+    parsed.version = 3;
+    parsed.gyms = [{
+      id: 'gym-default',
+      name: 'Default Gym',
+      color: DEFAULT_GYM_COLOR,
+      isDefault: true,
+      createdAt: parsed.exportedAt,
+    } satisfies Gym];
+    parsed.exerciseGymScopes = [];
+    parsed.workouts = parsed.workouts.map((workout: Workout) => ({ ...workout, gymId: 'gym-default' }));
+    parsed.drafts = parsed.drafts.map((draft: import('../database/contract').WorkoutDraft) => ({
+      ...draft,
+      workout: { ...draft.workout, gymId: 'gym-default' },
+    }));
+  } else {
+    if (!Array.isArray(parsed.gyms)) {
+      throw new Error('Invalid gyms format: expected array');
+    }
+    if (!Array.isArray(parsed.exerciseGymScopes)) {
+      throw new Error('Invalid exerciseGymScopes format: expected array');
+    }
+  }
+
+  // Older exports omitted fields that are required by the current runtime model.
+  // Normalize only those known legacy omissions; v3 remains strict below.
+  parsed.routines = parsed.routines.map((routine: any) => ({
+    ...routine,
+    ...(isLegacyV2 && routine.createdAt === undefined ? { createdAt: parsed.exportedAt } : {}),
+    exercises: Array.isArray(routine.exercises)
+      ? routine.exercises.map((exercise: any, index: number) => ({
+          ...exercise,
+          ...(isLegacyV2 && exercise.id === undefined ? { id: `re-${routine.id}-${index}` } : {}),
+          ...(isLegacyV2 && exercise.orderIndex === undefined ? { orderIndex: index } : {}),
+          ...(isLegacyV2 && exercise.targetSets === undefined ? { targetSets: 0 } : {}),
+          ...(isLegacyV2 && exercise.targetReps === undefined ? { targetReps: '' } : {}),
+          restTimerSeconds: exercise.restTimerSeconds ?? 0,
+        }))
+      : routine.exercises,
+  }));
+  parsed.workouts = parsed.workouts.map((workout: any) => ({
+    ...workout,
+    ...(isLegacyV2 && workout.durationSeconds === undefined ? { durationSeconds: 0 } : {}),
+    ...(isLegacyV2 && workout.totalVolumeKg === undefined ? { totalVolumeKg: 0 } : {}),
+    exercises: Array.isArray(workout.exercises)
+      ? workout.exercises.map((exercise: any) => ({ ...exercise, restTimerSeconds: exercise.restTimerSeconds ?? 0 }))
+      : workout.exercises,
+  }));
+  parsed.drafts = parsed.drafts.map((draft: any) => ({
+    ...draft,
+    ...(isLegacyV2 && draft.version === undefined ? { version: 1 } : {}),
+    ...(isLegacyV2 && draft.revision === undefined ? { revision: 0 } : {}),
+    ...(draft.restTimer === undefined ? { restTimer: null } : {}),
+    workout: draft.workout && {
+      ...draft.workout,
+      ...(isLegacyV2 && draft.workout.durationSeconds === undefined ? { durationSeconds: 0 } : {}),
+      ...(isLegacyV2 && draft.workout.totalVolumeKg === undefined ? { totalVolumeKg: 0 } : {}),
+      exercises: Array.isArray(draft.workout.exercises)
+        ? draft.workout.exercises.map((exercise: any) => ({ ...exercise, restTimerSeconds: exercise.restTimerSeconds ?? 0 }))
+        : draft.workout.exercises,
+    },
+  }));
+
+  validateGyms(parsed.gyms);
 
   // Map of available exercises: bundled seed exercises + backup exercises
   const knownExercisesMap = new Map<string, Exercise>();
@@ -174,7 +306,8 @@ export function parseBackup(json: string): BackupV2 {
   function validateWorkoutStructure(
     w: any,
     knownExercisesMap: Map<string, Exercise>,
-    entityLabel: string
+    entityLabel: string,
+    knownGymIds: ReadonlySet<string>
   ): void {
     if (!w || typeof w !== 'object') {
       throw new Error(`Invalid ${entityLabel}: expected object`);
@@ -184,6 +317,9 @@ export function parseBackup(json: string): BackupV2 {
     }
     if (!w.name || typeof w.name !== 'string') {
       throw new Error(`Invalid name in ${entityLabel} ${w.id}`);
+    }
+    if (typeof w.gymId !== 'string' || !knownGymIds.has(w.gymId)) {
+      throw new Error(`Invalid gym ID in ${entityLabel} ${w.id}: ${w.gymId}`);
     }
     if (!w.startTime || isNaN(Date.parse(w.startTime))) {
       throw new Error(`Invalid timestamp in ${entityLabel} ${w.id}: ${w.startTime}`);
@@ -330,7 +466,7 @@ export function parseBackup(json: string): BackupV2 {
     }
     workoutIds.add(w.id);
 
-    validateWorkoutStructure(w, knownExercisesMap, 'workout');
+    validateWorkoutStructure(w, knownExercisesMap, 'workout', new Set(parsed.gyms.map((gym: Gym) => gym.id)));
   }
 
   // Validate drafts
@@ -370,10 +506,13 @@ export function parseBackup(json: string): BackupV2 {
       }
     }
 
-    validateWorkoutStructure(d.workout, knownExercisesMap, 'draft workout');
+    validateWorkoutStructure(d.workout, knownExercisesMap, 'draft workout', new Set(parsed.gyms.map((gym: Gym) => gym.id)));
   }
 
-  return parsed as BackupV2;
+  validateScopes(parsed.exerciseGymScopes, parsed.gyms, new Set(knownExercisesMap.keys()));
+  validateSnapshotStructure(parsed, { knownExerciseIds: new Set(knownExercisesMap.keys()), requireDefaultGym: true });
+
+  return parsed as BackupV3;
 }
 
 export async function buildBackupJson(store?: Store): Promise<string> {
@@ -396,14 +535,16 @@ export async function buildBackupJson(store?: Store): Promise<string> {
     }
   }
 
-  const backup: BackupV2 = {
-    version: 2,
+  const backup: BackupV3 = {
+    version: 3,
     exportedAt: new Date().toISOString(),
     workouts: snapshot.workouts,
     routines: snapshot.routines,
     exercises: snapshot.exercises,
     drafts: snapshot.drafts,
     settings: safeSettings,
+    gyms: snapshot.gyms,
+    exerciseGymScopes: snapshot.exerciseGymScopes,
   };
 
   return JSON.stringify(backup, null, 2);

@@ -32,12 +32,12 @@
 | **Plate Calculator** | Visual barbell plate calculator | Olympic kg/lb plate calculator | Completed (Color-coded kg & lb plates, 45lb/20kg bar presets) |
 | **Units (kg / lb)** | Locked or buggy conversions | Reachable, persistent kg / lb toggle | Completed (Persisted in storage with rollback guard) |
 | **1RM Calculator** | Locked in premium | Unlocked with Epley & Brzycki formulas | Completed (With suggested training loads table) |
-| **Data Ownership & Backup** | Locked / proprietary export | Full JSON schema v2 backup & restore | Completed (Atomic cross-platform backup and restore) |
+| **Data Ownership & Backup** | Locked / proprietary export | Schema v2 import compatibility with current Schema v3 export & restore | Completed (Atomic cross-platform backup and restore; v2 imports, v3 exports) |
 | **Crash Recovery & Drafts** | Cloud sync required | Local draft autosave & multi-draft recovery | Completed (3s periodic + background saves + recovery modal) |
 | **RPE Tracking** | Premium feature | Interactive RPE cycle badge (5–10) | Completed (Active workout badge + history breakdown) |
 | **Supersets & Giant Sets** | Premium feature | Planned Phase 3 | Backlog |
 | **Warmup Set Progression** | Premium feature | Planned Phase 3 | Backlog |
-| **Progress Charts & Graphs** | Premium feature | Planned Phase 3 | Backlog |
+| **Progress Charts & Graphs** | Premium feature | Weekly volume and muscle-frequency views; strength/1RM trend charts remain planned | Partial — volume/frequency delivered |
 | **Exercise Demonstration Videos**| Premium feature | Planned Phase 4 | Backlog |
 | **Apple Health / Health Connect** | Premium feature | Planned Phase 4 | Backlog |
 
@@ -54,7 +54,7 @@
 - [x] Wall-clock accurate duration and rest timers across backgrounding and recovery.
 - [x] Strict 0 kg weight preservation and set completion validation.
 - [x] Cross-platform accessible confirmation dialogs replacing window.confirm/Alert.alert.
-- [x] Backup Schema v2: full export of workouts, routines, custom exercises, settings, and collision-resistant atomic restore.
+- [x] Backup compatibility and restore: Schema v2 remains import-compatible; current exports use Schema v3 for workouts, routines, custom exercises, settings, gyms, and scopes with collision-resistant atomic restore.
 - [x] Reachable kg/lb settings modal in Workout header with durable storage.
 - [x] History-derived statistics calculated strictly over completed workouts (`is_completed = 1`).
 - [x] "Perform Again" reconstructing full workout order, counts, and historical ghost suggestions.
@@ -69,11 +69,13 @@
 - [x] Dual-drum rest time wheel modal and quick presets.
 - [x] Expandable workout history cards with set summaries and delete options.
 - [x] Screen keep-awake lock during gym sessions.
+- [x] **Multi-Gym Tracking & Machine Isolation**: Gym profiles, active-gym workout assignment, machine/cable history isolation, global/current-gym records, linked scopes, and v2 import/v3 export. Implementation is complete; native/manual release acceptance remains pending.
 
 ### Phase 3: Advanced Training Features [Planned]
 - [ ] **Supersets & Giant Sets**: Visual grouping brackets connecting two or more exercises with combined rest intervals.
 - [ ] **Warmup Progression Calculator**: Automatic warmup ramp generator (e.g. 50% x 10, 70% x 5, 85% x 2).
-- [ ] **Volume & Strength Progression Charts**: Interactive charts visualizing weekly volume and 1RM progress per muscle group.
+- [x] **Weekly Volume & Muscle-Frequency Charts**: Delivered weekly completed-set volume and primary-muscle workout-frequency views.
+- [ ] **Strength / 1RM Progression Charts**: Interactive strength and estimated-1RM trend views per exercise or muscle group.
 - [ ] **Personal Record (PR) Badges**: Visual indicators when completing a set that sets a new weight or volume record.
 - [ ] **CSV / Strong / Hevy Data Import**: Import tools for existing workout history files from third-party trackers.
 

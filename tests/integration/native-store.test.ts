@@ -7,8 +7,219 @@ import { NodeSqliteDriver } from '../helpers/storeFixture';
 import { createNativeStore } from '../../src/database/nativeStore';
 import { applyMigrations } from '../../src/database/migrations';
 import { Workout } from '../../src/types';
+import { createStoreFixture } from '../helpers/storeFixture';
+import { createSessionController } from '../../src/workout/session';
 
 describe('nativeStore and migration safety', () => {
+  it('bootstraps the default gym and backfills legacy workout and draft gym IDs', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-native-gym-backfill-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    await applyMigrations(driver, { maxVersion: 4 });
+    await driver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles) VALUES (?, ?, ?, ?, ?)`,
+      'legacy-exercise', 'Legacy Exercise', 'strength', 'machine', '[]'
+    );
+    await driver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, end_time, in_progress) VALUES (?, ?, ?, ?, 0)`,
+      'legacy-workout', 'Legacy Workout', '2026-09-09T08:00:00.000Z', '2026-09-09T09:00:00.000Z'
+    );
+    await driver.runAsync(
+      `INSERT INTO workout_drafts (id, revision, saved_at, data) VALUES (?, ?, ?, ?)`,
+      'legacy-draft', 1, '2026-09-09T10:00:00.000Z', JSON.stringify({
+        version: 1, workout: { id: 'legacy-draft', name: 'Draft', startTime: '2026-09-09T10:00:00.000Z', durationSeconds: 0, totalVolumeKg: 0, exercises: [] },
+        savedAt: '2026-09-09T10:00:00.000Z', revision: 1, restTimer: null,
+      })
+    );
+    const store = createNativeStore(driver);
+    await store.init();
+    const gyms = await store.getGyms();
+    assert.equal(gyms.length, 1);
+    assert.equal(gyms[0].id, 'gym-default');
+    assert.equal(gyms[0].name, 'Default Gym');
+    assert.equal(gyms[0].isDefault, true);
+    assert.equal(gyms[0].color, '#3B82F6');
+    const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)');
+    assert.ok(columns.some(column => column.name === 'gym_id'));
+    assert.equal((await store.getWorkoutDetail('legacy-workout'))?.gymId, 'gym-default');
+    assert.equal((await store.getWorkoutDrafts())[0].workout.gymId, 'gym-default');
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
+
+  it('rolls back all migration 5 changes when failure is injected', async () => {
+    const driver = new NodeSqliteDriver();
+    await applyMigrations(driver, { maxVersion: 4 });
+    await driver.runAsync(
+      `INSERT INTO workouts (id, name, start_time, in_progress) VALUES (?, ?, ?, 0)`,
+      'rollback-workout', 'Keep Workout', '2026-09-09T08:00:00.000Z'
+    );
+    const legacyDraft = JSON.stringify({ version: 1, workout: { id: 'rollback-draft', name: 'Keep Draft' } });
+    await driver.runAsync(
+      `INSERT INTO workout_drafts (id, revision, saved_at, data) VALUES (?, ?, ?, ?)`,
+      'rollback-draft', 1, '2026-09-09T09:00:00.000Z', legacyDraft
+    );
+    await assert.rejects(() => applyMigrations(driver, { failAtVersion: 5 }), /Injected migration failure at version 5/);
+    assert.equal(await driver.getFirstAsync<any>("SELECT name FROM sqlite_master WHERE type='table' AND name='gyms'"), null);
+    assert.equal((await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)')).some(c => c.name === 'gym_id'), false);
+    const rollbackWorkout = await driver.getFirstAsync<any>('SELECT id, name FROM workouts WHERE id = ?', 'rollback-workout');
+    assert.equal(rollbackWorkout?.id, 'rollback-workout');
+    assert.equal(rollbackWorkout?.name, 'Keep Workout');
+    assert.equal((await driver.getFirstAsync<{ data: string }>('SELECT data FROM workout_drafts WHERE id = ?', 'rollback-draft'))?.data, legacyDraft);
+    assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 5'), null);
+    driver.close();
+  });
+
+  it('persists gym CRUD, atomic reassignment, and scope overrides', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const { store } = fixture;
+      const first = await store.createGym('Home', '#10B981');
+      const second = await store.createGym('Away', '#F59E0B');
+      const exercise = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+      assert.ok(exercise);
+      const workout: Workout = {
+        id: 'gym-reassignment-workout', name: 'Gym Reassignment', gymId: first.id,
+        startTime: '2026-09-09T11:00:00.000Z', durationSeconds: 60, totalVolumeKg: 0, exercises: [],
+      };
+      await store.saveCompletedWorkout(workout);
+      await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-reassignment-draft', endTime: '2026-09-09T12:00:00.000Z' }, savedAt: workout.startTime, revision: 1, restTimer: null });
+      await store.saveExerciseGymScope({ exerciseId: exercise.id, scopeType: 'linked_group', linkedGymIds: [first.id, second.id] });
+      await store.setDefaultGym(first.id);
+      assert.equal((await store.getDefaultGym()).id, first.id);
+      assert.equal((await store.updateGym(first.id, { name: 'Home Gym', color: '#EF4444' })).name, 'Home Gym');
+      assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.linkedGymIds, [first.id, second.id]);
+      await store.deleteGym(first.id, second.id);
+      assert.equal((await store.getGyms()).length, 2);
+      assert.equal((await store.getDefaultGym()).id, second.id);
+      assert.equal((await store.getWorkoutDetail(workout.id))?.gymId, second.id);
+      assert.equal((await store.getWorkoutDrafts()).find(d => d.workout.id === 'gym-reassignment-draft')?.workout.gymId, second.id);
+      assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.scopeType, 'gym_specific');
+      await store.deleteExerciseGymScope(exercise.id);
+      assert.equal(await store.getExerciseGymScope(exercise.id), null);
+      await assert.rejects(() => store.deleteGym(second.id, second.id), /different/);
+      await assert.rejects(() => store.createGym('   '), /empty/);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('rejects invalid completed-workout gym IDs before writing', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const workout = (gymId: string): Workout => ({
+        id: `invalid-gym-${gymId.trim() || 'empty'}`,
+        name: 'Invalid gym workout',
+        gymId,
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 1,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
+      await assert.rejects(() => fixture.store.saveCompletedWorkout(workout('missing-gym')), /unknown gym/i);
+      await assert.rejects(() => fixture.store.saveCompletedWorkout(workout('  ')), /gym ID cannot be empty/i);
+      assert.equal(await fixture.store.getWorkoutDetail('invalid-gym-missing-gym'), null);
+      assert.equal(await fixture.store.getWorkoutDetail('invalid-gym-empty'), null);
+      assert.deepEqual(await fixture.store.getWorkoutHistory(), []);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('orders equal-timestamp history by descending SQLite-binary workout ID', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const startTime = '2026-09-10T08:00:00.000Z';
+      for (const id of ['history-a', 'history-z', 'history-Ω', 'history-😀']) {
+        await fixture.store.saveCompletedWorkout({
+          id,
+          name: id,
+          gymId: 'gym-default',
+          startTime,
+          durationSeconds: 1,
+          totalVolumeKg: 0,
+          exercises: [],
+        });
+      }
+
+      assert.deepEqual(
+        (await fixture.store.getWorkoutHistory()).map(workout => workout.id),
+        ['history-😀', 'history-Ω', 'history-z', 'history-a'],
+      );
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('rejects deletion when the default gym is the only gym', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      await assert.rejects(() => fixture.store.deleteGym('gym-default', 'replacement'), /at least two/);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('rejects deleting a gym used by an active draft without a caller-supplied gym ID', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const replacement = await fixture.store.createGym('Replacement');
+      const controller = createSessionController(fixture.store);
+      await controller.start({
+        id: 'active-native-delete-guard',
+        name: 'Active workout',
+        gymId: 'gym-default',
+        startTime: new Date().toISOString(),
+        durationSeconds: 0,
+        totalVolumeKg: 0,
+        exercises: [],
+      });
+      await assert.rejects(
+        () => fixture.store.deleteGym('gym-default', replacement.id),
+        /active workout/i,
+      );
+      assert.deepEqual((await fixture.store.getGyms()).map((gym) => gym.id), ['gym-default', replacement.id]);
+      assert.equal((await fixture.store.getWorkoutDraft('active-native-delete-guard'))?.workout.gymId, 'gym-default');
+      await controller.discard();
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('rejects deleting a gym referenced by a legacy in-progress workout row', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const replacement = await fixture.store.createGym('Replacement');
+      await fixture.driver!.runAsync(
+        `INSERT INTO workouts (id, name, gym_id, start_time, duration_seconds, total_volume_kg, in_progress)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        'legacy-active-delete-guard',
+        'Legacy active workout',
+        'gym-default',
+        new Date().toISOString(),
+        0,
+        0,
+      );
+      await assert.rejects(
+        () => fixture.store.deleteGym('gym-default', replacement.id),
+        /in-progress|active workout/i,
+      );
+      assert.deepEqual((await fixture.store.getGyms()).map((gym) => gym.id), ['gym-default', replacement.id]);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('includes gyms and scopes in native snapshots', async () => {
+    const fixture = await createStoreFixture('native');
+    try {
+      const snapshot = await fixture.store.readSnapshot();
+      assert.equal(snapshot.gyms[0].id, 'gym-default');
+      assert.deepEqual(snapshot.exerciseGymScopes, []);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
   it('migrates an old-schema database with completed workouts and in-progress drafts without data loss', async () => {
     const tempFile = path.join(os.tmpdir(), `test-old-schema-${Date.now()}.db`);
     const rawDriver = new NodeSqliteDriver(tempFile);
@@ -338,6 +549,7 @@ describe('nativeStore and migration safety', () => {
     const workout: Workout = {
       id: 'native-target-reps-workout',
       name: 'Target Reps Test',
+      gymId: 'gym-default',
       startTime: '2026-09-08T09:00:00.000Z',
       endTime: '2026-09-08T10:00:00.000Z',
       durationSeconds: 3600,
@@ -384,6 +596,7 @@ describe('nativeStore and migration safety', () => {
       const workout: Workout = {
         id: 'native-history-commas-workout',
         name: 'Comma Names Test',
+        gymId: 'gym-default',
         startTime: '2026-09-08T11:00:00.000Z',
         endTime: '2026-09-08T12:00:00.000Z',
         durationSeconds: 3600,
@@ -427,6 +640,7 @@ describe('nativeStore and migration safety', () => {
       const workout: Workout = {
         id: 'native-history-edit-workout',
         name: 'Editable Workout',
+        gymId: 'gym-default',
         startTime: '2026-09-08T13:00:00.000Z',
         endTime: '2026-09-08T14:00:00.000Z',
         durationSeconds: 3600,

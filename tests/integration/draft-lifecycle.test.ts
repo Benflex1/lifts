@@ -9,12 +9,14 @@ describe('Draft Lifecycle Integration', () => {
     it(`[${platform}] full session lifecycle: start, update, reload, resume, finish leaves zero drafts`, async () => {
       let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
       const fixture = await createStoreFixture(platform);
+      const alternateGym = await fixture.store.createGym('Garage Gym');
 
       const controller = createSessionController(fixture.store, () => currentTime);
 
       const workout: Workout = {
         id: `session-${platform}-1`,
         name: 'Full Body A',
+        gymId: alternateGym.id,
         startTime: new Date(currentTime).toISOString(),
         durationSeconds: 0,
         totalVolumeKg: 0,
@@ -28,6 +30,7 @@ describe('Draft Lifecycle Integration', () => {
       const draftsAfterStart = await fixture.store.getWorkoutDrafts();
       assert.equal(draftsAfterStart.length, 1);
       assert.equal(draftsAfterStart[0].workout.id, workout.id);
+      assert.equal(draftsAfterStart[0].workout.gymId, alternateGym.id);
 
       // 2. Add an exercise and sets, update controller and flush
       currentTime += 60_000;
@@ -68,6 +71,7 @@ describe('Draft Lifecycle Integration', () => {
       const loadedDrafts = await reopenedStore.getWorkoutDrafts();
       assert.equal(loadedDrafts.length, 1);
       assert.equal(loadedDrafts[0].workout.name, 'Full Body A');
+      assert.equal(loadedDrafts[0].workout.gymId, alternateGym.id);
       assert.equal(loadedDrafts[0].workout.exercises.length, 1);
       assert.equal(loadedDrafts[0].workout.exercises[0].sets.length, 1);
 
@@ -79,6 +83,7 @@ describe('Draft Lifecycle Integration', () => {
       assert.equal(controller2.getState().phase, 'active');
       assert.equal(controller2.getState().workout?.id, workout.id);
       assert.equal(controller2.getState().workout?.startTime, workout.startTime);
+      assert.equal(controller2.getState().workout?.gymId, alternateGym.id);
       // Duration should be total wall clock time: 660 seconds
       assert.equal(controller2.getState().workout?.durationSeconds, 660);
 
@@ -95,6 +100,7 @@ describe('Draft Lifecycle Integration', () => {
       const history = await reopenedStore.getWorkoutHistory();
       assert.equal(history.length, 1);
       assert.equal(history[0].id, workout.id);
+      assert.equal(history[0].gymId, alternateGym.id);
 
       const detail = await reopenedStore.getWorkoutDetail(workout.id);
       assert.ok(detail);
@@ -117,6 +123,7 @@ describe('Draft Lifecycle Integration', () => {
         workout: {
           id: `draft-A-${platform}`,
           name: 'Draft A',
+          gymId: 'gym-default',
           startTime: '2026-09-07T08:00:00.000Z',
           durationSeconds: 300,
           totalVolumeKg: 100,
@@ -132,6 +139,7 @@ describe('Draft Lifecycle Integration', () => {
         workout: {
           id: `draft-B-${platform}`,
           name: 'Draft B',
+          gymId: 'gym-default',
           startTime: '2026-09-07T09:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 200,
@@ -167,6 +175,7 @@ describe('Draft Lifecycle Integration', () => {
       const workout: Workout = {
         id: `workout-zero-${platform}`,
         name: 'Zero Kg and Repeated Occurrences',
+        gymId: 'gym-default',
         startTime: '2026-09-07T11:00:00.000Z',
         endTime: '2026-09-07T11:30:00.000Z',
         durationSeconds: 1800,
@@ -256,6 +265,7 @@ describe('Draft Lifecycle Integration', () => {
             workout: {
               id: `draft-reconstruct-${platform}`,
               name: 'Draft With Omitted Exercise',
+              gymId: 'gym-default',
               startTime: '2026-09-07T10:00:00.000Z',
               durationSeconds: 300,
               totalVolumeKg: 1000,
@@ -273,6 +283,8 @@ describe('Draft Lifecycle Integration', () => {
           },
         ],
         settings: {},
+        gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+        exerciseGymScopes: [],
       });
 
       const { restoreBackup } = await import('../../src/utils/restore');

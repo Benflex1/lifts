@@ -44,6 +44,7 @@ yarn-error.*
 .claude/
 CLAUDE.md
 AGENTS.md
+.superpowers/
 
 # Temporary user assets
 temp-screenshots/
@@ -51,3 +52,6 @@ temp-screenshots/
 # Build artifacts
 build-artifacts/
 *.apk
+
+# Local feature worktrees
+.worktrees/

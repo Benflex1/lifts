@@ -1,5 +1,5 @@
 import type { WorkoutHistorySummary, Routine, Exercise } from '../types';
-import { buildBackupJson as buildV2BackupJson } from './backup';
+import { buildBackupJson as buildV3BackupJson } from './backup';
 
 export interface BackupData {
   version: number;
@@ -27,7 +27,7 @@ export function shapeBackup(
 }
 
 export async function buildBackupJson(): Promise<string> {
-  return buildV2BackupJson();
+  return buildV3BackupJson();
 }
 
 export async function exportBackup(): Promise<void> {

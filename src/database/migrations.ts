@@ -194,6 +194,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
             id: w.id,
             name: w.name,
             routineId: w.routine_id || undefined,
+            gymId: 'gym-default',
             startTime: w.start_time,
             durationSeconds: w.duration_seconds || 0,
             totalVolumeKg: w.total_volume_kg || 0,
@@ -269,6 +270,56 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
         'INSERT INTO schema_migrations (version, applied_at) VALUES (4, ?)',
         new Date().toISOString()
       );
+    });
+  }
+
+  // Migration 5: gym profiles, exercise scope overrides, and workout assignments
+  if (!applied.has(5) && (options?.maxVersion === undefined || options.maxVersion >= 5)) {
+    await driver.withTransactionAsync(async () => {
+      await driver.execAsync(`
+        CREATE TABLE IF NOT EXISTS gyms (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          color TEXT NOT NULL DEFAULT '#3B82F6',
+          created_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS gyms_one_default
+          ON gyms(is_default) WHERE is_default = 1;
+        CREATE TABLE IF NOT EXISTS exercise_gym_scopes (
+          exercise_id TEXT PRIMARY KEY,
+          scope_type TEXT NOT NULL CHECK(scope_type IN ('global', 'gym_specific', 'linked_group')),
+          linked_gym_ids TEXT,
+          FOREIGN KEY (exercise_id) REFERENCES exercises(id) ON DELETE CASCADE
+        );
+      `);
+      await driver.runAsync(
+        `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 1, ?, ?)`,
+        'gym-default', 'Default Gym', '#3B82F6', new Date().toISOString()
+      );
+      const defaultGym = await driver.getFirstAsync<{ id: string }>('SELECT id FROM gyms WHERE is_default = 1');
+      if (!defaultGym) await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', 'gym-default');
+
+      const workoutColumns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts);');
+      if (!workoutColumns.some(column => column.name === 'gym_id')) {
+        await driver.execAsync('ALTER TABLE workouts ADD COLUMN gym_id TEXT REFERENCES gyms(id);');
+      }
+      await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id IS NULL', 'gym-default');
+
+      const draftRows = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
+      for (const row of draftRows) {
+        try {
+          const payload = JSON.parse(row.data) as WorkoutDraft;
+          if (payload && payload.workout && !payload.workout.gymId) {
+            payload.workout.gymId = 'gym-default';
+            await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(payload), row.id);
+          }
+        } catch (_) {
+          // Preserve malformed legacy payloads for the existing reader to ignore.
+        }
+      }
+      if (options?.failAtVersion === 5) throw new Error('Injected migration failure at version 5');
+      await driver.runAsync('INSERT INTO schema_migrations (version, applied_at) VALUES (5, ?)', new Date().toISOString());
     });
   }
 }

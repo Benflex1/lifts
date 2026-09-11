@@ -53,10 +53,13 @@ Most modern fitness apps start out great, only to lock your workouts behind expe
 - **1-Rep Max (1RM) Calculator**: Epley and Brzycki formula calculators with an instant training percentage breakdown table (95% down to 50% 1RM).
 
 ### Progress, History & Data Ownership
+- **Gym Profiles**: Create profiles, choose the active/default gym, and keep completed workouts and drafts assigned to a gym. With one gym, the experience remains zero-friction: the seeded Default Gym is used automatically.
+- **Machine & Cable Isolation**: Machine and cable exercise history is gym-specific by default, so raw logged values stay separated between locations. No pulley-ratio, machine-leverage, or plate-increment conversion is performed.
+- **Global, Current-Gym & Linked Records**: Global exercises show all-gym records; gym-specific exercises show current-gym records; linked scopes can intentionally share selected gyms. Foreign previous-set suggestions are visibly labeled with their source gym.
 - **Exercise PRs & Stats**: Tap any exercise to view your heaviest lift, estimated 1RM, and session count derived strictly from completed workouts.
 - **Expandable Workout Log**: Drill down into every past workout to inspect completed weights, reps, and RPE pills.
 - **Perform Again**: 1-tap restart of past completed workouts from History, reconstructing all exercises, target sets, reps, and historical weights as suggestions.
-- **Atomic Backup & Restore (Schema v2)**: Export full workout history, routines, custom exercises, and settings to a standard JSON file. Restore merges records safely with conflict prevention.
+- **Atomic Backup & Restore (v3 export, v2 import)**: New exports include gym profiles and exercise scopes. Existing Schema v2 backups remain importable, and restore merges records safely with collision prevention.
 
 ---
 
@@ -141,6 +144,7 @@ To build a standalone debug APK locally without relying on cloud services:
 ## Documentation & Provenance
 
 - [Product Roadmap](ROADMAP.md)
+- [Multi-Gym Tracking & Machine Isolation Design Spec](docs/superpowers/specs/2026-09-10-multi-gym-tracking-design.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
 - [Data & Asset Provenance](docs/data-provenance.md)

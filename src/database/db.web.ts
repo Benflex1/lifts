@@ -1,4 +1,4 @@
-import { Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { createWebStore, WebStore } from './webStore';
 import { WorkoutDraft, DataSnapshot } from './contract';
 
@@ -77,19 +77,18 @@ export async function deleteWorkout(workoutId: string): Promise<void> {
   return store.deleteWorkout(workoutId);
 }
 
-export async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
+export async function getPreviousSetsForExercise(
+  exerciseId: string,
+  occurrenceIndex: number = 0,
+  currentGymId?: string,
+): Promise<PreviousSetSuggestion[]> {
   const store = await getStore();
-  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex);
+  return store.getPreviousSetsForExercise(exerciseId, occurrenceIndex, currentGymId);
 }
 
-export async function getExerciseStats(exerciseId: string): Promise<{
-  maxWeightKg: number;
-  maxReps: number;
-  estimated1RM: number;
-  sessionCount: number;
-}> {
+export async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
   const store = await getStore();
-  return store.getExerciseStats(exerciseId);
+  return store.getExerciseStats(exerciseId, currentGymId);
 }
 
 export async function getAllExercises(): Promise<Exercise[]> {
@@ -111,6 +110,17 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
   const store = await getStore();
   return store.createCustomExercise(exercise);
 }
+
+export async function getGyms(): Promise<Gym[]> { return (await getStore()).getGyms!(); }
+export async function getDefaultGym(): Promise<Gym> { return (await getStore()).getDefaultGym!(); }
+export async function createGym(name: string, color?: string): Promise<Gym> { return (await getStore()).createGym!(name, color); }
+export async function updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym> { return (await getStore()).updateGym!(id, updates); }
+export async function setDefaultGym(id: string): Promise<void> { return (await getStore()).setDefaultGym!(id); }
+export async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> { return (await getStore()).deleteGym!(id, replacementGymId, activeWorkoutGymId); }
+export async function getExerciseGymScopes(): Promise<ExerciseGymScope[]> { return (await getStore()).getExerciseGymScopes!(); }
+export async function getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null> { return (await getStore()).getExerciseGymScope!(exerciseId); }
+export async function saveExerciseGymScope(scope: ExerciseGymScope): Promise<void> { return (await getStore()).saveExerciseGymScope!(scope); }
+export async function deleteExerciseGymScope(exerciseId: string): Promise<void> { return (await getStore()).deleteExerciseGymScope!(exerciseId); }
 
 export async function getSetting(key: string): Promise<string | null> {
   const store = await getStore();

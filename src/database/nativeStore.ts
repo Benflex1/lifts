@@ -1,12 +1,34 @@
-import { ActiveExercise, Exercise, Routine, Workout, WorkoutHistorySummary, WorkoutSet } from '../types';
+import {
+  ActiveExercise,
+  DualExerciseStats,
+  Exercise,
+  ExerciseGymScope,
+  Gym,
+  PreviousSetSuggestion,
+  Routine,
+  Workout,
+  WorkoutHistorySummary,
+  WorkoutSet,
+} from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
 import { buildDefaultRoutines } from './seedData';
-import { calculate1RM } from '../utils/calculator';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
+import {
+  DEFAULT_GYM_COLOR,
+  isActiveWorkoutForGym,
+  validateGymColor,
+  validateGymDeletion,
+  validateGymName,
+  validateWorkoutGymId,
+} from '../workout/gym-profile';
+import { validateExerciseGymScope } from '../workout/gym-scope';
+import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
+import { calculateDualExerciseStats } from '../workout/gym-records';
+import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
 
 const defaultExercisesData: Exercise[] = require('./defaultExercises.json');
 
@@ -44,6 +66,69 @@ function mapSetRow(s: any): WorkoutSet {
   };
 }
 
+function mapGymRow(r: any): Gym {
+  return { id: r.id, name: r.name, isDefault: Boolean(r.is_default), color: r.color, createdAt: r.created_at };
+}
+
+function mapScopeRow(r: any): ExerciseGymScope {
+  const linkedGymIds = r.linked_gym_ids ? JSON.parse(r.linked_gym_ids) : undefined;
+  return { exerciseId: r.exercise_id, scopeType: r.scope_type, ...(linkedGymIds ? { linkedGymIds } : {}) };
+}
+
+function normalizeDraftPayload(data: string): WorkoutDraft | null {
+  try {
+    const draft = JSON.parse(data) as WorkoutDraft;
+    if (!draft || !draft.workout || typeof draft.workout !== 'object') return null;
+    if (!draft.workout.gymId) draft.workout.gymId = 'gym-default';
+    return draft;
+  } catch (_) {
+    return null;
+  }
+}
+
+function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
+  return a.exerciseId === b.exerciseId && a.scopeType === b.scopeType
+    && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
+}
+
+function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
+  if (!Array.isArray(snapshot.gyms)) return snapshot;
+  return {
+    ...snapshot,
+    gyms: snapshot.gyms.map((gym) => {
+      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
+      if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
+        throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
+      }
+      return {
+        ...gym,
+        name: validateGymName(gym.name),
+        color: validateGymColor(gym.color),
+      };
+    }),
+  };
+}
+
+function validateSnapshotMergeConflicts(snapshot: DataSnapshot, existing: DataSnapshot): void {
+  const incomingScopes = snapshot.exerciseGymScopes || [];
+  const exerciseIds = new Set([
+    ...existing.exercises.map((exercise) => exercise.id),
+    ...snapshot.exercises.map((exercise) => exercise.id),
+  ]);
+  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
+  const seenScopeIds = new Set<string>();
+  for (const scope of incomingScopes) {
+    if (seenScopeIds.has(scope.exerciseId)) throw new Error(`Snapshot contains duplicate exercise scope IDs: ${scope.exerciseId}`);
+    seenScopeIds.add(scope.exerciseId);
+    if (!exerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
+    const existingScope = existingScopes.get(scope.exerciseId);
+    if (existingScope && !scopesAreIdentical(scope, existingScope)) {
+      throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
+    }
+  }
+
+}
+
 export function createNativeStore(driver: SqliteDriver): Store {
   const writeQueue = createWriteQueue();
   let cachedExercises: Exercise[] | null = null;
@@ -70,6 +155,108 @@ export function createNativeStore(driver: SqliteDriver): Store {
     if (!rtSeeded) {
       await seedDefaultRoutines();
     }
+  }
+
+  async function getGyms(): Promise<Gym[]> {
+    return (await driver.getAllAsync<any>('SELECT * FROM gyms ORDER BY is_default DESC, name ASC')).map(mapGymRow);
+  }
+
+  async function getDefaultGym(): Promise<Gym> {
+    const row = await driver.getFirstAsync<any>('SELECT * FROM gyms WHERE is_default = 1');
+    if (!row) throw new Error('Default gym is missing');
+    return mapGymRow(row);
+  }
+
+  async function createGym(name: string, color: string = DEFAULT_GYM_COLOR): Promise<Gym> {
+    const validName = validateGymName(name);
+    const validColor = validateGymColor(color);
+    return writeQueue(async () => {
+      const gym: Gym = { id: createScopedId('gym'), name: validName, isDefault: false, color: validColor, createdAt: new Date().toISOString() };
+      await driver.runAsync('INSERT INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)', gym.id, gym.name, gym.color, gym.createdAt);
+      return gym;
+    });
+  }
+
+  async function updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym> {
+    const name = updates.name === undefined ? undefined : validateGymName(updates.name);
+    const color = updates.color === undefined ? undefined : validateGymColor(updates.color);
+    return writeQueue(async () => {
+      const current = await driver.getFirstAsync<any>('SELECT * FROM gyms WHERE id = ?', id);
+      if (!current) throw new Error(`unknown gym: ${id}`);
+      await driver.runAsync('UPDATE gyms SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ?', name ?? null, color ?? null, id);
+      return mapGymRow(await driver.getFirstAsync<any>('SELECT * FROM gyms WHERE id = ?', id));
+    });
+  }
+
+  async function setDefaultGym(id: string): Promise<void> {
+    return writeQueue(() => driver.withTransactionAsync(async () => {
+      if (!await driver.getFirstAsync<any>('SELECT id FROM gyms WHERE id = ?', id)) throw new Error(`unknown gym: ${id}`);
+      await driver.runAsync('UPDATE gyms SET is_default = 0');
+      await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', id);
+    }));
+  }
+
+  async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> {
+    return writeQueue(() => driver.withTransactionAsync(async () => {
+      const gyms = await getGyms();
+      validateGymDeletion(id, replacementGymId, gyms, activeWorkoutGymId);
+      const deleted = gyms.find(gym => gym.id === id)!;
+      if (!gyms.some(gym => gym.id === replacementGymId)) throw new Error(`unknown replacement gym: ${replacementGymId}`);
+      const drafts = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
+      if (drafts.some((row) => {
+        const draft = normalizeDraftPayload(row.data);
+        return Boolean(draft && isActiveWorkoutForGym(draft.workout, id));
+      })) {
+        throw new Error('cannot delete the gym used by an active workout draft');
+      }
+      const inProgressWorkout = await driver.getFirstAsync<{ id: string }>(
+        'SELECT id FROM workouts WHERE gym_id = ? AND in_progress = 1 LIMIT 1',
+        id,
+      );
+      if (inProgressWorkout) {
+        throw new Error('cannot delete the gym used by an in-progress workout');
+      }
+      await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id = ?', replacementGymId, id);
+      for (const row of drafts) {
+        const draft = normalizeDraftPayload(row.data);
+        if (draft && draft.workout.gymId === id) {
+          draft.workout.gymId = replacementGymId;
+          await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(draft), row.id);
+        }
+      }
+      const scopes = await driver.getAllAsync<any>('SELECT * FROM exercise_gym_scopes');
+      for (const row of scopes) {
+        if (row.scope_type !== 'linked_group') continue;
+        const ids = (row.linked_gym_ids ? JSON.parse(row.linked_gym_ids) : []).filter((gymId: string) => gymId !== id);
+        if (ids.length === 0) await driver.runAsync('DELETE FROM exercise_gym_scopes WHERE exercise_id = ?', row.exercise_id);
+        else if (ids.length < 2) await driver.runAsync('UPDATE exercise_gym_scopes SET scope_type = ?, linked_gym_ids = NULL WHERE exercise_id = ?', 'gym_specific', row.exercise_id);
+        else await driver.runAsync('UPDATE exercise_gym_scopes SET linked_gym_ids = ? WHERE exercise_id = ?', JSON.stringify(ids), row.exercise_id);
+      }
+      if (deleted.isDefault) {
+        await driver.runAsync('UPDATE gyms SET is_default = 0');
+        await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', replacementGymId);
+      }
+      await driver.runAsync('DELETE FROM gyms WHERE id = ?', id);
+    }));
+  }
+
+  async function getExerciseGymScopes(): Promise<ExerciseGymScope[]> {
+    return (await driver.getAllAsync<any>('SELECT * FROM exercise_gym_scopes ORDER BY exercise_id')).map(mapScopeRow);
+  }
+  async function getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null> {
+    const row = await driver.getFirstAsync<any>('SELECT * FROM exercise_gym_scopes WHERE exercise_id = ?', exerciseId);
+    return row ? mapScopeRow(row) : null;
+  }
+  async function saveExerciseGymScope(scope: ExerciseGymScope): Promise<void> {
+    return writeQueue(() => driver.withTransactionAsync(async () => {
+      if (!await driver.getFirstAsync<any>('SELECT id FROM exercises WHERE id = ?', scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
+      const gyms = new Set((await getGyms()).map(gym => gym.id));
+      validateExerciseGymScope(scope, gyms);
+      await driver.runAsync('INSERT OR REPLACE INTO exercise_gym_scopes (exercise_id, scope_type, linked_gym_ids) VALUES (?, ?, ?)', scope.exerciseId, scope.scopeType, scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null);
+    }));
+  }
+  async function deleteExerciseGymScope(exerciseId: string): Promise<void> {
+    return writeQueue(async () => { await driver.runAsync('DELETE FROM exercise_gym_scopes WHERE exercise_id = ?', exerciseId); });
   }
 
   async function seedDefaultExercises(): Promise<void> {
@@ -383,10 +570,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function finishWorkout(workout: Workout): Promise<void> {
     return writeQueue(async () => {
+      const gymId = validateWorkoutGymId(workout.gymId, await getGyms());
       await driver.withTransactionAsync(async () => {
         await driver.runAsync(
-          `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+          `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress, gym_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
           workout.id,
           workout.routineId || null,
           workout.name,
@@ -394,7 +582,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
           workout.endTime || new Date().toISOString(),
           workout.durationSeconds,
           workout.totalVolumeKg,
-          workout.notes || null
+          workout.notes || null,
+          gymId
         );
 
         await driver.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workout.id);
@@ -460,7 +649,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
        LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
        WHERE w.in_progress = 0
        GROUP BY w.id
-       ORDER BY w.start_time DESC`
+       ORDER BY w.start_time DESC, w.id DESC`
     );
 
     const namesByWorkout = new Map<string, string[]>();
@@ -493,6 +682,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       totalVolumeKg: r.total_volume_kg || 0,
       totalSets: r.total_sets || 0,
       exerciseNames: namesByWorkout.get(r.id) || [],
+      gymId: r.gym_id || 'gym-default',
       notes: r.notes,
     }));
   }
@@ -545,6 +735,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       endTime: w.end_time,
       durationSeconds: w.duration_seconds || 0,
       totalVolumeKg: w.total_volume_kg || 0,
+      gymId: w.gym_id || 'gym-default',
       exercises,
       notes: w.notes,
     };
@@ -556,97 +747,147 @@ export function createNativeStore(driver: SqliteDriver): Store {
     });
   }
 
-  async function getPreviousSetsForExercise(exerciseId: string, occurrenceIndex: number = 0): Promise<WorkoutSet[]> {
-    const latestWorkout = await driver.getFirstAsync<{ id: string }>(
-      `SELECT w.id FROM workouts w
-       JOIN workout_exercises we ON we.workout_id = w.id
-       JOIN exercise_sets s ON s.workout_exercise_id = we.id
-       WHERE we.exercise_id = ? AND w.in_progress = 0 AND s.is_completed = 1
-       ORDER BY w.start_time DESC
-       LIMIT 1`,
-      exerciseId
+  async function loadCompletedExerciseOccurrences(
+    exerciseId: string,
+    occurrenceIndex: number,
+  ): Promise<CompletedExerciseOccurrence[]> {
+    const rows = await driver.getAllAsync<any>(
+      `SELECT w.id AS workout_id, w.start_time, w.gym_id, g.name AS gym_name,
+              we.id AS occurrence_id, we.order_index, s.weight_kg, s.reps, s.set_number
+       FROM workouts w
+       JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ?
+       LEFT JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
+       LEFT JOIN gyms g ON g.id = w.gym_id
+       WHERE w.in_progress = 0
+       ORDER BY w.start_time DESC, w.id DESC, we.order_index ASC, s.set_number ASC, s.id ASC`,
+      exerciseId,
     );
 
-    if (!latestWorkout) return [];
-
-    const occurrences = await driver.getAllAsync<{ id: string }>(
-      `SELECT id FROM workout_exercises
-       WHERE workout_id = ? AND exercise_id = ?
-       ORDER BY order_index ASC`,
-      latestWorkout.id,
-      exerciseId
-    );
-
-    if (occurrences.length === 0) return [];
-
-    const targetWeId = occurrences[occurrenceIndex]?.id || occurrences[0].id;
-    let rows = await driver.getAllAsync<any>(
-      `SELECT * FROM exercise_sets
-       WHERE workout_exercise_id = ? AND is_completed = 1
-       ORDER BY set_number ASC`,
-      targetWeId
-    );
-
-    if (rows.length === 0) {
-      for (const occ of occurrences) {
-        rows = await driver.getAllAsync<any>(
-          `SELECT * FROM exercise_sets
-           WHERE workout_exercise_id = ? AND is_completed = 1
-           ORDER BY set_number ASC`,
-          occ.id
-        );
-        if (rows.length > 0) break;
+    const byWorkout = new Map<string, {
+      startTime: string;
+      gymId: string;
+      gymName: string;
+      occurrences: Array<{ id: string; sets: Array<{ weightKg: number; reps: number }> }>;
+    }>();
+    for (const row of rows) {
+      const workoutId = row.workout_id as string;
+      let workout = byWorkout.get(workoutId);
+      if (!workout) {
+        workout = {
+          startTime: row.start_time,
+          gymId: row.gym_id || 'gym-default',
+          gymName: row.gym_name || 'Default Gym',
+          occurrences: [],
+        };
+        byWorkout.set(workoutId, workout);
       }
+      let occurrence = workout.occurrences.find(item => item.id === row.occurrence_id);
+      if (!occurrence) {
+        occurrence = { id: row.occurrence_id, sets: [] };
+        workout.occurrences.push(occurrence);
+      }
+      if (row.weight_kg !== null && row.reps !== null) occurrence.sets.push({ weightKg: row.weight_kg, reps: row.reps });
     }
 
-    return rows.map(mapSetRow);
+    return Array.from(byWorkout.entries()).map(([workoutId, workout]) => {
+      const requested = workout.occurrences[occurrenceIndex];
+      const selected = requested?.sets.length ? requested : workout.occurrences.find(occurrence => occurrence.sets.length);
+      return {
+        workoutId,
+        startTime: workout.startTime,
+        gymId: workout.gymId,
+        gymName: workout.gymName,
+        occurrenceIndex: requested?.sets.length ? occurrenceIndex : Math.max(0, workout.occurrences.indexOf(selected!)),
+        sets: selected?.sets || [],
+      };
+    });
   }
 
-  async function getExerciseStats(exerciseId: string): Promise<{
-    maxWeightKg: number;
-    maxReps: number;
-    estimated1RM: number;
-    sessionCount: number;
-  }> {
-    const countRow = await driver.getFirstAsync<any>(
-      `SELECT COUNT(DISTINCT we.workout_id) as count
-       FROM workout_exercises we
-       JOIN workouts w ON we.workout_id = w.id
-       JOIN exercise_sets s ON s.workout_exercise_id = we.id
-       WHERE we.exercise_id = ? AND w.in_progress = 0 AND s.is_completed = 1`,
-      exerciseId
+  async function getPreviousSetsForExercise(
+    exerciseId: string,
+    occurrenceIndex: number = 0,
+    currentGymId?: string,
+  ): Promise<PreviousSetSuggestion[]> {
+    const exercise = await getExerciseById(exerciseId);
+    if (!exercise) return [];
+    const gymId = currentGymId || (await getDefaultGym()).id;
+    const occurrences = await loadCompletedExerciseOccurrences(exerciseId, occurrenceIndex);
+    const scope = await getExerciseGymScope(exerciseId);
+    return resolvePreviousSetsForExercise(exercise, occurrences, gymId, scope || undefined);
+  }
+
+  async function loadCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]> {
+    const exercise = await getExerciseById(exerciseId);
+    if (!exercise) return [];
+    const rows = await driver.getAllAsync<any>(
+      `SELECT w.id, w.name, w.routine_id, w.start_time, w.end_time, w.duration_seconds,
+              w.total_volume_kg, w.notes, w.gym_id, g.name AS gym_name,
+              we.id AS occurrence_id, we.order_index, we.notes AS occurrence_notes,
+              we.rest_timer_seconds, we.target_reps, s.id AS set_id, s.set_number,
+              s.set_type, s.weight_kg, s.reps, s.rpe, s.completed_at
+       FROM workouts w
+       JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ?
+       JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
+       LEFT JOIN gyms g ON g.id = w.gym_id
+       WHERE w.in_progress = 0
+       ORDER BY w.start_time DESC, w.id DESC, we.order_index ASC, s.set_number ASC`,
+      exerciseId,
     );
-
-    const setsRows = await driver.getAllAsync<any>(
-      `SELECT s.weight_kg, s.reps
-       FROM exercise_sets s
-       JOIN workout_exercises we ON s.workout_exercise_id = we.id
-       JOIN workouts w ON we.workout_id = w.id
-       WHERE we.exercise_id = ? AND s.is_completed = 1 AND w.in_progress = 0`,
-      exerciseId
-    );
-
-    let maxWeightKg = 0;
-    let maxReps = 0;
-    let estimated1RM = 0;
-
-    for (const s of setsRows) {
-      if (s.weight_kg > maxWeightKg) maxWeightKg = s.weight_kg;
-      if (s.reps > maxReps) maxReps = s.reps;
-      const oneRM = calculate1RM(s.weight_kg, s.reps).average;
-      if (oneRM > estimated1RM) estimated1RM = oneRM;
+    const workouts = new Map<string, Workout>();
+    for (const row of rows) {
+      let workout = workouts.get(row.id);
+      if (!workout) {
+        workout = {
+          id: row.id,
+          name: row.name,
+          routineId: row.routine_id || undefined,
+          gymId: row.gym_id || 'gym-default',
+          startTime: row.start_time,
+          endTime: row.end_time || undefined,
+          durationSeconds: row.duration_seconds || 0,
+          totalVolumeKg: row.total_volume_kg || 0,
+          exercises: [],
+          notes: row.notes || undefined,
+        };
+        workouts.set(row.id, workout);
+      }
+      let occurrence = workout.exercises.find(item => item.id === row.occurrence_id);
+      if (!occurrence) {
+        occurrence = {
+          id: row.occurrence_id,
+          exerciseId,
+          exercise,
+          restTimerSeconds: row.rest_timer_seconds ?? 0,
+          notes: row.occurrence_notes || undefined,
+          targetReps: row.target_reps || undefined,
+          sets: [],
+        };
+        workout.exercises.push(occurrence);
+      }
+      occurrence.sets.push({
+        id: row.set_id,
+        setNumber: row.set_number,
+        type: row.set_type,
+        weightKg: row.weight_kg,
+        reps: row.reps,
+        rpe: row.rpe,
+        isCompleted: true,
+        completedAt: row.completed_at,
+      });
     }
+    return Array.from(workouts.values());
+  }
 
-    return {
-      maxWeightKg,
-      maxReps,
-      estimated1RM,
-      sessionCount: countRow?.count || 0,
-    };
+  async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
+    const workouts = await loadCompletedWorkoutsForExercise(exerciseId);
+    const scope = await getExerciseGymScope(exerciseId);
+    const gymId = currentGymId || (await getDefaultGym()).id;
+    return calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined);
   }
 
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
     return writeQueue(async () => {
+      if (!draft.workout.gymId) draft.workout.gymId = (await getDefaultGym()).id;
       await driver.runAsync(
         `INSERT OR REPLACE INTO workout_drafts (id, revision, saved_at, rest_timer_ends_at, rest_timer_total_seconds, data)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -667,7 +908,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
     const drafts: WorkoutDraft[] = [];
     for (const r of rows) {
       try {
-        drafts.push(JSON.parse(r.data));
+        const draft = normalizeDraftPayload(r.data);
+        if (draft) drafts.push(draft);
       } catch (_) {}
     }
     return drafts;
@@ -681,7 +923,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       );
       if (!row) return null;
       try {
-        return JSON.parse(row.data);
+        return normalizeDraftPayload(row.data);
       } catch (_) {
         return null;
       }
@@ -692,7 +934,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     );
     if (!row) return null;
     try {
-      return JSON.parse(row.data);
+      return normalizeDraftPayload(row.data);
     } catch (_) {
       return null;
     }
@@ -758,17 +1000,34 @@ export function createNativeStore(driver: SqliteDriver): Store {
       exercises,
       drafts,
       settings,
+      gyms: await getGyms(),
+      exerciseGymScopes: await getExerciseGymScopes(),
     };
   }
 
   async function mergeSnapshot(snapshot: DataSnapshot): Promise<void> {
     return writeQueue(async () => {
+      snapshot = canonicalizeSnapshotGyms(snapshot);
+      const existing = await readSnapshot();
+      validateSharedSnapshotForMerge(snapshot, existing);
+      validateSnapshotMergeConflicts(snapshot, existing);
       await driver.withTransactionAsync(async () => {
-        // Merge exercises
+        for (const gym of snapshot.gyms || []) {
+          await driver.runAsync(
+            `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)`,
+            gym.id, gym.name, gym.color, gym.createdAt
+          );
+        }
+
+        // Exercises must precede scopes because scopes have an exercise foreign key.
         for (const ex of snapshot.exercises) {
           await driver.runAsync(
-            `INSERT OR REPLACE INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, category = excluded.category,
+               equipment = excluded.equipment, primary_muscles = excluded.primary_muscles,
+               secondary_muscles = excluded.secondary_muscles, instructions = excluded.instructions,
+               is_custom = excluded.is_custom`,
             ex.id,
             ex.name,
             ex.category,
@@ -777,6 +1036,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
             JSON.stringify(ex.secondaryMuscles || []),
             JSON.stringify(ex.instructions || []),
             ex.isCustom ? 1 : 0
+          );
+        }
+
+        for (const scope of snapshot.exerciseGymScopes || []) {
+          if ((await driver.getFirstAsync<any>('SELECT exercise_id FROM exercise_gym_scopes WHERE exercise_id = ?', scope.exerciseId))) {
+            continue;
+          }
+          await driver.runAsync(
+            'INSERT OR REPLACE INTO exercise_gym_scopes (exercise_id, scope_type, linked_gym_ids) VALUES (?, ?, ?)',
+            scope.exerciseId, scope.scopeType, scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null
           );
         }
 
@@ -811,8 +1080,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
         // Merge workouts
         for (const w of snapshot.workouts) {
           await driver.runAsync(
-            `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+            `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress, gym_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
             w.id,
             w.routineId || null,
             w.name,
@@ -820,7 +1089,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
             w.endTime || null,
             w.durationSeconds,
             w.totalVolumeKg,
-            w.notes || null
+            w.notes || null,
+            w.gymId || 'gym-default'
           );
           await driver.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', w.id);
           let ord = 0;
@@ -866,7 +1136,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             draft.savedAt,
             draft.restTimer ? draft.restTimer.endsAt : null,
             draft.restTimer ? draft.restTimer.totalSeconds : null,
-            JSON.stringify(draft)
+            JSON.stringify({ ...draft, workout: { ...draft.workout, gymId: draft.workout.gymId || 'gym-default' } })
           );
         }
 
@@ -903,6 +1173,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
     getWorkoutHistory,
     getWorkoutDetail,
     deleteWorkout,
+    getGyms,
+    getDefaultGym,
+    createGym,
+    updateGym,
+    setDefaultGym,
+    deleteGym,
+    getExerciseGymScopes,
+    getExerciseGymScope,
+    saveExerciseGymScope,
+    deleteExerciseGymScope,
     getPreviousSetsForExercise,
     getExerciseStats,
     getAllExercises,
@@ -913,5 +1193,5 @@ export function createNativeStore(driver: SqliteDriver): Store {
     setSetting,
     renameFolder,
     deleteFolder,
-  };
+  } as unknown as Store;
 }
