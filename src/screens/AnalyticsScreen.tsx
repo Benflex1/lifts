@@ -8,7 +8,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { Calculator, Award, Dumbbell, ShieldCheck, Download, Upload } from 'lucide-react-native';
+import { Calculator, Award, Dumbbell, ShieldCheck, Download, Upload, Share2 } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { getStore } from '../database/db';
@@ -16,6 +16,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
 import { exportBackup } from '../utils/export';
+import { saveBackupToFiles } from '../utils/saveBackup';
 import { pickBackupJson } from '../utils/pickBackup';
 import { parseBackup } from '../utils/backup';
 import { computeRestorePlan } from '../utils/restore';
@@ -81,6 +82,16 @@ export const AnalyticsScreen: React.FC = () => {
       await notify({ title: 'Export Complete', message: 'Your workout data has been exported.' });
     } catch (e) {
       await notify({ title: 'Export Error', message: 'Failed to export data. Please try again.' });
+    }
+  };
+
+  const handleSaveData = async () => {
+    try {
+      const result = await saveBackupToFiles();
+      if (result === 'cancelled') return;
+      await notify({ title: 'Backup Saved', message: 'Your workout data was saved to the selected file location.' });
+    } catch (e) {
+      await notify({ title: 'Save Error', message: 'Failed to save data. Please try again.' });
     }
   };
 
@@ -333,12 +344,22 @@ export const AnalyticsScreen: React.FC = () => {
         {/* Data Ownership */}
         <TouchableOpacity
           style={styles.exportCard}
-          onPress={handleExportData}
+          onPress={handleSaveData}
           accessibilityRole="button"
-          accessibilityLabel="Backup & Export Workout Data"
+          accessibilityLabel="Save Backup to Files"
         >
           <Download size={20} color="#9CA3AF" />
-          <Text style={styles.exportCardText}>Backup & Export (v2)</Text>
+          <Text style={styles.exportCardText}>Save Backup to Files (v2)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.exportCard, { marginTop: 10 }]}
+          onPress={handleExportData}
+          accessibilityRole="button"
+          accessibilityLabel="Share Backup Workout Data"
+        >
+          <Share2 size={20} color="#9CA3AF" />
+          <Text style={styles.exportCardText}>Share Backup</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

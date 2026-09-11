@@ -11,6 +11,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Trash2, X, Clock, Dumbbell } from 'lucide-react-native';
 import { WorkoutDraft } from '../database/contract';
 import { formatDuration } from '../utils/calculator';
+import {
+  getPausedWorkoutModalSubtitle,
+  PAUSED_WORKOUT_MODAL_TITLE,
+} from '../workout/session-copy';
 
 interface DraftRecoveryModalProps {
   visible: boolean;
@@ -49,9 +53,9 @@ export function DraftRecoveryModal({
         <View style={styles.container}>
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Recover Unfinished Workouts</Text>
+              <Text style={styles.title}>{PAUSED_WORKOUT_MODAL_TITLE}</Text>
               <Text style={styles.subtitle}>
-                You have {drafts.length} saved unfinished workout {drafts.length === 1 ? 'draft' : 'drafts'}.
+                {getPausedWorkoutModalSubtitle(drafts.length)}
               </Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
@@ -107,7 +111,7 @@ export function DraftRecoveryModal({
                       activeOpacity={0.7}
                     >
                       <Play size={14} color="#000000" fill="#000000" />
-                      <Text style={styles.resumeText}>Resume</Text>
+                      <Text style={styles.resumeText}>Continue</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

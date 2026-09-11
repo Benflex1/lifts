@@ -8,8 +8,17 @@ import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
 import { initialReps, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
-import { moveActiveExercise, replaceActiveExercise } from '../workout/active-exercises';
+import {
+  moveActiveExercise,
+  moveActiveExerciseToIndex,
+  replaceActiveExercise,
+} from '../workout/active-exercises';
 import { useDialog } from './DialogContext';
+import {
+  PAUSED_WORKOUT_CONFIRM_LABEL,
+  PAUSED_WORKOUT_DIALOG_MESSAGE,
+  PAUSED_WORKOUT_DIALOG_TITLE,
+} from '../workout/session-copy';
 
 interface RestTimerState {
   isActive: boolean;
@@ -38,6 +47,7 @@ interface WorkoutContextType {
   addExercisesToWorkout: (exercises: Exercise[]) => Promise<void>;
   removeExerciseFromWorkout: (activeExerciseId: string) => void;
   moveExercise: (activeExerciseId: string, direction: -1 | 1) => void;
+  moveExerciseToIndex: (activeExerciseId: string, targetIndex: number) => void;
   swapExercise: (activeExerciseId: string, exercise: Exercise) => void;
   addSet: (activeExerciseId: string, setType?: SetType) => void;
   removeSet: (activeExerciseId: string, setId: string) => void;
@@ -329,7 +339,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (currentState.phase === 'active' && currentState.workout) {
       const shouldResume = await confirm({
         title: 'Workout In Progress',
-        message: 'You already have an active workout in progress. Would you like to resume it?',
+        message: 'You already have an active workout in progress. Would you like to continue it?',
         confirmLabel: 'Resume',
         cancelLabel: 'Cancel',
       });
@@ -341,9 +351,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (availableDrafts.length > 0) {
       const shouldResume = await confirm({
-        title: 'Unfinished Workout Found',
-        message: 'You have an unfinished workout saved. Would you like to resume it?',
-        confirmLabel: 'Resume Saved',
+        title: PAUSED_WORKOUT_DIALOG_TITLE,
+        message: PAUSED_WORKOUT_DIALOG_MESSAGE,
+        confirmLabel: PAUSED_WORKOUT_CONFIRM_LABEL,
         cancelLabel: 'Cancel',
       });
       if (shouldResume) {
@@ -533,6 +543,31 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (state.phase !== 'active' || !state.workout) return;
 
     const updatedExercises = moveActiveExercise(state.workout.exercises, activeExerciseId, direction);
+    if (updatedExercises === state.workout.exercises) return;
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+  };
+
+  const moveExerciseToIndex = (activeExerciseId: string, targetIndex: number) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const updatedExercises = moveActiveExerciseToIndex(
+      state.workout.exercises,
+      activeExerciseId,
+      targetIndex
+    );
     if (updatedExercises === state.workout.exercises) return;
 
     const updated: Workout = {
@@ -803,6 +838,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addExercisesToWorkout,
         removeExerciseFromWorkout,
         moveExercise,
+        moveExerciseToIndex,
         swapExercise,
         addSet,
         removeSet,

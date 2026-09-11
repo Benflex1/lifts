@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,7 @@ import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
+import { DraggableExerciseCard } from '../components/DraggableExerciseCard';
 import { WeightInput } from '../components/WeightInput';
 import { RepsInput } from '../components/RepsInput';
 import { SwipeableSetRow } from '../components/SwipeableSetRow';
@@ -44,6 +45,8 @@ import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types
 import { useDialog } from '../context/DialogContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
+import { getExerciseDropIndex } from '../workout/active-exercises';
+import type { ExerciseLayout } from '../workout/active-exercises';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -57,6 +60,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     addExercisesToWorkout,
     removeExerciseFromWorkout,
     moveExercise,
+    moveExerciseToIndex,
     swapExercise,
     addSet,
     removeSet,
@@ -84,6 +88,25 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const [menuActiveExercise, setMenuActiveExercise] = useState<ActiveExercise | null>(null);
   const [showRpeColumn, setShowRpeColumn] = useState(false);
   const [editingNoteExId, setEditingNoteExId] = useState<string | null>(null);
+  const [isDraggingExercise, setIsDraggingExercise] = useState(false);
+  const exerciseLayoutsRef = useRef<Record<string, ExerciseLayout>>({});
+
+  const handleExerciseLayout = (itemId: string, layout: ExerciseLayout) => {
+    exerciseLayoutsRef.current[itemId] = layout;
+  };
+
+  const handleExerciseDrop = (itemId: string, deltaY: number) => {
+    if (!activeWorkout) return;
+    const targetIndex = getExerciseDropIndex(
+      activeWorkout.exercises.map((exercise) => exercise.id),
+      exerciseLayoutsRef.current,
+      itemId,
+      deltaY
+    );
+    if (targetIndex >= 0) {
+      moveExerciseToIndex(itemId, targetIndex);
+    }
+  };
 
   // Set Options / Fast 1-Tap RPE Modal
   const [setOptionsModal, setSetOptionsModal] = useState<{
@@ -355,6 +378,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={!isDraggingExercise}
       >
         {activeWorkout.exercises.map((activeEx) => {
           const isExpanded = expandedExercises[activeEx.id] ?? false;
@@ -365,52 +389,68 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           if (!isExpanded) {
             // Collapsed Accordion Row - Lyfta Screenshot 1
             return (
-              <TouchableOpacity
+              <DraggableExerciseCard
                 key={activeEx.id}
-                style={styles.collapsedCard}
-                onPress={() => toggleExerciseExpanded(activeEx.id)}
-                activeOpacity={0.7}
+                itemId={activeEx.id}
+                exerciseName={activeEx.exercise?.name || 'Exercise'}
+                onLayout={handleExerciseLayout}
+                onDrop={handleExerciseDrop}
+                onDragActiveChange={setIsDraggingExercise}
               >
-                <View style={styles.exerciseAvatar}>
-                  <Dumbbell size={20} color="#38BDF8" />
-                </View>
-
-                <View style={styles.collapsedContent}>
-                  <Text style={styles.collapsedTitle} numberOfLines={1}>
-                    {activeEx.exercise?.name || 'Exercise'}
-                  </Text>
-                  <View style={styles.collapsedMetaRow}>
-                    <Text
-                      style={[
-                        styles.collapsedSubtitle,
-                        isAllCompleted && styles.completedSubtitleText,
-                      ]}
-                    >
-                      {completedCount}/{totalCount} done
-                    </Text>
-                    {isAllCompleted && (
-                      <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
-                    )}
+                <TouchableOpacity
+                  style={styles.collapsedCard}
+                  onPress={() => toggleExerciseExpanded(activeEx.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.exerciseAvatar}>
+                    <Dumbbell size={20} color="#38BDF8" />
                   </View>
-                </View>
 
-                <View style={styles.collapsedActions}>
-                  <TouchableOpacity
-                    style={styles.iconBtn}
-                    onPress={() => setMenuActiveExercise(activeEx)}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  >
-                    <MoreVertical size={18} color="#9CA3AF" />
-                  </TouchableOpacity>
-                  <ChevronDown size={18} color="#6B7280" />
-                </View>
-              </TouchableOpacity>
+                  <View style={styles.collapsedContent}>
+                    <Text style={styles.collapsedTitle} numberOfLines={1}>
+                      {activeEx.exercise?.name || 'Exercise'}
+                    </Text>
+                    <View style={styles.collapsedMetaRow}>
+                      <Text
+                        style={[
+                          styles.collapsedSubtitle,
+                          isAllCompleted && styles.completedSubtitleText,
+                        ]}
+                      >
+                        {completedCount}/{totalCount} done
+                      </Text>
+                      {isAllCompleted && (
+                        <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.collapsedActions}>
+                    <TouchableOpacity
+                      style={styles.iconBtn}
+                      onPress={() => setMenuActiveExercise(activeEx)}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    >
+                      <MoreVertical size={18} color="#9CA3AF" />
+                    </TouchableOpacity>
+                    <ChevronDown size={18} color="#6B7280" />
+                  </View>
+                </TouchableOpacity>
+              </DraggableExerciseCard>
             );
           }
 
           // Expanded Full Exercise Card
           return (
-            <View key={activeEx.id} style={styles.exerciseCard}>
+            <DraggableExerciseCard
+              key={activeEx.id}
+              itemId={activeEx.id}
+              exerciseName={activeEx.exercise?.name || 'Exercise'}
+              onLayout={handleExerciseLayout}
+              onDrop={handleExerciseDrop}
+              onDragActiveChange={setIsDraggingExercise}
+            >
+              <View style={styles.exerciseCard}>
               {/* Exercise Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.exerciseAvatar}>
@@ -630,7 +670,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 <Plus size={16} color="#FFFFFF" />
                 <Text style={styles.addSetBtnWideText}>Add Set</Text>
               </TouchableOpacity>
-            </View>
+              </View>
+            </DraggableExerciseCard>
           );
         })}
 
@@ -1169,6 +1210,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#262A34',
     padding: 12,
+    paddingLeft: 44,
     marginBottom: 10,
   },
   exerciseAvatar: {
@@ -1216,6 +1258,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#181A20',
     borderRadius: 16,
     padding: 14,
+    paddingLeft: 44,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#262A34',

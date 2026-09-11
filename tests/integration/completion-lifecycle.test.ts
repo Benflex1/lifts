@@ -117,6 +117,37 @@ describe('Completion & Dialog Lifecycle', () => {
 
       await fixture.dispose();
     });
+
+    it(`[${platform}] discarding a paused workout clears its draft without adding history`, async () => {
+      const fixture = await createStoreFixture(platform);
+      let currentTime = new Date('2026-09-07T14:00:00.000Z').getTime();
+      const ctrl = createSessionController(fixture.store, () => currentTime, { maxDirtyTimeMs: 100 });
+
+      const pausedWorkout: Workout = {
+        id: `w-paused-${platform}-1`,
+        name: 'Paused Workout',
+        startTime: new Date(currentTime).toISOString(),
+        durationSeconds: 0,
+        totalVolumeKg: 0,
+        exercises: [],
+      };
+
+      await ctrl.start(pausedWorkout);
+      currentTime += 15 * 60 * 1000;
+      ctrl.update({ ...pausedWorkout, durationSeconds: 900 });
+      await ctrl.flush();
+
+      assert.equal((await fixture.store.getWorkoutDrafts()).length, 1);
+
+      await ctrl.discard();
+
+      assert.equal(ctrl.getState().phase, 'idle');
+      assert.equal(ctrl.getState().workout, null);
+      assert.equal((await fixture.store.getWorkoutDrafts()).length, 0);
+      assert.equal((await fixture.store.getWorkoutHistory()).length, 0);
+
+      await fixture.dispose();
+    });
   }
 
   it('dialog confirmation contract: cancel mutates nothing, confirm executes mutation', async () => {
