@@ -370,6 +370,97 @@ export function createNativeStore(driver: SqliteDriver): Store {
     });
   }
 
+  async function updateCustomExercise(
+    id: string,
+    updates: {
+      name?: string;
+      category?: string;
+      equipment?: string;
+      primaryMuscles?: string[];
+      secondaryMuscles?: string[];
+      instructions?: string[];
+    }
+  ): Promise<Exercise> {
+    return writeQueue(async () => {
+      const existing = await driver.getFirstAsync<any>(
+        'SELECT * FROM exercises WHERE id = ?',
+        id
+      );
+      if (!existing) {
+        throw new Error(`Exercise with id "${id}" not found`);
+      }
+      if (!existing.is_custom) {
+        throw new Error(`Cannot edit built-in exercise "${id}"`);
+      }
+
+      const updatedName = updates.name !== undefined ? updates.name.trim() : existing.name;
+      if (!updatedName) {
+        throw new Error('Exercise name cannot be empty');
+      }
+
+      const updatedCategory = updates.category !== undefined ? updates.category : existing.category;
+      const updatedEquipment = updates.equipment !== undefined ? updates.equipment.toLowerCase() : existing.equipment;
+      const updatedPrimary = updates.primaryMuscles !== undefined
+        ? updates.primaryMuscles
+        : JSON.parse(existing.primary_muscles || '[]');
+      const updatedSecondary = updates.secondaryMuscles !== undefined
+        ? updates.secondaryMuscles
+        : JSON.parse(existing.secondary_muscles || '[]');
+      const updatedInstructions = updates.instructions !== undefined
+        ? updates.instructions
+        : JSON.parse(existing.instructions || '[]');
+
+      await driver.runAsync(
+        `UPDATE exercises
+         SET name = ?, category = ?, equipment = ?, primary_muscles = ?, secondary_muscles = ?, instructions = ?
+         WHERE id = ?`,
+        updatedName,
+        updatedCategory,
+        updatedEquipment,
+        JSON.stringify(updatedPrimary),
+        JSON.stringify(updatedSecondary),
+        JSON.stringify(updatedInstructions),
+        id
+      );
+
+      const updatedExercise: Exercise = {
+        id,
+        name: updatedName,
+        category: updatedCategory,
+        equipment: updatedEquipment,
+        primaryMuscles: updatedPrimary,
+        secondaryMuscles: updatedSecondary,
+        instructions: updatedInstructions,
+        isCustom: true,
+      };
+
+      // Update any drafts that embed this exercise
+      const draftRows = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
+      for (const row of draftRows) {
+        try {
+          const draft: WorkoutDraft = JSON.parse(row.data);
+          let modified = false;
+          if (draft.workout?.exercises) {
+            for (const we of draft.workout.exercises) {
+              if (we.exerciseId === id && we.exercise) {
+                we.exercise = { ...we.exercise, ...updatedExercise };
+                modified = true;
+              }
+            }
+          }
+          if (modified) {
+            await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(draft), row.id);
+          }
+        } catch {
+          // ignore corrupted draft
+        }
+      }
+
+      cachedExercises = null;
+      return updatedExercise;
+    });
+  }
+
   async function getRoutines(): Promise<Routine[]> {
     const routines = await driver.getAllAsync<any>('SELECT * FROM routines ORDER BY created_at DESC');
     const result: Routine[] = [];
@@ -377,7 +468,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
     for (const r of routines) {
       const reRows = await driver.getAllAsync<any>(
         `SELECT re.*, e.name as ex_name, e.category as ex_category, e.equipment as ex_equipment,
-                e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst
+                e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst,
+                e.is_custom as ex_is_custom
          FROM routine_exercises re
          JOIN exercises e ON re.exercise_id = e.id
          WHERE re.routine_id = ?
@@ -403,6 +495,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             primaryMuscles: JSON.parse(row.ex_primary || '[]'),
             secondaryMuscles: JSON.parse(row.ex_secondary || '[]'),
             instructions: JSON.parse(row.ex_inst || '[]'),
+            isCustom: Boolean(row.ex_is_custom),
           },
           orderIndex: row.order_index,
           targetSets: row.target_sets,
@@ -421,7 +514,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
     const reRows = await driver.getAllAsync<any>(
       `SELECT re.*, e.name as ex_name, e.category as ex_category, e.equipment as ex_equipment,
-              e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst
+              e.primary_muscles as ex_primary, e.secondary_muscles as ex_secondary, e.instructions as ex_inst,
+              e.is_custom as ex_is_custom
        FROM routine_exercises re
        JOIN exercises e ON re.exercise_id = e.id
        WHERE re.routine_id = ?
@@ -447,6 +541,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           primaryMuscles: JSON.parse(row.ex_primary || '[]'),
           secondaryMuscles: JSON.parse(row.ex_secondary || '[]'),
           instructions: JSON.parse(row.ex_inst || '[]'),
+          isCustom: Boolean(row.ex_is_custom),
         },
         orderIndex: row.order_index,
         targetSets: row.target_sets,
@@ -693,7 +788,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
     const weRows = await driver.getAllAsync<any>(
       `SELECT we.*, e.name as ex_name, e.category as ex_cat, e.equipment as ex_equip, 
-              e.primary_muscles as ex_pm, e.secondary_muscles as ex_sm, e.instructions as ex_inst
+              e.primary_muscles as ex_pm, e.secondary_muscles as ex_sm, e.instructions as ex_inst,
+              e.is_custom as ex_is_custom
        FROM workout_exercises we
        JOIN exercises e ON we.exercise_id = e.id
        WHERE we.workout_id = ?
@@ -722,6 +818,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           primaryMuscles: JSON.parse(we.ex_pm || '[]'),
           secondaryMuscles: JSON.parse(we.ex_sm || '[]'),
           instructions: JSON.parse(we.ex_inst || '[]'),
+          isCustom: Boolean(we.ex_is_custom),
         },
         sets: sRows.map(mapSetRow),
       });
@@ -1189,6 +1286,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     searchExercises,
     getExerciseById,
     createCustomExercise,
+    updateCustomExercise,
     getSetting,
     setSetting,
     renameFolder,

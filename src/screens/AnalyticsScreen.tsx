@@ -8,7 +8,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { Calculator, Award, Dumbbell, ShieldCheck, Download, Upload, Share2 } from 'lucide-react-native';
+import { Calculator, Award, Dumbbell, ShieldCheck, Download, Upload, Share2, FileSpreadsheet } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { getStore } from '../database/db';
@@ -21,8 +21,12 @@ import { pickBackupJson } from '../utils/pickBackup';
 import { parseBackup } from '../utils/backup';
 import { computeRestorePlan } from '../utils/restore';
 import { useDialog } from '../context/DialogContext';
-import { Workout } from '../types';
+import { Exercise, Gym, Workout } from '../types';
 import { MuscleFrequencyPoint, WeeklyVolumePoint, buildMuscleFrequency, buildWeeklyVolume } from '../workout/analytics';
+import { pickCsvFile, computeCsvImportPlan, CsvImportPreview } from '../utils/importer';
+import { detectEquipmentHint, inferPrimaryMuscle } from '../utils/importer/exercise-mapper';
+import { createScopedId } from '../utils/ids';
+import { CsvImportModal } from '../components/CsvImportModal';
 
 export const AnalyticsScreen: React.FC = () => {
   const { unit } = useSettings();
@@ -36,6 +40,16 @@ export const AnalyticsScreen: React.FC = () => {
   const [hasWorkoutData, setHasWorkoutData] = useState(false);
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolumePoint[]>([]);
   const [muscleFrequency, setMuscleFrequency] = useState<MuscleFrequencyPoint[]>([]);
+
+  // CSV Import State
+  const [csvPreview, setCsvPreview] = useState<CsvImportPreview | null>(null);
+  const [csvFileName, setCsvFileName] = useState('');
+  const [csvRawText, setCsvRawText] = useState('');
+  const [csvGymId, setCsvGymId] = useState('');
+  const [csvSkipDuplicates, setCsvSkipDuplicates] = useState(true);
+  const [csvExerciseOverrides, setCsvExerciseOverrides] = useState<Record<string, Exercise>>({});
+  const [isCsvImporting, setIsCsvImporting] = useState(false);
+  const [allGyms, setAllGyms] = useState<Gym[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -80,8 +94,11 @@ export const AnalyticsScreen: React.FC = () => {
     try {
       await exportBackup();
       await notify({ title: 'Export Complete', message: 'Your workout data has been exported.' });
-    } catch (e) {
-      await notify({ title: 'Export Error', message: 'Failed to export data. Please try again.' });
+    } catch (e: any) {
+      await notify({
+        title: 'Export Error',
+        message: e?.message ? `Failed to export data: ${e.message}` : 'Failed to export data. Please try again.',
+      });
     }
   };
 
@@ -90,8 +107,11 @@ export const AnalyticsScreen: React.FC = () => {
       const result = await saveBackupToFiles();
       if (result === 'cancelled') return;
       await notify({ title: 'Backup Saved', message: 'Your workout data was saved to the selected file location.' });
-    } catch (e) {
-      await notify({ title: 'Save Error', message: 'Failed to save data. Please try again.' });
+    } catch (e: any) {
+      await notify({
+        title: 'Save Error',
+        message: e?.message ? `Failed to save data: ${e.message}` : 'Failed to save data. Please try again.',
+      });
     }
   };
 
@@ -142,6 +162,162 @@ export const AnalyticsScreen: React.FC = () => {
         title: 'Restore Failed',
         message: err?.message || 'An error occurred during restore. No data was changed.',
       });
+    }
+  };
+
+  const handleImportCsv = async () => {
+    if (isWorkingOut) {
+      await notify({
+        title: 'Session In Progress',
+        message: 'Cannot import workouts while a workout session is active. Please finish or discard your current workout first.',
+      });
+      return;
+    }
+
+    try {
+      const picked = await pickCsvFile();
+      if (!picked) return;
+
+      const store = await getStore();
+      const [snapshot, gymsList, defaultGym] = await Promise.all([
+        store.readSnapshot(),
+        store.getGyms(),
+        store.getDefaultGym(),
+      ]);
+
+      const targetGym = defaultGym.id || gymsList[0]?.id || 'gym-default';
+      setAllGyms(gymsList);
+      setCsvGymId(targetGym);
+      setCsvFileName(picked.name);
+      setCsvRawText(picked.content);
+      setCsvSkipDuplicates(true);
+      setCsvExerciseOverrides({});
+
+      const plan = computeCsvImportPlan(picked.content, snapshot, {
+        targetGymId: targetGym,
+        skipExistingWorkouts: true,
+        defaultUnit: unit,
+      });
+
+      setCsvPreview(plan);
+    } catch (err: any) {
+      await notify({
+        title: 'Import Failed',
+        message: err?.message || 'Failed to read or parse the selected CSV file.',
+      });
+    }
+  };
+
+  const handleAssignExercise = async (rawName: string, exercise: Exercise) => {
+    const updated = { ...csvExerciseOverrides, [rawName]: exercise };
+    setCsvExerciseOverrides(updated);
+    if (!csvRawText) return;
+    try {
+      const store = await getStore();
+      const snapshot = await store.readSnapshot();
+      const plan = computeCsvImportPlan(csvRawText, snapshot, {
+        targetGymId: csvGymId,
+        skipExistingWorkouts: csvSkipDuplicates,
+        defaultUnit: unit,
+        exerciseOverrides: updated,
+      });
+      setCsvPreview(plan);
+    } catch (err) {
+      console.error('Failed to recompute plan after exercise assignment:', err);
+    }
+  };
+
+  const handleSetCustomExercise = async (rawName: string) => {
+    const customId = createScopedId('custom-ex');
+    const customEx: Exercise = {
+      id: customId,
+      name: rawName.trim(),
+      category: 'strength',
+      equipment: detectEquipmentHint(rawName) || 'other',
+      primaryMuscles: inferPrimaryMuscle(rawName),
+      secondaryMuscles: [],
+      instructions: [],
+      isCustom: true,
+    };
+    const updated = { ...csvExerciseOverrides, [rawName]: customEx };
+    setCsvExerciseOverrides(updated);
+    if (!csvRawText) return;
+    try {
+      const store = await getStore();
+      const snapshot = await store.readSnapshot();
+      const plan = computeCsvImportPlan(csvRawText, snapshot, {
+        targetGymId: csvGymId,
+        skipExistingWorkouts: csvSkipDuplicates,
+        defaultUnit: unit,
+        exerciseOverrides: updated,
+      });
+      setCsvPreview(plan);
+    } catch (err) {
+      console.error('Failed to recompute plan after setting custom exercise:', err);
+    }
+  };
+
+  const handleSelectCsvGym = async (gymId: string) => {
+    setCsvGymId(gymId);
+    if (!csvRawText) return;
+    try {
+      const store = await getStore();
+      const snapshot = await store.readSnapshot();
+      const plan = computeCsvImportPlan(csvRawText, snapshot, {
+        targetGymId: gymId,
+        skipExistingWorkouts: csvSkipDuplicates,
+        defaultUnit: unit,
+        exerciseOverrides: csvExerciseOverrides,
+      });
+      setCsvPreview(plan);
+    } catch (err) {
+      console.error('Failed to recompute plan with gym:', err);
+    }
+  };
+
+  const handleToggleCsvSkipDuplicates = async (skip: boolean) => {
+    setCsvSkipDuplicates(skip);
+    if (!csvRawText) return;
+    try {
+      const store = await getStore();
+      const snapshot = await store.readSnapshot();
+      const plan = computeCsvImportPlan(csvRawText, snapshot, {
+        targetGymId: csvGymId,
+        skipExistingWorkouts: skip,
+        defaultUnit: unit,
+        exerciseOverrides: csvExerciseOverrides,
+      });
+      setCsvPreview(plan);
+    } catch (err) {
+      console.error('Failed to recompute plan with duplicate toggle:', err);
+    }
+  };
+
+  const handleConfirmCsvImport = async () => {
+    if (!csvPreview) return;
+    setIsCsvImporting(true);
+    try {
+      const store = await getStore();
+      await store.mergeSnapshot(csvPreview.snapshotToMerge);
+      const snapshot = await store.readSnapshot();
+      const workouts: Workout[] = snapshot.workouts || [];
+      setHasWorkoutData(workouts.length > 0);
+      setWeeklyVolume(buildWeeklyVolume(workouts));
+      setMuscleFrequency(buildMuscleFrequency(workouts));
+
+      const importedCount = csvSkipDuplicates ? csvPreview.newWorkoutsCount : csvPreview.totalWorkouts;
+      setCsvPreview(null);
+      await notify({
+        title: 'Import Complete',
+        message: `Successfully imported ${importedCount} workouts and ${csvPreview.totalSets} sets from ${csvPreview.formatLabel}.`,
+      });
+    } catch (err: any) {
+      await notify({
+        title: 'Import Failed',
+        message: err?.message || 'Failed to import workouts. No changes were made.',
+      });
+    } finally {
+      setIsCsvImporting(false);
     }
   };
 
@@ -373,12 +549,38 @@ export const AnalyticsScreen: React.FC = () => {
           <Upload size={20} color="#3B82F6" />
           <Text style={[styles.exportCardText, { color: '#3B82F6' }]}>Restore & Import Backup</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.exportCard, { marginTop: 10 }]}
+          onPress={handleImportCsv}
+          accessibilityRole="button"
+          accessibilityLabel="Import Workouts from CSV"
+        >
+          <FileSpreadsheet size={20} color="#10B981" />
+          <Text style={[styles.exportCardText, { color: '#10B981' }]}>Import Workouts (Hevy, Strong, Lyfta...)</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <PlateCalculatorModal
         visible={showPlateCalc}
         initialWeight={numWeight || 100}
         onClose={() => setShowPlateCalc(false)}
+      />
+
+      <CsvImportModal
+        visible={csvPreview !== null}
+        preview={csvPreview}
+        fileName={csvFileName}
+        gyms={allGyms}
+        selectedGymId={csvGymId}
+        onSelectGymId={handleSelectCsvGym}
+        skipDuplicates={csvSkipDuplicates}
+        onToggleSkipDuplicates={handleToggleCsvSkipDuplicates}
+        onConfirmImport={handleConfirmCsvImport}
+        onClose={() => setCsvPreview(null)}
+        isImporting={isCsvImporting}
+        onAssignExercise={handleAssignExercise}
+        onSetCustomExercise={handleSetCustomExercise}
       />
     </View>
   );

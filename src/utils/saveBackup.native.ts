@@ -1,5 +1,8 @@
-import type { SaveBackupResult } from './saveBackup';
+import { buildBackupJson } from './backup';
+import { getBackupFilename, type SaveBackupResult } from './saveBackupCommon';
 import type { WritingOptions } from 'expo-file-system/legacy';
+
+export { getBackupFilename, type SaveBackupResult };
 
 export interface AndroidBackupFileSystem {
   StorageAccessFramework: {
@@ -84,14 +87,52 @@ export async function saveBackupToIos(
   return 'saved';
 }
 
-export async function saveBackupJson(json: string, filename: string): Promise<SaveBackupResult> {
-  const { Platform } = await import('react-native');
-  const FileSystem = await import('expo-file-system/legacy');
+export async function saveBackupAndroidWithFallback(
+  json: string,
+  filename: string,
+  fileSystem: Partial<AndroidBackupFileSystem> & IosBackupFileSystem,
+  sharing: IosSharing
+): Promise<SaveBackupResult> {
+  try {
+    if (
+      fileSystem.StorageAccessFramework &&
+      typeof fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync === 'function'
+    ) {
+      return await saveBackupToAndroid(
+        json,
+        filename,
+        fileSystem as AndroidBackupFileSystem
+      );
+    }
+  } catch (safErr) {
+    console.warn('StorageAccessFramework failed, falling back to share sheet:', safErr);
+  }
+  return saveBackupToIos(json, filename, fileSystem, sharing);
+}
 
-  if (Platform.OS === 'android') {
-    return saveBackupToAndroid(json, filename, FileSystem);
+function getPlatformOS(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const rn = require('react-native');
+    return rn?.Platform?.OS || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+export async function saveBackupJson(json: string, filename: string): Promise<SaveBackupResult> {
+  const FileSystem = await import('expo-file-system/legacy');
+  const Sharing = await import('expo-sharing');
+
+  if (getPlatformOS() === 'android') {
+    return saveBackupAndroidWithFallback(json, filename, FileSystem as any, Sharing);
   }
 
-  const Sharing = await import('expo-sharing');
   return saveBackupToIos(json, filename, FileSystem, Sharing);
+}
+
+export async function saveBackupToFiles(): Promise<SaveBackupResult> {
+  const json = await buildBackupJson();
+  const filename = getBackupFilename();
+  return saveBackupJson(json, filename);
 }

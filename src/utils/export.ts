@@ -32,8 +32,8 @@ export async function buildBackupJson(): Promise<string> {
 
 export async function exportBackup(): Promise<void> {
   const json = await buildBackupJson();
-  const { Platform } = await import('react-native');
-  if (Platform.OS === 'web') {
+
+  if (typeof document !== 'undefined') {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -43,9 +43,23 @@ export async function exportBackup(): Promise<void> {
     URL.revokeObjectURL(url);
     return;
   }
+
   const FileSystem = await import('expo-file-system/legacy');
   const Sharing = await import('expo-sharing');
-  const uri = (FileSystem.documentDirectory || '') + `lifts-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+  if (!baseDir) {
+    throw new Error('Storage is unavailable on this device');
+  }
+  const cacheDir = baseDir.endsWith('/') ? baseDir : `${baseDir}/`;
+  const filename = `lifts-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const uri = `${cacheDir}${filename}`;
   await FileSystem.writeAsStringAsync(uri, json, { encoding: FileSystem.EncodingType.UTF8 });
-  await Sharing.shareAsync(uri);
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, {
+      mimeType: 'application/json',
+      dialogTitle: 'Share Lifts backup',
+    });
+  } else {
+    throw new Error('File sharing is unavailable on this device');
+  }
 }

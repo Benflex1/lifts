@@ -111,6 +111,21 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
   return store.createCustomExercise(exercise);
 }
 
+export async function updateCustomExercise(
+  id: string,
+  updates: {
+    name?: string;
+    category?: string;
+    equipment?: string;
+    primaryMuscles?: string[];
+    secondaryMuscles?: string[];
+    instructions?: string[];
+  }
+): Promise<Exercise> {
+  const store = await getStore();
+  return store.updateCustomExercise(id, updates);
+}
+
 export async function getGyms(): Promise<Gym[]> { return (await getStore()).getGyms!(); }
 export async function getDefaultGym(): Promise<Gym> { return (await getStore()).getDefaultGym!(); }
 export async function createGym(name: string, color?: string): Promise<Gym> { return (await getStore()).createGym!(name, color); }

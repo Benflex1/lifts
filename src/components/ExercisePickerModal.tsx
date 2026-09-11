@@ -10,9 +10,9 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus, Check } from 'lucide-react-native';
+import { Search, X, Dumbbell, Plus, Check, Edit2 } from 'lucide-react-native';
 import { Exercise } from '../types';
-import { searchExercises, createCustomExercise } from '../database/db';
+import { searchExercises, createCustomExercise, updateCustomExercise } from '../database/db';
 
 interface Props {
   visible: boolean;
@@ -46,6 +46,73 @@ const EQUIPMENT_LIST = [
   'Body Only',
 ];
 
+const CUSTOM_MUSCLE_OPTIONS = [
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Biceps',
+  'Triceps',
+  'Quadriceps',
+  'Hamstrings',
+  'Glutes',
+  'Abdominals',
+  'Calves',
+];
+
+const CUSTOM_EQUIPMENT_OPTIONS = [
+  'Barbell',
+  'Dumbbell',
+  'Machine',
+  'Cable',
+  'Bodyweight',
+];
+
+const MUSCLE_ALIAS_MAP: Record<string, string> = {
+  lats: 'Back',
+  lat: 'Back',
+  traps: 'Back',
+  trap: 'Back',
+  rhomboids: 'Back',
+  lower_back: 'Back',
+  'lower back': 'Back',
+  quads: 'Quadriceps',
+  quad: 'Quadriceps',
+  quadriceps: 'Quadriceps',
+  hamstrings: 'Hamstrings',
+  hamstring: 'Hamstrings',
+  glutes: 'Glutes',
+  glute: 'Glutes',
+  abs: 'Abdominals',
+  core: 'Abdominals',
+  abdominals: 'Abdominals',
+  calves: 'Calves',
+  calf: 'Calves',
+  chest: 'Chest',
+  pectorals: 'Chest',
+  shoulders: 'Shoulders',
+  delts: 'Shoulders',
+  deltoids: 'Shoulders',
+  biceps: 'Biceps',
+  triceps: 'Triceps',
+};
+
+const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
+  barbell: 'Barbell',
+  bb: 'Barbell',
+  dumbbell: 'Dumbbell',
+  db: 'Dumbbell',
+  machine: 'Machine',
+  'smith machine': 'Machine',
+  cable: 'Cable',
+  bodyweight: 'Bodyweight',
+  'body weight': 'Bodyweight',
+  'body only': 'Bodyweight',
+  body: 'Bodyweight',
+  kettlebell: 'Dumbbell',
+  bands: 'Cable',
+  band: 'Cable',
+};
+
 const QUICK_SUGGESTIONS = [
   'Bench',
   'Squat',
@@ -78,6 +145,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
 
   // Custom exercise modal state
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [customName, setCustomName] = useState('');
   const [customMuscle, setCustomMuscle] = useState('Chest');
   const [customEquipment, setCustomEquipment] = useState('Barbell');
@@ -132,21 +200,72 @@ export const ExercisePickerModal: React.FC<Props> = ({
     }
   };
 
-  const handleCreateCustom = async () => {
-    if (!customName.trim()) return;
-    const created = await createCustomExercise({
-      name: customName.trim(),
-      category: 'strength',
-      equipment: customEquipment.toLowerCase(),
-      primaryMuscles: [customMuscle.toLowerCase()],
-    });
-    setShowCustomModal(false);
+  const handleOpenAddCustom = () => {
+    setEditingExercise(null);
     setCustomName('');
-    if (multiSelect) {
-      setSelectedExercises(prev => new Map(prev).set(created.id, created));
+    setCustomMuscle('Chest');
+    setCustomEquipment('Barbell');
+    setShowCustomModal(true);
+  };
+
+  const handleOpenEditCustom = (exercise: Exercise) => {
+    setEditingExercise(exercise);
+    setCustomName(exercise.name);
+
+    const rawMuscle = (exercise.primaryMuscles?.[0] || '').toLowerCase().trim();
+    const matchedMuscle =
+      CUSTOM_MUSCLE_OPTIONS.find(m => m.toLowerCase() === rawMuscle) ||
+      MUSCLE_ALIAS_MAP[rawMuscle] ||
+      'Chest';
+    setCustomMuscle(matchedMuscle);
+
+    const rawEquip = (exercise.equipment || '').toLowerCase().trim();
+    const matchedEquip =
+      CUSTOM_EQUIPMENT_OPTIONS.find(eq => eq.toLowerCase() === rawEquip) ||
+      EQUIPMENT_ALIAS_MAP[rawEquip] ||
+      (['kettlebell', 'db'].some(k => rawEquip.includes(k)) ? 'Dumbbell' :
+       rawEquip.includes('body') ? 'Bodyweight' :
+       rawEquip.includes('cable') || rawEquip.includes('band') ? 'Cable' :
+       rawEquip.includes('smith') || rawEquip.includes('machine') ? 'Machine' : 'Barbell');
+    setCustomEquipment(matchedEquip);
+
+    setShowCustomModal(true);
+  };
+
+  const handleSaveCustom = async () => {
+    const trimmed = customName.trim();
+    if (!trimmed) return;
+
+    if (editingExercise) {
+      const updated = await updateCustomExercise(editingExercise.id, {
+        name: trimmed,
+        category: editingExercise.category || 'strength',
+        equipment: customEquipment.toLowerCase(),
+        primaryMuscles: [customMuscle.toLowerCase()],
+      });
+      setShowCustomModal(false);
+      setEditingExercise(null);
+      setCustomName('');
+      await loadExercises();
+      if (selectedExercises.has(updated.id)) {
+        setSelectedExercises(prev => new Map(prev).set(updated.id, updated));
+      }
     } else {
-      onSelectExercise(created);
-      onClose();
+      const created = await createCustomExercise({
+        name: trimmed,
+        category: 'strength',
+        equipment: customEquipment.toLowerCase(),
+        primaryMuscles: [customMuscle.toLowerCase()],
+      });
+      setShowCustomModal(false);
+      setCustomName('');
+      await loadExercises();
+      if (multiSelect) {
+        setSelectedExercises(prev => new Map(prev).set(created.id, created));
+      } else {
+        onSelectExercise(created);
+        onClose();
+      }
     }
   };
 
@@ -266,7 +385,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
         {/* Add Custom Exercise Bar */}
         <TouchableOpacity
           style={styles.createCustomBar}
-          onPress={() => setShowCustomModal(true)}
+          onPress={handleOpenAddCustom}
         >
           <Plus size={18} color="#3B82F6" />
           <Text style={styles.createCustomText}>Can't find it? Create Custom Exercise</Text>
@@ -286,28 +405,57 @@ export const ExercisePickerModal: React.FC<Props> = ({
             renderItem={({ item }) => {
               const isSelected = selectedExercises.has(item.id);
               return (
-                <TouchableOpacity
-                  style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}
-                  onPress={() => handleItemPress(item)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.iconThumb, isSelected && styles.iconThumbSelected]}>
-                    <Dumbbell size={20} color={isSelected ? '#10B981' : '#3B82F6'} />
-                  </View>
-                  <View style={styles.itemInfo}>
-                    <Text style={[styles.itemName, isSelected && styles.itemNameSelected]}>{item.name}</Text>
-                    <View style={styles.tagRow}>
-                      <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
-                      <Text style={styles.tagDot}>•</Text>
-                      <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                <View style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}>
+                  <TouchableOpacity
+                    style={styles.exerciseItemMain}
+                    onPress={() => handleItemPress(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.iconThumb, isSelected && styles.iconThumbSelected]}>
+                      <Dumbbell size={20} color={isSelected ? '#10B981' : '#3B82F6'} />
                     </View>
-                  </View>
-                  {multiSelect && (
-                    <View style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}>
-                      {isSelected && <Check size={16} color="#000000" strokeWidth={3} />}
+                    <View style={styles.itemInfo}>
+                      <View style={styles.itemNameRow}>
+                        <Text style={[styles.itemName, isSelected && styles.itemNameSelected]} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        {item.isCustom && (
+                          <View style={styles.listCustomBadge}>
+                            <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.tagRow}>
+                        <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
+                        <Text style={styles.tagDot}>•</Text>
+                        <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                      </View>
                     </View>
+                  </TouchableOpacity>
+                  {item.isCustom && (
+                    <TouchableOpacity
+                      style={styles.itemEditBtn}
+                      onPress={() => handleOpenEditCustom(item)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${item.name}`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Edit2 size={16} color="#3B82F6" />
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
+                  {multiSelect && (
+                    <TouchableOpacity
+                      style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}
+                      onPress={() => handleItemPress(item)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isSelected }}
+                      accessibilityLabel={`Select ${item.name}`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      {isSelected && <Check size={16} color="#000000" strokeWidth={3} />}
+                    </TouchableOpacity>
+                  )}
+                </View>
               );
             }}
             ListEmptyComponent={
@@ -345,13 +493,21 @@ export const ExercisePickerModal: React.FC<Props> = ({
           visible={showCustomModal}
           transparent
           animationType="fade"
-          onRequestClose={() => setShowCustomModal(false)}
+          onRequestClose={() => {
+            setShowCustomModal(false);
+            setEditingExercise(null);
+          }}
         >
           <View style={styles.customModalOverlay}>
             <View style={styles.customModalCard}>
               <View style={styles.header}>
-                <Text style={styles.headerTitle}>New Custom Exercise</Text>
-                <TouchableOpacity onPress={() => setShowCustomModal(false)}>
+                <Text style={styles.headerTitle}>
+                  {editingExercise ? 'Edit Custom Exercise' : 'New Custom Exercise'}
+                </Text>
+                <TouchableOpacity onPress={() => {
+                  setShowCustomModal(false);
+                  setEditingExercise(null);
+                }}>
                   <X color="#9CA3AF" size={22} />
                 </TouchableOpacity>
               </View>
@@ -363,11 +519,12 @@ export const ExercisePickerModal: React.FC<Props> = ({
                 placeholderTextColor="#6B7280"
                 value={customName}
                 onChangeText={setCustomName}
+                autoFocus
               />
 
               <Text style={styles.fieldLabel}>Primary Muscle</Text>
               <View style={styles.modalPills}>
-                {['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quadriceps', 'Hamstrings', 'Glutes', 'Abdominals'].map(m => (
+                {CUSTOM_MUSCLE_OPTIONS.map(m => (
                   <TouchableOpacity
                     key={m}
                     style={[styles.modalPill, customMuscle === m && styles.modalPillActive]}
@@ -382,7 +539,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
 
               <Text style={styles.fieldLabel}>Equipment</Text>
               <View style={styles.modalPills}>
-                {['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'].map(eq => (
+                {CUSTOM_EQUIPMENT_OPTIONS.map(eq => (
                   <TouchableOpacity
                     key={eq}
                     style={[styles.modalPill, customEquipment === eq && styles.modalPillActive]}
@@ -395,8 +552,10 @@ export const ExercisePickerModal: React.FC<Props> = ({
                 ))}
               </View>
 
-              <TouchableOpacity style={styles.saveCustomBtn} onPress={handleCreateCustom}>
-                <Text style={styles.saveCustomBtnText}>Save & Add Exercise</Text>
+              <TouchableOpacity style={styles.saveCustomBtn} onPress={handleSaveCustom}>
+                <Text style={styles.saveCustomBtnText}>
+                  {editingExercise ? 'Save Changes' : 'Save & Add Exercise'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -564,6 +723,12 @@ const styles = StyleSheet.create({
     borderColor: '#20242E',
     gap: 14,
   },
+  exerciseItemMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
   exerciseItemSelected: {
     borderColor: '#10B981',
     backgroundColor: '#132822',
@@ -582,15 +747,42 @@ const styles = StyleSheet.create({
   itemInfo: {
     flex: 1,
   },
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   itemName: {
+    flexShrink: 1,
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
   },
   itemNameSelected: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  listCustomBadge: {
+    backgroundColor: '#3B82F620',
+    borderColor: '#3B82F640',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  listCustomBadgeText: {
+    color: '#60A5FA',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  itemEditBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#1E2638',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkCircle: {
     width: 28,

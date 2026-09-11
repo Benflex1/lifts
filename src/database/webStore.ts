@@ -542,6 +542,138 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return custom;
   }
 
+  async function updateCustomExercise(
+    id: string,
+    updates: {
+      name?: string;
+      category?: string;
+      equipment?: string;
+      primaryMuscles?: string[];
+      secondaryMuscles?: string[];
+      instructions?: string[];
+    }
+  ): Promise<Exercise> {
+    const database = await openDb();
+    await verifyAndRenewLease(database);
+
+    const existing = await new Promise<Exercise | null>((resolve, reject) => {
+      const tx = database.transaction('exercises', 'readonly');
+      const req = tx.objectStore('exercises').get(id);
+      req.onsuccess = () => resolve((req.result as Exercise) || null);
+      req.onerror = () => reject(req.error);
+    });
+
+    if (!existing) {
+      throw new Error(`Exercise with id "${id}" not found`);
+    }
+    if (!existing.isCustom) {
+      throw new Error(`Cannot edit built-in exercise "${id}"`);
+    }
+
+    const updatedName = updates.name !== undefined ? updates.name.trim() : existing.name;
+    if (!updatedName) {
+      throw new Error('Exercise name cannot be empty');
+    }
+
+    const updated: Exercise = {
+      ...existing,
+      ...updates,
+      name: updatedName,
+      equipment: updates.equipment !== undefined ? updates.equipment.toLowerCase() : existing.equipment,
+      id,
+      isCustom: true,
+    };
+
+    // 1. Update exercises table
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction('exercises', 'readwrite');
+      tx.objectStore('exercises').put(updated);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    // 2. Update embedded exercise in routines
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction('routines', 'readwrite');
+      const store = tx.objectStore('routines');
+      const getAllReq = store.getAll();
+      getAllReq.onsuccess = () => {
+        const routines = (getAllReq.result as Routine[]) || [];
+        for (const r of routines) {
+          let touched = false;
+          if (r.exercises) {
+            for (const re of r.exercises) {
+              if (re.exerciseId === id) {
+                re.exercise = { ...re.exercise, ...updated };
+                touched = true;
+              }
+            }
+          }
+          if (touched) {
+            store.put(r);
+          }
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    // 3. Update embedded exercise in workouts
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction('workouts', 'readwrite');
+      const store = tx.objectStore('workouts');
+      const getAllReq = store.getAll();
+      getAllReq.onsuccess = () => {
+        const workouts = (getAllReq.result as Workout[]) || [];
+        for (const w of workouts) {
+          let touched = false;
+          if (w.exercises) {
+            for (const we of w.exercises) {
+              if (we.exerciseId === id) {
+                we.exercise = { ...we.exercise, ...updated };
+                touched = true;
+              }
+            }
+          }
+          if (touched) {
+            store.put(w);
+          }
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    // 4. Update embedded exercise in workout_drafts
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction('workout_drafts', 'readwrite');
+      const store = tx.objectStore('workout_drafts');
+      const getAllReq = store.getAll();
+      getAllReq.onsuccess = () => {
+        const drafts = (getAllReq.result as WorkoutDraft[]) || [];
+        for (const d of drafts) {
+          let touched = false;
+          if (d.workout?.exercises) {
+            for (const we of d.workout.exercises) {
+              if (we.exerciseId === id) {
+                we.exercise = { ...we.exercise, ...updated };
+                touched = true;
+              }
+            }
+          }
+          if (touched) {
+            store.put(d);
+          }
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    cachedExercises = null;
+    return updated;
+  }
+
   async function getRoutines(): Promise<Routine[]> {
     const database = await openDb();
     return new Promise((resolve, reject) => {
@@ -1107,6 +1239,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     searchExercises,
     getExerciseById,
     createCustomExercise,
+    updateCustomExercise,
     getGyms,
     getDefaultGym,
     createGym,
