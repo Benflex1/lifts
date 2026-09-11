@@ -19,7 +19,7 @@ import {
   ChevronUp,
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
-import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise } from '../types';
+import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise, ExerciseGymScope } from '../types';
 import {
   getWorkoutHistory,
   getWorkoutDetail,
@@ -27,6 +27,8 @@ import {
   getRoutineById,
   getGyms,
   saveCompletedWorkout,
+  getCompletedWorkoutsForExercise,
+  getExerciseGymScope,
 } from '../database/db';
 import { formatDuration } from '../utils/calculator';
 import { useWorkout } from '../context/WorkoutContext';
@@ -38,6 +40,8 @@ import { resolveInitialStartGymId, resolveRepeatSourceGym } from '../workout/gym
 import { updateWorkoutHistorySummary } from '../workout/history-summary';
 import { WorkoutEditModal } from '../components/WorkoutEditModal';
 import { WorkoutStartModal } from '../components/WorkoutStartModal';
+import { PRBadge } from '../components/PRBadge';
+import { evaluateWorkoutPRs, WorkoutPRSummary } from '../workout/pr';
 
 interface HistoryScreenProps {
   workoutUpdate?: Workout | null;
@@ -59,6 +63,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [workoutDetails, setWorkoutDetails] = useState<Record<string, Workout>>({});
+  const [workoutPRs, setWorkoutPRs] = useState<Record<string, WorkoutPRSummary>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [pendingRepeat, setPendingRepeat] = useState<PendingRepeatWorkout | null>(null);
@@ -78,6 +83,39 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
     }
   }, [gymTrackingEnabled, gyms, selectedGymId]);
 
+  const loadWorkoutPRs = async (targetWorkout: Workout, currentGyms: Gym[]) => {
+    try {
+      const results = await Promise.all(
+        targetWorkout.exercises.map(async (ex) => {
+          const [workouts, scope] = await Promise.all([
+            getCompletedWorkoutsForExercise(ex.exerciseId),
+            getExerciseGymScope(ex.exerciseId),
+          ]);
+          return { exerciseId: ex.exerciseId, workouts, scope };
+        })
+      );
+      const workoutsByEx: Record<string, Workout[]> = {};
+      const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
+      results.forEach((r) => {
+        workoutsByEx[r.exerciseId] = r.workouts;
+        scopesByEx[r.exerciseId] = r.scope || undefined;
+      });
+
+      const summary = evaluateWorkoutPRs(
+        targetWorkout,
+        workoutsByEx,
+        currentGyms,
+        gymTrackingEnabled,
+        scopesByEx
+      );
+      setWorkoutPRs((prev) => ({ ...prev, [targetWorkout.id]: summary }));
+      return summary;
+    } catch (e) {
+      console.error('Failed to load workout PRs:', e);
+      return null;
+    }
+  };
+
   const loadHistory = async () => {
     const requestId = ++historyLoadRequestRef.current;
     setLoading(true);
@@ -86,6 +124,22 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
       if (requestId !== historyLoadRequestRef.current) return;
       setHistory(list);
       setGyms(gymList);
+
+      // Preload PRs for top 5 recent workouts in the background
+      const recent = list.slice(0, 5);
+      for (const item of recent) {
+        void (async () => {
+          try {
+            const detail = await getWorkoutDetail(item.id);
+            if (detail && requestId === historyLoadRequestRef.current) {
+              setWorkoutDetails((prev) => ({ ...prev, [item.id]: detail }));
+              await loadWorkoutPRs(detail, gymList);
+            }
+          } catch {
+            // Ignore preload error
+          }
+        })();
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -98,6 +152,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
 
     setHistory(previous => updateWorkoutHistorySummary(previous, workoutUpdate));
     setWorkoutDetails(previous => ({ ...previous, [workoutUpdate.id]: workoutUpdate }));
+    void loadWorkoutPRs(workoutUpdate, gyms);
     void loadHistory();
   }, [workoutUpdate]);
 
@@ -115,18 +170,24 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
     }
 
     setExpandedId(workoutId);
-    if (!workoutDetails[workoutId]) {
+    let detail: Workout | null = workoutDetails[workoutId] || null;
+    if (!detail) {
       setLoadingDetailId(workoutId);
       try {
-        const detail = await getWorkoutDetail(workoutId);
-        if (detail) {
-          setWorkoutDetails(prev => ({ ...prev, [workoutId]: detail }));
+        const loaded = await getWorkoutDetail(workoutId);
+        if (loaded) {
+          detail = loaded;
+          setWorkoutDetails(prev => ({ ...prev, [workoutId]: loaded }));
         }
       } catch (e) {
         console.error('Error fetching workout detail:', e);
       } finally {
         setLoadingDetailId(null);
       }
+    }
+
+    if (detail && !workoutPRs[workoutId]) {
+      void loadWorkoutPRs(detail, gyms);
     }
   };
 
@@ -234,6 +295,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
       }
       await saveCompletedWorkout(updated);
       setWorkoutDetails(previous => ({ ...previous, [updated.id]: updated }));
+      void loadWorkoutPRs(updated, gyms);
       await loadHistory();
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to save workout changes.' });
@@ -329,6 +391,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
           renderItem={({ item }) => {
             const isExpanded = expandedId === item.id;
             const detail = workoutDetails[item.id];
+            const prSummary = workoutPRs[item.id];
 
             return (
               <View key={item.id} style={styles.historyCard}>
@@ -387,6 +450,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                     <Trophy size={15} color="#9CA3AF" />
                     <Text style={styles.metricText}>{item.totalSets} sets</Text>
                   </View>
+
+                  {prSummary && prSummary.totalCount > 0 && (
+                    <View style={styles.metric}>
+                      <Text style={styles.metricPRText}>
+                        {prSummary.goldCount > 0 ? '🥇' : prSummary.silverCount > 0 ? '🥈' : '🥉'}{' '}
+                        {prSummary.totalCount} PR{prSummary.totalCount > 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Toggle Detail Button */}
@@ -411,35 +483,69 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                     {loadingDetailId === item.id ? (
                       <ActivityIndicator size="small" color="#3B82F6" style={{ marginVertical: 12 }} />
                     ) : detail && detail.exercises.length > 0 ? (
-                      detail.exercises.map((ex, exIdx) => {
-                        const completedSets = ex.sets.filter(s => s.isCompleted);
-                        if (completedSets.length === 0) return null;
-
-                        return (
-                          <View key={exIdx} style={styles.detailExBlock}>
-                            <Text style={styles.detailExTitle}>{ex.exercise.name}</Text>
-                            {ex.notes && (
-                              <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
-                            )}
-                            <View style={styles.detailSetsGrid}>
-                              {completedSets.map((s, sIdx) => (
-                                <View key={sIdx} style={styles.detailSetPill}>
-                                  <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
-                                  <Text style={styles.detailSetWeight}>
-                                    {formatWeight(s.weightKg, unit)} × {s.reps}
-                                  </Text>
-                                  {s.type !== 'normal' && (
-                                    <Text style={styles.detailSetType}>{s.type.toUpperCase()}</Text>
-                                  )}
-                                  {s.rpe != null && (
-                                    <Text style={styles.detailRpe}>RPE {s.rpe}</Text>
-                                  )}
-                                </View>
-                              ))}
-                            </View>
+                      <>
+                        {prSummary && prSummary.totalCount > 0 && (
+                          <View style={styles.historyPRBanner}>
+                            <Trophy size={14} color="#F59E0B" />
+                            <Text style={styles.historyPRBannerText}>
+                              {prSummary.totalCount} PR{prSummary.totalCount > 1 ? 's' : ''} achieved in this workout
+                            </Text>
                           </View>
-                        );
-                      })
+                        )}
+                        {detail.exercises.map((ex, exIdx) => {
+                          const completedSets = ex.sets.filter(s => s.isCompleted);
+                          if (completedSets.length === 0) return null;
+                          const exercisePRs = prSummary?.achievements.filter(a => a.exerciseId === ex.exerciseId);
+
+                          return (
+                            <View key={exIdx} style={styles.detailExBlock}>
+                              <View style={styles.detailExHeader}>
+                                <Text style={styles.detailExTitle}>{ex.exercise.name}</Text>
+                                {exercisePRs && exercisePRs.length > 0 && (
+                                  <View style={styles.detailExPRBadge}>
+                                    <Text style={styles.detailExPRBadgeText}>
+                                      {exercisePRs.some(a => a.achievement.rank === 1)
+                                        ? '🥇 PR'
+                                        : exercisePRs.some(a => a.achievement.rank === 2)
+                                        ? '🥈 2nd'
+                                        : '🥉 3rd'}
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              {ex.notes && (
+                                <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
+                              )}
+                              <View style={styles.detailSetsGrid}>
+                                {completedSets.map((s, sIdx) => {
+                                  const setPR = prSummary?.setPRs.get(s.id);
+                                  return (
+                                    <View key={sIdx} style={styles.detailSetPill}>
+                                      <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
+                                      <Text style={styles.detailSetWeight}>
+                                        {formatWeight(s.weightKg, unit)} × {s.reps}
+                                      </Text>
+                                      {setPR?.primary && (
+                                        <PRBadge
+                                          achievement={setPR.primary}
+                                          compact
+                                          showGym={gymTrackingEnabled}
+                                        />
+                                      )}
+                                      {s.type !== 'normal' && (
+                                        <Text style={styles.detailSetType}>{s.type.toUpperCase()}</Text>
+                                      )}
+                                      {s.rpe != null && (
+                                        <Text style={styles.detailRpe}>RPE {s.rpe}</Text>
+                                      )}
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </>
                     ) : (
                       <View style={styles.exerciseNamesBox}>
                         <Text style={styles.exerciseNamesText}>
@@ -768,6 +874,47 @@ const styles = StyleSheet.create({
     color: '#A855F7',
     fontSize: 10,
     fontWeight: '700',
+  },
+  metricPRText: {
+    color: '#FBBF24',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  historyPRBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#78350F25',
+    borderColor: '#F59E0B50',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 4,
+  },
+  historyPRBannerText: {
+    color: '#FBBF24',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  detailExHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  detailExPRBadge: {
+    backgroundColor: '#78350F30',
+    borderColor: '#F59E0B50',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  detailExPRBadgeText: {
+    color: '#FBBF24',
+    fontSize: 10,
+    fontWeight: '800',
   },
   exerciseNamesBox: {
     paddingTop: 8,

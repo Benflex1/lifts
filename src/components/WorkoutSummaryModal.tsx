@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -8,14 +8,17 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Award, Check, Clock, Dumbbell, Flame, MapPin } from 'lucide-react-native';
-import { Gym, Workout } from '../types';
+import { Award, Check, Clock, Dumbbell, Flame, MapPin, Trophy } from 'lucide-react-native';
+import { ExerciseGymScope, Gym, Workout } from '../types';
 import { formatDuration } from '../utils/calculator';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { GymPickerModal } from './GymPickerModal';
 import { useDialog } from '../context/DialogContext';
 import { reassignWorkoutGym } from '../workout/workout-edit';
+import { getCompletedWorkoutsForExercise, getExerciseGymScope } from '../database/db';
+import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
+import { PRBadge } from './PRBadge';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
@@ -35,6 +38,46 @@ export function WorkoutSummaryModal({
   const { unit, gymTrackingEnabled } = useSettings();
   const { notify } = useDialog();
   const [showGymPicker, setShowGymPicker] = useState(false);
+  const [prSummary, setPrSummary] = useState<WorkoutPRSummary | null>(null);
+
+  useEffect(() => {
+    if (!workout) {
+      setPrSummary(null);
+      return;
+    }
+
+    let mounted = true;
+    Promise.all(
+      workout.exercises.map(async (ex) => {
+        const [workouts, scope] = await Promise.all([
+          getCompletedWorkoutsForExercise(ex.exerciseId),
+          getExerciseGymScope(ex.exerciseId),
+        ]);
+        return { exerciseId: ex.exerciseId, workouts, scope };
+      })
+    ).then((results) => {
+      if (!mounted) return;
+      const workoutsByEx: Record<string, Workout[]> = {};
+      const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
+      results.forEach((r) => {
+        workoutsByEx[r.exerciseId] = r.workouts;
+        scopesByEx[r.exerciseId] = r.scope || undefined;
+      });
+
+      const summary = evaluateWorkoutPRs(
+        workout,
+        workoutsByEx,
+        gyms,
+        gymTrackingEnabled,
+        scopesByEx
+      );
+      setPrSummary(summary);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [workout?.id, workout?.gymId, gyms, gymTrackingEnabled]);
 
   const currentGym = workout ? gyms.find((gym) => gym.id === workout.gymId) : null;
 
@@ -134,6 +177,34 @@ export function WorkoutSummaryModal({
             </View>
           )}
 
+          {/* Personal Records Section */}
+          {prSummary && prSummary.totalCount > 0 && (
+            <View style={styles.prSection}>
+              <View style={styles.prSectionHeader}>
+                <Trophy size={18} color="#F59E0B" />
+                <Text style={styles.prSectionTitle}>
+                  {prSummary.totalCount} PERSONAL RECORD{prSummary.totalCount > 1 ? 'S' : ''} BROKEN!
+                </Text>
+              </View>
+              <ScrollView style={styles.prList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                {prSummary.achievements.map((item, idx) => (
+                  <View key={idx} style={styles.prCard}>
+                    <Text style={styles.prCardEmoji}>
+                      {item.achievement.rank === 1 ? '🥇' : item.achievement.rank === 2 ? '🥈' : '🥉'}
+                    </Text>
+                    <View style={styles.prCardContent}>
+                      <Text style={styles.prCardExercise}>{item.exerciseName}</Text>
+                      <Text style={styles.prCardMetric}>
+                        {item.weightKg > 0 ? `${formatWeight(item.weightKg, unit)} × ${item.reps} · ` : `${item.reps} reps · `}
+                        {formatPRDescription(item.achievement, unit)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           {/* Exercise Breakdown */}
           <Text style={styles.breakdownTitle}>Exercise Summary</Text>
           <ScrollView style={styles.exerciseList} showsVerticalScrollIndicator={false}>
@@ -143,11 +214,25 @@ export function WorkoutSummaryModal({
                 (max, s) => (s.weightKg > max ? s.weightKg : max),
                 0
               );
+              const exercisePRs = prSummary?.achievements.filter((a) => a.exerciseId === ex.exerciseId);
 
               return (
                 <View key={ex.id || idx} style={styles.exerciseItem}>
                   <View style={styles.exerciseInfo}>
-                    <Text style={styles.exerciseNameText}>{ex.exercise.name}</Text>
+                    <View style={styles.exerciseNameRow}>
+                      <Text style={styles.exerciseNameText}>{ex.exercise.name}</Text>
+                      {exercisePRs && exercisePRs.length > 0 && (
+                        <View style={styles.exercisePRBadge}>
+                          <Text style={styles.exercisePRBadgeText}>
+                            {exercisePRs.some((a) => a.achievement.rank === 1)
+                              ? '🥇 PR'
+                              : exercisePRs.some((a) => a.achievement.rank === 2)
+                              ? '🥈 2nd'
+                              : '🥉 3rd'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={styles.exerciseMetaText}>
                       {completedSets.length} {completedSets.length === 1 ? 'set' : 'sets'}
                       {maxWeight > 0 ? ` • Top: ${formatWeight(maxWeight, unit)}` : ''}
@@ -306,6 +391,73 @@ const styles = StyleSheet.create({
     color: '#7DD3FC',
     fontSize: 13,
     fontWeight: '700',
+  },
+  prSection: {
+    backgroundColor: '#1E1912',
+    borderColor: '#F59E0B50',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    maxHeight: 180,
+  },
+  prSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  prSectionTitle: {
+    color: '#FBBF24',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  prList: {
+    maxHeight: 130,
+  },
+  prCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2B2317',
+  },
+  prCardEmoji: {
+    fontSize: 18,
+  },
+  prCardContent: {
+    flex: 1,
+  },
+  prCardExercise: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  prCardMetric: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  exerciseNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  exercisePRBadge: {
+    backgroundColor: '#78350F30',
+    borderColor: '#F59E0B50',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  exercisePRBadgeText: {
+    color: '#FBBF24',
+    fontSize: 10,
+    fontWeight: '800',
   },
   breakdownTitle: {
     fontSize: 14,

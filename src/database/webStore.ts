@@ -941,6 +941,21 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
+  async function getCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]> {
+    const database = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction('workouts', 'readonly');
+      const req = tx.objectStore('workouts').getAll();
+      req.onsuccess = () => {
+        const workouts = (req.result as Workout[]).map(normalizeWorkout)
+          .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
+        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
+        resolve(workouts);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
     const database = await openDb();
     const [scope] = await Promise.all([getExerciseGymScope(exerciseId)]);
@@ -1234,6 +1249,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     getWorkoutDetail,
     deleteWorkout,
     getPreviousSetsForExercise,
+    getCompletedWorkoutsForExercise,
     getExerciseStats,
     getAllExercises,
     searchExercises,

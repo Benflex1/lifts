@@ -1281,6 +1281,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     saveExerciseGymScope,
     deleteExerciseGymScope,
     getPreviousSetsForExercise,
+    getCompletedWorkoutsForExercise: loadCompletedWorkoutsForExercise,
     getExerciseStats,
     getAllExercises,
     searchExercises,
