@@ -788,4 +788,92 @@ describe('nativeStore and migration safety', () => {
     driver.close();
     fs.unlinkSync(tempFile);
   });
+
+  it('updates custom exercises and preserves draft consistency', async () => {
+    const tempFile = path.join(os.tmpdir(), `test-custom-edit-${Date.now()}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    const store = createNativeStore(driver);
+    await store.init();
+
+    // 1. Create custom exercise
+    const created = await store.createCustomExercise({
+      name: 'Old Custom Press',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    });
+
+    assert.equal(created.name, 'Old Custom Press');
+    assert.equal(created.isCustom, true);
+
+    // 2. Save a draft that uses this exercise
+    const defaultGym = await store.getDefaultGym();
+    await store.saveDraft({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      revision: 1,
+      restTimer: null,
+      workout: {
+        id: 'draft-test-edit',
+        name: 'In-progress workout',
+        gymId: defaultGym.id,
+        startTime: new Date().toISOString(),
+        durationSeconds: 60,
+        totalVolumeKg: 100,
+        exercises: [
+          {
+            id: 'we-draft-edit-1',
+            exerciseId: created.id,
+            exercise: created,
+            sets: [],
+            restTimerSeconds: 60,
+          },
+        ],
+      },
+    });
+
+    // 3. Edit custom exercise
+    const updated = await store.updateCustomExercise(created.id, {
+      name: 'Updated Machine Press',
+      equipment: 'machine',
+      primaryMuscles: ['chest', 'triceps'],
+    });
+
+    assert.equal(updated.id, created.id);
+    assert.equal(updated.name, 'Updated Machine Press');
+    assert.equal(updated.equipment, 'machine');
+    assert.deepEqual(updated.primaryMuscles, ['chest', 'triceps']);
+
+    // Verify persistence via getExerciseById
+    const fetched = await store.getExerciseById(created.id);
+    assert.ok(fetched);
+    assert.equal(fetched.name, 'Updated Machine Press');
+    assert.equal(fetched.equipment, 'machine');
+
+    // Verify search finds new name
+    const searchResults = await store.searchExercises('Updated Machine');
+    assert.ok(searchResults.some(e => e.id === created.id && e.name === 'Updated Machine Press'));
+
+    // Verify draft embedded exercise was updated
+    const drafts = await store.getWorkoutDrafts();
+    assert.equal(drafts.length, 1);
+    assert.equal(drafts[0].workout.exercises[0].exercise.name, 'Updated Machine Press');
+
+    // 4. Reject editing built-in exercise
+    await assert.rejects(async () => {
+      await store.updateCustomExercise('Barbell_Bench_Press_-_Medium_Grip', {
+        name: 'Hacked Bench Press',
+      });
+    }, /Cannot edit built-in exercise/);
+
+    // 5. Reject empty exercise name
+    await assert.rejects(async () => {
+      await store.updateCustomExercise(created.id, {
+        name: '   ',
+      });
+    }, /Exercise name cannot be empty/);
+
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
 });

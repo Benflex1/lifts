@@ -134,6 +134,21 @@ export async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCu
   return store.createCustomExercise(exercise);
 }
 
+export async function updateCustomExercise(
+  id: string,
+  updates: {
+    name?: string;
+    category?: string;
+    equipment?: string;
+    primaryMuscles?: string[];
+    secondaryMuscles?: string[];
+    instructions?: string[];
+  }
+): Promise<Exercise> {
+  const store = await getStore();
+  return store.updateCustomExercise(id, updates);
+}
+
 export async function getSetting(key: string): Promise<string | null> {
   const store = await getStore();
   return store.getSetting(key);

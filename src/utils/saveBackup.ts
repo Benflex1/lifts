@@ -1,17 +1,13 @@
 import { buildBackupJson } from './backup';
 
-export type SaveBackupResult = 'saved' | 'cancelled';
+import { getBackupFilename, type SaveBackupResult } from './saveBackupCommon';
 
-export function getBackupFilename(date: Date = new Date()): string {
-  return `lifts-backup-${date.toISOString().slice(0, 10)}.json`;
-}
+export { getBackupFilename, type SaveBackupResult };
 
 export async function saveBackupToFiles(): Promise<SaveBackupResult> {
   const json = await buildBackupJson();
   const filename = getBackupFilename();
-  const { Platform } = await import('react-native');
-
-  if (Platform.OS === 'web') {
+  if (typeof document !== 'undefined') {
     const { saveBackupJson } = await import('./saveBackup.web');
     return saveBackupJson(json, filename);
   }

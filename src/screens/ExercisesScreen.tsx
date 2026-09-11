@@ -10,11 +10,12 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus, ChevronRight, Info, Trophy, TrendingUp } from 'lucide-react-native';
+import { Search, X, Dumbbell, Plus, ChevronRight, Info, Trophy, TrendingUp, Edit2 } from 'lucide-react-native';
 import { DualExerciseStats, Exercise, ExerciseGymScope, Gym } from '../types';
 import {
   searchExercises,
   createCustomExercise,
+  updateCustomExercise,
   getDefaultGym,
   getExerciseStats,
   getExerciseGymScope,
@@ -74,8 +75,9 @@ export const ExercisesScreen: React.FC = () => {
   // Selected exercise for detail view
   const [activeDetail, setActiveDetail] = useState<Exercise | null>(null);
 
-  // Custom exercise modal
+  // Custom exercise modal (create & edit)
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [customName, setCustomName] = useState('');
   const [customMuscle, setCustomMuscle] = useState('Chest');
   const [customEquipment, setCustomEquipment] = useState('Barbell');
@@ -203,18 +205,64 @@ export const ExercisesScreen: React.FC = () => {
     }
   };
 
-  const handleCreateCustom = async () => {
-    if (!customName.trim()) return;
-    const created = await createCustomExercise({
-      name: customName.trim(),
-      category: 'strength',
-      equipment: customEquipment.toLowerCase(),
-      primaryMuscles: [customMuscle.toLowerCase()],
-    });
-    setShowCustomModal(false);
+  const handleOpenAddCustom = () => {
+    setEditingExercise(null);
     setCustomName('');
-    loadExercises();
-    setActiveDetail(created);
+    setCustomMuscle('Chest');
+    setCustomEquipment('Barbell');
+    setShowCustomModal(true);
+  };
+
+  const handleOpenEditCustom = (exercise: Exercise) => {
+    setEditingExercise(exercise);
+    setCustomName(exercise.name);
+
+    const rawMuscle = exercise.primaryMuscles?.[0] || 'chest';
+    const matchedMuscle = MUSCLE_GROUPS.find(
+      m => m.toLowerCase() === rawMuscle.toLowerCase()
+    ) || 'Chest';
+    setCustomMuscle(matchedMuscle === 'All' ? 'Chest' : matchedMuscle);
+
+    const rawEquip = exercise.equipment || 'barbell';
+    const matchedEquip = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'].find(
+      eq => eq.toLowerCase() === rawEquip.toLowerCase() || (eq === 'Bodyweight' && rawEquip.toLowerCase().includes('body'))
+    ) || 'Barbell';
+    setCustomEquipment(matchedEquip);
+
+    setShowCustomModal(true);
+  };
+
+  const handleSaveCustom = async () => {
+    const trimmed = customName.trim();
+    if (!trimmed) return;
+
+    if (editingExercise) {
+      const updated = await updateCustomExercise(editingExercise.id, {
+        name: trimmed,
+        category: editingExercise.category || 'strength',
+        equipment: customEquipment.toLowerCase(),
+        primaryMuscles: [customMuscle.toLowerCase()],
+      });
+      setShowCustomModal(false);
+      setEditingExercise(null);
+      setCustomName('');
+      await loadExercises();
+      if (activeDetail && activeDetail.id === editingExercise.id) {
+        setActiveDetail(updated);
+        await loadExerciseDetails(updated, false);
+      }
+    } else {
+      const created = await createCustomExercise({
+        name: trimmed,
+        category: 'strength',
+        equipment: customEquipment.toLowerCase(),
+        primaryMuscles: [customMuscle.toLowerCase()],
+      });
+      setShowCustomModal(false);
+      setCustomName('');
+      await loadExercises();
+      setActiveDetail(created);
+    }
   };
 
   return (
@@ -224,7 +272,7 @@ export const ExercisesScreen: React.FC = () => {
         <Text style={styles.headerTitle}>Exercise Library</Text>
         <TouchableOpacity
           style={styles.addCustomBtn}
-          onPress={() => setShowCustomModal(true)}
+          onPress={handleOpenAddCustom}
         >
           <Plus size={16} color="#FFFFFF" />
           <Text style={styles.addCustomBtnText}>Custom</Text>
@@ -345,9 +393,16 @@ export const ExercisesScreen: React.FC = () => {
               </View>
 
               <View style={styles.itemInfo}>
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {item.name}
-                </Text>
+                <View style={styles.itemNameRow}>
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  {item.isCustom && (
+                    <View style={styles.listCustomBadge}>
+                      <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
+                    </View>
+                  )}
+                </View>
                 <View style={styles.tagRow}>
                   <Text style={styles.tagMuscle}>
                     {item.primaryMuscles.join(', ') || 'General'}
@@ -357,7 +412,22 @@ export const ExercisesScreen: React.FC = () => {
                 </View>
               </View>
 
-              <ChevronRight size={18} color="#4B5563" />
+              {item.isCustom ? (
+                <TouchableOpacity
+                  style={styles.itemEditBtn}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    handleOpenEditCustom(item);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${item.name}`}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Edit2 size={16} color="#3B82F6" />
+                </TouchableOpacity>
+              ) : (
+                <ChevronRight size={18} color="#4B5563" />
+              )}
             </TouchableOpacity>
           )}
           ListEmptyComponent={
@@ -380,7 +450,20 @@ export const ExercisesScreen: React.FC = () => {
               <X size={24} color="#9CA3AF" />
             </TouchableOpacity>
             <Text style={styles.detailHeaderTitle}>Exercise Details</Text>
-            <View style={{ width: 24 }} />
+            {activeDetail?.isCustom ? (
+              <TouchableOpacity
+                style={styles.headerEditBtn}
+                onPress={() => handleOpenEditCustom(activeDetail)}
+                accessibilityRole="button"
+                accessibilityLabel="Edit custom exercise"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Edit2 size={16} color="#3B82F6" />
+                <Text style={styles.headerEditBtnText}>Edit</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 24 }} />
+            )}
           </View>
 
           {activeDetail && (
@@ -389,6 +472,11 @@ export const ExercisesScreen: React.FC = () => {
               contentContainerStyle={{ paddingBottom: 40 }}
               keyboardShouldPersistTaps="handled"
             >
+              {activeDetail.isCustom && (
+                <View style={styles.detailCustomBadge}>
+                  <Text style={styles.detailCustomBadgeText}>CUSTOM EXERCISE</Text>
+                </View>
+              )}
               <Text style={styles.detailName}>{activeDetail.name}</Text>
 
               {/* Tag Badges */}
@@ -402,6 +490,18 @@ export const ExercisesScreen: React.FC = () => {
                   <Text style={styles.badgeSecondaryText}>Equipment: {activeDetail.equipment}</Text>
                 </View>
               </View>
+
+              {activeDetail.isCustom && (
+                <TouchableOpacity
+                  style={styles.editCustomActionBtn}
+                  onPress={() => handleOpenEditCustom(activeDetail)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit custom exercise details"
+                >
+                  <Edit2 size={16} color="#3B82F6" />
+                  <Text style={styles.editCustomActionBtnText}>Edit Custom Exercise</Text>
+                </TouchableOpacity>
+              )}
 
               {activeDetail.secondaryMuscles && activeDetail.secondaryMuscles.length > 0 && (
                 <Text style={styles.secondaryMusclesText}>
@@ -480,18 +580,26 @@ export const ExercisesScreen: React.FC = () => {
         onSaved={handleScopeSaved}
       />
 
-      {/* Create Custom Modal */}
+      {/* Create / Edit Custom Modal */}
       <Modal 
         visible={showCustomModal} 
         transparent 
         animationType="fade"
-        onRequestClose={() => setShowCustomModal(false)}
+        onRequestClose={() => {
+          setShowCustomModal(false);
+          setEditingExercise(null);
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.detailHeader}>
-              <Text style={styles.detailHeaderTitle}>Add Custom Exercise</Text>
-              <TouchableOpacity onPress={() => setShowCustomModal(false)}>
+              <Text style={styles.detailHeaderTitle}>
+                {editingExercise ? 'Edit Custom Exercise' : 'Add Custom Exercise'}
+              </Text>
+              <TouchableOpacity onPress={() => {
+                setShowCustomModal(false);
+                setEditingExercise(null);
+              }}>
                 <X size={22} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
@@ -503,6 +611,7 @@ export const ExercisesScreen: React.FC = () => {
               placeholderTextColor="#6B7280"
               value={customName}
               onChangeText={setCustomName}
+              autoFocus
             />
 
             <Text style={[styles.fieldLabel, { marginTop: 14 }]}>PRIMARY MUSCLE</Text>
@@ -535,8 +644,10 @@ export const ExercisesScreen: React.FC = () => {
               ))}
             </View>
 
-            <TouchableOpacity style={styles.saveCustomBtn} onPress={handleCreateCustom}>
-              <Text style={styles.saveCustomBtnText}>Save Exercise</Text>
+            <TouchableOpacity style={styles.saveCustomBtn} onPress={handleSaveCustom}>
+              <Text style={styles.saveCustomBtnText}>
+                {editingExercise ? 'Save Changes' : 'Save Exercise'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -699,11 +810,87 @@ const styles = StyleSheet.create({
   itemInfo: {
     flex: 1,
   },
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   itemName: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  listCustomBadge: {
+    backgroundColor: '#3B82F620',
+    borderColor: '#3B82F640',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  listCustomBadgeText: {
+    color: '#60A5FA',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  itemEditBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#1E2638',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1E2638',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  headerEditBtnText: {
+    color: '#3B82F6',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  detailCustomBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#3B82F620',
+    borderColor: '#3B82F660',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 8,
+  },
+  detailCustomBadgeText: {
+    color: '#60A5FA',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  editCustomActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#1E2638',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 14,
     marginBottom: 4,
+  },
+  editCustomActionBtnText: {
+    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '700',
   },
   tagRow: {
     flexDirection: 'row',

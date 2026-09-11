@@ -120,4 +120,71 @@ describe('backup file saving', () => {
       ],
     ]);
   });
+
+  it('falls back to sharing when StorageAccessFramework throws on Android', async () => {
+    const writes: unknown[][] = [];
+    const shares: unknown[][] = [];
+
+    const fileSystem = {
+      StorageAccessFramework: {
+        requestDirectoryPermissionsAsync: async () => ({
+          granted: true,
+          directoryUri: 'content://tree/restricted',
+        }),
+        createFileAsync: async () => {
+          throw new Error('SecurityException: The path is not accessible on Android 11+');
+        },
+        writeAsStringAsync: async () => {},
+      },
+      cacheDirectory: 'file:///cache/',
+      EncodingType: { UTF8: 'utf8' },
+      writeAsStringAsync: async (...args: unknown[]) => {
+        writes.push(args);
+      },
+    };
+
+    const sharing: IosSharing = {
+      isAvailableAsync: async () => true,
+      shareAsync: async (...args) => {
+        shares.push(args);
+      },
+    };
+
+    const { saveBackupAndroidWithFallback } = await import('../../src/utils/saveBackup.native');
+
+    const result = await saveBackupAndroidWithFallback(
+      backupJson,
+      'lifts-backup-2026-09-10.json',
+      fileSystem as any,
+      sharing
+    );
+
+    assert.equal(result, 'saved');
+    assert.equal(writes.length, 1);
+    assert.equal(shares.length, 1);
+    assert.deepEqual(shares[0], [
+      'file:///cache/lifts-backup-2026-09-10.json',
+      { mimeType: 'application/json', dialogTitle: 'Save Lifts backup' },
+    ]);
+  });
+
+  it('exports saveBackupToFiles and getBackupFilename across all platform variants', async () => {
+    const common = await import('../../src/utils/saveBackup');
+    const native = await import('../../src/utils/saveBackup.native');
+    const web = await import('../../src/utils/saveBackup.web');
+
+    assert.equal(typeof common.saveBackupToFiles, 'function');
+    assert.equal(typeof common.getBackupFilename, 'function');
+
+    assert.equal(typeof native.saveBackupToFiles, 'function');
+    assert.equal(typeof native.getBackupFilename, 'function');
+
+    assert.equal(typeof web.saveBackupToFiles, 'function');
+    assert.equal(typeof web.getBackupFilename, 'function');
+  });
+
+  it('exports exportBackup in export module', async () => {
+    const common = await import('../../src/utils/export');
+    assert.equal(typeof common.exportBackup, 'function');
+  });
 });

@@ -1083,4 +1083,63 @@ describe('webStore persistence and lease handling', () => {
 
     if (store.close) await store.close();
   });
+
+  it('updates custom exercises and synchronizes embedded exercises in routines and workouts in web store', async () => {
+    const dbName = `test-custom-edit-web-${Date.now()}`;
+    const store = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    // 1. Create custom exercise
+    const created = await store.createCustomExercise({
+      name: 'Old Web Custom Lift',
+      category: 'strength',
+      equipment: 'dumbbell',
+      primaryMuscles: ['shoulders'],
+    });
+
+    assert.equal(created.name, 'Old Web Custom Lift');
+    assert.equal(created.isCustom, true);
+
+    // 2. Save a routine referencing this custom exercise
+    const routineId = await store.saveRoutine('Custom Routine', 'Folder', [
+      { exerciseId: created.id, targetSets: 3, targetReps: '10-12', restTimerSeconds: 60 },
+    ]);
+
+    // 3. Update the custom exercise
+    const updated = await store.updateCustomExercise(created.id, {
+      name: 'Updated Web Custom Press',
+      equipment: 'machine',
+      primaryMuscles: ['shoulders', 'triceps'],
+    });
+
+    assert.equal(updated.id, created.id);
+    assert.equal(updated.name, 'Updated Web Custom Press');
+    assert.equal(updated.equipment, 'machine');
+
+    // Verify getExerciseById
+    const fetched = await store.getExerciseById(created.id);
+    assert.ok(fetched);
+    assert.equal(fetched.name, 'Updated Web Custom Press');
+
+    // Verify routine has updated embedded exercise
+    const routine = await store.getRoutineById(routineId);
+    assert.ok(routine);
+    assert.equal(routine.exercises[0].exercise.name, 'Updated Web Custom Press');
+
+    // 4. Reject editing built-in exercise
+    await assert.rejects(async () => {
+      await store.updateCustomExercise('Barbell_Bench_Press_-_Medium_Grip', {
+        name: 'Hacked Bench',
+      });
+    }, /Cannot edit built-in exercise/);
+
+    // 5. Reject empty name
+    await assert.rejects(async () => {
+      await store.updateCustomExercise(created.id, {
+        name: '',
+      });
+    }, /Exercise name cannot be empty/);
+
+    if (store.close) await store.close();
+  });
 });

@@ -77,6 +77,17 @@ export interface Store {
   searchExercises(query?: string, muscle?: string, equipment?: string): Promise<Exercise[]>;
   getExerciseById(id: string): Promise<Exercise | null>;
   createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise>;
+  updateCustomExercise(
+    id: string,
+    updates: {
+      name?: string;
+      category?: string;
+      equipment?: string;
+      primaryMuscles?: string[];
+      secondaryMuscles?: string[];
+      instructions?: string[];
+    }
+  ): Promise<Exercise>;
 
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;

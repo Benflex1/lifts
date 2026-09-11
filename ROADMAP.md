@@ -38,6 +38,7 @@
 | **Supersets & Giant Sets** | Premium feature | Planned Phase 3 | Backlog |
 | **Warmup Set Progression** | Premium feature | Planned Phase 3 | Backlog |
 | **Progress Charts & Graphs** | Premium feature | Weekly volume and muscle-frequency views; strength/1RM trend charts remain planned | Partial — volume/frequency delivered |
+| **CSV / Third-Party Import** | Freemium feature | Cross-platform importer for Hevy, Strong, Lyfta, FitNotes & CSV | Completed (Auto-format detection, unit normalization, exercise matching) |
 | **Exercise Demonstration Videos**| Premium feature | Planned Phase 4 | Backlog |
 | **Apple Health / Health Connect** | Premium feature | Planned Phase 4 | Backlog |
 
@@ -77,7 +78,7 @@
 - [x] **Weekly Volume & Muscle-Frequency Charts**: Delivered weekly completed-set volume and primary-muscle workout-frequency views.
 - [ ] **Strength / 1RM Progression Charts**: Interactive strength and estimated-1RM trend views per exercise or muscle group.
 - [ ] **Personal Record (PR) Badges**: Visual indicators when completing a set that sets a new weight or volume record.
-- [ ] **CSV / Strong / Hevy Data Import**: Import tools for existing workout history files from third-party trackers.
+- [x] **CSV / Strong / Hevy / Lyfta Data Import**: Cross-platform importer supporting Hevy, Strong, Lyfta, FitNotes, and generic CSV exports with fuzzy exercise matching, synonym expansion, interactive exercise library assignment & custom creation picker, unit normalization, duplicate workout detection, and dry-run preview.
 
 ### Phase 4: Ecosystem & Platform Integrations [Planned]
 - [ ] **Health Connect (Android) & Apple Health (iOS)**: Sync completed workouts and exercise duration with platform health services.

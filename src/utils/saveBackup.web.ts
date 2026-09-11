@@ -1,4 +1,7 @@
-import type { SaveBackupResult } from './saveBackup';
+import { buildBackupJson } from './backup';
+import { getBackupFilename, type SaveBackupResult } from './saveBackupCommon';
+
+export { getBackupFilename, type SaveBackupResult };
 
 export function saveBackupJson(json: string, filename: string): SaveBackupResult {
   if (typeof document === 'undefined' || typeof URL === 'undefined') {
@@ -13,4 +16,10 @@ export function saveBackupJson(json: string, filename: string): SaveBackupResult
   anchor.click();
   URL.revokeObjectURL(url);
   return 'saved';
+}
+
+export async function saveBackupToFiles(): Promise<SaveBackupResult> {
+  const json = await buildBackupJson();
+  const filename = getBackupFilename();
+  return saveBackupJson(json, filename);
 }

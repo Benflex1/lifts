@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import { MAX_BACKUP_SIZE_BYTES } from './backup';
+import { readNativeFileAsString } from './readNativeFile';
 
 export async function pickBackupJson(): Promise<string | null> {
   const result = await DocumentPicker.getDocumentAsync({
@@ -17,13 +17,9 @@ export async function pickBackupJson(): Promise<string | null> {
     throw new Error('Backup file exceeds the 50 MiB size limit');
   }
 
-  const content = await FileSystem.readAsStringAsync(asset.uri, {
-    encoding: FileSystem.EncodingType.UTF8,
+  const content = await readNativeFileAsString(asset.uri, {
+    maxSizeBytes: MAX_BACKUP_SIZE_BYTES,
   });
-
-  if (content.length > MAX_BACKUP_SIZE_BYTES) {
-    throw new Error('Backup file exceeds the 50 MiB size limit');
-  }
 
   return content;
 }
