@@ -23,6 +23,11 @@ import {
   Search,
   ChevronRight,
   X,
+  Flame,
+  TrendingUp,
+  Layers,
+  PieChart,
+  Calendar,
 } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
@@ -37,7 +42,22 @@ import { parseBackup } from '../utils/backup';
 import { computeRestorePlan } from '../utils/restore';
 import { useDialog } from '../context/DialogContext';
 import { Exercise, ExerciseGymScope, Gym, Workout } from '../types';
-import { MuscleFrequencyPoint, WeeklyVolumePoint, buildMuscleFrequency, buildWeeklyVolume } from '../workout/analytics';
+import {
+  MuscleFrequencyPoint,
+  WeeklyVolumePoint,
+  buildMuscleFrequency,
+  buildWeeklyVolume,
+  extractExerciseProgression,
+  buildTrainingDistribution,
+  buildRepRangeDistribution,
+  buildConsistencySummary,
+  buildLifetimeTrainingStats,
+  ProgressionMetric,
+  TimeframeFilter,
+} from '../workout/analytics';
+import { ProgressionCurveView } from '../components/ProgressionCurveView';
+import { ExercisePickerModal } from '../components/ExercisePickerModal';
+import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { pickCsvFile, computeCsvImportPlan, CsvImportPreview } from '../utils/importer';
 import { detectEquipmentHint, inferPrimaryMuscle } from '../utils/importer/exercise-mapper';
 import { createScopedId } from '../utils/ids';
@@ -76,6 +96,13 @@ export const AnalyticsScreen: React.FC = () => {
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolumePoint[]>([]);
   const [muscleFrequency, setMuscleFrequency] = useState<MuscleFrequencyPoint[]>([]);
 
+  // Progression states
+  const [selectedProgressionExerciseId, setSelectedProgressionExerciseId] = useState<string | null>(null);
+  const [progressionTimeframe, setProgressionTimeframe] = useState<TimeframeFilter>('ALL');
+  const [progressionMetric, setProgressionMetric] = useState<ProgressionMetric>('e1rm');
+  const [progressionGymFilter, setProgressionGymFilter] = useState<string | null>(null);
+  const [showProgressionPicker, setShowProgressionPicker] = useState(false);
+
   // CSV Import State
   const [csvPreview, setCsvPreview] = useState<CsvImportPreview | null>(null);
   const [csvFileName, setCsvFileName] = useState('');
@@ -112,6 +139,22 @@ export const AnalyticsScreen: React.FC = () => {
         setHasWorkoutData(workouts.length > 0);
         setWeeklyVolume(buildWeeklyVolume(workouts));
         setMuscleFrequency(buildMuscleFrequency(workouts));
+
+        if (workouts.length > 0) {
+          let foundExerciseId: string | null = null;
+          for (const w of workouts) {
+            for (const ex of w.exercises || []) {
+              if ((ex.sets || []).some((s) => s.isCompleted)) {
+                foundExerciseId = ex.exerciseId;
+                break;
+              }
+            }
+            if (foundExerciseId) break;
+          }
+          if (foundExerciseId) {
+            setSelectedProgressionExerciseId((prev) => prev || foundExerciseId);
+          }
+        }
       } catch (error) {
         console.error('Failed to load analytics:', error);
       } finally {
@@ -124,6 +167,47 @@ export const AnalyticsScreen: React.FC = () => {
       mounted = false;
     };
   }, []);
+
+  const progressionExercise = useMemo(() => {
+    if (!selectedProgressionExerciseId) {
+      return allExerciseList[0] || null;
+    }
+    return allExerciseList.find((e) => e.id === selectedProgressionExerciseId) || null;
+  }, [allExerciseList, selectedProgressionExerciseId]);
+
+  const progressionSeries = useMemo(() => {
+    if (!progressionExercise || allWorkouts.length === 0) return null;
+    const gymNames = new Map(allGyms.map((g) => [g.id, g.name]));
+    const allowedGymIds = progressionGymFilter ? [progressionGymFilter] : undefined;
+    return extractExerciseProgression(allWorkouts, progressionExercise.id, {
+      allowedGymIds,
+      timeframe: progressionTimeframe,
+      gymNamesMap: gymNames,
+    });
+  }, [progressionExercise, allWorkouts, progressionGymFilter, progressionTimeframe, allGyms]);
+
+  const [dashboardTimeframe, setDashboardTimeframe] = useState<TimeframeFilter>('ALL');
+  const [distMode, setDistMode] = useState<'volume' | 'sets'>('volume');
+
+  const lifetimeStats = useMemo(() => {
+    if (allWorkouts.length === 0) return null;
+    return buildLifetimeTrainingStats(allWorkouts);
+  }, [allWorkouts]);
+
+  const trainingDistribution = useMemo(() => {
+    if (allWorkouts.length === 0) return [];
+    return buildTrainingDistribution(allWorkouts, dashboardTimeframe);
+  }, [allWorkouts, dashboardTimeframe]);
+
+  const repRangeDistribution = useMemo(() => {
+    if (allWorkouts.length === 0) return null;
+    return buildRepRangeDistribution(allWorkouts, dashboardTimeframe);
+  }, [allWorkouts, dashboardTimeframe]);
+
+  const consistencySummary = useMemo(() => {
+    if (allWorkouts.length === 0) return null;
+    return buildConsistencySummary(allWorkouts, new Date(), 12);
+  }, [allWorkouts]);
 
   const trophySummary = useMemo(() => {
     if (allWorkouts.length === 0) return null;
@@ -153,12 +237,7 @@ export const AnalyticsScreen: React.FC = () => {
   const handleOpenRecordDetail = (record: ExerciseRecordSummary) => {
     const ex = allExerciseList.find((e) => e.id === record.exerciseId);
     if (!ex) return;
-    const scope = exerciseScopes[ex.id];
-    const currentGymId = trophyGymId || allGyms[0]?.id || 'default-gym';
-    const allowedGymIds = getAllowedGymIds(ex, scope, currentGymId);
-    const podium = extractExercisePodium(allWorkouts, ex.id, allGyms, allowedGymIds);
     setDetailExercise(ex);
-    setDetailPodium(podium);
   };
 
   const numWeight = displayToKg(parseFloat(weight) || 0, unit);
@@ -701,6 +780,54 @@ export const AnalyticsScreen: React.FC = () => {
           </View>
         ) : hasWorkoutData ? (
           <>
+            {/* Lifetime Training Overview Banner */}
+            {lifetimeStats && (
+              <View style={styles.lifetimeHeroCard}>
+                <View style={styles.lifetimeHeroHeader}>
+                  <TrendingUp size={18} color="#38BDF8" />
+                  <Text style={styles.lifetimeHeroTitle}>LIFETIME TRAINING SUMMARY</Text>
+                </View>
+                <View style={styles.lifetimeGrid}>
+                  <View style={styles.lifetimeTile}>
+                    <Text style={styles.lifetimeTileVal}>{lifetimeStats.totalWorkouts}</Text>
+                    <Text style={styles.lifetimeTileLabel}>WORKOUTS</Text>
+                    <Text style={styles.lifetimeTileSub}>
+                      {lifetimeStats.workoutsThisWeek} this week
+                    </Text>
+                  </View>
+                  <View style={styles.lifetimeTile}>
+                    <Text style={styles.lifetimeTileVal}>
+                      {formatWeight(lifetimeStats.totalVolumeKg, unit)}
+                    </Text>
+                    <Text style={styles.lifetimeTileLabel}>TOTAL VOLUME</Text>
+                    <Text style={styles.lifetimeTileSub}>
+                      {formatWeight(lifetimeStats.volumeThisWeekKg, unit)} this wk
+                    </Text>
+                  </View>
+                  <View style={styles.lifetimeTile}>
+                    <Text style={styles.lifetimeTileVal}>
+                      {lifetimeStats.totalDurationMinutes >= 60
+                        ? `${(lifetimeStats.totalDurationMinutes / 60).toFixed(1)}h`
+                        : `${lifetimeStats.totalDurationMinutes}m`}
+                    </Text>
+                    <Text style={styles.lifetimeTileLabel}>TIME TRAINED</Text>
+                    <Text style={styles.lifetimeTileSub}>
+                      {lifetimeStats.totalWorkouts > 0
+                        ? `~${Math.round(lifetimeStats.totalDurationMinutes / lifetimeStats.totalWorkouts)}m / session`
+                        : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.lifetimeTile}>
+                    <Text style={styles.lifetimeTileVal}>{lifetimeStats.totalSets}</Text>
+                    <Text style={styles.lifetimeTileLabel}>SETS LOGGED</Text>
+                    <Text style={styles.lifetimeTileSub}>
+                      {lifetimeStats.totalReps.toLocaleString()} reps
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
             <View style={styles.toolCard}>
               <View style={styles.toolHeader}>
                 <Dumbbell size={20} color="#38BDF8" />
@@ -747,6 +874,353 @@ export const AnalyticsScreen: React.FC = () => {
                       </View>
                     );
                   })}
+                </View>
+              </View>
+            )}
+
+            {/* Consistency & Streaks */}
+            {consistencySummary && (
+              <View style={styles.toolCard}>
+                <View style={styles.toolHeader}>
+                  <Flame size={20} color="#EF4444" />
+                  <Text style={styles.toolTitle}>Consistency & Streaks</Text>
+                </View>
+                <Text style={styles.toolSubtitle}>Your training rhythm over the last 12 weeks.</Text>
+
+                <View style={styles.streakBadgesRow}>
+                  <View style={styles.streakBadge}>
+                    <Text style={styles.streakEmoji}>🔥</Text>
+                    <View>
+                      <Text style={styles.streakValue}>{consistencySummary.currentStreakWeeks} Wks</Text>
+                      <Text style={styles.streakLabel}>CURRENT</Text>
+                    </View>
+                  </View>
+                  <View style={styles.streakBadge}>
+                    <Text style={styles.streakEmoji}>🏆</Text>
+                    <View>
+                      <Text style={styles.streakValue}>{consistencySummary.bestStreakWeeks} Wks</Text>
+                      <Text style={styles.streakLabel}>BEST STREAK</Text>
+                    </View>
+                  </View>
+                  <View style={styles.streakBadge}>
+                    <Text style={styles.streakEmoji}>⚡</Text>
+                    <View>
+                      <Text style={styles.streakValue}>{consistencySummary.averageWorkoutsPerWeek}/wk</Text>
+                      <Text style={styles.streakLabel}>12-WK AVG</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.consistencyHeatmap}>
+                  {consistencySummary.weeks.map((week) => {
+                    const active = week.workoutCount > 0;
+                    return (
+                      <View key={week.weekKey} style={styles.consistencyCol}>
+                        <View
+                          style={[
+                            styles.consistencyDot,
+                            active && styles.consistencyDotActive,
+                            week.workoutCount >= 3 && styles.consistencyDotHigh,
+                          ]}
+                        />
+                        <Text style={styles.consistencyLabel}>{week.label.split(' ')[0]}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Exercise Progression Curve */}
+            <View style={styles.toolCard}>
+              <View style={styles.toolHeader}>
+                <TrendingUp size={20} color="#38BDF8" />
+                <Text style={styles.toolTitle}>Exercise Progression</Text>
+              </View>
+              <Text style={styles.toolSubtitle}>
+                Estimated 1RM, load, and volume trajectory over time.
+              </Text>
+
+              {/* Exercise Selector */}
+              <TouchableOpacity
+                style={styles.exerciseSelectorBtn}
+                onPress={() => setShowProgressionPicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Choose exercise for progression curve"
+              >
+                <View style={styles.exerciseSelectorLeft}>
+                  <Dumbbell size={18} color="#38BDF8" />
+                  <Text style={styles.exerciseSelectorName}>
+                    {progressionExercise?.name || 'Select Exercise'}
+                  </Text>
+                </View>
+                <View style={styles.changeBadge}>
+                  <Text style={styles.changeBadgeText}>Change</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Timeframe & Metric Filters */}
+              <View style={styles.filterControlsRow}>
+                <View style={styles.filterGroup}>
+                  {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => (
+                    <TouchableOpacity
+                      key={tf}
+                      style={[
+                        styles.filterChip,
+                        progressionTimeframe === tf && styles.filterChipActive,
+                      ]}
+                      onPress={() => setProgressionTimeframe(tf)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          progressionTimeframe === tf && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {tf}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={styles.filterGroup}>
+                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => (
+                    <TouchableOpacity
+                      key={m}
+                      style={[
+                        styles.filterChip,
+                        progressionMetric === m && styles.filterChipActive,
+                      ]}
+                      onPress={() => setProgressionMetric(m)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          progressionMetric === m && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Gym Scoping Filter */}
+              {gymTrackingEnabled && allGyms.length > 1 && (
+                <View style={styles.gymFilterRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.gymChip,
+                      progressionGymFilter === null && styles.gymChipActive,
+                    ]}
+                    onPress={() => setProgressionGymFilter(null)}
+                  >
+                    <Text
+                      style={[
+                        styles.gymChipText,
+                        progressionGymFilter === null && styles.gymChipTextActive,
+                      ]}
+                    >
+                      All Gyms
+                    </Text>
+                  </TouchableOpacity>
+                  {allGyms.map((gym) => (
+                    <TouchableOpacity
+                      key={gym.id}
+                      style={[
+                        styles.gymChip,
+                        progressionGymFilter === gym.id && styles.gymChipActive,
+                      ]}
+                      onPress={() => setProgressionGymFilter(gym.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.gymChipText,
+                          progressionGymFilter === gym.id && styles.gymChipTextActive,
+                        ]}
+                      >
+                        {gym.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Chart */}
+              {progressionSeries ? (
+                <ProgressionCurveView
+                  series={progressionSeries}
+                  metric={progressionMetric}
+                  unit={unit}
+                  height={190}
+                  gymTrackingEnabled={gymTrackingEnabled}
+                />
+              ) : (
+                <View style={styles.emptyChartBox}>
+                  <Text style={styles.emptyChartText}>No recorded sets for this exercise yet.</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Training Breakdown Section Header & Timeframe Filter */}
+            <View style={styles.breakdownHeaderRow}>
+              <View style={styles.breakdownTitleWrap}>
+                <Layers size={18} color="#38BDF8" />
+                <Text style={styles.breakdownTitleText}>TRAINING BREAKDOWN</Text>
+              </View>
+              <View style={styles.breakdownTimeframeRow}>
+                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => (
+                  <TouchableOpacity
+                    key={tf}
+                    style={[
+                      styles.breakdownChip,
+                      dashboardTimeframe === tf && styles.breakdownChipActive,
+                    ]}
+                    onPress={() => setDashboardTimeframe(tf)}
+                  >
+                    <Text
+                      style={[
+                        styles.breakdownChipText,
+                        dashboardTimeframe === tf && styles.breakdownChipTextActive,
+                      ]}
+                    >
+                      {tf}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Rep-Range Training Zones */}
+            {repRangeDistribution && repRangeDistribution.totalSets > 0 && (
+              <View style={styles.toolCard}>
+                <View style={styles.toolHeader}>
+                  <Layers size={20} color="#10B981" />
+                  <Text style={styles.toolTitle}>Rep Range Training Zones</Text>
+                </View>
+                <Text style={styles.toolSubtitle}>
+                  Distribution of completed sets across strength, hypertrophy, and endurance ({dashboardTimeframe === 'ALL' ? 'All time' : `Past ${dashboardTimeframe}`}).
+                </Text>
+
+                <View style={styles.zoneStackedBar}>
+                  {repRangeDistribution.percentages.strength > 0 && (
+                    <View
+                      style={[
+                        styles.zoneBarSegment,
+                        {
+                          width: `${repRangeDistribution.percentages.strength}%`,
+                          backgroundColor: '#EF4444',
+                        },
+                      ]}
+                    />
+                  )}
+                  {repRangeDistribution.percentages.hypertrophy > 0 && (
+                    <View
+                      style={[
+                        styles.zoneBarSegment,
+                        {
+                          width: `${repRangeDistribution.percentages.hypertrophy}%`,
+                          backgroundColor: '#38BDF8',
+                        },
+                      ]}
+                    />
+                  )}
+                  {repRangeDistribution.percentages.endurance > 0 && (
+                    <View
+                      style={[
+                        styles.zoneBarSegment,
+                        {
+                          width: `${repRangeDistribution.percentages.endurance}%`,
+                          backgroundColor: '#10B981',
+                        },
+                      ]}
+                    />
+                  )}
+                </View>
+
+                <View style={styles.zoneLegendRow}>
+                  <View style={styles.zoneLegendItem}>
+                    <View style={[styles.zoneDot, { backgroundColor: '#EF4444' }]} />
+                    <Text style={styles.zoneLabel}>
+                      Strength (1-5): {repRangeDistribution.percentages.strength}% ({repRangeDistribution.strength} sets)
+                    </Text>
+                  </View>
+                  <View style={styles.zoneLegendItem}>
+                    <View style={[styles.zoneDot, { backgroundColor: '#38BDF8' }]} />
+                    <Text style={styles.zoneLabel}>
+                      Hypertrophy (6-12): {repRangeDistribution.percentages.hypertrophy}% ({repRangeDistribution.hypertrophy} sets)
+                    </Text>
+                  </View>
+                  <View style={styles.zoneLegendItem}>
+                    <View style={[styles.zoneDot, { backgroundColor: '#10B981' }]} />
+                    <Text style={styles.zoneLabel}>
+                      Endurance (13+): {repRangeDistribution.percentages.endurance}% ({repRangeDistribution.endurance} sets)
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Muscle Distribution with Volume vs Sets Toggle */}
+            {trainingDistribution.length > 0 && (
+              <View style={styles.toolCard}>
+                <View style={styles.toolHeaderBetween}>
+                  <View style={styles.toolHeaderLeft}>
+                    <PieChart size={20} color="#F59E0B" />
+                    <Text style={styles.toolTitle}>Muscle Distribution</Text>
+                  </View>
+                  <View style={styles.distToggleWrap}>
+                    <TouchableOpacity
+                      style={[styles.distToggleBtn, distMode === 'volume' && styles.distToggleBtnActive]}
+                      onPress={() => setDistMode('volume')}
+                    >
+                      <Text style={[styles.distToggleText, distMode === 'volume' && styles.distToggleTextActive]}>
+                        Volume
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.distToggleBtn, distMode === 'sets' && styles.distToggleBtnActive]}
+                      onPress={() => setDistMode('sets')}
+                    >
+                      <Text style={[styles.distToggleText, distMode === 'sets' && styles.distToggleTextActive]}>
+                        Sets
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={styles.toolSubtitle}>
+                  {distMode === 'volume'
+                    ? `Proportion of completed volume across muscle groups (${dashboardTimeframe === 'ALL' ? 'All time' : `Past ${dashboardTimeframe}`}).`
+                    : `Proportion of hard working sets completed across muscle groups (${dashboardTimeframe === 'ALL' ? 'All time' : `Past ${dashboardTimeframe}`}).`}
+                </Text>
+
+                <View style={styles.distList}>
+                  {[...trainingDistribution]
+                    .sort((a, b) => (distMode === 'volume' ? b.volumeKg - a.volumeKg : b.setsCount - a.setsCount))
+                    .slice(0, 8)
+                    .map((item) => {
+                      const pct = distMode === 'volume' ? item.percentage : item.setsPercentage;
+                      const valText = distMode === 'volume'
+                        ? `${item.percentage}% (${formatWeight(item.volumeKg, unit)})`
+                        : `${item.setsPercentage}% (${item.setsCount} ${item.setsCount === 1 ? 'set' : 'sets'})`;
+                      return (
+                        <View key={item.muscle} style={styles.distRow}>
+                          <View style={styles.distHeaderRow}>
+                            <Text style={styles.distMuscleName}>{item.muscle}</Text>
+                            <Text style={styles.distPercentage}>{valText}</Text>
+                          </View>
+                          <View style={styles.distBarTrack}>
+                            <View
+                              style={[
+                                styles.distBarFill,
+                                { width: `${Math.min(100, pct)}%` },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      );
+                    })}
                 </View>
               </View>
             )}
@@ -918,6 +1392,16 @@ export const AnalyticsScreen: React.FC = () => {
         onClose={() => setShowPlateCalc(false)}
       />
 
+      <ExercisePickerModal
+        visible={showProgressionPicker}
+        title="Select Progression Exercise"
+        onClose={() => setShowProgressionPicker(false)}
+        onSelectExercise={(ex) => {
+          setSelectedProgressionExerciseId(ex.id);
+          setShowProgressionPicker(false);
+        }}
+      />
+
       <CsvImportModal
         visible={csvPreview !== null}
         preview={csvPreview}
@@ -934,52 +1418,13 @@ export const AnalyticsScreen: React.FC = () => {
         onSetCustomExercise={handleSetCustomExercise}
       />
 
-      {/* Modal for Exercise Podium in Trophy Room */}
-      <Modal
+      {/* Modal for Exercise Details & History in Trophy Room */}
+      <ExerciseDetailModal
         visible={detailExercise !== null}
-        animationType="slide"
-        onRequestClose={() => setDetailExercise(null)}
-      >
-        <View style={styles.modalDetailContainer}>
-          <View style={styles.modalDetailHeader}>
-            <TouchableOpacity
-              onPress={() => setDetailExercise(null)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <X size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-            <Text style={styles.modalDetailTitle} numberOfLines={1}>
-              {detailExercise?.name}
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
-          <ScrollView style={styles.modalDetailScroll} contentContainerStyle={styles.modalDetailContent}>
-            {detailExercise && (
-              <View style={styles.modalDetailBadges}>
-                <View style={styles.modalDetailBadge}>
-                  <Text style={styles.modalDetailBadgeText}>
-                    Primary: {(detailExercise.primaryMuscles || []).join(', ')}
-                  </Text>
-                </View>
-                <View style={styles.modalDetailBadge}>
-                  <Text style={styles.modalDetailBadgeText}>
-                    Equipment: {detailExercise.equipment}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {detailPodium && (
-              <ExercisePodiumView
-                podium={detailPodium}
-                unit={unit}
-                isBodyweight={Boolean(detailExercise?.equipment?.toLowerCase().includes('body'))}
-                gymTrackingEnabled={gymTrackingEnabled}
-              />
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
+        exercise={detailExercise}
+        onClose={() => setDetailExercise(null)}
+        currentGym={trophyGymId ? allGyms.find((g) => g.id === trophyGymId) : null}
+      />
     </View>
   );
 };
@@ -1033,6 +1478,58 @@ const styles = StyleSheet.create({
     color: '#A7F3D0',
     fontSize: 12,
     lineHeight: 16,
+  },
+  lifetimeHeroCard: {
+    backgroundColor: '#181A20',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    marginBottom: 16,
+  },
+  lifetimeHeroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  lifetimeHeroTitle: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  lifetimeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  lifetimeTile: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    backgroundColor: '#13151B',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#20242E',
+  },
+  lifetimeTileVal: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  lifetimeTileLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  lifetimeTileSub: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '500',
   },
   chartLoading: {
     flexDirection: 'row',
@@ -1617,6 +2114,318 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 12,
     fontWeight: '600',
+  },
+  streakBadgesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  streakBadge: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#181A20',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    padding: 10,
+  },
+  streakEmoji: {
+    fontSize: 18,
+  },
+  streakValue: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  streakLabel: {
+    color: '#6B7280',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  consistencyHeatmap: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#262A34',
+  },
+  consistencyCol: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  consistencyDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#262A34',
+  },
+  consistencyDotActive: {
+    backgroundColor: '#EF444490',
+  },
+  consistencyDotHigh: {
+    backgroundColor: '#EF4444',
+  },
+  consistencyLabel: {
+    color: '#6B7280',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  exerciseSelectorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#181A20',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  exerciseSelectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  exerciseSelectorName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+  },
+  changeBadge: {
+    backgroundColor: '#38BDF820',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#38BDF840',
+  },
+  changeBadgeText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  filterControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#181A20',
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  filterChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  filterChipActive: {
+    backgroundColor: '#38BDF820',
+  },
+  filterChipText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  gymFilterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  gymChip: {
+    backgroundColor: '#181A20',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  gymChipActive: {
+    backgroundColor: '#38BDF820',
+    borderColor: '#38BDF850',
+  },
+  gymChipText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  gymChipTextActive: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  emptyChartBox: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#14171F',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  emptyChartText: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
+  zoneStackedBar: {
+    flexDirection: 'row',
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#262A34',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  zoneBarSegment: {
+    height: '100%',
+  },
+  zoneLegendRow: {
+    gap: 6,
+  },
+  zoneLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  zoneDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  zoneLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  distList: {
+    gap: 10,
+  },
+  distRow: {
+    gap: 4,
+  },
+  distHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  distMuscleName: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  distPercentage: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  distBarTrack: {
+    height: 6,
+    backgroundColor: '#262A34',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  distBarFill: {
+    height: '100%',
+    backgroundColor: '#F59E0B',
+    borderRadius: 3,
+  },
+  breakdownHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  breakdownTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  breakdownTitleText: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  breakdownTimeframeRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  breakdownChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#181A20',
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  breakdownChipActive: {
+    backgroundColor: '#38BDF820',
+    borderColor: '#38BDF8',
+  },
+  breakdownChipText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  breakdownChipTextActive: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  toolHeaderBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  toolHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  distToggleWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#13151B',
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  distToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  distToggleBtnActive: {
+    backgroundColor: '#F59E0B25',
+  },
+  distToggleText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  distToggleTextActive: {
+    color: '#F59E0B',
+    fontWeight: '700',
   },
 });
 

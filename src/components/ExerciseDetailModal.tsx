@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { X, Edit2, Trophy, Info, Calendar as CalendarIcon } from 'lucide-react-native';
+import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Exercise, DualExerciseStats, Gym, ExerciseGymScope, Workout } from '../types';
 import { useSettings } from '../context/SettingsContext';
@@ -22,6 +22,9 @@ import {
 import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
 import { ExercisePodium, extractExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from './ExercisePodiumView';
+import { ProgressionCurveView } from './ProgressionCurveView';
+import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
+import { calculate1RM } from '../utils/calculator';
 
 export interface ExerciseDetailModalProps {
   visible: boolean;
@@ -50,6 +53,13 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const [exercisePodium, setExercisePodium] = useState<ExercisePodium | null>(null);
   const [resolvedGym, setResolvedGym] = useState<Gym | null>(initialGym ?? null);
   const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
+  const [allHistoryWorkouts, setAllHistoryWorkouts] = useState<Workout[]>([]);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<ProgressionMetric>('e1rm');
+  const [selectedTimeframe, setSelectedTimeframe] = useState<TimeframeFilter>('ALL');
+  const [historyGymFilter, setHistoryGymFilter] = useState<string | null>(null);
+  const [highlightedWorkoutId, setHighlightedWorkoutId] = useState<string | null>(null);
+  const [availableGyms, setAvailableGyms] = useState<Gym[]>([]);
   const [gymNamesMap, setGymNamesMap] = useState<Map<string, string>>(new Map());
   const requestCounterRef = useRef(0);
 
@@ -58,7 +68,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       setExerciseStats(null);
       setExerciseScope(null);
       setRecentWorkouts([]);
+      setAllHistoryWorkouts([]);
+      setShowAllHistory(false);
       setExercisePodium(null);
+      setSelectedTimeframe('ALL');
+      setHistoryGymFilter(null);
+      setHighlightedWorkoutId(null);
       return;
     }
 
@@ -73,6 +88,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         }
         if (requestId !== requestCounterRef.current) return;
         setResolvedGym(activeGym);
+        setAvailableGyms(allGyms);
 
         const [stats, scope, historyWorkouts] = await Promise.all([
           getExerciseStats(exercise!.id, activeGym.id),
@@ -87,6 +103,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         setExerciseStats(stats);
         setExerciseScope(scope);
         setExercisePodium(podium);
+        setAllHistoryWorkouts(historyWorkouts);
         setRecentWorkouts(historyWorkouts.slice(0, 5));
         setGymNamesMap(new Map(allGyms.map((g) => [g.id, g.name])));
       } catch (err) {
@@ -97,6 +114,23 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
     void loadData();
   }, [visible, exercise, initialGym, refreshKey]);
+
+  const progressionSeries = React.useMemo(() => {
+    if (!exercise || allHistoryWorkouts.length === 0) return null;
+    const allowedGymIds = resolvedGym
+      ? getAllowedGymIds(exercise, exerciseScope || undefined, resolvedGym.id)
+      : undefined;
+    return extractExerciseProgression(allHistoryWorkouts, exercise.id, {
+      allowedGymIds,
+      timeframe: selectedTimeframe,
+      gymNamesMap,
+    });
+  }, [exercise, allHistoryWorkouts, resolvedGym, exerciseScope, gymNamesMap, selectedTimeframe]);
+
+  const filteredHistoryWorkouts = React.useMemo(() => {
+    if (!historyGymFilter) return allHistoryWorkouts;
+    return allHistoryWorkouts.filter((w) => w.gymId === historyGymFilter);
+  }, [allHistoryWorkouts, historyGymFilter]);
 
   if (!exercise) {
     return null;
@@ -222,55 +256,211 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             </>
           )}
 
-          {/* Recent Workout History */}
+          {/* Progression Curve */}
+          {progressionSeries && progressionSeries.points.length > 0 && (
+            <View style={styles.progressionSection}>
+              <View style={styles.progressionHeaderRow}>
+                <View style={styles.progressionTitleWrap}>
+                  <TrendingUp size={16} color="#38BDF8" />
+                  <Text style={styles.progressionTitleText}>STRENGTH PROGRESSION</Text>
+                </View>
+                <View style={styles.metricTabsRow}>
+                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => (
+                    <TouchableOpacity
+                      key={m}
+                      style={[
+                        styles.metricTab,
+                        selectedMetric === m && styles.metricTabActive,
+                      ]}
+                      onPress={() => setSelectedMetric(m)}
+                    >
+                      <Text
+                        style={[
+                          styles.metricTabText,
+                          selectedMetric === m && styles.metricTabTextActive,
+                        ]}
+                      >
+                        {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Timeframe selector row */}
+              <View style={styles.timeframeTabsRow}>
+                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => (
+                  <TouchableOpacity
+                    key={tf}
+                    style={[
+                      styles.timeframeChip,
+                      selectedTimeframe === tf && styles.timeframeChipActive,
+                    ]}
+                    onPress={() => setSelectedTimeframe(tf)}
+                  >
+                    <Text
+                      style={[
+                        styles.timeframeChipText,
+                        selectedTimeframe === tf && styles.timeframeChipTextActive,
+                      ]}
+                    >
+                      {tf}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <ProgressionCurveView
+                series={progressionSeries}
+                metric={selectedMetric}
+                unit={unit}
+                height={190}
+                gymTrackingEnabled={gymTrackingEnabled}
+                onPointPress={(p) => setHighlightedWorkoutId(p.workoutId)}
+              />
+            </View>
+          )}
+
+          {/* Chronological Workout History */}
           <View style={styles.historySection}>
             <View style={styles.historyHeader}>
               <CalendarIcon size={16} color="#38BDF8" />
-              <Text style={styles.historyHeaderTitle}>RECENT SESSIONS</Text>
+              <Text style={styles.historyHeaderTitle}>
+                {showAllHistory ? `ALL SESSIONS (${filteredHistoryWorkouts.length})` : 'RECENT SESSIONS'}
+              </Text>
             </View>
 
-            {recentWorkouts.length > 0 ? (
-              recentWorkouts.map((w) => {
-                const exerciseOccurrences = w.exercises.filter((e) => e.exerciseId === exercise.id);
-                const allSets = exerciseOccurrences.flatMap((e) => e.sets).filter((s) => s.isCompleted);
-                if (allSets.length === 0) return null;
+            {/* Gym filter pills for history */}
+            {gymTrackingEnabled && availableGyms.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.historyGymFilterScroll}>
+                <TouchableOpacity
+                  style={[styles.historyGymFilterPill, historyGymFilter === null && styles.historyGymFilterPillActive]}
+                  onPress={() => setHistoryGymFilter(null)}
+                >
+                  <Text style={[styles.historyGymFilterPillText, historyGymFilter === null && styles.historyGymFilterPillTextActive]}>
+                    All Gyms
+                  </Text>
+                </TouchableOpacity>
+                {availableGyms.map((g) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    style={[styles.historyGymFilterPill, historyGymFilter === g.id && styles.historyGymFilterPillActive]}
+                    onPress={() => setHistoryGymFilter(g.id)}
+                  >
+                    <Text style={[styles.historyGymFilterPillText, historyGymFilter === g.id && styles.historyGymFilterPillTextActive]}>
+                      {g.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
-                const dateStr = new Date(w.startTime).toLocaleDateString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                });
-                const gymName = gymNamesMap.get(w.gymId);
+            {filteredHistoryWorkouts.length > 0 ? (
+              <>
+                {(showAllHistory ? filteredHistoryWorkouts : filteredHistoryWorkouts.slice(0, 5)).map((w) => {
+                  const exerciseOccurrences = w.exercises.filter((e) => e.exerciseId === exercise.id);
+                  const allSets = exerciseOccurrences.flatMap((e) => e.sets).filter((s) => s.isCompleted);
+                  if (allSets.length === 0) return null;
 
-                return (
-                  <View key={w.id} style={styles.historyCard}>
-                    <View style={styles.historyCardHeader}>
-                      <View style={styles.historyCardMeta}>
-                        <Text style={styles.historyDate}>{dateStr}</Text>
-                        <Text style={styles.historyWorkoutName}>{w.name}</Text>
-                      </View>
-                      {gymTrackingEnabled && gymName && (
-                        <View style={styles.historyGymBadge}>
-                          <Text style={styles.historyGymBadgeText}>{gymName}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.historySetsRow}>
-                      {allSets.map((s, sIdx) => (
-                        <View key={s.id || sIdx} style={styles.historySetPill}>
-                          <Text style={styles.historySetNum}>{sIdx + 1}</Text>
-                          <Text style={styles.historySetMetric}>
-                            {formatWeight(s.weightKg, unit)} × {s.reps}
-                          </Text>
-                          {s.rpe !== undefined && s.rpe !== null && (
-                            <Text style={styles.historySetRpe}>@{s.rpe}</Text>
+                  const dateStr = new Date(w.startTime).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  });
+                  const gymName = gymNamesMap.get(w.gymId);
+                  const firstOccurrenceNotes = exerciseOccurrences.find((o) => Boolean(o.notes))?.notes;
+
+                  const session1RM = allSets.reduce((max, s) => {
+                    const calc = calculate1RM(s.weightKg, s.reps);
+                    return calc.average > max ? calc.average : max;
+                  }, 0);
+                  const sessionVolume = allSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+                  const isHighlighted = w.id === highlightedWorkoutId;
+
+                  return (
+                    <View key={w.id} style={[styles.historyCard, isHighlighted && styles.historyCardHighlighted]}>
+                      <View style={styles.historyCardHeader}>
+                        <View style={styles.historyCardMeta}>
+                          <Text style={styles.historyDate}>{dateStr}</Text>
+                          <Text style={styles.historyWorkoutName}>{w.name}</Text>
+                          {(session1RM > 0 || sessionVolume > 0) && (
+                            <View style={styles.historyMetaStats}>
+                              {session1RM > 0 && (
+                                <Text style={styles.historySessionMetaText}>
+                                  1RM: {formatWeight(session1RM, unit)}
+                                </Text>
+                              )}
+                              {sessionVolume > 0 && (
+                                <Text style={styles.historySessionMetaText}>
+                                  Vol: {formatWeight(sessionVolume, unit)}
+                                </Text>
+                              )}
+                            </View>
                           )}
                         </View>
-                      ))}
+                        {gymTrackingEnabled && gymName && (
+                          <View style={styles.historyGymBadge}>
+                            <Text style={styles.historyGymBadgeText}>{gymName}</Text>
+                          </View>
+                        )}
+                      </View>
+                      {firstOccurrenceNotes ? (
+                        <Text style={styles.historyNotesText}>"{firstOccurrenceNotes}"</Text>
+                      ) : null}
+                      <View style={styles.historySetsRow}>
+                        {allSets.map((s, sIdx) => (
+                          <View key={s.id || sIdx} style={styles.historySetPill}>
+                            {s.type && s.type !== 'normal' ? (
+                              <View
+                                style={[
+                                  styles.historySetTypeTag,
+                                  s.type === 'warmup'
+                                    ? styles.historySetTypeWarmup
+                                    : s.type === 'drop'
+                                    ? styles.historySetTypeDrop
+                                    : styles.historySetTypeFailure,
+                                ]}
+                              >
+                                <Text style={styles.historySetTypeTagText}>
+                                  {s.type === 'warmup' ? 'W' : s.type === 'drop' ? 'D' : 'F'}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.historySetNum}>{sIdx + 1}</Text>
+                            )}
+                            <Text style={styles.historySetMetric}>
+                              {s.weightKg > 0 ? formatWeight(s.weightKg, unit) : 'BW'} × {s.reps}
+                            </Text>
+                            {s.rpe !== undefined && s.rpe !== null && (
+                              <Text style={styles.historySetRpe}>@{s.rpe}</Text>
+                            )}
+                          </View>
+                        ))}
+                      </View>
                     </View>
-                  </View>
-                );
-              })
+                  );
+                })}
+
+                {filteredHistoryWorkouts.length > 5 && (
+                  <TouchableOpacity
+                    style={styles.expandHistoryBtn}
+                    onPress={() => setShowAllHistory((prev) => !prev)}
+                    accessibilityRole="button"
+                    accessibilityLabel={showAllHistory ? 'Show recent 5 sessions' : `View all ${filteredHistoryWorkouts.length} sessions`}
+                  >
+                    <Text style={styles.expandHistoryBtnText}>
+                      {showAllHistory
+                        ? 'Show Recent 5 Sessions'
+                        : `View All ${filteredHistoryWorkouts.length} Recorded Sessions`}
+                    </Text>
+                    {showAllHistory ? (
+                      <ChevronUp size={16} color="#38BDF8" />
+                    ) : (
+                      <ChevronDown size={16} color="#38BDF8" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              </>
             ) : (
               <View style={styles.historyEmpty}>
                 <Text style={styles.historyEmptyText}>No recorded workout sessions for this exercise yet.</Text>
@@ -667,5 +857,163 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 13,
     fontStyle: 'italic',
+  },
+  historyNotesText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  expandHistoryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    backgroundColor: '#181A20',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    marginTop: 4,
+  },
+  expandHistoryBtnText: {
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  progressionSection: {
+    marginBottom: 20,
+  },
+  progressionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  progressionTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  progressionTitleText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  metricTabsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#181A20',
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  metricTab: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  metricTabActive: {
+    backgroundColor: '#38BDF820',
+  },
+  metricTabText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  metricTabTextActive: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  timeframeTabsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  timeframeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#181A20',
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  timeframeChipActive: {
+    backgroundColor: '#38BDF820',
+    borderColor: '#38BDF8',
+  },
+  timeframeChipText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  timeframeChipTextActive: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  historyGymFilterScroll: {
+    marginBottom: 12,
+  },
+  historyGymFilterPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#181A20',
+    borderWidth: 1,
+    borderColor: '#262A34',
+    marginRight: 6,
+  },
+  historyGymFilterPillActive: {
+    backgroundColor: '#38BDF820',
+    borderColor: '#38BDF8',
+  },
+  historyGymFilterPillText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  historyGymFilterPillTextActive: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  historyCardHighlighted: {
+    borderColor: '#38BDF8',
+    borderWidth: 1.5,
+  },
+  historyMetaStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 3,
+  },
+  historySessionMetaText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  historySetTypeTag: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historySetTypeWarmup: {
+    backgroundColor: '#F59E0B25',
+  },
+  historySetTypeDrop: {
+    backgroundColor: '#8B5CF625',
+  },
+  historySetTypeFailure: {
+    backgroundColor: '#EF444425',
+  },
+  historySetTypeTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#CBD5E1',
   },
 });

@@ -89,10 +89,10 @@
 - [ ] **Supersets & Giant Sets**: Visual grouping brackets connecting two or more exercises with combined rest intervals.
 - [ ] **Warmup Progression Calculator**: Automatic warmup ramp generator (e.g. 50% x 10, 70% x 5, 85% x 2).
 - [x] **Weekly Volume & Muscle-Frequency Charts**: Delivered weekly completed-set volume and primary-muscle workout-frequency views.
-- [ ] **Per-Exercise Chronological History Drill-Down**: Full set-by-set workout logs per exercise with dates, gyms, loads, reps, volume, and session notes.
-- [ ] **Strength / 1RM Progression Curves**: Interactive strength, volume, and estimated-1RM trend views per exercise or muscle group.
+- [x] **Per-Exercise Chronological History Drill-Down**: Full set-by-set workout logs per exercise with dates, gyms, loads, reps, volume, and session notes.
+- [x] **Strength / 1RM Progression Curves**: Interactive strength, volume, and estimated-1RM trend views per exercise or muscle group.
 - [ ] **Personal Record (PR) Badges & Celebrations**: Visual badges and celebration cues when achieving a new weight, volume, or rep record.
-- [ ] **Comprehensive Training Analytics**: Muscle balance heatmaps, fatigue & recovery estimates, rep range distributions, and consistency timelines.
+- [x] **Comprehensive Training Analytics**: Muscle balance heatmaps, fatigue & recovery estimates, rep range distributions, and consistency timelines.
 - [x] **CSV / Strong / Hevy / Lyfta Data Import**: Cross-platform importer supporting Hevy, Strong, Lyfta, FitNotes, and generic CSV exports with fuzzy exercise matching, synonym expansion, interactive exercise library assignment & custom creation picker, unit normalization, duplicate workout detection, and dry-run preview.
 
 ### Phase 4: Ecosystem & Rich Media [Planned]

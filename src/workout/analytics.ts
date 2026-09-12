@@ -1,4 +1,5 @@
 import { Workout } from '../types';
+import { calculate1RM } from '../utils/calculator';
 
 export interface WeeklyVolumePoint {
   key: string;
@@ -92,4 +93,504 @@ export function buildMuscleFrequency(
     .map(([muscle, count]) => ({ muscle, count }))
     .sort((a, b) => b.count - a.count || a.muscle.localeCompare(b.muscle))
     .slice(0, Math.max(0, Math.floor(limit)));
+}
+
+export type ProgressionMetric = 'e1rm' | 'max_weight' | 'volume' | 'max_reps';
+export type TimeframeFilter = '1M' | '3M' | '6M' | '1Y' | 'ALL';
+
+export interface ProgressionDataPoint {
+  workoutId: string;
+  workoutName: string;
+  date: string;
+  dateLabel: string;
+  timestamp: number;
+  gymId: string;
+  gymName?: string;
+  e1rmKg: number;
+  maxWeightKg: number;
+  totalVolumeKg: number;
+  maxReps: number;
+  isPr: boolean;
+  topSet: {
+    weightKg: number;
+    reps: number;
+    rpe?: number;
+  };
+}
+
+export interface ExerciseProgressionSeries {
+  exerciseId: string;
+  points: ProgressionDataPoint[];
+  summary: {
+    allTimeBest1RM: number;
+    allTimeBestWeight: number;
+    allTimeBestReps: number;
+    current1RM: number;
+    currentWeight: number;
+    currentReps: number;
+    changePercent1RM: number;
+    changePercentReps: number;
+    totalSessions: number;
+    totalVolumeKg: number;
+  };
+}
+
+export function getTimeframeCutoff(timeframe: TimeframeFilter, now: Date = new Date()): number {
+  if (timeframe === 'ALL') return 0;
+  const nowMs = now.getTime();
+  const dayMs = 24 * 60 * 60 * 1000;
+  switch (timeframe) {
+    case '1M':
+      return nowMs - 30 * dayMs;
+    case '3M':
+      return nowMs - 90 * dayMs;
+    case '6M':
+      return nowMs - 180 * dayMs;
+    case '1Y':
+      return nowMs - 365 * dayMs;
+    default:
+      return 0;
+  }
+}
+
+export interface ExtractProgressionOptions {
+  allowedGymIds?: string[] | Set<string> | null;
+  timeframe?: TimeframeFilter;
+  now?: Date;
+  gymNamesMap?: Map<string, string> | Record<string, string>;
+}
+
+export function extractExerciseProgression(
+  workouts: Workout[],
+  exerciseId: string,
+  options: ExtractProgressionOptions = {},
+): ExerciseProgressionSeries {
+  const { allowedGymIds, timeframe = 'ALL', now = new Date(), gymNamesMap } = options;
+  const cutoffMs = getTimeframeCutoff(timeframe, now);
+
+  const rawPoints: ProgressionDataPoint[] = [];
+
+  for (const workout of workouts) {
+    if (allowedGymIds) {
+      const isAllowed = allowedGymIds instanceof Set
+        ? allowedGymIds.has(workout.gymId)
+        : (allowedGymIds.length === 0 || allowedGymIds.includes(workout.gymId));
+      if (!isAllowed) {
+        continue;
+      }
+    }
+
+    const workoutDate = new Date(workout.startTime);
+    const timestamp = workoutDate.getTime();
+    if (Number.isNaN(timestamp) || timestamp < cutoffMs) {
+      continue;
+    }
+
+    const occurrences = (workout.exercises || []).filter((e) => e.exerciseId === exerciseId);
+    const completedSets = occurrences.flatMap((e) => e.sets || []).filter((s) => s.isCompleted);
+    if (completedSets.length === 0) continue;
+
+    let maxWeightKg = 0;
+    let maxReps = 0;
+    let totalVolumeKg = 0;
+    let best1RM = 0;
+    let topSet = completedSets[0];
+    let topSetScore = -1;
+
+    for (const set of completedSets) {
+      const weight = Number.isFinite(set.weightKg) ? Math.max(0, set.weightKg) : 0;
+      const reps = Number.isFinite(set.reps) ? Math.max(0, set.reps) : 0;
+      const setVol = weight * reps;
+      totalVolumeKg += setVol;
+
+      if (weight > maxWeightKg) maxWeightKg = weight;
+      if (reps > maxReps) maxReps = reps;
+
+      const calc = calculate1RM(weight, reps);
+      const est1RM = calc.average;
+      if (est1RM > best1RM) best1RM = est1RM;
+
+      // Score set priority for topSet metadata: prefer higher 1RM, tie-break by weight
+      const score = est1RM * 1000 + weight;
+      if (score > topSetScore) {
+        topSetScore = score;
+        topSet = set;
+      }
+    }
+
+    const gymName = gymNamesMap
+      ? (gymNamesMap instanceof Map ? gymNamesMap.get(workout.gymId) : (gymNamesMap as Record<string, string>)[workout.gymId])
+      : undefined;
+
+    rawPoints.push({
+      workoutId: workout.id,
+      workoutName: workout.name,
+      date: workout.startTime,
+      dateLabel: dateLabel(workoutDate),
+      timestamp,
+      gymId: workout.gymId,
+      gymName,
+      e1rmKg: best1RM,
+      maxWeightKg,
+      totalVolumeKg,
+      maxReps,
+      isPr: false,
+      topSet: {
+        weightKg: topSet.weightKg,
+        reps: topSet.reps,
+        rpe: topSet.rpe,
+      },
+    });
+  }
+
+  // Chronological sort: oldest to newest
+  rawPoints.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Compute PR flags as records fall chronologically
+  let runningBest1RM = 0;
+  let runningBestWeight = 0;
+  let runningBestReps = 0;
+
+  for (let i = 0; i < rawPoints.length; i++) {
+    const p = rawPoints[i];
+    if (i > 0 && (p.e1rmKg > runningBest1RM || p.maxWeightKg > runningBestWeight || (runningBestWeight === 0 && p.maxReps > runningBestReps))) {
+      p.isPr = true;
+    }
+    if (p.e1rmKg > runningBest1RM) runningBest1RM = p.e1rmKg;
+    if (p.maxWeightKg > runningBestWeight) runningBestWeight = p.maxWeightKg;
+    if (p.maxReps > runningBestReps) runningBestReps = p.maxReps;
+  }
+
+  const allTimeBest1RM = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.e1rmKg)) : 0;
+  const allTimeBestWeight = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxWeightKg)) : 0;
+  const allTimeBestReps = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxReps)) : 0;
+  const current1RM = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].e1rmKg : 0;
+  const currentWeight = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxWeightKg : 0;
+  const currentReps = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxReps : 0;
+
+  let changePercent1RM = 0;
+  let changePercentReps = 0;
+  if (rawPoints.length >= 2) {
+    const firstVal = rawPoints[0].e1rmKg;
+    const lastVal = rawPoints[rawPoints.length - 1].e1rmKg;
+    if (firstVal > 0) {
+      changePercent1RM = Number((((lastVal - firstVal) / firstVal) * 100).toFixed(1));
+    }
+    const firstReps = rawPoints[0].maxReps;
+    const lastReps = rawPoints[rawPoints.length - 1].maxReps;
+    if (firstReps > 0) {
+      changePercentReps = Number((((lastReps - firstReps) / firstReps) * 100).toFixed(1));
+    }
+  }
+
+  const totalVolumeKg = rawPoints.reduce((sum, p) => sum + p.totalVolumeKg, 0);
+
+  return {
+    exerciseId,
+    points: rawPoints,
+    summary: {
+      allTimeBest1RM,
+      allTimeBestWeight,
+      allTimeBestReps,
+      current1RM,
+      currentWeight,
+      currentReps,
+      changePercent1RM,
+      changePercentReps,
+      totalSessions: rawPoints.length,
+      totalVolumeKg,
+    },
+  };
+}
+
+export interface MuscleDistributionPoint {
+  muscle: string;
+  volumeKg: number;
+  setsCount: number;
+  percentage: number;
+  setsPercentage: number;
+}
+
+export function buildTrainingDistribution(
+  workouts: Workout[],
+  timeframe: TimeframeFilter = 'ALL',
+  now: Date = new Date(),
+): MuscleDistributionPoint[] {
+  const cutoffMs = getTimeframeCutoff(timeframe, now);
+  const muscleMap = new Map<string, { volumeKg: number; setsCount: number }>();
+
+  let grandTotalVolume = 0;
+  let grandTotalSets = 0;
+
+  for (const workout of workouts) {
+    const workoutTime = new Date(workout.startTime).getTime();
+    if (Number.isNaN(workoutTime) || workoutTime < cutoffMs) continue;
+
+    for (const ex of workout.exercises || []) {
+      const completedSets = (ex.sets || []).filter((s) => s.isCompleted);
+      if (completedSets.length === 0) continue;
+
+      const rawMuscles = ex.exercise?.primaryMuscles || [];
+      const muscles = rawMuscles.length > 0
+        ? rawMuscles.map((m) => m.trim().toLowerCase()).filter(Boolean)
+        : ['other'];
+
+      const totalExVolume = completedSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+      const totalExSets = completedSets.length;
+      grandTotalVolume += totalExVolume;
+      grandTotalSets += totalExSets;
+
+      for (const m of muscles) {
+        const existing = muscleMap.get(m) || { volumeKg: 0, setsCount: 0 };
+        existing.volumeKg += totalExVolume;
+        existing.setsCount += totalExSets;
+        muscleMap.set(m, existing);
+      }
+    }
+  }
+
+  return Array.from(muscleMap.entries())
+    .map(([muscle, data]) => ({
+      muscle,
+      volumeKg: data.volumeKg,
+      setsCount: data.setsCount,
+      percentage: grandTotalVolume > 0 ? Number(((data.volumeKg / grandTotalVolume) * 100).toFixed(1)) : 0,
+      setsPercentage: grandTotalSets > 0 ? Number(((data.setsCount / grandTotalSets) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.volumeKg - a.volumeKg || a.muscle.localeCompare(b.muscle));
+}
+
+export interface LifetimeTrainingStats {
+  totalWorkouts: number;
+  totalVolumeKg: number;
+  totalDurationMinutes: number;
+  totalSets: number;
+  totalReps: number;
+  workoutsThisWeek: number;
+  volumeThisWeekKg: number;
+}
+
+export function buildLifetimeTrainingStats(
+  workouts: Workout[],
+  now: Date = new Date(),
+): LifetimeTrainingStats {
+  let totalVolumeKg = 0;
+  let totalDurationMinutes = 0;
+  let totalSets = 0;
+  let totalReps = 0;
+
+  const currentWeekStart = startOfWeek(now).getTime();
+  let workoutsThisWeek = 0;
+  let volumeThisWeekKg = 0;
+
+  for (const w of workouts) {
+    const wTime = new Date(w.startTime).getTime();
+    const isThisWeek = !Number.isNaN(wTime) && wTime >= currentWeekStart;
+    if (isThisWeek) {
+      workoutsThisWeek++;
+    }
+
+    totalDurationMinutes += Math.round((w.durationSeconds || 0) / 60);
+
+    let workoutVolume = 0;
+    for (const ex of w.exercises || []) {
+      for (const s of ex.sets || []) {
+        if (!s.isCompleted) continue;
+        totalSets++;
+        const reps = Number.isFinite(s.reps) ? Math.max(0, s.reps) : 0;
+        const weight = Number.isFinite(s.weightKg) ? Math.max(0, setWeightOrZero(s.weightKg)) : 0;
+        totalReps += reps;
+        const setVol = weight * reps;
+        workoutVolume += setVol;
+      }
+    }
+
+    totalVolumeKg += workoutVolume;
+    if (isThisWeek) {
+      volumeThisWeekKg += workoutVolume;
+    }
+  }
+
+  return {
+    totalWorkouts: workouts.length,
+    totalVolumeKg,
+    totalDurationMinutes,
+    totalSets,
+    totalReps,
+    workoutsThisWeek,
+    volumeThisWeekKg,
+  };
+}
+
+function setWeightOrZero(val: number | undefined | null): number {
+  return typeof val === 'number' && Number.isFinite(val) ? Math.max(0, val) : 0;
+}
+
+export interface RepRangeDistribution {
+  strength: number; // 1-5 reps
+  hypertrophy: number; // 6-12 reps
+  endurance: number; // 13+ reps
+  totalSets: number;
+  percentages: {
+    strength: number;
+    hypertrophy: number;
+    endurance: number;
+  };
+}
+
+export function buildRepRangeDistribution(
+  workouts: Workout[],
+  timeframe: TimeframeFilter = 'ALL',
+  now: Date = new Date(),
+): RepRangeDistribution {
+  const cutoffMs = getTimeframeCutoff(timeframe, now);
+  let strength = 0;
+  let hypertrophy = 0;
+  let endurance = 0;
+
+  for (const workout of workouts) {
+    const workoutTime = new Date(workout.startTime).getTime();
+    if (Number.isNaN(workoutTime) || workoutTime < cutoffMs) continue;
+
+    for (const ex of workout.exercises || []) {
+      for (const s of ex.sets || []) {
+        if (!s.isCompleted || s.reps <= 0) continue;
+        if (s.reps <= 5) strength++;
+        else if (s.reps <= 12) hypertrophy++;
+        else endurance++;
+      }
+    }
+  }
+
+  const totalSets = strength + hypertrophy + endurance;
+  return {
+    strength,
+    hypertrophy,
+    endurance,
+    totalSets,
+    percentages: {
+      strength: totalSets > 0 ? Number(((strength / totalSets) * 100).toFixed(1)) : 0,
+      hypertrophy: totalSets > 0 ? Number(((hypertrophy / totalSets) * 100).toFixed(1)) : 0,
+      endurance: totalSets > 0 ? Number(((endurance / totalSets) * 100).toFixed(1)) : 0,
+    },
+  };
+}
+
+export interface ConsistencyWeek {
+  weekKey: string;
+  label: string;
+  workoutCount: number;
+  totalDurationMinutes: number;
+}
+
+export interface ConsistencySummary {
+  currentStreakWeeks: number;
+  bestStreakWeeks: number;
+  totalWorkouts: number;
+  averageWorkoutsPerWeek: number;
+  weeks: ConsistencyWeek[];
+}
+
+export function buildConsistencySummary(
+  workouts: Workout[],
+  now: Date = new Date(),
+  weekSpan: number = 12,
+): ConsistencySummary {
+  const span = Math.max(1, Math.floor(weekSpan));
+  const currentWeekDate = startOfWeek(now);
+  const firstWeekDate = new Date(currentWeekDate);
+  firstWeekDate.setUTCDate(firstWeekDate.getUTCDate() - (span - 1) * 7);
+
+  const weeks: ConsistencyWeek[] = [];
+  const weeksByKey = new Map<string, ConsistencyWeek>();
+
+  for (let i = 0; i < span; i++) {
+    const wDate = new Date(firstWeekDate);
+    wDate.setUTCDate(wDate.getUTCDate() + i * 7);
+    const key = dateKey(wDate);
+    const item: ConsistencyWeek = {
+      weekKey: key,
+      label: dateLabel(wDate),
+      workoutCount: 0,
+      totalDurationMinutes: 0,
+    };
+    weeks.push(item);
+    weeksByKey.set(key, item);
+  }
+
+  // Populate weeks and all-time weekly counts for streak calculation
+  const allTimeWeeklyCounts = new Map<string, number>();
+
+  for (const w of workouts) {
+    const wTime = new Date(w.startTime);
+    if (Number.isNaN(wTime.getTime())) continue;
+
+    const wWeek = dateKey(startOfWeek(wTime));
+    allTimeWeeklyCounts.set(wWeek, (allTimeWeeklyCounts.get(wWeek) || 0) + 1);
+
+    const tracked = weeksByKey.get(wWeek);
+    if (tracked) {
+      tracked.workoutCount += 1;
+      tracked.totalDurationMinutes += Math.round((w.durationSeconds || 0) / 60);
+    }
+  }
+
+  // Current streak
+  const currentWeekKey = dateKey(currentWeekDate);
+  const currentWeekCount = allTimeWeeklyCounts.get(currentWeekKey) || 0;
+
+  let currentStreakWeeks = 0;
+  // If current week has workouts, start checking from current week.
+  // Otherwise, start checking from previous week (streak is still ongoing if last week was active).
+  let checkDate = new Date(currentWeekDate);
+  if (currentWeekCount === 0) {
+    checkDate.setUTCDate(checkDate.getUTCDate() - 7);
+  }
+
+  while (true) {
+    const key = dateKey(checkDate);
+    const count = allTimeWeeklyCounts.get(key) || 0;
+    if (count > 0) {
+      currentStreakWeeks++;
+      checkDate.setUTCDate(checkDate.getUTCDate() - 7);
+    } else {
+      break;
+    }
+  }
+
+  // Best streak across all recorded weeks
+  const sortedWeekKeys = Array.from(allTimeWeeklyCounts.keys()).sort();
+  let bestStreakWeeks = 0;
+  let runningStreak = 0;
+  let lastWeekMs: number | null = null;
+
+  for (const key of sortedWeekKeys) {
+    const count = allTimeWeeklyCounts.get(key) || 0;
+    if (count > 0) {
+      const thisWeekMs = new Date(key).getTime();
+      if (lastWeekMs === null || Math.round((thisWeekMs - lastWeekMs) / (7 * 86400 * 1000)) === 1) {
+        runningStreak++;
+      } else {
+        runningStreak = 1;
+      }
+      lastWeekMs = thisWeekMs;
+      if (runningStreak > bestStreakWeeks) {
+        bestStreakWeeks = runningStreak;
+      }
+    }
+  }
+  if (currentStreakWeeks > bestStreakWeeks) {
+    bestStreakWeeks = currentStreakWeeks;
+  }
+
+  const workoutsInSpan = weeks.reduce((sum, w) => sum + w.workoutCount, 0);
+  const averageWorkoutsPerWeek = Number((workoutsInSpan / span).toFixed(1));
+
+  return {
+    currentStreakWeeks,
+    bestStreakWeeks,
+    totalWorkouts: workouts.length,
+    averageWorkoutsPerWeek,
+    weeks,
+  };
 }
