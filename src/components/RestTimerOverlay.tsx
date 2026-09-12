@@ -4,7 +4,11 @@ import { Timer, Plus, Minus, X } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatTimer } from '../utils/calculator';
 
-export const RestTimerOverlay: React.FC = () => {
+export interface RestTimerOverlayProps {
+  nextUpText?: string | null;
+}
+
+export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText }) => {
   const { restTimer, adjustRestTimer, stopRestTimer } = useWorkout();
 
   if (!restTimer.isActive || restTimer.remainingSeconds <= 0) {
@@ -70,6 +74,18 @@ export const RestTimerOverlay: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Up Next in Superset / Exercise Cue */}
+      {nextUpText ? (
+        <View style={styles.nextUpContainer}>
+          <View style={styles.nextUpBadge}>
+            <Text style={styles.nextUpBadgeText}>NEXT</Text>
+          </View>
+          <Text style={styles.nextUpText} numberOfLines={1}>
+            {nextUpText}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -171,5 +187,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 2,
+  },
+  nextUpContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161922',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#2A303F',
+    gap: 8,
+  },
+  nextUpBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#8B5CF625',
+    borderWidth: 1,
+    borderColor: '#8B5CF660',
+  },
+  nextUpBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#A78BFA',
+    letterSpacing: 0.5,
+  },
+  nextUpText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E5E7EB',
   },
 });

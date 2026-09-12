@@ -17,6 +17,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Layers,
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
 import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise, ExerciseGymScope } from '../types';
@@ -43,6 +44,7 @@ import { WorkoutEditModal } from '../components/WorkoutEditModal';
 import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { PRBadge } from '../components/PRBadge';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
+import { getSupersetMetadata } from '../workout/supersets';
 
 interface HistoryScreenProps {
   workoutUpdate?: Workout | null;
@@ -376,6 +378,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
             const isExpanded = expandedId === item.id;
             const detail = workoutDetails[item.id];
             const prSummary = workoutPRs[item.id];
+            const supersetMetaMap = detail?.exercises
+              ? getSupersetMetadata(detail.exercises)
+              : new Map();
 
             return (
               <View key={item.id} style={styles.historyCard}>
@@ -435,6 +440,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                     <Text style={styles.metricText}>{item.totalSets} sets</Text>
                   </View>
 
+                  {supersetMetaMap.size > 0 && (
+                    <View style={styles.metric}>
+                      <Layers size={14} color="#8B5CF6" />
+                      <Text style={[styles.metricText, { color: '#C4B5FD', fontWeight: '700' }]}>
+                        Supersets
+                      </Text>
+                    </View>
+                  )}
+
                   {prSummary && prSummary.totalCount > 0 && (
                     <View style={styles.metric}>
                       <Text style={styles.metricPRText}>
@@ -480,69 +494,135 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                           const completedSets = ex.sets.filter(s => s.isCompleted);
                           if (completedSets.length === 0) return null;
                           const exercisePRs = prSummary?.achievements.filter(a => a.exerciseId === ex.exerciseId);
+                          const ssMeta = supersetMetaMap.get(ex.id);
 
                           return (
-                            <View key={exIdx} style={styles.detailExBlock}>
-                              <View style={styles.detailExHeader}>
-                                <Text style={styles.detailExTitle}>{ex.exercise.name}</Text>
-                                {exercisePRs && exercisePRs.length > 0 && (
-                                  <View style={styles.detailExPRBadge}>
-                                    <Text style={styles.detailExPRBadgeText}>
-                                      {exercisePRs.some(a => a.achievement.rank === 1)
-                                        ? '🥇 PR'
-                                        : exercisePRs.some(a => a.achievement.rank === 2)
-                                        ? '🥈 2nd'
-                                        : '🥉 3rd'}
+                            <React.Fragment key={exIdx}>
+                              {ssMeta?.isFirst && (
+                                <View style={[styles.historySupersetHeader, { borderLeftColor: ssMeta.color }]}>
+                                  <View
+                                    style={[
+                                      styles.historySupersetBadge,
+                                      { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
+                                    ]}
+                                  >
+                                    <Layers size={12} color={ssMeta.color} />
+                                    <Text style={[styles.historySupersetBadgeText, { color: ssMeta.color }]}>
+                                      {ssMeta.label}
                                     </Text>
                                   </View>
-                                )}
-                              </View>
-                              {ex.notes && (
-                                <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
+                                  <Text style={styles.historySupersetSubtext}>
+                                    {ssMeta.totalInGroup} Exercises · Alternating Sets
+                                  </Text>
+                                </View>
                               )}
-                              <View style={styles.detailSetsGrid}>
-                                {completedSets.map((s, sIdx) => {
-                                  const setPR = prSummary?.setPRs.get(s.id);
-                                  return (
-                                    <View key={sIdx} style={styles.detailSetPill}>
-                                      <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
-                                      <Text style={styles.detailSetWeight}>
-                                        {formatWeight(s.weightKg, unit)} × {s.reps}
+
+                              <View
+                                style={[
+                                  styles.detailExBlock,
+                                  ssMeta && {
+                                    borderLeftWidth: 3,
+                                    borderLeftColor: ssMeta.color,
+                                  },
+                                ]}
+                              >
+                                <View style={styles.detailExHeader}>
+                                  <View style={styles.detailExTitleWrap}>
+                                    <Text style={styles.detailExTitle}>{ex.exercise.name}</Text>
+                                    {ssMeta && (
+                                      <View
+                                        style={[
+                                          styles.historySupersetPosBadge,
+                                          { borderColor: ssMeta.color + '60' },
+                                        ]}
+                                      >
+                                        <Text style={[styles.historySupersetPosText, { color: ssMeta.color }]}>
+                                          {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                  {exercisePRs && exercisePRs.length > 0 && (
+                                    <View style={styles.detailExPRBadge}>
+                                      <Text style={styles.detailExPRBadgeText}>
+                                        {exercisePRs.some(a => a.achievement.rank === 1)
+                                          ? '🥇 PR'
+                                          : exercisePRs.some(a => a.achievement.rank === 2)
+                                          ? '🥈 2nd'
+                                          : '🥉 3rd'}
                                       </Text>
-                                      {setPR?.primary && (
-                                        <PRBadge
-                                          achievement={setPR.primary}
-                                          compact
-                                          showGym={gymTrackingEnabled}
-                                          onPress={() => {
-                                            const desc = setPR.achievements
-                                              .map((a) => `• ${formatPRDescription(a, unit)}`)
-                                              .join('\n');
-                                            notify({
-                                              title:
-                                                setPR.primary?.rank === 1
-                                                  ? setPR.primary?.isTie
-                                                    ? 'Tied Personal Record 🥇'
-                                                    : 'Personal Record 🥇'
-                                                  : setPR.primary?.rank === 2
-                                                  ? 'Silver Record 🥈'
-                                                  : 'Bronze Record 🥉',
-                                              message: `${ex.exercise.name} (Set #${s.setNumber})\n\n${desc}`,
-                                            });
-                                          }}
-                                        />
-                                      )}
-                                      {s.type !== 'normal' && (
-                                        <Text style={styles.detailSetType}>{s.type.toUpperCase()}</Text>
-                                      )}
-                                      {s.rpe != null && (
-                                        <Text style={styles.detailRpe}>RPE {s.rpe}</Text>
-                                      )}
                                     </View>
-                                  );
-                                })}
+                                  )}
+                                </View>
+                                {ex.notes && (
+                                  <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
+                                )}
+                                <View style={styles.detailSetsGrid}>
+                                  {completedSets.map((s, sIdx) => {
+                                    const setPR = prSummary?.setPRs.get(s.id);
+                                    return (
+                                      <View key={sIdx} style={styles.detailSetPill}>
+                                        <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
+                                        <Text style={styles.detailSetWeight}>
+                                          {formatWeight(s.weightKg, unit)} × {s.reps}
+                                        </Text>
+                                        {setPR?.primary && (
+                                          <PRBadge
+                                            achievement={setPR.primary}
+                                            compact
+                                            showGym={gymTrackingEnabled}
+                                            onPress={() => {
+                                              const desc = setPR.achievements
+                                                .map((a) => `• ${formatPRDescription(a, unit)}`)
+                                                .join('\n');
+                                              notify({
+                                                title:
+                                                  setPR.primary?.rank === 1
+                                                    ? setPR.primary?.isTie
+                                                      ? 'Tied Personal Record 🥇'
+                                                      : 'Personal Record 🥇'
+                                                    : setPR.primary?.rank === 2
+                                                    ? 'Silver Record 🥈'
+                                                    : 'Bronze Record 🥉',
+                                                message: `${ex.exercise.name} (Set #${s.setNumber})\n\n${desc}`,
+                                              });
+                                            }}
+                                          />
+                                        )}
+                                        {s.type !== 'normal' && (
+                                          <View
+                                            style={[
+                                              styles.detailSetTypeBadge,
+                                              s.type === 'warmup'
+                                                ? styles.detailSetTypeWarmup
+                                                : s.type === 'drop'
+                                                ? styles.detailSetTypeDrop
+                                                : styles.detailSetTypeFailure,
+                                            ]}
+                                          >
+                                            <Text
+                                              style={[
+                                                styles.detailSetTypeBadgeText,
+                                                s.type === 'warmup'
+                                                  ? styles.detailSetTypeWarmupText
+                                                  : s.type === 'drop'
+                                                  ? styles.detailSetTypeDropText
+                                                  : styles.detailSetTypeFailureText,
+                                              ]}
+                                            >
+                                              {s.type === 'warmup' ? 'W' : s.type === 'drop' ? 'D' : 'F'}
+                                            </Text>
+                                          </View>
+                                        )}
+                                        {s.rpe != null && (
+                                          <Text style={styles.detailRpe}>RPE {s.rpe}</Text>
+                                        )}
+                                      </View>
+                                    );
+                                  })}
+                                </View>
                               </View>
-                            </View>
+                            </React.Fragment>
                           );
                         })}
                       </>
@@ -947,5 +1027,82 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 14,
     textAlign: 'center',
+  },
+  historySupersetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 8,
+    paddingVertical: 4,
+    marginTop: 8,
+    marginBottom: 4,
+    borderLeftWidth: 3,
+  },
+  historySupersetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  historySupersetBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  historySupersetSubtext: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  detailExTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  historySupersetPosBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    backgroundColor: '#1E232F',
+  },
+  historySupersetPosText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  detailSetTypeBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    borderWidth: 1,
+  },
+  detailSetTypeBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  detailSetTypeWarmup: {
+    backgroundColor: '#78350F30',
+    borderColor: '#F59E0B60',
+  },
+  detailSetTypeWarmupText: {
+    color: '#F59E0B',
+  },
+  detailSetTypeDrop: {
+    backgroundColor: '#83184330',
+    borderColor: '#EC489960',
+  },
+  detailSetTypeDropText: {
+    color: '#F472B6',
+  },
+  detailSetTypeFailure: {
+    backgroundColor: '#7F1D1D30',
+    borderColor: '#EF444460',
+  },
+  detailSetTypeFailureText: {
+    color: '#EF4444',
   },
 });

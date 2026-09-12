@@ -194,4 +194,109 @@ describe('Warmup Set Progression Calculator', () => {
     assert.equal(ramp.length, 1);
     assert.equal(ramp[0].displayWeight, 20);
   });
+
+  it('supports custom ramp protocols with customSteps', () => {
+    const ramp = generateWarmupRamp({
+      workingWeightKg: 100,
+      barWeightKg: 20,
+      unit: 'kg',
+      preset: 'custom',
+      customSteps: [
+        { percentage: 0, reps: 10, useBarIfAvailable: true },
+        { percentage: 0.40, reps: 8 },
+        { percentage: 0.60, reps: 4 },
+        { percentage: 0.80, reps: 2 },
+      ],
+    });
+
+    assert.equal(ramp.length, 4);
+    assert.equal(ramp[0].displayWeight, 20);
+    assert.equal(ramp[0].reps, 10);
+    assert.equal(ramp[1].displayWeight, 40);
+    assert.equal(ramp[1].reps, 8);
+    assert.equal(ramp[2].displayWeight, 60);
+    assert.equal(ramp[2].reps, 4);
+    assert.equal(ramp[3].displayWeight, 80);
+    assert.equal(ramp[3].reps, 2);
+  });
+
+  it('supports step exclusion and customized reps filtering', () => {
+    const ramp = generateWarmupRamp({
+      workingWeightKg: 100,
+      barWeightKg: 20,
+      unit: 'kg',
+      preset: 'strength',
+    });
+
+    // Say user excludes step 1 (setIndex 1, the empty bar)
+    const excluded = new Set([1]);
+    const customReps: Record<number, number> = { 2: 6, 3: 4 };
+
+    const applied = ramp
+      .filter((s) => !excluded.has(s.setIndex))
+      .map((s) => ({
+        weightKg: s.weightKg,
+        reps: customReps[s.setIndex] ?? s.reps,
+      }));
+
+    assert.equal(applied.length, 3);
+    assert.equal(applied[0].weightKg, 50);
+    assert.equal(applied[0].reps, 6); // customized from 5 to 6
+    assert.equal(applied[1].weightKg, 70);
+    assert.equal(applied[1].reps, 4); // customized from 3 to 4
+    assert.equal(applied[2].weightKg, 85);
+    assert.equal(applied[2].reps, 1); // unedited default
+  });
+});
+
+describe('Barbell Sleeve Visual & Plate Color Specs', () => {
+  const { getPlateVisualSpec } = require('../../src/workout/barbell');
+
+  it('returns correct Olympic color-coded specs for KG plates', () => {
+    const red25 = getPlateVisualSpec(25, 'kg');
+    assert.equal(red25.backgroundColor, '#DC2626');
+    assert.equal(red25.label, '25');
+
+    const blue20 = getPlateVisualSpec(20, 'kg');
+    assert.equal(blue20.backgroundColor, '#2563EB');
+    assert.equal(blue20.label, '20');
+
+    const yellow15 = getPlateVisualSpec(15, 'kg');
+    assert.equal(yellow15.backgroundColor, '#EAB308');
+    assert.equal(yellow15.label, '15');
+
+    const green10 = getPlateVisualSpec(10, 'kg');
+    assert.equal(green10.backgroundColor, '#16A34A');
+    assert.equal(green10.label, '10');
+
+    const white5 = getPlateVisualSpec(5, 'kg');
+    assert.equal(white5.backgroundColor, '#F3F4F6');
+    assert.equal(white5.label, '5');
+
+    const black2_5 = getPlateVisualSpec(2.5, 'kg');
+    assert.equal(black2_5.backgroundColor, '#1F2937');
+
+    const silver1_25 = getPlateVisualSpec(1.25, 'kg');
+    assert.equal(silver1_25.backgroundColor, '#94A3B8');
+  });
+
+  it('returns correct Olympic color-coded specs for LB plates', () => {
+    const red55 = getPlateVisualSpec(55, 'lb');
+    assert.equal(red55.backgroundColor, '#DC2626');
+
+    const blue45 = getPlateVisualSpec(45, 'lb');
+    assert.equal(blue45.backgroundColor, '#2563EB');
+
+    const yellow35 = getPlateVisualSpec(35, 'lb');
+    assert.equal(yellow35.backgroundColor, '#EAB308');
+
+    const green25 = getPlateVisualSpec(25, 'lb');
+    assert.equal(green25.backgroundColor, '#16A34A');
+
+    const black10 = getPlateVisualSpec(10, 'lb');
+    assert.equal(black10.backgroundColor, '#1F2937');
+
+    const white5 = getPlateVisualSpec(5, 'lb');
+    assert.equal(white5.backgroundColor, '#F3F4F6');
+  });
 });

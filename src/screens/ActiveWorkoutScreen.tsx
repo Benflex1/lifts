@@ -40,7 +40,7 @@ import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
-import { formatWeight, kgToDisplay } from '../utils/units';
+import { formatWeight, kgToDisplay, displayToKg } from '../utils/units';
 import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
@@ -64,6 +64,7 @@ import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../wo
 import { PRBadge } from '../components/PRBadge';
 import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { WarmupModal } from '../components/WarmupModal';
+import { roundToIncrement, getDefaultIncrement } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
 
@@ -92,6 +93,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
+    restTimer,
     expandedExercises,
     toggleExerciseExpanded,
     setExerciseExpanded,
@@ -123,6 +125,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [selectedDetailExercise, setSelectedDetailExercise] = useState<Exercise | null>(null);
   const [warmupModalExercise, setWarmupModalExercise] = useState<ActiveExercise | null>(null);
+  const [supersetNextUpCue, setSupersetNextUpCue] = useState<string | null>(null);
   const exerciseLayoutsRef = useRef<Record<string, ExerciseLayout>>({});
 
   const supersetMetaMap = useMemo(() => {
@@ -262,11 +265,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       const nextTarget = resolveNextSupersetTarget(activeWorkout, exerciseId, setId);
       if (nextTarget && !nextTarget.isRoundComplete) {
         setExerciseExpanded(nextTarget.nextExerciseId, true);
-        notify({
-          title: `Next in ${supersetMetaMap.get(exerciseId)?.label || 'Superset'}`,
-          message: `${nextTarget.nextExerciseName} · Set ${nextTarget.nextSetNumber}`,
-        });
+        const meta = supersetMetaMap.get(exerciseId);
+        const groupLabel = meta?.label || 'SUPERSET';
+        setSupersetNextUpCue(`${groupLabel}: ${nextTarget.nextExerciseName} · Set ${nextTarget.nextSetNumber}`);
+      } else {
+        setSupersetNextUpCue(null);
       }
+    } else if (!isBecomingCompleted) {
+      setSupersetNextUpCue(null);
     }
   };
 
@@ -449,8 +455,44 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   const handleSelectSetType = (type: SetType) => {
     if (!setOptionsModal) return;
-    updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, { type });
-    setSetOptionsModal((prev) => (prev ? { ...prev, set: { ...prev.set, type } } : null));
+    const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
+    const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
+    const prevSet = setIdx > 0 ? modalEx?.sets[setIdx - 1] : undefined;
+
+    let updatedWeightKg = setOptionsModal.set.weightKg;
+    let isWeightEdited = setOptionsModal.set.isWeightEdited;
+
+    if (
+      type === 'drop' &&
+      (!updatedWeightKg || !isWeightEdited) &&
+      prevSet &&
+      prevSet.weightKg > 0
+    ) {
+      const inc = getDefaultIncrement(unit);
+      const prevDisp = kgToDisplay(prevSet.weightKg, unit);
+      updatedWeightKg = displayToKg(roundToIncrement(prevDisp * 0.80, inc), unit);
+      isWeightEdited = true;
+    }
+
+    updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, {
+      type,
+      ...(type === 'drop' && updatedWeightKg !== setOptionsModal.set.weightKg
+        ? { weightKg: updatedWeightKg, isWeightEdited: true }
+        : {}),
+    });
+    setSetOptionsModal((prev) =>
+      prev
+        ? {
+            ...prev,
+            set: {
+              ...prev.set,
+              type,
+              weightKg: updatedWeightKg,
+              isWeightEdited,
+            },
+          }
+        : null
+    );
   };
 
   const handleSelectRpe = (rpe: number | null) => {
@@ -983,7 +1025,27 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       </ScrollView>
 
       {/* Floating Rest Timer Overlay */}
-      <RestTimerOverlay />
+      <RestTimerOverlay nextUpText={supersetNextUpCue} />
+
+      {/* Non-blocking Floating Superset Cue when timer is not active */}
+      {!restTimer.isActive && supersetNextUpCue && (
+        <View style={styles.supersetFloatingCue}>
+          <View style={styles.supersetCueBadge}>
+            <Text style={styles.supersetCueBadgeText}>NEXT UP</Text>
+          </View>
+          <Text style={styles.supersetCueText} numberOfLines={1}>
+            {supersetNextUpCue}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSupersetNextUpCue(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss next up cue"
+          >
+            <X size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Floating PR Celebration Toast */}
       <PRCelebrationToast
@@ -1156,6 +1218,64 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   );
                 })}
               </View>
+
+              {/* Quick Drop Set Load Reduction Helper */}
+              {(() => {
+                if (setOptionsModal?.set.type !== 'drop') return null;
+                const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
+                const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
+                const prevSet = setIdx > 0 ? modalEx?.sets[setIdx - 1] : undefined;
+                if (!prevSet || !prevSet.weightKg || prevSet.weightKg <= 0) return null;
+
+                const inc = getDefaultIncrement(unit);
+                const prevDisplay = kgToDisplay(prevSet.weightKg, unit);
+                const dropReductions = [
+                  { pct: 20, kg: displayToKg(roundToIncrement(prevDisplay * 0.80, inc), unit) },
+                  { pct: 25, kg: displayToKg(roundToIncrement(prevDisplay * 0.75, inc), unit) },
+                  { pct: 30, kg: displayToKg(roundToIncrement(prevDisplay * 0.70, inc), unit) },
+                ];
+
+                return (
+                  <View style={styles.dropHelperBox}>
+                    <Text style={styles.dropHelperTitle}>DROP SET WEIGHT SUGGESTIONS</Text>
+                    <Text style={styles.dropHelperDesc}>
+                      Based on Set #{prevSet.setNumber} ({prevDisplay} {unit}):
+                    </Text>
+                    <View style={styles.dropChipsRow}>
+                      {dropReductions.map((r) => {
+                        const isCurrent = Math.abs(setOptionsModal.set.weightKg - r.kg) < 0.05;
+                        return (
+                          <TouchableOpacity
+                            key={r.pct}
+                            style={[styles.dropChip, isCurrent && styles.dropChipActive]}
+                            onPress={() => {
+                              updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, {
+                                weightKg: r.kg,
+                                isWeightEdited: true,
+                              });
+                              setSetOptionsModal((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      set: { ...prev.set, weightKg: r.kg, isWeightEdited: true },
+                                    }
+                                  : null
+                              );
+                            }}
+                          >
+                            <Text style={[styles.dropChipPct, isCurrent && styles.dropChipPctActive]}>
+                              -{r.pct}%
+                            </Text>
+                            <Text style={[styles.dropChipWeight, isCurrent && styles.dropChipWeightActive]}>
+                              {kgToDisplay(r.kg, unit)} {unit}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })()}
             </View>
 
             {/* Fast 1-Tap RPE / Effort Grid */}
@@ -2293,5 +2413,102 @@ const styles = StyleSheet.create({
   ssPositionText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  supersetFloatingCue: {
+    position: 'absolute',
+    bottom: 80,
+    left: 16,
+    right: 16,
+    backgroundColor: '#1E232F',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#8B5CF680',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 900,
+  },
+  supersetCueBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#8B5CF625',
+    borderWidth: 1,
+    borderColor: '#8B5CF680',
+  },
+  supersetCueBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#C4B5FD',
+    letterSpacing: 0.5,
+  },
+  supersetCueText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F3F4F6',
+  },
+  dropHelperBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#1E232F',
+    borderWidth: 1,
+    borderColor: '#EC489940',
+    gap: 6,
+  },
+  dropHelperTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#F472B6',
+    letterSpacing: 0.5,
+  },
+  dropHelperDesc: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  dropChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dropChip: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#161922',
+    borderWidth: 1,
+    borderColor: '#374151',
+    alignItems: 'center',
+  },
+  dropChipActive: {
+    backgroundColor: '#EC489925',
+    borderColor: '#EC4899',
+  },
+  dropChipPct: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#F472B6',
+  },
+  dropChipPctActive: {
+    color: '#F472B6',
+  },
+  dropChipWeight: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E5E7EB',
+    marginTop: 2,
+  },
+  dropChipWeightActive: {
+    color: '#FFFFFF',
   },
 });
