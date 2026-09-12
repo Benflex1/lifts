@@ -8,6 +8,9 @@ import {
   StyleSheet,
   Modal,
   BackHandler,
+  Platform,
+  Keyboard,
+  KeyboardAvoidingView,
 } from 'react-native';
 import {
   Clock,
@@ -29,6 +32,7 @@ import {
   ArrowDown,
   Repeat,
   Trophy,
+  Info,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -38,6 +42,7 @@ import { formatWeight, kgToDisplay } from '../utils/units';
 import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
+import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { DraggableExerciseCard } from '../components/DraggableExerciseCard';
@@ -55,6 +60,7 @@ import { formatPreviousMetric } from '../workout/gym-display';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from '../components/PRBadge';
+import { applyPreviousSetStats } from '../workout/gym-session';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -78,6 +84,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
+    expandedExercises,
+    toggleExerciseExpanded,
+    setExerciseExpanded,
+    expandAllExercises,
+    collapseAllExercises,
     gyms,
     activeGym,
     setActiveGym,
@@ -101,6 +112,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const [showRpeColumn, setShowRpeColumn] = useState(false);
   const [editingNoteExId, setEditingNoteExId] = useState<string | null>(null);
   const [isDraggingExercise, setIsDraggingExercise] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [selectedDetailExercise, setSelectedDetailExercise] = useState<Exercise | null>(null);
   const exerciseLayoutsRef = useRef<Record<string, ExerciseLayout>>({});
 
   const handleExerciseLayout = (itemId: string, layout: ExerciseLayout) => {
@@ -215,47 +228,22 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     toggleSetComplete(exerciseId, setId);
   };
 
-  // Accordion state: which exercises are expanded
-  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
-
-  // Initialize accordion state on load: first incomplete exercise is expanded, others collapsed
-  useEffect(() => {
-    if (!activeWorkout || activeWorkout.exercises.length === 0) return;
-
-    setExpandedExercises((prev) => {
-      // If already initialized, preserve existing toggles
-      if (Object.keys(prev).length > 0) {
-        // Ensure any newly added exercises are expanded
-        const next = { ...prev };
-        let hasMissing = false;
-        for (const ex of activeWorkout.exercises) {
-          if (next[ex.id] === undefined) {
-            next[ex.id] = true;
-            hasMissing = true;
-          }
-        }
-        return hasMissing ? next : prev;
-      }
-
-      // Initial layout: expand first exercise (or first incomplete exercise)
-      const initial: Record<string, boolean> = {};
-      let firstIncompleteFound = false;
-
-      activeWorkout.exercises.forEach((ex, idx) => {
-        const isComplete = ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted);
-        if (!firstIncompleteFound && !isComplete) {
-          initial[ex.id] = true;
-          firstIncompleteFound = true;
-        } else if (!firstIncompleteFound && idx === 0) {
-          initial[ex.id] = true;
-        } else {
-          initial[ex.id] = false;
-        }
-      });
-
-      return initial;
+  const handleApplyPreviousStats = (exerciseId: string, set: WorkoutSet, targetReps?: string) => {
+    if (set.isCompleted) return;
+    if (set.previousWeightKg === undefined && set.previousReps === undefined) return;
+    if (Platform.OS !== 'web') {
+      try {
+        Haptics.selectionAsync();
+      } catch (_) {}
+    }
+    const fallbackReps = parseInt(targetReps || '10', 10) || 10;
+    const applied = applyPreviousSetStats(set, fallbackReps);
+    updateSet(exerciseId, set.id, {
+      weightKg: applied.weightKg,
+      reps: applied.reps,
+      isWeightEdited: true,
     });
-  }, [activeWorkout?.exercises.length]);
+  };
 
   // Handle hardware back press on Android to minimize instead of exiting
   useEffect(() => {
@@ -272,6 +260,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       setShowGymPicker(false);
     }
   }, [gymTrackingEnabled]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates ? e.endCoordinates.height : 0);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   if (!activeWorkout) {
     return null;
@@ -302,28 +307,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     ? activeWorkout.exercises.findIndex(exercise => exercise.id === menuActiveExercise.id)
     : -1;
 
-  const toggleExerciseExpanded = (id: string) => {
-    setExpandedExercises((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
   const expandAll = () => {
-    const all: Record<string, boolean> = {};
-    activeWorkout.exercises.forEach((e) => {
-      all[e.id] = true;
-    });
-    setExpandedExercises(all);
+    expandAllExercises();
     setShowWorkoutMenu(false);
   };
 
   const collapseAll = () => {
-    const all: Record<string, boolean> = {};
-    activeWorkout.exercises.forEach((e) => {
-      all[e.id] = false;
-    });
-    setExpandedExercises(all);
+    collapseAllExercises();
     setShowWorkoutMenu(false);
   };
 
@@ -424,7 +414,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   };
 
   return (
-    <View style={styles.screenContainer}>
+    <KeyboardAvoidingView
+      style={styles.screenContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       {/* Top App Bar - Lyfta Inspired */}
       <View style={[styles.topBar, { paddingTop: Math.max(50, insets.top + 8) }]}>
         <TouchableOpacity
@@ -495,9 +488,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       {/* Exercises Stream */}
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(130, 130 + (Platform.OS === 'android' ? keyboardHeight : 0)) },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         scrollEnabled={!isDraggingExercise}
       >
         {activeWorkout.exercises.map((activeEx) => {
@@ -522,9 +519,18 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   onPress={() => toggleExerciseExpanded(activeEx.id)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.exerciseAvatar}>
+                  <TouchableOpacity
+                    style={styles.exerciseAvatar}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setSelectedDetailExercise(activeEx.exercise || null);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
+                  >
                     <Dumbbell size={20} color="#38BDF8" />
-                  </View>
+                  </TouchableOpacity>
 
                   <View style={styles.collapsedContent}>
                     <Text style={styles.collapsedTitle} numberOfLines={1}>
@@ -548,8 +554,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   <View style={styles.collapsedActions}>
                     <TouchableOpacity
                       style={styles.iconBtn}
-                      onPress={() => setMenuActiveExercise(activeEx)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setMenuActiveExercise(activeEx);
+                      }}
                       hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                      accessibilityLabel="Exercise menu"
+                      accessibilityRole="button"
                     >
                       <MoreVertical size={18} color="#9CA3AF" />
                     </TouchableOpacity>
@@ -573,11 +584,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <View style={styles.exerciseCard}>
               {/* Exercise Header */}
               <View style={styles.cardHeader}>
-                <View style={styles.exerciseAvatar}>
+                <TouchableOpacity
+                  style={styles.exerciseAvatar}
+                  onPress={() => setSelectedDetailExercise(activeEx.exercise || null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
+                >
                   <Dumbbell size={20} color="#38BDF8" />
-                </View>
+                </TouchableOpacity>
 
-                <View style={styles.exerciseTitleGroup}>
+                <TouchableOpacity
+                  style={styles.exerciseTitleGroup}
+                  onPress={() => setSelectedDetailExercise(activeEx.exercise || null)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
+                >
                   <Text style={styles.exerciseName}>{activeEx.exercise?.name || 'Exercise'}</Text>
                   <View style={styles.badgeRow}>
                     <Text style={styles.muscleBadge}>
@@ -593,7 +616,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
                     ) : null}
                   </View>
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.headerActions}>
                   <TouchableOpacity
@@ -704,18 +727,36 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                               }
                             />
                           </View>
-                        ) : set.previousWeightKg !== undefined ? (
-                          <Text style={styles.previousText}>
-                            {formatPreviousMetric(
+                        ) : (set.previousWeightKg !== undefined || set.previousReps !== undefined) ? (
+                          <TouchableOpacity
+                            style={styles.previousButton}
+                            onPress={() => handleApplyPreviousStats(activeEx.id, set, activeEx.targetReps)}
+                            disabled={set.isCompleted}
+                            activeOpacity={0.6}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Apply previous stats: ${formatPreviousMetric(
                               {
-                                weightKg: set.previousWeightKg,
+                                weightKg: set.previousWeightKg ?? 0,
                                 reps: set.previousReps ?? 0,
                                 sourceGymId: set.previousGymId,
                                 sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
                               },
                               unit,
-                            )}
-                          </Text>
+                            )}`}
+                          >
+                            <Text style={[styles.previousText, !set.isCompleted && styles.previousTextClickable]}>
+                              {formatPreviousMetric(
+                                {
+                                  weightKg: set.previousWeightKg ?? 0,
+                                  reps: set.previousReps ?? 0,
+                                  sourceGymId: set.previousGymId,
+                                  sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
+                                },
+                                unit,
+                              )}
+                            </Text>
+                          </TouchableOpacity>
                         ) : (
                           <Text style={styles.previousPlaceholder}>—</Text>
                         )}
@@ -852,6 +893,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             addExercisesToWorkout(exs);
           }
         }}
+      />
+
+      {/* Exercise Detail Modal */}
+      <ExerciseDetailModal
+        visible={selectedDetailExercise !== null}
+        exercise={selectedDetailExercise}
+        currentGym={displayedActiveGym}
+        onClose={() => setSelectedDetailExercise(null)}
       />
 
       {/* Active Workout Gym Picker */}
@@ -1079,6 +1128,20 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             </View>
 
             <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise?.exercise) {
+                  const ex = menuActiveExercise.exercise;
+                  setMenuActiveExercise(null);
+                  setSelectedDetailExercise(ex);
+                }
+              }}
+            >
+              <Info size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>View Exercise Details</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.menuItem, menuExerciseIndex <= 0 && styles.menuItemDisabled]}
               disabled={menuExerciseIndex <= 0}
               onPress={() => {
@@ -1163,7 +1226,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               onPress={() => {
                 if (menuActiveExercise) {
                   setEditingNoteExId(menuActiveExercise.id);
-                  setExpandedExercises((prev) => ({ ...prev, [menuActiveExercise.id]: true }));
+                  setExerciseExpanded(menuActiveExercise.id, true);
                   setMenuActiveExercise(null);
                 }
               }}
@@ -1273,7 +1336,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -1622,10 +1685,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 18,
   },
+  previousButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   previousText: {
     color: '#9CA3AF',
     fontSize: 13,
     fontWeight: '500',
+  },
+  previousTextClickable: {
+    color: '#CBD5E1',
+    textDecorationLine: 'underline',
+    textDecorationStyle: 'dotted',
+    textDecorationColor: '#64748B',
   },
   previousPlaceholder: {
     color: '#4B5563',

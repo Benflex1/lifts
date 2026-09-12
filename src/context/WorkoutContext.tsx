@@ -22,6 +22,9 @@ import {
   resolveStartGymId,
   StartWorkoutOptions,
   switchWorkoutGym,
+  resolveInitialAccordionState,
+  resolveAddedSetGhostStats,
+  createWorkoutSetsFromSuggestions,
 } from '../workout/gym-session';
 import { resolveActiveGymAfterRefresh } from '../workout/gym-profile';
 import { useDialog } from './DialogContext';
@@ -30,6 +33,11 @@ import {
   PAUSED_WORKOUT_DIALOG_MESSAGE,
   PAUSED_WORKOUT_DIALOG_TITLE,
 } from '../workout/session-copy';
+import {
+  initRestNotifications,
+  scheduleRestNotification,
+  cancelRestNotification,
+} from '../utils/restNotifications';
 
 interface RestTimerState {
   isActive: boolean;
@@ -68,18 +76,23 @@ interface WorkoutContextType {
   removeExerciseFromWorkout: (activeExerciseId: string) => void;
   moveExercise: (activeExerciseId: string, direction: -1 | 1) => void;
   moveExerciseToIndex: (activeExerciseId: string, targetIndex: number) => void;
-  swapExercise: (activeExerciseId: string, exercise: Exercise) => void;
+  swapExercise: (activeExerciseId: string, exercise: Exercise) => void | Promise<void>;
   addSet: (activeExerciseId: string, setType?: SetType) => void;
   removeSet: (activeExerciseId: string, setId: string) => void;
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
   updateExerciseRestTimer: (activeExerciseId: string, seconds: number) => void;
   toggleSetComplete: (activeExerciseId: string, setId: string) => void;
-  startRestTimer: (seconds: number) => void;
+  startRestTimer: (seconds: number, exerciseName?: string) => void;
   adjustRestTimer: (deltaSeconds: number) => void;
   stopRestTimer: () => void;
   finishWorkout: () => Promise<Workout | null>;
   cancelWorkout: () => void;
+  expandedExercises: Record<string, boolean>;
+  toggleExerciseExpanded: (activeExerciseId: string) => void;
+  setExerciseExpanded: (activeExerciseId: string, expanded: boolean) => void;
+  expandAllExercises: () => void;
+  collapseAllExercises: () => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
@@ -112,6 +125,42 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gymSwitchRequestRef = useRef(0);
+  const lastBuzzedSecondRef = useRef<number | null>(null);
+  const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
+
+  const toggleExerciseExpanded = useCallback((activeExerciseId: string) => {
+    setExpandedExercises((prev) => ({
+      ...prev,
+      [activeExerciseId]: !(prev[activeExerciseId] ?? false),
+    }));
+  }, []);
+
+  const setExerciseExpanded = useCallback((activeExerciseId: string, expanded: boolean) => {
+    setExpandedExercises((prev) => ({
+      ...prev,
+      [activeExerciseId]: expanded,
+    }));
+  }, []);
+
+  const expandAllExercises = useCallback(() => {
+    const workout = controllerRef.current?.getState().workout;
+    if (!workout) return;
+    const all: Record<string, boolean> = {};
+    workout.exercises.forEach((e) => {
+      all[e.id] = true;
+    });
+    setExpandedExercises(all);
+  }, []);
+
+  const collapseAllExercises = useCallback(() => {
+    const workout = controllerRef.current?.getState().workout;
+    if (!workout) return;
+    const all: Record<string, boolean> = {};
+    workout.exercises.forEach((e) => {
+      all[e.id] = false;
+    });
+    setExpandedExercises(all);
+  }, []);
 
   const refreshDrafts = useCallback(async () => {
     try {
@@ -141,6 +190,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     (async () => {
       try {
+        void initRestNotifications();
         const store = await getStore();
         const ctrl = createSessionController(store, () => Date.now(), { maxDirtyTimeMs: 3000 });
         controllerRef.current = ctrl;
@@ -189,11 +239,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [sessionState.phase, sessionState.workout?.startTime]);
 
-  // AppState background flush
+  // AppState background flush & foreground notification cleanup
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
       if (state === 'background' && controllerRef.current && sessionState.phase === 'active') {
         controllerRef.current.flush().catch(console.error);
+      } else if (state === 'active') {
+        void cancelRestNotification();
       }
     };
     const sub = AppState.addEventListener('change', handler);
@@ -207,6 +259,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const now = Date.now();
         const remaining = computeRemaining(restTimer.endsAt!, now);
         if (remaining <= 0) {
+          const expiredRecently = restTimer.endsAt !== null && Math.abs(now - restTimer.endsAt) < 1500;
           setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
           const ctrl = controllerRef.current;
           if (ctrl) {
@@ -215,10 +268,53 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
               ctrl.update(state.workout, null);
             }
           }
-          if (Platform.OS !== 'web') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          void cancelRestNotification();
+
+          // Intense countdown finish buzzer (triple pulse)
+          // Only buzz if timer reached 0 in foreground / just now (< 1.5s), avoiding false alarm on app resume
+          if (lastBuzzedSecondRef.current !== 0 && expiredRecently) {
+            lastBuzzedSecondRef.current = 0;
+            if (Platform.OS !== 'web') {
+              try {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setTimeout(() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                }, 160);
+                setTimeout(() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                }, 320);
+              } catch (_) {}
+            }
+          } else {
+            lastBuzzedSecondRef.current = 0;
           }
         } else {
+          // Intense 3-2-1 countdown haptics
+          if (remaining === 3 && lastBuzzedSecondRef.current !== 3) {
+            lastBuzzedSecondRef.current = 3;
+            if (Platform.OS !== 'web') {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              } catch (_) {}
+            }
+          } else if (remaining === 2 && lastBuzzedSecondRef.current !== 2) {
+            lastBuzzedSecondRef.current = 2;
+            if (Platform.OS !== 'web') {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              } catch (_) {}
+            }
+          } else if (remaining === 1 && lastBuzzedSecondRef.current !== 1) {
+            lastBuzzedSecondRef.current = 1;
+            if (Platform.OS !== 'web') {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              } catch (_) {}
+            }
+          } else if (remaining > 3) {
+            lastBuzzedSecondRef.current = null;
+          }
+
           setRestTimer((prev) => {
             if (prev.remainingSeconds === remaining) return prev;
             return { ...prev, remainingSeconds: remaining };
@@ -228,6 +324,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       restTimerRef.current = setInterval(tick, 250);
       tick();
     } else {
+      lastBuzzedSecondRef.current = null;
       if (restTimerRef.current) clearInterval(restTimerRef.current);
     }
 
@@ -236,9 +333,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [restTimer.isActive, restTimer.endsAt, sessionState.phase]);
 
-  const startRestTimer = (seconds: number) => {
+  const startRestTimer = (seconds: number, exerciseName?: string) => {
     if (seconds <= 0) return;
     const endsAt = Date.now() + seconds * 1000;
+    lastBuzzedSecondRef.current = null;
+    void scheduleRestNotification(endsAt, exerciseName);
     setRestTimer({
       isActive: true,
       remainingSeconds: seconds,
@@ -259,6 +358,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!prev.endsAt) return prev;
       const newEndsAt = prev.endsAt + deltaSeconds * 1000;
       const remaining = computeRemaining(newEndsAt, Date.now());
+      if (remaining > 0) {
+        void scheduleRestNotification(newEndsAt);
+      } else {
+        void cancelRestNotification();
+      }
       const updatedTimer = {
         ...prev,
         endsAt: newEndsAt,
@@ -280,6 +384,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const stopRestTimer = () => {
+    lastBuzzedSecondRef.current = null;
+    void cancelRestNotification();
     setRestTimer({
       isActive: false,
       remainingSeconds: 0,
@@ -345,28 +451,15 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const occ = occurrenceCounts[item.exerciseId] || 0;
         occurrenceCounts[item.exerciseId] = occ + 1;
         const prevSets = await loadSuggestionsForExercise(store, item.exerciseId, occ, gymId);
-        const count = item.targetSets || 3;
         const activeExId = `ae-${workoutId}-${item.exerciseId}-occ${occ}-${Crypto.randomUUID().slice(0, 6)}`;
-        const sets: WorkoutSet[] = [];
-
-        for (let i = 1; i <= count; i++) {
-          const ghost = prevSets[i - 1];
-          sets.push({
-            id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
-            setNumber: i,
-            type: 'normal',
-            weightKg: 0,
-            reps: 0,
-            targetReps: item.targetReps,
-            rpe: 8,
-            isCompleted: false,
-            isWeightEdited: false,
-            previousWeightKg: ghost ? ghost.weightKg : undefined,
-            previousReps: ghost ? ghost.reps : undefined,
-            previousGymId: ghost ? ghost.sourceGymId : undefined,
-            previousGymName: ghost ? ghost.sourceGymName : undefined,
-          });
-        }
+        const sets = createWorkoutSetsFromSuggestions({
+          activeExerciseId: activeExId,
+          targetSets: item.targetSets || 3,
+          targetReps: item.targetReps,
+          suggestions: prevSets,
+          currentGymId: gymId,
+          idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+        });
 
         exercises.push({
           id: activeExId,
@@ -392,6 +485,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     await ctrl.start(newWorkout);
+    setExpandedExercises(resolveInitialAccordionState(exercises));
     setGyms(loadedGyms);
     setActiveGymState(selectedGym);
     setIsMinimized(false);
@@ -454,6 +548,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsMinimized(false);
     setIsDraftModalOpen(false);
 
+    setExpandedExercises((prev) => {
+      if (Object.keys(prev).length > 0) return prev;
+      return resolveInitialAccordionState(targetDraft.workout.exercises);
+    });
+
     if (targetDraft.restTimer && targetDraft.restTimer.endsAt > Date.now()) {
       setRestTimer({
         isActive: true,
@@ -501,6 +600,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (state.phase === 'active') {
         await ctrl.discard();
         setIsMinimized(false);
+        setExpandedExercises({});
         stopRestTimer();
         await refreshDrafts();
         return;
@@ -529,6 +629,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const finished = await ctrl.finish();
       setIsMinimized(false);
+      setExpandedExercises({});
       stopRestTimer();
       await refreshDrafts();
       return finished;
@@ -570,27 +671,15 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         occurrenceIndex,
         currentWorkout.gymId,
       );
-      const initialSets: WorkoutSet[] = [];
-      const count = 3;
+      const initialSets = createWorkoutSetsFromSuggestions({
+        activeExerciseId: activeExId,
+        targetSets: 3,
+        targetReps: '10',
+        suggestions: prevSets,
+        currentGymId: currentWorkout.gymId,
+        idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+      });
 
-      for (let i = 1; i <= count; i++) {
-        const ghost = prevSets[i - 1];
-        initialSets.push({
-          id: `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
-          setNumber: i,
-          type: 'normal',
-          weightKg: 0,
-          reps: 0,
-          targetReps: '10',
-          rpe: 8,
-          isCompleted: false,
-          isWeightEdited: false,
-          previousWeightKg: ghost ? ghost.weightKg : undefined,
-          previousReps: ghost ? ghost.reps : undefined,
-          previousGymId: ghost ? ghost.sourceGymId : undefined,
-          previousGymName: ghost ? ghost.sourceGymName : undefined,
-        });
-      }
 
       newActiveExercises.push({
         id: activeExId,
@@ -604,6 +693,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     appendExercisesToCurrentWorkout(ctrl, expectedVersion, newActiveExercises);
+    setExpandedExercises((prev) => {
+      const next = { ...prev };
+      for (const ex of newActiveExercises) {
+        next[ex.id] = true;
+      }
+      return next;
+    });
   };
 
   const addExerciseToWorkout = async (exercise: Exercise) => {
@@ -615,6 +711,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!ctrl) return;
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
+
+    setExpandedExercises((prev) => {
+      const next = { ...prev };
+      delete next[activeExerciseId];
+      return next;
+    });
 
     const updatedExercises = state.workout.exercises.filter((e) => e.id !== activeExerciseId);
     const totalVol = calculateTotalVolume(updatedExercises);
@@ -672,15 +774,45 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   };
 
-  const swapExercise = (activeExerciseId: string, exercise: Exercise) => {
+  const swapExercise = async (activeExerciseId: string, exercise: Exercise) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
+    const currentWorkout = state.workout;
+    const store = await getStore();
+
+    let occurrenceIndex = 0;
+    for (const ex of currentWorkout.exercises) {
+      if (ex.id !== activeExerciseId && ex.exerciseId === exercise.id) {
+        occurrenceIndex++;
+      }
+    }
+
+    const prevSets = await loadSuggestionsForExercise(
+      store,
+      exercise.id,
+      occurrenceIndex,
+      currentWorkout.gymId,
+    );
+
+    const latestState = ctrl.getState();
+    if (latestState.phase !== 'active' || !latestState.workout) return;
+
+    const updatedExercises = replaceActiveExercise(
+      latestState.workout.exercises,
+      activeExerciseId,
+      exercise,
+      prevSets,
+      currentWorkout.gymId,
+    );
+
+    const totalVol = calculateTotalVolume(updatedExercises);
     const updated: Workout = {
-      ...state.workout,
-      exercises: replaceActiveExercise(state.workout.exercises, activeExerciseId, exercise),
+      ...latestState.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: totalVol,
     };
     ctrl.update(
       updated,
@@ -699,12 +831,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updatedExercises = state.workout.exercises.map((ex) => {
       if (ex.id !== activeExerciseId) return ex;
       const nextNum = ex.sets.length + 1;
-      const lastSet = ex.sets[ex.sets.length - 1];
-      const lastWeightEdited = lastSet?.isWeightEdited ?? ((lastSet?.weightKg ?? 0) > 0 || lastSet?.isCompleted);
-      const ghostWeight = lastSet
-        ? (lastWeightEdited ? (lastSet.weightKg > 0 ? lastSet.weightKg : undefined) : lastSet.previousWeightKg)
-        : undefined;
-      const ghostReps = lastSet ? (lastSet.reps > 0 ? lastSet.reps : lastSet.previousReps) : undefined;
+      const ghostStats = resolveAddedSetGhostStats(ex.sets);
+
       const newSet: WorkoutSet = {
         id: `set-${ex.id}-${nextNum}-${Crypto.randomUUID().slice(0, 6)}`,
         setNumber: nextNum,
@@ -712,12 +840,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         weightKg: 0,
         reps: 0,
         targetReps: ex.targetReps,
-        rpe: 8,
+        rpe: undefined,
         isCompleted: false,
         isWeightEdited: false,
-        previousWeightKg: ghostWeight,
-        previousReps: ghostReps,
-        ...copyPreviousSetProvenance(lastSet),
+        previousWeightKg: ghostStats.previousWeightKg,
+        previousReps: ghostStats.previousReps,
+        ...copyPreviousSetProvenance(ghostStats.provenanceSet),
       };
       return { ...ex, sets: [...ex.sets, newSet] };
     });
@@ -782,12 +910,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updated: Workout = {
-      ...state.workout,
-      exercises: state.workout.exercises.map((ex) =>
-        ex.id === activeExerciseId ? { ...ex, notes } : ex
-      ),
-    };
+    const updatedExercises = state.workout.exercises.map((ex) =>
+      ex.id === activeExerciseId ? { ...ex, notes } : ex
+    );
+    const updated: Workout = { ...state.workout, exercises: updatedExercises };
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
@@ -797,12 +923,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updated: Workout = {
-      ...state.workout,
-      exercises: state.workout.exercises.map((ex) =>
-        ex.id === activeExerciseId ? { ...ex, restTimerSeconds: seconds } : ex
-      ),
-    };
+    const updatedExercises = state.workout.exercises.map((ex) =>
+      ex.id === activeExerciseId ? { ...ex, restTimerSeconds: seconds } : ex
+    );
+    const updated: Workout = { ...state.workout, exercises: updatedExercises };
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
@@ -849,6 +973,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     let targetRestSeconds: number | null = null;
     let justCompleted = false;
+    let completedExerciseName: string | undefined;
 
     const updatedExercises = state.workout.exercises.map((ex) => {
       if (ex.id !== activeExerciseId) return ex;
@@ -860,6 +985,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (nextCompleted) {
             justCompleted = true;
             targetRestSeconds = resolveRestTimerSeconds(ex.restTimerSeconds);
+            completedExerciseName = ex.exercise?.name;
           }
           return {
             ...s,
@@ -881,12 +1007,16 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     let timerMeta: { endsAt: number; totalSeconds: number } | null = null;
-    if (justCompleted && targetRestSeconds) {
+    if (justCompleted) {
       if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        } catch (_) {}
       }
-      startRestTimer(targetRestSeconds);
-      timerMeta = { endsAt: Date.now() + targetRestSeconds * 1000, totalSeconds: targetRestSeconds };
+      if (targetRestSeconds) {
+        startRestTimer(targetRestSeconds, completedExerciseName);
+        timerMeta = { endsAt: Date.now() + targetRestSeconds * 1000, totalSeconds: targetRestSeconds };
+      }
     } else {
       timerMeta = restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null;
     }
@@ -946,6 +1076,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         stopRestTimer,
         finishWorkout,
         cancelWorkout,
+        expandedExercises,
+        toggleExerciseExpanded,
+        setExerciseExpanded,
+        expandAllExercises,
+        collapseAllExercises,
       }}
     >
       {children}

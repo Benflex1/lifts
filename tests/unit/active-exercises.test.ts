@@ -108,4 +108,60 @@ describe('active exercise operations', () => {
     assert.equal(updated[0], exercises[0]);
     assert.notEqual(updated[1], original);
   });
+
+  it('updates uncompleted sets with new suggestions while preserving completed sets', () => {
+    const exercises = ['a', 'b'].map(makeActiveExercise);
+    exercises[1].sets = [
+      {
+        id: 's-completed',
+        setNumber: 1,
+        type: 'normal',
+        weightKg: 100,
+        reps: 8,
+        isCompleted: true,
+        isWeightEdited: true,
+        previousWeightKg: 95,
+        previousReps: 8,
+      },
+      {
+        id: 's-uncompleted',
+        setNumber: 2,
+        type: 'normal',
+        weightKg: 50,
+        reps: 6,
+        isCompleted: false,
+        isWeightEdited: true,
+        previousWeightKg: 95,
+        previousReps: 8,
+      },
+    ];
+
+    const replacement = makeExercise('incline-db-press', 'Incline Dumbbell Press');
+    const suggestions = [
+      { weightKg: 32, reps: 10 },
+      { weightKg: 32, reps: 10 },
+    ];
+
+    const updated = replaceActiveExercise(
+      exercises,
+      'active-b',
+      replacement,
+      suggestions,
+      'gym-main',
+    );
+
+    assert.equal(updated[1].exerciseId, 'incline-db-press');
+    assert.equal(updated[1].sets[0].isCompleted, true);
+    assert.equal(updated[1].sets[0].weightKg, 100);
+    assert.equal(updated[1].sets[0].previousWeightKg, 95);
+
+    // Uncompleted set was reset and updated with replacement suggestions
+    assert.equal(updated[1].sets[1].isCompleted, false);
+    assert.equal(updated[1].sets[1].weightKg, 0);
+    assert.equal(updated[1].sets[1].reps, 0);
+    assert.equal(updated[1].sets[1].isWeightEdited, false);
+    assert.equal(updated[1].sets[1].previousWeightKg, 32);
+    assert.equal(updated[1].sets[1].previousReps, 10);
+  });
 });
+

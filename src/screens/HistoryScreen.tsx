@@ -221,7 +221,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
             weightKg: s.weightKg,
             reps: s.reps,
             targetReps: resolveHistoricalTargetReps(ex.targetReps, s.targetReps),
-            rpe: s.rpe ?? 8,
+            rpe: s.rpe,
             isCompleted: false,
             previousWeightKg: s.weightKg,
             previousReps: s.reps,

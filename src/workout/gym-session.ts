@@ -223,3 +223,128 @@ export function rehydrateUntouchedSuggestions(
     }),
   };
 }
+
+export function resolveInitialAccordionState(
+  exercises: Array<{ id: string; sets: Array<{ isCompleted: boolean }> }>,
+): Record<string, boolean> {
+  const initial: Record<string, boolean> = {};
+  let firstIncompleteFound = false;
+  exercises.forEach((ex, idx) => {
+    const isComplete = ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted);
+    if (!firstIncompleteFound && !isComplete) {
+      initial[ex.id] = true;
+      firstIncompleteFound = true;
+    } else if (!firstIncompleteFound && idx === 0 && !isComplete) {
+      initial[ex.id] = true;
+    } else {
+      initial[ex.id] = false;
+    }
+  });
+  return initial;
+}
+
+export function applyPreviousSetStats<T extends {
+  weightKg: number;
+  reps: number;
+  isWeightEdited?: boolean;
+  isCompleted: boolean;
+  previousWeightKg?: number;
+  previousReps?: number;
+}>(set: T, fallbackReps: number = 10): T {
+  if (set.isCompleted) return set;
+  if (set.previousWeightKg === undefined && set.previousReps === undefined) return set;
+  return {
+    ...set,
+    weightKg: set.previousWeightKg !== undefined ? set.previousWeightKg : set.weightKg,
+    reps: set.previousReps !== undefined ? set.previousReps : fallbackReps,
+    isWeightEdited: true,
+  };
+}
+
+export interface AddedSetGhostStats {
+  previousWeightKg?: number;
+  previousReps?: number;
+  provenanceSet?: Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>;
+}
+
+export function resolveAddedSetGhostStats(
+  existingSets: WorkoutSet[],
+): AddedSetGhostStats {
+  // 1. Look for the most recent completed or edited set in reverse
+  const lastCompletedOrEditedSet = [...existingSets].reverse().find(
+    (s) => s.isCompleted || s.isWeightEdited || s.weightKg > 0 || s.reps > 0,
+  );
+
+  if (lastCompletedOrEditedSet) {
+    const isEdited = lastCompletedOrEditedSet.isWeightEdited ?? (lastCompletedOrEditedSet.weightKg > 0 || lastCompletedOrEditedSet.isCompleted);
+    const ghostWeight = isEdited ? lastCompletedOrEditedSet.weightKg : lastCompletedOrEditedSet.previousWeightKg;
+    const ghostReps = lastCompletedOrEditedSet.reps > 0 ? lastCompletedOrEditedSet.reps : lastCompletedOrEditedSet.previousReps;
+    return {
+      previousWeightKg: ghostWeight,
+      previousReps: ghostReps,
+      provenanceSet: lastCompletedOrEditedSet.isCompleted ? undefined : lastCompletedOrEditedSet,
+    };
+  }
+
+  // 2. Look for the most recent set with ghost suggestions if no set has been done/edited yet
+  const lastGhostSet = [...existingSets].reverse().find(
+    (s) => s.previousWeightKg !== undefined || s.previousReps !== undefined,
+  );
+
+  if (lastGhostSet) {
+    return {
+      previousWeightKg: lastGhostSet.previousWeightKg,
+      previousReps: lastGhostSet.previousReps,
+      provenanceSet: lastGhostSet,
+    };
+  }
+
+  const lastSet = existingSets[existingSets.length - 1];
+  return {
+    previousWeightKg: lastSet?.previousWeightKg,
+    previousReps: lastSet?.previousReps,
+    provenanceSet: lastSet,
+  };
+}
+
+export interface CreateWorkoutSetsOptions {
+  activeExerciseId: string;
+  targetSets: number;
+  targetReps?: string;
+  suggestions: PreviousSetSuggestion[];
+  currentGymId?: string;
+  idGenerator?: (setNumber: number) => string;
+}
+
+export function createWorkoutSetsFromSuggestions(options: CreateWorkoutSetsOptions): WorkoutSet[] {
+  const { activeExerciseId, targetSets, targetReps, suggestions, currentGymId, idGenerator } = options;
+  const count = Math.max(targetSets, suggestions.length);
+  const sets: WorkoutSet[] = [];
+
+  for (let i = 1; i <= count; i++) {
+    const ghost = suggestions[i - 1] ?? (suggestions.length > 0 ? suggestions[suggestions.length - 1] : undefined);
+    const isSameGym = Boolean(currentGymId && ghost?.sourceGymId === currentGymId);
+    const setId = idGenerator
+      ? idGenerator(i)
+      : `set-${activeExerciseId}-${i}`;
+
+    sets.push({
+      id: setId,
+      setNumber: i,
+      type: 'normal',
+      weightKg: 0,
+      reps: 0,
+      targetReps,
+      rpe: undefined,
+      isCompleted: false,
+      isWeightEdited: false,
+      previousWeightKg: ghost ? ghost.weightKg : undefined,
+      previousReps: ghost ? ghost.reps : undefined,
+      previousGymId: isSameGym ? undefined : ghost?.sourceGymId,
+      previousGymName: isSameGym ? undefined : ghost?.sourceGymName,
+    });
+  }
+
+  return sets;
+}
+

@@ -140,3 +140,21 @@ export function validateCompletedSet(set: WorkoutSet): string | null {
   }
   return null;
 }
+
+export function sanitizeWeightInput(input: string): string {
+  // Normalize commas to dots for international keyboard decimal inputs
+  let s = input.replace(/,/g, '.');
+  // Remove all characters except digits and decimal point
+  s = s.replace(/[^0-9.]/g, '');
+  // Keep only the first decimal point
+  const firstDotIndex = s.indexOf('.');
+  if (firstDotIndex !== -1) {
+    s = s.slice(0, firstDotIndex + 1) + s.slice(firstDotIndex + 1).replace(/\./g, '');
+  }
+  return s;
+}
+
+export function sanitizeRepsInput(input: string): string {
+  // Whole numbers only
+  return input.replace(/[^0-9]/g, '');
+}

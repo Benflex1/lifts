@@ -11,26 +11,33 @@ export const RestTimerOverlay: React.FC = () => {
     return null;
   }
 
+  const isWarning = restTimer.remainingSeconds <= 3 && restTimer.remainingSeconds > 0;
+  const accentColor = isWarning ? '#F59E0B' : '#10B981';
+
   const progressPercent = Math.min(
     100,
     Math.max(0, ((restTimer.totalSeconds - restTimer.remainingSeconds) / restTimer.totalSeconds) * 100)
   );
 
   return (
-    <View style={styles.floatingContainer}>
+    <View style={[styles.floatingContainer, isWarning && styles.floatingContainerWarning]}>
       {/* Progress Line */}
       <View style={styles.progressBarBackground}>
-        <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+        <View style={[styles.progressBarFill, { width: `${progressPercent}%`, backgroundColor: accentColor }]} />
       </View>
 
       <View style={styles.contentRow}>
         <View style={styles.leftInfo}>
-          <View style={styles.timerIconWrap}>
-            <Timer size={18} color="#10B981" />
+          <View style={[styles.timerIconWrap, isWarning && styles.timerIconWrapWarning]}>
+            <Timer size={18} color={accentColor} />
           </View>
           <View>
-            <Text style={styles.timerTitle}>Rest Time</Text>
-            <Text style={styles.timerCountdown}>{formatTimer(restTimer.remainingSeconds)}</Text>
+            <Text style={[styles.timerTitle, isWarning && styles.timerTitleWarning]}>
+              {isWarning ? `Get Ready! (${restTimer.remainingSeconds})` : 'Rest Time'}
+            </Text>
+            <Text style={[styles.timerCountdown, { color: accentColor }]}>
+              {formatTimer(restTimer.remainingSeconds)}
+            </Text>
           </View>
         </View>
 
@@ -84,6 +91,15 @@ const styles = StyleSheet.create({
     borderColor: '#2F3442',
     overflow: 'hidden',
     zIndex: 999,
+  },
+  floatingContainerWarning: {
+    borderColor: '#F59E0B66',
+  },
+  timerIconWrapWarning: {
+    backgroundColor: '#382510',
+  },
+  timerTitleWarning: {
+    color: '#F59E0B',
   },
   progressBarBackground: {
     height: 4,
