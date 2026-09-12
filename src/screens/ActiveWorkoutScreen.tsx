@@ -33,12 +33,14 @@ import {
   Repeat,
   Trophy,
   Info,
+  Flame,
+  Layers,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
-import { formatWeight, kgToDisplay } from '../utils/units';
+import { formatWeight, kgToDisplay, displayToKg } from '../utils/units';
 import { formatTimer, formatDuration } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
@@ -60,6 +62,11 @@ import { formatPreviousMetric } from '../workout/gym-display';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from '../components/PRBadge';
+import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
+import { WarmupModal } from '../components/WarmupModal';
+import { SupersetModal } from '../components/SupersetModal';
+import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
+import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
@@ -77,6 +84,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     moveExerciseToIndex,
     swapExercise,
     addSet,
+    insertWarmupSets,
+    linkSuperset,
+    unlinkSuperset,
+    setSupersetGroup,
     removeSet,
     updateSet,
     updateExerciseNotes,
@@ -84,6 +95,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
+    restTimer,
     expandedExercises,
     toggleExerciseExpanded,
     setExerciseExpanded,
@@ -114,7 +126,64 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const [isDraggingExercise, setIsDraggingExercise] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [selectedDetailExercise, setSelectedDetailExercise] = useState<Exercise | null>(null);
+  const [warmupModalExercise, setWarmupModalExercise] = useState<ActiveExercise | null>(null);
+  const [supersetModalExerciseId, setSupersetModalExerciseId] = useState<string | null>(null);
+  const [supersetNextUpCue, setSupersetNextUpCue] = useState<string | null>(null);
   const exerciseLayoutsRef = useRef<Record<string, ExerciseLayout>>({});
+
+  const supersetMetaMap = useMemo(() => {
+    return getSupersetMetadata(activeWorkout?.exercises || []);
+  }, [activeWorkout?.exercises]);
+
+  const supersetModalExercises = useMemo(() => {
+    return (activeWorkout?.exercises || []).map((e) => ({
+      id: e.id,
+      name: e.exercise?.name || 'Exercise',
+      category: e.exercise?.category,
+      equipment: e.exercise?.equipment,
+      supersetId: e.supersetId,
+      setsCount: e.sets.length,
+    }));
+  }, [activeWorkout?.exercises]);
+
+  const handleAddQuickWarmup = (activeEx: ActiveExercise) => {
+    const defaultBar = getDefaultBarWeight(
+      activeEx.exercise?.equipment,
+      activeEx.exercise?.category,
+      unit
+    );
+
+    let targetWorkingWeight = 0;
+    const workingSet = activeEx.sets.find((s) => s.type !== 'warmup' && s.weightKg > 0);
+    if (workingSet) {
+      targetWorkingWeight = workingSet.weightKg;
+    } else {
+      const ghostSet = activeEx.sets.find((s) => (s.previousWeightKg || 0) > 0);
+      targetWorkingWeight =
+        ghostSet?.previousWeightKg ||
+        (defaultBar > 0 ? (unit === 'lb' ? displayToKg(135, 'lb') : 60) : 0);
+    }
+
+    const inc = getDefaultIncrement(unit);
+    const displayWorking = kgToDisplay(targetWorkingWeight, unit);
+    const displayWarmup = Math.max(
+      roundToIncrement(displayWorking * 0.5, inc),
+      defaultBar
+    );
+    const warmupWeightKg = displayToKg(displayWarmup, unit);
+
+    insertWarmupSets(
+      activeEx.id,
+      [{ weightKg: warmupWeightKg, reps: 8 }],
+      false
+    );
+
+    if (Platform.OS !== 'web') {
+      try {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+    }
+  };
 
   const handleExerciseLayout = (itemId: string, layout: ExerciseLayout) => {
     exerciseLayoutsRef.current[itemId] = layout;
@@ -143,6 +212,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   // PR Tracking & Historical baseline cache
   const [exerciseWorkouts, setExerciseWorkouts] = useState<Record<string, Workout[]>>({});
   const [exerciseScopes, setExerciseScopes] = useState<Record<string, ExerciseGymScope | undefined>>({});
+  const [prCelebrationEvent, setPrCelebrationEvent] = useState<PRCelebrationEvent | null>(null);
 
   useEffect(() => {
     if (!activeWorkout) return;
@@ -217,6 +287,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch (_) {}
+          for (const ex of activeWorkout.exercises) {
+            const foundSet = ex.sets.find((s) => s.id === setId);
+            if (foundSet) {
+              setPrCelebrationEvent({
+                exerciseName: ex.exercise?.name || 'Exercise',
+                weightKg: foundSet.weightKg,
+                reps: foundSet.reps,
+                achievement: pr.primary,
+                secondaryCount: Math.max(0, pr.achievements.length - 1),
+              });
+              break;
+            }
+          }
         }
       }
     }
@@ -225,7 +308,25 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   }, [activeWorkout, prSummary]);
 
   const handleToggleSetWithHaptics = (exerciseId: string, setId: string) => {
+    const currentEx = activeWorkout?.exercises.find((e) => e.id === exerciseId);
+    const targetSet = currentEx?.sets.find((s) => s.id === setId);
+    const isBecomingCompleted = targetSet ? !targetSet.isCompleted : false;
+
     toggleSetComplete(exerciseId, setId);
+
+    if (isBecomingCompleted && currentEx?.supersetId && activeWorkout) {
+      const nextTarget = resolveNextSupersetTarget(activeWorkout, exerciseId, setId);
+      if (nextTarget && !nextTarget.isRoundComplete) {
+        setExerciseExpanded(nextTarget.nextExerciseId, true);
+        const meta = supersetMetaMap.get(exerciseId);
+        const groupLabel = meta?.label || 'SUPERSET';
+        setSupersetNextUpCue(`${groupLabel}: ${nextTarget.nextExerciseName} · Set ${nextTarget.nextSetNumber}`);
+      } else {
+        setSupersetNextUpCue(null);
+      }
+    } else if (!isBecomingCompleted) {
+      setSupersetNextUpCue(null);
+    }
   };
 
   const handleApplyPreviousStats = (exerciseId: string, set: WorkoutSet, targetReps?: string) => {
@@ -306,6 +407,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const menuExerciseIndex = menuActiveExercise
     ? activeWorkout.exercises.findIndex(exercise => exercise.id === menuActiveExercise.id)
     : -1;
+
+  const menuNextExercise =
+    menuExerciseIndex >= 0 && menuExerciseIndex < activeWorkout.exercises.length - 1
+      ? activeWorkout.exercises[menuExerciseIndex + 1]
+      : null;
 
   const expandAll = () => {
     expandAllExercises();
@@ -402,8 +508,48 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   const handleSelectSetType = (type: SetType) => {
     if (!setOptionsModal) return;
-    updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, { type });
-    setSetOptionsModal((prev) => (prev ? { ...prev, set: { ...prev.set, type } } : null));
+    const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
+    const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
+    // Find the previous working set (ignoring warmups and unweighted sets)
+    const prevWorkingSet = modalEx?.sets
+      .slice(0, setIdx)
+      .reverse()
+      .find((s) => s.type !== 'warmup' && s.weightKg > 0);
+
+    let updatedWeightKg = setOptionsModal.set.weightKg;
+    let isWeightEdited = setOptionsModal.set.isWeightEdited;
+
+    if (
+      type === 'drop' &&
+      (!updatedWeightKg || !isWeightEdited) &&
+      prevWorkingSet &&
+      prevWorkingSet.weightKg > 0
+    ) {
+      const inc = getDefaultIncrement(unit);
+      const prevDisp = kgToDisplay(prevWorkingSet.weightKg, unit);
+      updatedWeightKg = displayToKg(roundToIncrement(prevDisp * 0.80, inc), unit);
+      isWeightEdited = true;
+    }
+
+    updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, {
+      type,
+      ...(type === 'drop' && updatedWeightKg !== setOptionsModal.set.weightKg
+        ? { weightKg: updatedWeightKg, isWeightEdited: true }
+        : {}),
+    });
+    setSetOptionsModal((prev) =>
+      prev
+        ? {
+            ...prev,
+            set: {
+              ...prev.set,
+              type,
+              weightKg: updatedWeightKg,
+              isWeightEdited,
+            },
+          }
+        : null
+    );
   };
 
   const handleSelectRpe = (rpe: number | null) => {
@@ -502,54 +648,64 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           const completedCount = activeEx.sets.filter((s) => s.isCompleted).length;
           const totalCount = activeEx.sets.length;
           const isAllCompleted = totalCount > 0 && completedCount === totalCount;
+          const ssMeta = supersetMetaMap.get(activeEx.id);
 
-          if (!isExpanded) {
+          const cardElement = !isExpanded ? (
             // Collapsed Accordion Row - Lyfta Screenshot 1
-            return (
-              <DraggableExerciseCard
-                key={activeEx.id}
-                itemId={activeEx.id}
-                exerciseName={activeEx.exercise?.name || 'Exercise'}
-                onLayout={handleExerciseLayout}
-                onDrop={handleExerciseDrop}
-                onDragActiveChange={setIsDraggingExercise}
+            <DraggableExerciseCard
+              key={activeEx.id}
+              itemId={activeEx.id}
+              exerciseName={activeEx.exercise?.name || 'Exercise'}
+              onLayout={handleExerciseLayout}
+              onDrop={handleExerciseDrop}
+              onDragActiveChange={setIsDraggingExercise}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.collapsedCard,
+                  ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
+                ]}
+                onPress={() => toggleExerciseExpanded(activeEx.id)}
+                activeOpacity={0.7}
               >
                 <TouchableOpacity
-                  style={styles.collapsedCard}
-                  onPress={() => toggleExerciseExpanded(activeEx.id)}
-                  activeOpacity={0.7}
+                  style={styles.exerciseAvatar}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setSelectedDetailExercise(activeEx.exercise || null);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
                 >
-                  <TouchableOpacity
-                    style={styles.exerciseAvatar}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setSelectedDetailExercise(activeEx.exercise || null);
-                    }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
-                  >
-                    <Dumbbell size={20} color="#38BDF8" />
-                  </TouchableOpacity>
+                  <Dumbbell size={20} color="#38BDF8" />
+                </TouchableOpacity>
 
-                  <View style={styles.collapsedContent}>
-                    <Text style={styles.collapsedTitle} numberOfLines={1}>
-                      {activeEx.exercise?.name || 'Exercise'}
+                <View style={styles.collapsedContent}>
+                  <Text style={styles.collapsedTitle} numberOfLines={1}>
+                    {activeEx.exercise?.name || 'Exercise'}
+                  </Text>
+                  <View style={styles.collapsedMetaRow}>
+                    {ssMeta && (
+                      <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color, marginRight: 6 }]}>
+                        <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
+                          {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
+                        </Text>
+                      </View>
+                    )}
+                    <Text
+                      style={[
+                        styles.collapsedSubtitle,
+                        isAllCompleted && styles.completedSubtitleText,
+                      ]}
+                    >
+                      {completedCount}/{totalCount} done
                     </Text>
-                    <View style={styles.collapsedMetaRow}>
-                      <Text
-                        style={[
-                          styles.collapsedSubtitle,
-                          isAllCompleted && styles.completedSubtitleText,
-                        ]}
-                      >
-                        {completedCount}/{totalCount} done
-                      </Text>
-                      {isAllCompleted && (
-                        <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
-                      )}
-                    </View>
+                    {isAllCompleted && (
+                      <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
+                    )}
                   </View>
+                </View>
 
                   <View style={styles.collapsedActions}>
                     <TouchableOpacity
@@ -568,12 +724,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   </View>
                 </TouchableOpacity>
               </DraggableExerciseCard>
-            );
-          }
-
-          // Expanded Full Exercise Card
-          return (
-            <DraggableExerciseCard
+            ) : (
+              // Expanded Full Exercise Card
+              <DraggableExerciseCard
               key={activeEx.id}
               itemId={activeEx.id}
               exerciseName={activeEx.exercise?.name || 'Exercise'}
@@ -581,7 +734,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               onDrop={handleExerciseDrop}
               onDragActiveChange={setIsDraggingExercise}
             >
-              <View style={styles.exerciseCard}>
+              <View
+                style={[
+                  styles.exerciseCard,
+                  ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
+                ]}
+              >
               {/* Exercise Header */}
               <View style={styles.cardHeader}>
                 <TouchableOpacity
@@ -615,6 +773,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     {activeEx.targetReps ? (
                       <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
                     ) : null}
+                    {ssMeta && (
+                      <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color }]}>
+                        <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
+                          {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </TouchableOpacity>
 
@@ -722,6 +887,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                               achievement={prSummary.setPRs.get(set.id)!.primary!}
                               compact
                               showGym={gymTrackingEnabled}
+                              additionalCount={Math.max(0, (prSummary.setPRs.get(set.id)?.achievements.length || 0) - 1)}
                               onPress={() =>
                                 openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
                               }
@@ -842,16 +1008,57 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 );
               })}
 
-              {/* Bottom of Card Actions - Wide Add Set Button (Lyfta Style) */}
+              {/* Add Set Button */}
               <TouchableOpacity
                 style={styles.addSetBtnWide}
                 onPress={() => addSet(activeEx.id, 'normal')}
+                accessibilityRole="button"
+                accessibilityLabel="Add set"
               >
                 <Plus size={16} color="#FFFFFF" />
                 <Text style={styles.addSetBtnWideText}>Add Set</Text>
               </TouchableOpacity>
               </View>
             </DraggableExerciseCard>
+          );
+
+          return (
+            <React.Fragment key={activeEx.id}>
+              {ssMeta?.isFirst && (
+                <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.supersetPill,
+                      { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
+                    ]}
+                    onPress={() => setSupersetModalExerciseId(activeEx.id)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${ssMeta.label}`}
+                  >
+                    <Layers size={13} color={ssMeta.color} />
+                    <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
+                      {ssMeta.label}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.supersetCountText}>
+                    {ssMeta.totalInGroup} Exercises · Alternating Sets
+                  </Text>
+                </View>
+              )}
+
+              {cardElement}
+
+              {ssMeta && !ssMeta.isLast && (
+                <View style={styles.supersetConnectorWrap}>
+                  <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                  <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
+                    ⇩ NEXT IN {ssMeta.label}
+                  </Text>
+                  <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                </View>
+              )}
+            </React.Fragment>
           );
         })}
 
@@ -869,7 +1076,64 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       </ScrollView>
 
       {/* Floating Rest Timer Overlay */}
-      <RestTimerOverlay />
+      <RestTimerOverlay nextUpText={supersetNextUpCue} />
+
+      {/* Non-blocking Floating Superset Cue when timer is not active */}
+      {!restTimer.isActive && supersetNextUpCue && (
+        <View style={styles.supersetFloatingCue}>
+          <View style={styles.supersetCueBadge}>
+            <Text style={styles.supersetCueBadgeText}>NEXT UP</Text>
+          </View>
+          <Text style={styles.supersetCueText} numberOfLines={1}>
+            {supersetNextUpCue}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSupersetNextUpCue(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss next up cue"
+          >
+            <X size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Floating PR Celebration Toast */}
+      <PRCelebrationToast
+        event={prCelebrationEvent}
+        unit={unit}
+        onDismiss={() => setPrCelebrationEvent(null)}
+      />
+
+      {/* Warmup Progression Calculator Modal */}
+      <WarmupModal
+        visible={warmupModalExercise !== null}
+        activeExercise={warmupModalExercise}
+        unit={unit}
+        onClose={() => setWarmupModalExercise(null)}
+        onApplyWarmupSets={(warmupSets, replaceExisting) => {
+          if (warmupModalExercise) {
+            insertWarmupSets(warmupModalExercise.id, warmupSets, replaceExisting);
+            setWarmupModalExercise(null);
+          }
+        }}
+      />
+
+      {/* Superset Selection Modal */}
+      <SupersetModal
+        visible={supersetModalExerciseId !== null}
+        currentExerciseId={supersetModalExerciseId}
+        exercises={supersetModalExercises}
+        onClose={() => setSupersetModalExerciseId(null)}
+        onSaveSuperset={(selectedIds) => {
+          setSupersetGroup(selectedIds);
+          setSupersetModalExerciseId(null);
+        }}
+        onUngroupSuperset={(exId) => {
+          unlinkSuperset(exId);
+          setSupersetModalExerciseId(null);
+        }}
+      />
 
       {/* Exercise Picker Modal */}
       <ExercisePickerModal
@@ -1021,6 +1285,67 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   );
                 })}
               </View>
+
+              {/* Quick Drop Set Load Reduction Helper */}
+              {(() => {
+                if (setOptionsModal?.set.type !== 'drop') return null;
+                const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
+                const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
+                const prevWorkingSet = modalEx?.sets
+                  .slice(0, setIdx)
+                  .reverse()
+                  .find((s) => s.type !== 'warmup' && s.weightKg > 0);
+                if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0) return null;
+
+                const inc = getDefaultIncrement(unit);
+                const prevDisplay = kgToDisplay(prevWorkingSet.weightKg, unit);
+                const dropReductions = [
+                  { pct: 20, kg: displayToKg(roundToIncrement(prevDisplay * 0.80, inc), unit) },
+                  { pct: 25, kg: displayToKg(roundToIncrement(prevDisplay * 0.75, inc), unit) },
+                  { pct: 30, kg: displayToKg(roundToIncrement(prevDisplay * 0.70, inc), unit) },
+                ];
+
+                return (
+                  <View style={styles.dropHelperBox}>
+                    <Text style={styles.dropHelperTitle}>DROP SET WEIGHT SUGGESTIONS</Text>
+                    <Text style={styles.dropHelperDesc}>
+                      Based on Set #{prevWorkingSet.setNumber} ({prevDisplay} {unit}):
+                    </Text>
+                    <View style={styles.dropChipsRow}>
+                      {dropReductions.map((r) => {
+                        const isCurrent = Math.abs(setOptionsModal.set.weightKg - r.kg) < 0.05;
+                        return (
+                          <TouchableOpacity
+                            key={r.pct}
+                            style={[styles.dropChip, isCurrent && styles.dropChipActive]}
+                            onPress={() => {
+                              updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, {
+                                weightKg: r.kg,
+                                isWeightEdited: true,
+                              });
+                              setSetOptionsModal((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      set: { ...prev.set, weightKg: r.kg, isWeightEdited: true },
+                                    }
+                                  : null
+                              );
+                            }}
+                          >
+                            <Text style={[styles.dropChipPct, isCurrent && styles.dropChipPctActive]}>
+                              -{r.pct}%
+                            </Text>
+                            <Text style={[styles.dropChipWeight, isCurrent && styles.dropChipWeightActive]}>
+                              {kgToDisplay(r.kg, unit)} {unit}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })()}
             </View>
 
             {/* Fast 1-Tap RPE / Effort Grid */}
@@ -1220,6 +1545,65 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Calculator size={18} color="#38BDF8" />
               <Text style={styles.menuItemText}>Plate Calculator</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  const ex = menuActiveExercise;
+                  setMenuActiveExercise(null);
+                  handleAddQuickWarmup(ex);
+                }
+              }}
+            >
+              <Flame size={18} color="#F97316" />
+              <Text style={styles.menuItemText}>Add Warm-up Set</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  const ex = menuActiveExercise;
+                  setMenuActiveExercise(null);
+                  setWarmupModalExercise(ex);
+                }
+              }}
+            >
+              <Calculator size={18} color="#F97316" />
+              <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  const exId = menuActiveExercise.id;
+                  setMenuActiveExercise(null);
+                  setSupersetModalExerciseId(exId);
+                }
+              }}
+            >
+              <Layers size={18} color="#A855F7" />
+              <Text style={styles.menuItemText}>
+                {menuActiveExercise?.supersetId ? 'Edit Superset' : 'Create Superset'}
+              </Text>
+            </TouchableOpacity>
+
+            {menuActiveExercise?.supersetId && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  if (menuActiveExercise) {
+                    unlinkSuperset(menuActiveExercise.id);
+                    setMenuActiveExercise(null);
+                  }
+                }}
+              >
+                <Layers size={18} color="#EF4444" />
+                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Ungroup Superset</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -2024,5 +2408,188 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 15,
     fontWeight: '600',
+  },
+
+  // Bottom of Card Actions Row (Add Set + Warmup)
+  cardBottomActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  warmupRampBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#2A1D17',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#7C2D12',
+  },
+  warmupRampBtnText: {
+    color: '#FB923C',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Supersets & Giant Sets
+  supersetGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#161922',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  supersetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  supersetPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  supersetCountText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  supersetConnectorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 4,
+  },
+  supersetConnectorLine: {
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+    opacity: 0.6,
+  },
+  supersetConnectorText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  ssPositionBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  ssPositionText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  supersetFloatingCue: {
+    position: 'absolute',
+    bottom: 80,
+    left: 16,
+    right: 16,
+    backgroundColor: '#1E232F',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#8B5CF680',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 900,
+  },
+  supersetCueBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#8B5CF625',
+    borderWidth: 1,
+    borderColor: '#8B5CF680',
+  },
+  supersetCueBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#C4B5FD',
+    letterSpacing: 0.5,
+  },
+  supersetCueText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F3F4F6',
+  },
+  dropHelperBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#1E232F',
+    borderWidth: 1,
+    borderColor: '#EC489940',
+    gap: 6,
+  },
+  dropHelperTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#F472B6',
+    letterSpacing: 0.5,
+  },
+  dropHelperDesc: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  dropChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dropChip: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#161922',
+    borderWidth: 1,
+    borderColor: '#374151',
+    alignItems: 'center',
+  },
+  dropChipActive: {
+    backgroundColor: '#EC489925',
+    borderColor: '#EC4899',
+  },
+  dropChipPct: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#F472B6',
+  },
+  dropChipPctActive: {
+    color: '#F472B6',
+  },
+  dropChipWeight: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E5E7EB',
+    marginTop: 2,
+  },
+  dropChipWeightActive: {
+    color: '#FFFFFF',
   },
 });

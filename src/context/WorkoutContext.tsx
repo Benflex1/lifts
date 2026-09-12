@@ -38,6 +38,11 @@ import {
   scheduleRestNotification,
   cancelRestNotification,
 } from '../utils/restNotifications';
+import {
+  linkExercisesInGroup,
+  unlinkExerciseFromGroup,
+  setSupersetGroupInList,
+} from '../workout/supersets';
 
 interface RestTimerState {
   isActive: boolean;
@@ -78,6 +83,14 @@ interface WorkoutContextType {
   moveExerciseToIndex: (activeExerciseId: string, targetIndex: number) => void;
   swapExercise: (activeExerciseId: string, exercise: Exercise) => void | Promise<void>;
   addSet: (activeExerciseId: string, setType?: SetType) => void;
+  insertWarmupSets: (
+    activeExerciseId: string,
+    warmupSets: { weightKg: number; reps: number }[],
+    replaceExisting?: boolean
+  ) => void;
+  linkSuperset: (firstExerciseId: string, secondExerciseId: string) => void;
+  unlinkSuperset: (exerciseId: string) => void;
+  setSupersetGroup: (selectedExerciseIds: string[]) => void;
   removeSet: (activeExerciseId: string, setId: string) => void;
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
@@ -469,6 +482,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           notes: '',
           targetReps: item.targetReps,
           restTimerSeconds: resolveRestTimerSeconds(item.restTimerSeconds),
+          supersetId: item.supersetId,
         });
       }
     }
@@ -859,6 +873,114 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
+  const insertWarmupSets = (
+    activeExerciseId: string,
+    warmupSets: { weightKg: number; reps: number }[],
+    replaceExisting: boolean = true
+  ) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const updatedExercises = state.workout.exercises.map((ex) => {
+      if (ex.id !== activeExerciseId) return ex;
+
+      const completedWarmupSets = ex.sets.filter((s) => s.type === 'warmup' && s.isCompleted);
+      const nonWarmupSets = ex.sets.filter((s) => s.type !== 'warmup');
+
+      const newWarmupSets: WorkoutSet[] = warmupSets.map((ws, i) => ({
+        id: `set-${ex.id}-w${i + 1}-${Crypto.randomUUID().slice(0, 6)}`,
+        setNumber: i + 1,
+        type: 'warmup',
+        weightKg: ws.weightKg,
+        reps: ws.reps,
+        targetReps: ws.reps.toString(),
+        rpe: undefined,
+        isCompleted: false,
+        isWeightEdited: true,
+      }));
+
+      const combinedSets = replaceExisting
+        ? [...completedWarmupSets, ...newWarmupSets, ...nonWarmupSets]
+        : [...newWarmupSets, ...ex.sets];
+
+      const renumbered = combinedSets.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+      return { ...ex, sets: renumbered };
+    });
+
+    const totalVol = calculateTotalVolume(updatedExercises);
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: totalVol,
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+  };
+
+  const linkSuperset = (firstExerciseId: string, secondExerciseId: string) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const idx1 = state.workout.exercises.findIndex((e) => e.id === firstExerciseId);
+    const idx2 = state.workout.exercises.findIndex((e) => e.id === secondExerciseId);
+    if (idx1 === -1 || idx2 === -1) return;
+
+    const fallbackId = `ss-${Crypto.randomUUID().slice(0, 8)}`;
+    const updatedExercises = linkExercisesInGroup(state.workout.exercises, idx1, idx2, fallbackId);
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+  };
+
+  const unlinkSuperset = (exerciseId: string) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const targetIdx = state.workout.exercises.findIndex((e) => e.id === exerciseId);
+    if (targetIdx === -1) return;
+
+    const updatedExercises = unlinkExerciseFromGroup(state.workout.exercises, targetIdx);
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+  };
+
+  const setSupersetGroup = (selectedExerciseIds: string[]) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const fallbackId = `ss-${Crypto.randomUUID().slice(0, 8)}`;
+    const updatedExercises = setSupersetGroupInList(
+      state.workout.exercises,
+      selectedExerciseIds,
+      fallbackId
+    );
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+  };
+
   const removeSet = (activeExerciseId: string, setId: string) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
@@ -1066,6 +1188,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         moveExerciseToIndex,
         swapExercise,
         addSet,
+        insertWarmupSets,
+        linkSuperset,
+        unlinkSuperset,
+        setSupersetGroup,
         removeSet,
         updateSet,
         updateExerciseNotes,

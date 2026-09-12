@@ -701,7 +701,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   async function saveRoutine(
     name: string,
     folderName: string,
-    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number }[],
+    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number; supersetId?: string }[],
     notes?: string,
     existingId?: string
   ): Promise<string> {
@@ -734,6 +734,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         targetSets: item.targetSets,
         targetReps: item.targetReps,
         restTimerSeconds: item.restTimerSeconds,
+        supersetId: item.supersetId,
       })),
     };
 
@@ -764,15 +765,26 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (!original) throw new Error('Routine not found');
 
     const newId = createScopedId('routine');
+    const supersetMap = new Map<string, string>();
     const copy: Routine = {
       ...original,
       id: newId,
       name: `${original.name} (Copy)`,
       createdAt: new Date().toISOString(),
-      exercises: original.exercises.map((e, idx) => ({
-        ...e,
-        id: `re-${newId}-${idx}`,
-      })),
+      exercises: original.exercises.map((e, idx) => {
+        let remappedSupersetId: string | undefined = undefined;
+        if (e.supersetId) {
+          if (!supersetMap.has(e.supersetId)) {
+            supersetMap.set(e.supersetId, createScopedId('ss'));
+          }
+          remappedSupersetId = supersetMap.get(e.supersetId);
+        }
+        return {
+          ...e,
+          id: `re-${newId}-${idx}`,
+          supersetId: remappedSupersetId,
+        };
+      }),
     };
 
     const database = await openDb();
@@ -867,6 +879,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
           exerciseNames: w.exercises.map(e => e.exercise.name),
           notes: w.notes,
           gymId: w.gymId,
+          hasSupersets: w.exercises.some(e => Boolean(e.supersetId)),
         })));
       };
       req.onerror = () => reject(req.error);

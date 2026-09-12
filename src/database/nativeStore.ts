@@ -300,15 +300,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
         let order = 0;
         for (const re of r.exercises) {
           await driver.runAsync(
-            `INSERT OR IGNORE INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT OR IGNORE INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds, superset_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             re.id || `re-${r.id}-${order}`,
             r.id,
             re.exerciseId,
             order,
             re.targetSets,
             re.targetReps,
-            re.restTimerSeconds
+            re.restTimerSeconds,
+            re.supersetId || null
           );
           order++;
         }
@@ -501,6 +502,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           targetSets: row.target_sets,
           targetReps: row.target_reps,
           restTimerSeconds: row.rest_timer_seconds,
+          supersetId: row.superset_id || undefined,
         })),
       });
     }
@@ -547,6 +549,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         targetSets: row.target_sets,
         targetReps: row.target_reps,
         restTimerSeconds: row.rest_timer_seconds,
+        supersetId: row.superset_id || undefined,
       })),
     };
   }
@@ -554,28 +557,24 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function saveRoutine(
     name: string,
     folderName: string,
-    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number }[],
+    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number; supersetId?: string }[],
     notes?: string,
     existingId?: string
   ): Promise<string> {
-    for (const item of exercises) {
-      const repVal = validateTargetReps(item.targetReps);
-      if (!repVal.isValid) {
-        throw new Error(`Invalid target reps for exercise ${item.exerciseId}: ${repVal.error}`);
-      }
-    }
-
     return writeQueue(async () => {
+      for (const item of exercises) {
+        const repVal = validateTargetReps(item.targetReps);
+        if (!repVal.isValid) {
+          throw new Error(`Invalid target reps for exercise ${item.exerciseId}: ${repVal.error}`);
+        }
+      }
+
       const routineId = existingId || createScopedId('routine');
 
       await driver.withTransactionAsync(async () => {
-        const existing = existingId
-          ? await driver.getFirstAsync<{ id: string }>('SELECT id FROM routines WHERE id = ?', existingId)
-          : null;
-
-        if (existing) {
+        if (existingId) {
           await driver.runAsync(
-            'UPDATE routines SET name = ?, folder_name = ?, notes = ? WHERE id = ?',
+            `UPDATE routines SET name = ?, folder_name = ?, notes = ? WHERE id = ?`,
             name,
             folderName || null,
             notes || null,
@@ -583,7 +582,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           );
         } else {
           await driver.runAsync(
-            'INSERT INTO routines (id, name, folder_name, notes, created_at) VALUES (?, ?, ?, ?, ?)',
+            `INSERT INTO routines (id, name, folder_name, notes, created_at) VALUES (?, ?, ?, ?, ?)`,
             routineId,
             name,
             folderName || null,
@@ -598,15 +597,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
         let order = 0;
         for (const item of exercises) {
           await driver.runAsync(
-            `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds, superset_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             `re-${routineId}-${order}`,
             routineId,
             item.exerciseId,
             order,
             item.targetSets,
             item.targetReps,
-            item.restTimerSeconds
+            item.restTimerSeconds,
+            item.supersetId || null
           );
           order++;
         }
@@ -643,18 +643,27 @@ export function createNativeStore(driver: SqliteDriver): Store {
           new Date().toISOString()
         );
 
+        const supersetMap = new Map<string, string>();
         for (let i = 0; i < exRows.length; i++) {
           const e = exRows[i];
+          let remappedSupersetId: string | null = null;
+          if (e.superset_id) {
+            if (!supersetMap.has(e.superset_id)) {
+              supersetMap.set(e.superset_id, createScopedId('ss'));
+            }
+            remappedSupersetId = supersetMap.get(e.superset_id)!;
+          }
           await driver.runAsync(
-            `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds, superset_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             `re-${newId}-${i}`,
             newId,
             e.exercise_id,
             e.order_index,
             e.target_sets,
             e.target_reps,
-            e.rest_timer_seconds
+            e.rest_timer_seconds,
+            remappedSupersetId
           );
         }
       });
@@ -695,15 +704,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
         for (const ex of workout.exercises) {
           const weId = ex.id || `we-${workout.id}-${exOrder}`;
           await driver.runAsync(
-            `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps, superset_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             weId,
             workout.id,
             ex.exerciseId,
             exOrder,
             ex.notes || null,
             ex.restTimerSeconds ?? 0,
-            ex.targetReps || null
+            ex.targetReps || null,
+            ex.supersetId || null
           );
 
           for (const s of ex.sets) {
@@ -738,7 +748,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
     const rows = await driver.getAllAsync<any>(
       `SELECT w.*, 
-              COUNT(DISTINCT s.id) as total_sets
+              COUNT(DISTINCT s.id) as total_sets,
+              MAX(CASE WHEN we.superset_id IS NOT NULL THEN 1 ELSE 0 END) as has_supersets
        FROM workouts w
        LEFT JOIN workout_exercises we ON w.id = we.workout_id
        LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
@@ -779,6 +790,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       exerciseNames: namesByWorkout.get(r.id) || [],
       gymId: r.gym_id || 'gym-default',
       notes: r.notes,
+      hasSupersets: Boolean(r.has_supersets),
     }));
   }
 
@@ -810,6 +822,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         notes: we.notes,
         targetReps: we.target_reps || undefined,
         restTimerSeconds: we.rest_timer_seconds ?? 0,
+        supersetId: we.superset_id || undefined,
         exercise: {
           id: we.exercise_id,
           name: we.ex_name,
@@ -1170,15 +1183,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
           await driver.runAsync('DELETE FROM routine_exercises WHERE routine_id = ?', rt.id);
           for (const re of rt.exercises) {
             await driver.runAsync(
-              `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds, superset_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               re.id,
               rt.id,
               re.exerciseId,
               re.orderIndex,
               re.targetSets,
               re.targetReps,
-              re.restTimerSeconds
+              re.restTimerSeconds,
+              re.supersetId || null
             );
           }
         }
@@ -1203,15 +1217,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
           for (const we of w.exercises) {
             const weId = we.id || `we-${w.id}-${ord}`;
             await driver.runAsync(
-              `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps, superset_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
               weId,
               w.id,
               we.exerciseId,
               ord,
               we.notes || null,
               we.restTimerSeconds ?? 0,
-              we.targetReps || null
+              we.targetReps || null,
+              we.supersetId || null
             );
             for (const s of we.sets) {
               await driver.runAsync(

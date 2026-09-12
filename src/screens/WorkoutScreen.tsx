@@ -18,6 +18,7 @@ import {
   Calendar,
   Copy,
   Settings2,
+  Layers,
 } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { Routine } from '../types';
@@ -29,6 +30,7 @@ import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { resolveInitialStartGymId } from '../workout/gym-session';
 import { useSettings } from '../context/SettingsContext';
 import { useDialog } from '../context/DialogContext';
+import { getSupersetMetadata } from '../workout/supersets';
 
 export const WorkoutScreen: React.FC = () => {
   const { startWorkout, gyms, refreshGyms } = useWorkout();
@@ -256,12 +258,20 @@ export const WorkoutScreen: React.FC = () => {
             <View style={styles.routineCardHeader}>
               <View style={styles.routineTitleGroup}>
                 <Text style={styles.routineName}>{routine.name}</Text>
-                {routine.folderName && (
-                  <View style={styles.folderBadge}>
-                    <Folder size={11} color="#3B82F6" />
-                    <Text style={styles.folderBadgeText}>{routine.folderName}</Text>
-                  </View>
-                )}
+                <View style={styles.routineBadgesRow}>
+                  {routine.folderName && (
+                    <View style={styles.folderBadge}>
+                      <Folder size={11} color="#3B82F6" />
+                      <Text style={styles.folderBadgeText}>{routine.folderName}</Text>
+                    </View>
+                  )}
+                  {getSupersetMetadata(routine.exercises).size > 0 && (
+                    <View style={styles.supersetTagBadge}>
+                      <Layers size={11} color="#A855F7" />
+                      <Text style={styles.supersetTagBadgeText}>Supersets</Text>
+                    </View>
+                  )}
+                </View>
               </View>
 
               <View style={styles.routineActions}>
@@ -557,6 +567,28 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontSize: 12,
     fontWeight: '600',
+  },
+  routineBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  supersetTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#261834',
+    borderWidth: 1,
+    borderColor: '#6B21A8',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  supersetTagBadgeText: {
+    color: '#C084FC',
+    fontSize: 11,
+    fontWeight: '700',
   },
   routineActions: {
     flexDirection: 'row',

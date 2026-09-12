@@ -137,6 +137,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
           targetSets: 4,
           targetReps: '8-12',
           restTimerSeconds: 120,
+          supersetId: 'ss-roundtrip-1',
         },
       ],
       'Focus on mind-muscle connection'
@@ -166,6 +167,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
           notes: 'Bench occurrence 1',
           restTimerSeconds: 120,
           targetReps: '8-12',
+          supersetId: 'ss-roundtrip-1',
           exercise: {
             id: 'Barbell_Bench_Press_-_Medium_Grip',
             name: 'Bench Press (Barbell)',
@@ -224,6 +226,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
             orderIndex: 0,
             exercise: customEx,
             restTimerSeconds: 0,
+            supersetId: 'ss-draft-1',
             sets: [
               { id: 'ds1', setNumber: 1, type: 'normal', weightKg: 100, reps: 2, isCompleted: true },
             ],
@@ -271,12 +274,14 @@ describe('Backup Roundtrip & Merge Safety', () => {
       assert.equal(destW.totalVolumeKg, srcW.totalVolumeKg);
       assert.equal(destW.exercises.length, srcW.exercises.length);
       assert.equal(destW.exercises[0].sets.length, srcW.exercises[0].sets.length);
+      assert.equal(destW.exercises[0].supersetId, 'ss-roundtrip-1'); // supersetId preserved!
       assert.equal(destW.exercises[1].sets[0].weightKg, 0); // zero preserved!
       assert.equal(destW.exercises[1].sets[1].weightKg, 12.25); // fractional weight preserved!
 
       // Compare routines
       assert.equal(destSnap.routines.length, sourceSnap.routines.length);
       assert.equal(destSnap.routines[0].name, sourceSnap.routines[0].name);
+      assert.equal(destSnap.routines[0].exercises[0].supersetId, 'ss-roundtrip-1'); // routine supersetId preserved!
 
       // Compare custom exercises
       const destCustom = destSnap.exercises.filter((e) => e.isCustom);

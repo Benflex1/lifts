@@ -85,13 +85,13 @@
 - [x] **In-Workout Exercise Detail Modal**: Tap exercise avatar or title to inspect form instructions, cues, and muscle targets directly from the active workout screen.
 - [x] **Previous Stats Accuracy & Fallback**: Fix ghost set lookup inconsistencies across uncompleted set states, set count variations, and gym scoping fallbacks.
 
-### Phase 3: Advanced Training & Deep Analytics [Planned]
-- [ ] **Supersets & Giant Sets**: Visual grouping brackets connecting two or more exercises with combined rest intervals.
-- [ ] **Warmup Progression Calculator**: Automatic warmup ramp generator (e.g. 50% x 10, 70% x 5, 85% x 2).
+### Phase 3: Advanced Training & Deep Analytics [Completed]
+- [x] **Supersets & Giant Sets**: Visual grouping brackets connecting two or more exercises with alternating set navigation, group color coding, and routine template support.
+- [x] **Warmup Progression Calculator**: Automatic warmup ramp generator with Olympic plate rounding (2.5 kg / 5 lb), empty bar baselines, customizable presets (Strength, Hypertrophy, Quick, Heavy), and visual plate breakdowns.
 - [x] **Weekly Volume & Muscle-Frequency Charts**: Delivered weekly completed-set volume and primary-muscle workout-frequency views.
 - [x] **Per-Exercise Chronological History Drill-Down**: Full set-by-set workout logs per exercise with dates, gyms, loads, reps, volume, and session notes.
 - [x] **Strength / 1RM Progression Curves**: Interactive strength, volume, and estimated-1RM trend views per exercise or muscle group.
-- [ ] **Personal Record (PR) Badges & Celebrations**: Visual badges and celebration cues when achieving a new weight, volume, or rep record.
+- [x] **Personal Record (PR) Badges & Celebrations**: Visual badges and celebration cues when achieving a new weight, volume, or rep record.
 - [x] **Comprehensive Training Analytics**: Muscle balance heatmaps, fatigue & recovery estimates, rep range distributions, and consistency timelines.
 - [x] **CSV / Strong / Hevy / Lyfta Data Import**: Cross-platform importer supporting Hevy, Strong, Lyfta, FitNotes, and generic CSV exports with fuzzy exercise matching, synonym expansion, interactive exercise library assignment & custom creation picker, unit normalization, duplicate workout detection, and dry-run preview.
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
   View,
@@ -31,6 +31,13 @@ import { ExercisePickerModal } from './ExercisePickerModal';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
 import { saveRoutine } from '../database/db';
 import { validateTargetReps } from '../workout/sets';
+import { SupersetModal } from './SupersetModal';
+import {
+  getSupersetMetadata,
+  linkExercisesInGroup,
+  unlinkExerciseFromGroup,
+  setSupersetGroupInList,
+} from '../workout/supersets';
 
 interface Props {
   visible: boolean;
@@ -41,10 +48,12 @@ interface Props {
 }
 
 interface RoutineDraftExercise {
+  id: string;
   exercise: Exercise;
   targetSets: number;
   targetReps: string;
   restTimerSeconds: number;
+  supersetId?: string;
 }
 
 const PRESET_FOLDERS = [
@@ -97,11 +106,13 @@ export const RoutineEditorModal: React.FC<Props> = ({
       setFolderName(routineToEdit.folderName || '');
       setNotes(routineToEdit.notes || '');
       setDraftExercises(
-        routineToEdit.exercises.map(e => ({
+        routineToEdit.exercises.map((e, idx) => ({
+          id: e.id || `rde-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
           exercise: e.exercise,
           targetSets: e.targetSets,
           targetReps: e.targetReps,
           restTimerSeconds: e.restTimerSeconds,
+          supersetId: e.supersetId,
         }))
       );
     } else {
@@ -112,10 +123,51 @@ export const RoutineEditorModal: React.FC<Props> = ({
     }
   }, [routineToEdit, visible]);
 
+  const [supersetModalExerciseId, setSupersetModalExerciseId] = useState<string | null>(null);
+
+  const supersetMetaMap = useMemo(
+    () => getSupersetMetadata(draftExercises),
+    [draftExercises]
+  );
+
+  const supersetModalExercises = useMemo(() => {
+    return draftExercises.map((e) => ({
+      id: e.id,
+      name: e.exercise.name,
+      category: e.exercise.category,
+      equipment: e.exercise.equipment,
+      supersetId: e.supersetId,
+      targetSets: e.targetSets,
+    }));
+  }, [draftExercises]);
+
+  const handleSaveSupersetGroup = (selectedIds: string[]) => {
+    const fallbackId = `ss-routine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setDraftExercises((prev) => setSupersetGroupInList(prev, selectedIds, fallbackId));
+  };
+
+  const handleUngroupSupersetById = (exerciseId: string) => {
+    const targetIdx = draftExercises.findIndex((e) => e.id === exerciseId);
+    if (targetIdx !== -1) {
+      setDraftExercises((prev) => unlinkExerciseFromGroup(prev, targetIdx));
+    }
+  };
+
+  const handleLinkSuperset = (index: number) => {
+    if (index >= draftExercises.length - 1) return;
+    const fallbackId = `ss-routine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setDraftExercises(prev => linkExercisesInGroup(prev, index, index + 1, fallbackId));
+  };
+
+  const handleUnlinkSuperset = (index: number) => {
+    setDraftExercises(prev => unlinkExerciseFromGroup(prev, index));
+  };
+
   const handleAddExercise = (exercise: Exercise) => {
     setDraftExercises(prev => [
       ...prev,
       {
+        id: `rde-${Date.now()}-${prev.length}-${Math.random().toString(36).slice(2, 7)}`,
         exercise,
         targetSets: 3,
         targetReps: '8-12',
@@ -147,7 +199,8 @@ export const RoutineEditorModal: React.FC<Props> = ({
       );
       setReplacingIndex(null);
     } else {
-      const newItems: RoutineDraftExercise[] = exercises.map(ex => ({
+      const newItems: RoutineDraftExercise[] = exercises.map((ex, i) => ({
+        id: `rde-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
         exercise: ex,
         targetSets: 3,
         targetReps: '8-12',
@@ -162,10 +215,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
       const item = prev[index];
       if (!item) return prev;
       const duplicate: RoutineDraftExercise = {
+        id: `rde-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         exercise: item.exercise,
         targetSets: item.targetSets,
         targetReps: item.targetReps,
         restTimerSeconds: item.restTimerSeconds,
+        supersetId: undefined,
       };
       const next = [...prev];
       next.splice(index + 1, 0, duplicate);
@@ -184,7 +239,20 @@ export const RoutineEditorModal: React.FC<Props> = ({
   };
 
   const handleRemoveExercise = (index: number) => {
-    setDraftExercises(prev => prev.filter((_, idx) => idx !== index));
+    setDraftExercises(prev => {
+      const target = prev[index];
+      const oldId = target?.supersetId;
+      const updated = prev.filter((_, idx) => idx !== index);
+      if (oldId) {
+        const remaining = updated.filter(item => item.supersetId === oldId);
+        if (remaining.length < 2) {
+          return updated.map(item =>
+            item.supersetId === oldId ? { ...item, supersetId: undefined } : item
+          );
+        }
+      }
+      return updated;
+    });
   };
 
   const handleMoveUp = (index: number) => {
@@ -269,6 +337,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
         targetSets: e.targetSets,
         targetReps: e.targetReps,
         restTimerSeconds: e.restTimerSeconds,
+        supersetId: e.supersetId,
       })),
       notes.trim(),
       routineToEdit?.id
@@ -430,276 +499,428 @@ export const RoutineEditorModal: React.FC<Props> = ({
           {/* Compact View Mode */}
           {viewMode === 'compact' && draftExercises.length > 0 && (
             <View style={styles.compactList}>
-              {draftExercises.map((item, idx) => (
-                <View key={`${item.exercise.id}-${idx}`} style={styles.compactRow}>
-                  <View style={styles.compactOrderBadge}>
-                    <Text style={styles.compactOrderText}>#{idx + 1}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.compactInfo}
-                    onPress={() => handleStartReplace(idx)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.compactName} numberOfLines={1}>
-                      {item.exercise.name}
-                    </Text>
-                    <View style={styles.compactMetaRow}>
-                      <Text style={styles.compactMeta}>
-                        {item.targetSets} sets × {item.targetReps} •
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.compactRestBadge}
-                        onPress={() => setRestWheelIndex(idx)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
-                        <Timer size={11} color="#10B981" />
-                        <Text style={styles.compactRestText}>
-                          {item.restTimerSeconds > 0
-                            ? `${Math.floor(item.restTimerSeconds / 60)}m ${item.restTimerSeconds % 60}s`
-                            : 'Off'}
+              {draftExercises.map((item, idx) => {
+                const ssMeta = supersetMetaMap.get(item.id);
+                return (
+                  <React.Fragment key={item.id}>
+                    {ssMeta?.isFirst && (
+                      <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
+                        <TouchableOpacity
+                          style={[
+                            styles.supersetPill,
+                            { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
+                          ]}
+                          onPress={() => setSupersetModalExerciseId(item.id)}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit ${ssMeta.label}`}
+                        >
+                          <Layers size={13} color={ssMeta.color} />
+                          <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
+                            {ssMeta.label}
+                          </Text>
+                        </TouchableOpacity>
+                        <Text style={styles.supersetCountText}>
+                          {ssMeta.totalInGroup} Exercises · Alternating Sets
                         </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
-                  <View style={styles.compactActions}>
-                    <TouchableOpacity
-                      style={styles.compactActionBtn}
-                      onPress={() => handleStartReplace(idx)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <ArrowRightLeft size={14} color="#3B82F6" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.compactActionBtn}
-                      onPress={() => handleDuplicateExercise(idx)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Copy size={14} color="#9CA3AF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.compactActionBtn, idx === 0 && styles.iconActionDisabled]}
-                      disabled={idx === 0}
-                      onPress={() => handleMoveUp(idx)}
-                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                    >
-                      <ChevronUp size={16} color={idx === 0 ? '#374151' : '#9CA3AF'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                      </View>
+                    )}
+
+                    <View
                       style={[
-                        styles.compactActionBtn,
-                        idx === draftExercises.length - 1 && styles.iconActionDisabled,
+                        styles.compactRow,
+                        ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
                       ]}
-                      disabled={idx === draftExercises.length - 1}
-                      onPress={() => handleMoveDown(idx)}
-                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     >
-                      <ChevronDown
-                        size={16}
-                        color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.compactDeleteBtn}
-                      onPress={() => handleRemoveExercise(idx)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Trash2 size={14} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
+                      <View style={styles.compactOrderBadge}>
+                        <Text style={styles.compactOrderText}>#{idx + 1}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.compactInfo}
+                        onPress={() => handleStartReplace(idx)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={styles.compactName} numberOfLines={1}>
+                            {item.exercise.name}
+                          </Text>
+                          {ssMeta && (
+                            <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color }]}>
+                              <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
+                                {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.compactMetaRow}>
+                          <Text style={styles.compactMeta}>
+                            {item.targetSets} sets × {item.targetReps} •
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.compactRestBadge}
+                            onPress={() => setRestWheelIndex(idx)}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Timer size={11} color="#10B981" />
+                            <Text style={styles.compactRestText}>
+                              {item.restTimerSeconds > 0
+                                ? `${Math.floor(item.restTimerSeconds / 60)}m ${item.restTimerSeconds % 60}s`
+                                : 'Off'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                      <View style={styles.compactActions}>
+                        <TouchableOpacity
+                          style={styles.compactActionBtn}
+                          onPress={() => setSupersetModalExerciseId(item.id)}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          accessibilityLabel={ssMeta ? `Edit ${ssMeta.label}` : 'Create superset'}
+                        >
+                          <Layers size={14} color={ssMeta ? ssMeta.color : '#8B5CF6'} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.compactActionBtn}
+                          onPress={() => handleStartReplace(idx)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <ArrowRightLeft size={14} color="#3B82F6" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.compactActionBtn}
+                          onPress={() => handleDuplicateExercise(idx)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Copy size={14} color="#9CA3AF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.compactActionBtn, idx === 0 && styles.iconActionDisabled]}
+                          disabled={idx === 0}
+                          onPress={() => handleMoveUp(idx)}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                        >
+                          <ChevronUp size={16} color={idx === 0 ? '#374151' : '#9CA3AF'} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.compactActionBtn,
+                            idx === draftExercises.length - 1 && styles.iconActionDisabled,
+                          ]}
+                          disabled={idx === draftExercises.length - 1}
+                          onPress={() => handleMoveDown(idx)}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                        >
+                          <ChevronDown
+                            size={16}
+                            color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.compactDeleteBtn}
+                          onPress={() => handleRemoveExercise(idx)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Trash2 size={14} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {ssMeta && !ssMeta.isLast && (
+                      <View style={styles.supersetConnectorWrap}>
+                        <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                        <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
+                          ⇩ NEXT IN {ssMeta.label}
+                        </Text>
+                        <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                      </View>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </View>
           )}
 
           {/* Detailed View Mode */}
           {viewMode === 'detailed' &&
-            draftExercises.map((item, idx) => (
-              <View key={`${item.exercise.id}-${idx}`} style={styles.exerciseCard}>
-                {/* Exercise Card Header */}
-                <View style={styles.cardTopRow}>
-                  <View style={styles.orderBadge}>
-                    <Text style={styles.orderBadgeText}>#{idx + 1}</Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.cardHeaderInfo}
-                    onPress={() => handleStartReplace(idx)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.cardExName}>{item.exercise.name}</Text>
-                    <Text style={styles.cardExMeta}>
-                      {item.exercise.primaryMuscles.join(', ')} • {item.exercise.equipment}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Action Buttons: Swap, Duplicate, Up, Down, Trash */}
-                  <View style={styles.reorderActions}>
-                    <TouchableOpacity
-                      style={styles.actionPillBtn}
-                      onPress={() => handleStartReplace(idx)}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                    >
-                      <ArrowRightLeft size={13} color="#3B82F6" />
-                      <Text style={styles.actionPillText}>Swap</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.iconActionBtn}
-                      onPress={() => handleDuplicateExercise(idx)}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                    >
-                      <Copy size={15} color="#9CA3AF" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.iconActionBtn, idx === 0 && styles.iconActionDisabled]}
-                      disabled={idx === 0}
-                      onPress={() => handleMoveUp(idx)}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                    >
-                      <ChevronUp size={18} color={idx === 0 ? '#374151' : '#9CA3AF'} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.iconActionBtn,
-                        idx === draftExercises.length - 1 && styles.iconActionDisabled,
-                      ]}
-                      disabled={idx === draftExercises.length - 1}
-                      onPress={() => handleMoveDown(idx)}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                    >
-                      <ChevronDown
-                        size={18}
-                        color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
-                      />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.deleteActionBtn}
-                      onPress={() => handleRemoveExercise(idx)}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                    >
-                      <Trash2 size={16} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Target Sets Row: Clean Stepper without Presets */}
-                <View style={styles.configRow}>
-                  <Text style={styles.configLabel}>TARGET SETS</Text>
-                  <View style={styles.stepperRowContainer}>
-                    <View style={styles.cleanStepperContainer}>
+            draftExercises.map((item, idx) => {
+              const ssMeta = supersetMetaMap.get(item.id);
+              return (
+                <React.Fragment key={item.id}>
+                  {ssMeta?.isFirst && (
+                    <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
                       <TouchableOpacity
-                        style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
-                        onPress={() => handleUpdateSets(idx, -1)}
-                        disabled={item.targetSets <= 1}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        style={[
+                          styles.supersetPill,
+                          { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
+                        ]}
+                        onPress={() => setSupersetModalExerciseId(item.id)}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit ${ssMeta.label}`}
                       >
-                        <Minus size={15} color={item.targetSets > 1 ? '#FFFFFF' : '#4B5563'} />
+                        <Layers size={13} color={ssMeta.color} />
+                        <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
+                          {ssMeta.label}
+                        </Text>
                       </TouchableOpacity>
+                      <Text style={styles.supersetCountText}>
+                        {ssMeta.totalInGroup} Exercises · Alternating Sets
+                      </Text>
+                    </View>
+                  )}
 
-                      <View style={styles.cleanStepValueWrap}>
-                        <TextInput
-                          style={styles.cleanStepInput}
-                          keyboardType="number-pad"
-                          value={String(item.targetSets)}
-                          onChangeText={text => {
-                            const num = parseInt(text.replace(/[^0-9]/g, ''), 10);
-                            if (!isNaN(num) && num > 0 && num <= 50) {
-                              handleSetTargetSets(idx, num);
-                            } else if (text === '') {
-                              handleSetTargetSets(idx, 1);
-                            }
-                          }}
-                          selectTextOnFocus={true}
-                          maxLength={2}
-                        />
-                        <Text style={styles.cleanStepUnit}>sets</Text>
+                  <View
+                    style={[
+                      styles.exerciseCard,
+                      ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
+                    ]}
+                  >
+                    {/* Exercise Card Header */}
+                    <View style={styles.cardTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={styles.orderBadge}>
+                          <Text style={styles.orderBadgeText}>#{idx + 1}</Text>
+                        </View>
+                        {ssMeta && (
+                          <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color, marginLeft: 6 }]}>
+                            <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
+                              {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
+                            </Text>
+                          </View>
+                        )}
                       </View>
 
                       <TouchableOpacity
-                        style={styles.cleanStepBtn}
-                        onPress={() => handleUpdateSets(idx, 1)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        style={styles.cardHeaderInfo}
+                        onPress={() => handleStartReplace(idx)}
+                        activeOpacity={0.7}
                       >
-                        <Plus size={15} color="#FFFFFF" />
+                        <Text style={styles.cardExName}>{item.exercise.name}</Text>
+                        <Text style={styles.cardExMeta}>
+                          {item.exercise.primaryMuscles.join(', ')} • {item.exercise.equipment}
+                        </Text>
                       </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
 
-                {/* Target Reps Row: Custom Main Input with Presets Dropdown */}
-                {(() => {
-                  const repVal = validateTargetReps(item.targetReps);
-                  const isRepInvalid = !repVal.isValid && item.targetReps.trim().length > 0;
-                  return (
-                    <>
-                      <View style={styles.configRow}>
-                        <Text style={styles.configLabel}>TARGET REPS</Text>
-                        <View style={styles.repsRowContainer}>
-                          <View
-                            style={[
-                              styles.customRepInputWrapper,
-                              isRepInvalid && styles.customRepInputWrapperError,
-                            ]}
+                      {/* Action Buttons: Swap, Duplicate, Up, Down, Trash */}
+                      <View style={styles.reorderActions}>
+                        <TouchableOpacity
+                          style={styles.actionPillBtn}
+                          onPress={() => handleStartReplace(idx)}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <ArrowRightLeft size={13} color="#3B82F6" />
+                          <Text style={styles.actionPillText}>Swap</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.iconActionBtn}
+                          onPress={() => handleDuplicateExercise(idx)}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <Copy size={15} color="#9CA3AF" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.iconActionBtn, idx === 0 && styles.iconActionDisabled]}
+                          disabled={idx === 0}
+                          onPress={() => handleMoveUp(idx)}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <ChevronUp size={18} color={idx === 0 ? '#374151' : '#9CA3AF'} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.iconActionBtn,
+                            idx === draftExercises.length - 1 && styles.iconActionDisabled,
+                          ]}
+                          disabled={idx === draftExercises.length - 1}
+                          onPress={() => handleMoveDown(idx)}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <ChevronDown
+                            size={18}
+                            color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
+                          />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.deleteActionBtn}
+                          onPress={() => handleRemoveExercise(idx)}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <Trash2 size={16} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Target Sets Row: Clean Stepper without Presets */}
+                    <View style={styles.configRow}>
+                      <Text style={styles.configLabel}>TARGET SETS</Text>
+                      <View style={styles.stepperRowContainer}>
+                        <View style={styles.cleanStepperContainer}>
+                          <TouchableOpacity
+                            style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
+                            onPress={() => handleUpdateSets(idx, -1)}
+                            disabled={item.targetSets <= 1}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
+                            <Minus size={15} color={item.targetSets > 1 ? '#FFFFFF' : '#4B5563'} />
+                          </TouchableOpacity>
+
+                          <View style={styles.cleanStepValueWrap}>
                             <TextInput
-                              style={styles.primaryRepInput}
-                              placeholder="e.g. 8-12"
-                              placeholderTextColor="#6B7280"
-                              value={item.targetReps}
-                              onChangeText={txt => handleUpdateReps(idx, txt)}
+                              style={styles.cleanStepInput}
+                              keyboardType="number-pad"
+                              value={String(item.targetSets)}
+                              onChangeText={text => {
+                                const num = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                                if (!isNaN(num) && num > 0 && num <= 50) {
+                                  handleSetTargetSets(idx, num);
+                                } else if (text === '') {
+                                  handleSetTargetSets(idx, 1);
+                                }
+                              }}
                               selectTextOnFocus={true}
-                              autoCapitalize="none"
-                              autoCorrect={false}
+                              maxLength={2}
                             />
-                            <Text style={styles.repInputSuffix}>reps</Text>
+                            <Text style={styles.cleanStepUnit}>sets</Text>
                           </View>
 
                           <TouchableOpacity
-                            style={styles.presetDropdownBtn}
-                            onPress={() => setRepDropdownIndex(idx)}
-                            activeOpacity={0.7}
+                            style={styles.cleanStepBtn}
+                            onPress={() => handleUpdateSets(idx, 1)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
-                            <Sparkles size={13} color="#60A5FA" />
-                            <Text style={styles.presetDropdownBtnText}>Presets</Text>
-                            <ChevronDown size={13} color="#9CA3AF" />
+                            <Plus size={15} color="#FFFFFF" />
                           </TouchableOpacity>
                         </View>
                       </View>
-                      {isRepInvalid ? (
-                        <Text style={styles.repErrorText}>{repVal.error}</Text>
-                      ) : null}
-                    </>
-                  );
-                })()}
+                    </View>
 
-                {/* Rest Timer Row with Precision Wheel Trigger */}
-                <View style={styles.configRow}>
-                  <Text style={styles.configLabel}>REST TIMER</Text>
-                  <TouchableOpacity
-                    style={styles.restWheelTriggerBtn}
-                    onPress={() => setRestWheelIndex(idx)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.restWheelTriggerLeft}>
-                      <Timer size={14} color="#10B981" />
-                      <Text style={styles.restWheelTriggerText}>
-                        {item.restTimerSeconds > 0
-                          ? `${Math.floor(item.restTimerSeconds / 60)}m ${String(item.restTimerSeconds % 60).padStart(2, '0')}s`
-                          : 'Timer Off'}
+                    {/* Target Reps Row: Custom Main Input with Presets Dropdown */}
+                    {(() => {
+                      const repVal = validateTargetReps(item.targetReps);
+                      const isRepInvalid = !repVal.isValid && item.targetReps.trim().length > 0;
+                      return (
+                        <>
+                          <View style={styles.configRow}>
+                            <Text style={styles.configLabel}>TARGET REPS</Text>
+                            <View style={styles.repsRowContainer}>
+                              <View
+                                style={[
+                                  styles.customRepInputWrapper,
+                                  isRepInvalid && styles.customRepInputWrapperError,
+                                ]}
+                              >
+                                <TextInput
+                                  style={styles.primaryRepInput}
+                                  placeholder="e.g. 8-12"
+                                  placeholderTextColor="#6B7280"
+                                  value={item.targetReps}
+                                  onChangeText={txt => handleUpdateReps(idx, txt)}
+                                  selectTextOnFocus={true}
+                                  autoCapitalize="none"
+                                  autoCorrect={false}
+                                />
+                                <Text style={styles.repInputSuffix}>reps</Text>
+                              </View>
+
+                              <TouchableOpacity
+                                style={styles.presetDropdownBtn}
+                                onPress={() => setRepDropdownIndex(idx)}
+                                activeOpacity={0.7}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <Sparkles size={13} color="#60A5FA" />
+                                <Text style={styles.presetDropdownBtnText}>Presets</Text>
+                                <ChevronDown size={13} color="#9CA3AF" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                          {isRepInvalid ? (
+                            <Text style={styles.repErrorText}>{repVal.error}</Text>
+                          ) : null}
+                        </>
+                      );
+                    })()}
+
+                    {/* Rest Timer Row with Precision Wheel Trigger */}
+                    <View style={styles.configRow}>
+                      <Text style={styles.configLabel}>REST TIMER</Text>
+                      <TouchableOpacity
+                        style={styles.restWheelTriggerBtn}
+                        onPress={() => setRestWheelIndex(idx)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.restWheelTriggerLeft}>
+                          <Timer size={14} color="#10B981" />
+                          <Text style={styles.restWheelTriggerText}>
+                            {item.restTimerSeconds > 0
+                              ? `${Math.floor(item.restTimerSeconds / 60)}m ${String(item.restTimerSeconds % 60).padStart(2, '0')}s`
+                              : 'Timer Off'}
+                          </Text>
+                        </View>
+                        <View style={styles.restWheelTriggerRight}>
+                          <Text style={styles.restWheelTriggerHint}>Change</Text>
+                          <ChevronDown size={13} color="#10B981" />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Superset Link / Status Row */}
+                    <View style={styles.configRow}>
+                      <Text style={styles.configLabel}>SUPERSET</Text>
+                      {ssMeta ? (
+                        <View style={styles.ssActiveControlRow}>
+                          <TouchableOpacity
+                            style={[
+                              styles.ssActiveBadge,
+                              { borderColor: ssMeta.color, backgroundColor: ssMeta.color + '1A' },
+                            ]}
+                            onPress={() => setSupersetModalExerciseId(item.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Layers size={13} color={ssMeta.color} />
+                            <Text style={[styles.ssActiveBadgeText, { color: ssMeta.color }]}>
+                              {ssMeta.label} ({ssMeta.positionInGroup}/{ssMeta.totalInGroup}) · Edit
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.ssUnlinkBtn}
+                            onPress={() => handleUnlinkSuperset(idx)}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={styles.ssUnlinkBtnText}>Ungroup</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.ssLinkBtn}
+                          onPress={() => setSupersetModalExerciseId(item.id)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Layers size={13} color="#A855F7" />
+                          <Text style={styles.ssLinkBtnText}>
+                            + Create / Add to Superset...
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  {ssMeta && !ssMeta.isLast && (
+                    <View style={styles.supersetConnectorWrap}>
+                      <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                      <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
+                        ⇩ NEXT IN {ssMeta.label}
                       </Text>
+                      <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
                     </View>
-                    <View style={styles.restWheelTriggerRight}>
-                      <Text style={styles.restWheelTriggerHint}>Change</Text>
-                      <ChevronDown size={13} color="#10B981" />
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
+                  )}
+                </React.Fragment>
+              );
+            })}
 
           {draftExercises.length === 0 && (
             <View style={styles.emptyCard}>
@@ -845,6 +1066,16 @@ export const RoutineEditorModal: React.FC<Props> = ({
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
+
+        {/* Superset Manager Modal */}
+        <SupersetModal
+          visible={supersetModalExerciseId !== null}
+          currentExerciseId={supersetModalExerciseId}
+          exercises={supersetModalExercises}
+          onClose={() => setSupersetModalExerciseId(null)}
+          onSaveSuperset={handleSaveSupersetGroup}
+          onUngroupSuperset={handleUngroupSupersetById}
+        />
       </View>
     </Modal>
   );
@@ -1508,6 +1739,123 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  // Supersets in Routine Editor
+  supersetGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#161922',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  supersetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  supersetPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  supersetCountText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  supersetConnectorWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 4,
+  },
+  supersetConnectorLine: {
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+    opacity: 0.6,
+  },
+  supersetConnectorText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  ssPositionBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  ssPositionText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  ssActiveControlRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  ssActiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  ssActiveBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  ssUnlinkBtn: {
+    backgroundColor: '#2A1D24',
+    borderWidth: 1,
+    borderColor: '#701A40',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  ssUnlinkBtnText: {
+    color: '#F43F5E',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  ssLinkBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#1E1B2E',
+    borderWidth: 1,
+    borderColor: '#4C1D95',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  ssLinkBtnText: {
+    color: '#C084FC',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  ssNoneText: {
+    color: '#6B7280',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });
 

@@ -6,6 +6,7 @@ interface PRBadgeProps {
   achievement: PRAchievement;
   compact?: boolean;
   showGym?: boolean;
+  additionalCount?: number;
   onPress?: () => void;
 }
 
@@ -13,6 +14,7 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
   achievement,
   compact = false,
   showGym = false,
+  additionalCount = 0,
   onPress,
 }) => {
   const { rank, metric } = achievement;
@@ -48,14 +50,16 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
       ? 'Volume'
       : 'Reps';
 
+  const suffix = additionalCount > 0 ? ` (+${additionalCount})` : '';
+
   const content = compact ? (
     <View style={[styles.compactContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
-      <Text style={[styles.compactText, { color: theme.text }]}>{badgeText}</Text>
+      <Text style={[styles.compactText, { color: theme.text }]}>{badgeText}{suffix}</Text>
     </View>
   ) : (
     <View style={[styles.fullContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
       <Text style={[styles.fullText, { color: theme.text }]}>
-        {badgeText} · {metricLabel}
+        {badgeText} · {metricLabel}{suffix}
       </Text>
     </View>
   );
