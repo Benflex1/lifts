@@ -490,7 +490,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         style={styles.scrollArea}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(130, 130 + keyboardHeight) },
+          { paddingBottom: Math.max(130, 130 + (Platform.OS === 'android' ? keyboardHeight : 0)) },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

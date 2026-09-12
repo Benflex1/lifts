@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,21 +10,16 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus, ChevronRight, Info, Trophy, TrendingUp, Edit2 } from 'lucide-react-native';
-import { DualExerciseStats, Exercise, ExerciseGymScope, Gym } from '../types';
+import { Search, X, Dumbbell, Plus, ChevronRight, Edit2 } from 'lucide-react-native';
+import { Exercise, ExerciseGymScope, Gym } from '../types';
 import {
   searchExercises,
   createCustomExercise,
   updateCustomExercise,
-  getDefaultGym,
-  getExerciseStats,
   getExerciseGymScope,
   getGyms,
-  getCompletedWorkoutsForExercise,
 } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
-import { formatWeight } from '../utils/units';
-import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 
@@ -134,7 +129,7 @@ const QUICK_SUGGESTIONS = [
 ];
 
 export const ExercisesScreen: React.FC = () => {
-  const { unit, gymTrackingEnabled } = useSettings();
+  const { gymTrackingEnabled } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
@@ -152,69 +147,35 @@ export const ExercisesScreen: React.FC = () => {
   const [customMuscle, setCustomMuscle] = useState('Chest');
   const [customEquipment, setCustomEquipment] = useState('Barbell');
 
-  // Exercise personal stats
-  const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
+  // Exercise scope management
   const [gyms, setGyms] = useState<Gym[]>([]);
-  const [currentGym, setCurrentGym] = useState<Gym | null>(null);
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
   const [showScopeModal, setShowScopeModal] = useState(false);
-  const exerciseLoadRequestRef = useRef(0);
+  const [scopeRefreshKey, setScopeRefreshKey] = useState(0);
 
-  const loadExerciseDetails = useCallback(async (exercise: Exercise, clearBeforeLoad: boolean) => {
-    const requestId = ++exerciseLoadRequestRef.current;
-    if (clearBeforeLoad) {
-      setCurrentGym(null);
-      setExerciseScope(null);
-      setGyms([]);
-    }
-    setExerciseStats(null);
-
+  const handleOpenScope = async () => {
+    if (!activeDetail) return;
     try {
-      const [gymList, defaultGym, scope] = await Promise.all([
+      const [gymList, scope] = await Promise.all([
         getGyms(),
-        getDefaultGym(),
-        getExerciseGymScope(exercise.id),
+        getExerciseGymScope(activeDetail.id),
       ]);
-      const selectedGym = gymList.find(gym => gym.id === defaultGym.id) || gymList[0] || defaultGym;
-      const stats = await getExerciseStats(exercise.id, selectedGym.id);
-
-      if (requestId !== exerciseLoadRequestRef.current) return;
       setGyms(gymList);
-      setCurrentGym(selectedGym);
       setExerciseScope(scope);
-      setExerciseStats(stats);
+      setShowScopeModal(true);
     } catch (e) {
-      if (requestId !== exerciseLoadRequestRef.current) return;
-      setCurrentGym(null);
-      setExerciseScope(null);
-      setExerciseStats(null);
-      console.error('Error loading exercise stats:', e);
+      console.error('Error loading scope details:', e);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    if (!activeDetail) {
-      ++exerciseLoadRequestRef.current;
-      setExerciseStats(null);
-      setCurrentGym(null);
-      setExerciseScope(null);
-      setGyms([]);
-      setShowScopeModal(false);
-      return;
-    }
-    void loadExerciseDetails(activeDetail, true);
-  }, [activeDetail, loadExerciseDetails]);
+  const handleScopeSaved = (scope: ExerciseGymScope | null) => {
+    setExerciseScope(scope);
+    setScopeRefreshKey((k) => k + 1);
+  };
 
   useEffect(() => {
     if (!gymTrackingEnabled) setShowScopeModal(false);
   }, [gymTrackingEnabled]);
-
-  const handleScopeSaved = async (scope: ExerciseGymScope | null) => {
-    setExerciseScope(scope);
-    if (activeDetail) {
-      await loadExerciseDetails(activeDetail, false);
-    }
-  };
 
 
   useEffect(() => {
@@ -296,7 +257,6 @@ export const ExercisesScreen: React.FC = () => {
       await loadExercises();
       if (activeDetail && activeDetail.id === editingExercise.id) {
         setActiveDetail(updated);
-        await loadExerciseDetails(updated, false);
       }
     } else {
       const created = await createCustomExercise({
@@ -489,12 +449,14 @@ export const ExercisesScreen: React.FC = () => {
       <ExerciseDetailModal
         visible={activeDetail !== null}
         exercise={activeDetail}
-        currentGym={currentGym}
-        onClose={() => setActiveDetail(null)}
+        onClose={() => {
+          setActiveDetail(null);
+          setShowScopeModal(false);
+        }}
         onEditCustom={handleOpenEditCustom}
-        onEditScope={() => setShowScopeModal(true)}
+        onEditScope={handleOpenScope}
+        refreshKey={scopeRefreshKey}
       />
-
 
       <ExerciseScopeModal
         visible={gymTrackingEnabled && showScopeModal && activeDetail !== null}

@@ -30,6 +30,7 @@ export interface ExerciseDetailModalProps {
   currentGym?: Gym | null;
   onEditCustom?: (exercise: Exercise) => void;
   onEditScope?: (exercise: Exercise) => void;
+  refreshKey?: number | string;
 }
 
 export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
@@ -39,6 +40,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   currentGym: initialGym,
   onEditCustom,
   onEditScope,
+  refreshKey,
 }) => {
   const insets = useSafeAreaInsets();
   const { unit, gymTrackingEnabled } = useSettings();
@@ -94,7 +96,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     }
 
     void loadData();
-  }, [visible, exercise, initialGym]);
+  }, [visible, exercise, initialGym, refreshKey]);
 
   if (!exercise) {
     return null;

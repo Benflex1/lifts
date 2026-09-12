@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 let channelCreated = false;
 let handlerConfigured = false;
+let permissionRequested = false;
 let lastScheduledId: string | null = null;
 
 export async function initRestNotifications(): Promise<void> {
@@ -34,15 +35,19 @@ export async function initRestNotifications(): Promise<void> {
     }
   }
 
-  try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    if (existingStatus !== 'granted') {
-      await Notifications.requestPermissionsAsync();
+  if (!permissionRequested) {
+    permissionRequested = true;
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      if (existingStatus !== 'granted') {
+        await Notifications.requestPermissionsAsync();
+      }
+    } catch (e) {
+      console.warn('Failed to request notification permissions:', e);
     }
-  } catch (e) {
-    console.warn('Failed to request notification permissions:', e);
   }
 }
+
 
 export async function scheduleRestNotification(
   endsAtMs: number,
@@ -90,9 +95,11 @@ export async function scheduleRestNotification(
 export async function cancelRestNotification(): Promise<void> {
   try {
     if (lastScheduledId) {
-      await Notifications.cancelScheduledNotificationAsync(lastScheduledId);
+      await Notifications.cancelScheduledNotificationAsync(lastScheduledId).catch(() => {});
       lastScheduledId = null;
     }
+    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
+    await Notifications.dismissAllNotificationsAsync().catch(() => {});
   } catch (e) {
     console.warn('Failed to cancel rest notification:', e);
   }

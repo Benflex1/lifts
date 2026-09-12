@@ -38,4 +38,17 @@ describe('computeRemaining', () => {
     assert.equal(computeRemaining(now, now), 0);
     assert.equal(computeRemaining(now - 1000, now), 0);
   });
+
+  it('differentiates recently expired timers from stale resumptions', () => {
+    const now = 1_000_000;
+    // Just expired (within 1.5s tolerance)
+    const freshExpiry = now - 500;
+    const isRecentlyExpiredFresh = Math.abs(now - freshExpiry) < 1500;
+    assert.equal(isRecentlyExpiredFresh, true);
+
+    // Stale expiration (e.g. app reopened 15s after background timer completion)
+    const staleExpiry = now - 15_000;
+    const isRecentlyExpiredStale = Math.abs(now - staleExpiry) < 1500;
+    assert.equal(isRecentlyExpiredStale, false);
+  });
 });

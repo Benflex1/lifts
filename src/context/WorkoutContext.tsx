@@ -239,11 +239,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [sessionState.phase, sessionState.workout?.startTime]);
 
-  // AppState background flush
+  // AppState background flush & foreground notification cleanup
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
       if (state === 'background' && controllerRef.current && sessionState.phase === 'active') {
         controllerRef.current.flush().catch(console.error);
+      } else if (state === 'active') {
+        void cancelRestNotification();
       }
     };
     const sub = AppState.addEventListener('change', handler);
@@ -257,6 +259,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const now = Date.now();
         const remaining = computeRemaining(restTimer.endsAt!, now);
         if (remaining <= 0) {
+          const expiredRecently = restTimer.endsAt !== null && Math.abs(now - restTimer.endsAt) < 1500;
           setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
           const ctrl = controllerRef.current;
           if (ctrl) {
@@ -268,7 +271,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           void cancelRestNotification();
 
           // Intense countdown finish buzzer (triple pulse)
-          if (lastBuzzedSecondRef.current !== 0) {
+          // Only buzz if timer reached 0 in foreground / just now (< 1.5s), avoiding false alarm on app resume
+          if (lastBuzzedSecondRef.current !== 0 && expiredRecently) {
             lastBuzzedSecondRef.current = 0;
             if (Platform.OS !== 'web') {
               try {
@@ -281,6 +285,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }, 320);
               } catch (_) {}
             }
+          } else {
+            lastBuzzedSecondRef.current = 0;
           }
         } else {
           // Intense 3-2-1 countdown haptics
