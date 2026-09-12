@@ -975,6 +975,15 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return Array.from(workouts.values());
   }
 
+  async function getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
+    const idSet = Array.from(new Set(exerciseIds));
+    const result: Record<string, Workout[]> = {};
+    for (const id of idSet) {
+      result[id] = await loadCompletedWorkoutsForExercise(id);
+    }
+    return result;
+  }
+
   async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
     const workouts = await loadCompletedWorkoutsForExercise(exerciseId);
     const scope = await getExerciseGymScope(exerciseId);
@@ -1281,6 +1290,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
     saveExerciseGymScope,
     deleteExerciseGymScope,
     getPreviousSetsForExercise,
+    getCompletedWorkoutsForExercise: loadCompletedWorkoutsForExercise,
+    getCompletedWorkoutsForExercises,
     getExerciseStats,
     getAllExercises,
     searchExercises,

@@ -28,7 +28,9 @@ import {
   ArrowUp,
   ArrowDown,
   Repeat,
+  Trophy,
 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
@@ -43,13 +45,16 @@ import { GymPickerModal } from '../components/GymPickerModal';
 import { WeightInput } from '../components/WeightInput';
 import { RepsInput } from '../components/RepsInput';
 import { SwipeableSetRow } from '../components/SwipeableSetRow';
-import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise } from '../types';
+import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise, ExerciseGymScope } from '../types';
 import { useDialog } from '../context/DialogContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
 import { getExerciseDropIndex } from '../workout/active-exercises';
 import type { ExerciseLayout } from '../workout/active-exercises';
 import { formatPreviousMetric } from '../workout/gym-display';
+import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
+import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
+import { PRBadge } from '../components/PRBadge';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -121,6 +126,94 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     exerciseName: string;
     set: WorkoutSet;
   } | null>(null);
+
+  // PR Tracking & Historical baseline cache
+  const [exerciseWorkouts, setExerciseWorkouts] = useState<Record<string, Workout[]>>({});
+  const [exerciseScopes, setExerciseScopes] = useState<Record<string, ExerciseGymScope | undefined>>({});
+
+  useEffect(() => {
+    if (!activeWorkout) return;
+    const missingIds = Array.from(
+      new Set(activeWorkout.exercises.map((ex) => ex.exerciseId))
+    ).filter((id) => !(id in exerciseWorkouts));
+
+    if (missingIds.length === 0) return;
+
+    let mounted = true;
+    Promise.all([
+      getCompletedWorkoutsForExercises(missingIds),
+      Promise.all(missingIds.map((id) => getExerciseGymScope(id))),
+    ]).then(([workoutsByEx, scopes]) => {
+      if (!mounted) return;
+      setExerciseWorkouts((prev) => ({
+        ...prev,
+        ...workoutsByEx,
+      }));
+      setExerciseScopes((prev) => {
+        const next = { ...prev };
+        missingIds.forEach((id, idx) => {
+          next[id] = scopes[idx] || undefined;
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeWorkout?.exercises]);
+
+  const prSummary = useMemo(() => {
+    if (!activeWorkout) return null;
+    return evaluateWorkoutPRs(
+      activeWorkout,
+      exerciseWorkouts,
+      gyms,
+      gymTrackingEnabled,
+      exerciseScopes
+    );
+  }, [activeWorkout, exerciseWorkouts, gyms, gymTrackingEnabled, exerciseScopes]);
+
+  const previousCompletedSetIdsRef = useRef<Set<string> | null>(null);
+
+  useEffect(() => {
+    if (!activeWorkout) {
+      previousCompletedSetIdsRef.current = null;
+      return;
+    }
+
+    const currentCompleted = new Set<string>();
+    for (const ex of activeWorkout.exercises) {
+      for (const s of ex.sets) {
+        if (s.isCompleted) {
+          currentCompleted.add(s.id);
+        }
+      }
+    }
+
+    if (previousCompletedSetIdsRef.current === null) {
+      // Seed initial set IDs without firing haptics (e.g. initial mount or resume)
+      previousCompletedSetIdsRef.current = currentCompleted;
+      return;
+    }
+
+    for (const setId of currentCompleted) {
+      if (!previousCompletedSetIdsRef.current.has(setId)) {
+        const pr = prSummary?.setPRs.get(setId);
+        if (pr?.primary) {
+          try {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (_) {}
+        }
+      }
+    }
+
+    previousCompletedSetIdsRef.current = currentCompleted;
+  }, [activeWorkout, prSummary]);
+
+  const handleToggleSetWithHaptics = (exerciseId: string, setId: string) => {
+    toggleSetComplete(exerciseId, setId);
+  };
 
   // Accordion state: which exercises are expanded
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
@@ -598,9 +691,20 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                         </Text>
                       </TouchableOpacity>
 
-                      {/* Previous Performance Comparison */}
+                      {/* Previous Performance Comparison / PR Medal */}
                       <View style={styles.previousCell}>
-                        {set.previousWeightKg !== undefined ? (
+                        {set.isCompleted && prSummary?.setPRs.get(set.id)?.primary ? (
+                          <View style={styles.prBadgeWrap}>
+                            <PRBadge
+                              achievement={prSummary.setPRs.get(set.id)!.primary!}
+                              compact
+                              showGym={gymTrackingEnabled}
+                              onPress={() =>
+                                openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
+                              }
+                            />
+                          </View>
+                        ) : set.previousWeightKg !== undefined ? (
                           <Text style={styles.previousText}>
                             {formatPreviousMetric(
                               {
@@ -683,7 +787,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                           styles.checkBtn,
                           set.isCompleted ? styles.checkBtnActive : styles.checkBtnInactive,
                         ]}
-                        onPress={() => toggleSetComplete(activeEx.id, set.id)}
+                        onPress={() => handleToggleSetWithHaptics(activeEx.id, set.id)}
                         hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                       >
                         <Check
@@ -818,6 +922,27 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 <X size={20} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
+
+            {/* PR Achievement Banner */}
+            {setOptionsModal && prSummary?.setPRs.get(setOptionsModal.set.id) && (
+              <View style={styles.prOptionsBanner}>
+                <View style={styles.prOptionsBannerHeader}>
+                  <Trophy size={16} color="#F59E0B" />
+                  <Text style={styles.prOptionsBannerTitle}>
+                    {prSummary.setPRs.get(setOptionsModal.set.id)!.primary?.rank === 1
+                      ? 'PERSONAL RECORD (1ST BEST)'
+                      : prSummary.setPRs.get(setOptionsModal.set.id)!.primary?.rank === 2
+                      ? 'SILVER RECORD (2ND BEST)'
+                      : 'BRONZE RECORD (3RD BEST)'}
+                  </Text>
+                </View>
+                {prSummary.setPRs.get(setOptionsModal.set.id)!.achievements.map((ach, idx) => (
+                  <Text key={idx} style={styles.prOptionsDetailText}>
+                    • {formatPRDescription(ach, unit)}
+                  </Text>
+                ))}
+              </View>
+            )}
 
             {/* Set Type Selector */}
             <View style={styles.optionsSection}>
@@ -1465,6 +1590,37 @@ const styles = StyleSheet.create({
   previousCell: {
     flex: 1,
     paddingHorizontal: 6,
+    justifyContent: 'center',
+  },
+  prBadgeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  prOptionsBanner: {
+    backgroundColor: '#78350F25',
+    borderColor: '#F59E0B60',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    gap: 6,
+  },
+  prOptionsBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  prOptionsBannerTitle: {
+    color: '#FBBF24',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  prOptionsDetailText: {
+    color: '#FDE68A',
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   previousText: {
     color: '#9CA3AF',
