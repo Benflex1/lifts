@@ -7,8 +7,16 @@ import {
   resolveRestTimerSeconds,
   validateCompletedSet,
   validateTargetReps,
+  sanitizeWeightInput,
+  sanitizeRepsInput,
 } from '../../src/workout/sets';
 import { WorkoutSet } from '../../src/types';
+import {
+  resolveInitialAccordionState,
+  applyPreviousSetStats,
+  resolveAddedSetGhostStats,
+  createWorkoutSetsFromSuggestions,
+} from '../../src/workout/gym-session';
 
 describe('initialReps', () => {
   it('parses single fixed numeric target', () => {
@@ -61,8 +69,128 @@ describe('workout defaults', () => {
     assert.equal(resolveHistoricalTargetReps(undefined, undefined), '10');
   });
 
-  it('offers the documented RPE range from 5 through 10', () => {
+  it('offers the documented RPE range from 5 through 10 with null (None) first', () => {
     assert.deepEqual(RPE_CHIPS, [null, 5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10]);
+    assert.equal(RPE_CHIPS[0], null);
+  });
+});
+
+describe('applyPreviousSetStats', () => {
+  it('copies previous weight and reps into current set and marks weight edited', () => {
+    const set: WorkoutSet = {
+      id: 's-1',
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 0,
+      reps: 0,
+      isCompleted: false,
+      isWeightEdited: false,
+      previousWeightKg: 85,
+      previousReps: 8,
+    };
+    const result = applyPreviousSetStats(set, 10);
+    assert.equal(result.weightKg, 85);
+    assert.equal(result.reps, 8);
+    assert.equal(result.isWeightEdited, true);
+    assert.equal(result.isCompleted, false);
+  });
+
+  it('leaves completed sets untouched', () => {
+    const set: WorkoutSet = {
+      id: 's-2',
+      setNumber: 2,
+      type: 'normal',
+      weightKg: 60,
+      reps: 10,
+      isCompleted: true,
+      isWeightEdited: true,
+      previousWeightKg: 90,
+      previousReps: 5,
+    };
+    const result = applyPreviousSetStats(set, 10);
+    assert.equal(result.weightKg, 60);
+    assert.equal(result.reps, 10);
+  });
+
+  it('handles 0 kg previous weight for bodyweight movements', () => {
+    const set: WorkoutSet = {
+      id: 's-3',
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 0,
+      reps: 0,
+      isCompleted: false,
+      isWeightEdited: false,
+      previousWeightKg: 0,
+      previousReps: 15,
+    };
+    const result = applyPreviousSetStats(set, 10);
+    assert.equal(result.weightKg, 0);
+    assert.equal(result.reps, 15);
+    assert.equal(result.isWeightEdited, true);
+  });
+
+  it('uses fallback reps when previous reps are absent', () => {
+    const set: WorkoutSet = {
+      id: 's-4',
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 0,
+      reps: 0,
+      isCompleted: false,
+      isWeightEdited: false,
+      previousWeightKg: 50,
+      previousReps: undefined,
+    };
+    const result = applyPreviousSetStats(set, 12);
+    assert.equal(result.weightKg, 50);
+    assert.equal(result.reps, 12);
+    assert.equal(result.isWeightEdited, true);
+  });
+});
+
+describe('resolveInitialAccordionState', () => {
+  it('expands first exercise if incomplete and collapses subsequent exercises', () => {
+    const exercises = [
+      { id: 'ex-1', sets: [{ isCompleted: false }, { isCompleted: false }] },
+      { id: 'ex-2', sets: [{ isCompleted: false }] },
+    ];
+    const state = resolveInitialAccordionState(exercises);
+    assert.deepEqual(state, {
+      'ex-1': true,
+      'ex-2': false,
+    });
+  });
+
+  it('skips completed exercises and expands the first incomplete exercise', () => {
+    const exercises = [
+      { id: 'ex-1', sets: [{ isCompleted: true }, { isCompleted: true }] },
+      { id: 'ex-2', sets: [{ isCompleted: false }, { isCompleted: false }] },
+      { id: 'ex-3', sets: [{ isCompleted: false }] },
+    ];
+    const state = resolveInitialAccordionState(exercises);
+    assert.deepEqual(state, {
+      'ex-1': false,
+      'ex-2': true,
+      'ex-3': false,
+    });
+  });
+
+  it('keeps all exercises collapsed if all are completed without randomly popping open', () => {
+    const exercises = [
+      { id: 'ex-1', sets: [{ isCompleted: true }, { isCompleted: true }] },
+      { id: 'ex-2', sets: [{ isCompleted: true }] },
+    ];
+    const state = resolveInitialAccordionState(exercises);
+    assert.deepEqual(state, {
+      'ex-1': false,
+      'ex-2': false,
+    });
+  });
+
+  it('handles empty exercise list', () => {
+    const state = resolveInitialAccordionState([]);
+    assert.deepEqual(state, {});
   });
 });
 
@@ -217,3 +345,200 @@ describe('validateTargetReps', () => {
     assert.equal(validateTargetReps(undefined).isValid, false);
   });
 });
+
+describe('numeric input sanitization', () => {
+  it('sanitizes weight inputs by converting comma to dot', () => {
+    assert.equal(sanitizeWeightInput('82,5'), '82.5');
+    assert.equal(sanitizeWeightInput('100,25'), '100.25');
+  });
+
+  it('preserves valid decimal and integer weight inputs', () => {
+    assert.equal(sanitizeWeightInput('100'), '100');
+    assert.equal(sanitizeWeightInput('77.5'), '77.5');
+    assert.equal(sanitizeWeightInput('0.5'), '0.5');
+  });
+
+  it('keeps only the first decimal dot and strips subsequent dots', () => {
+    assert.equal(sanitizeWeightInput('80.5.2'), '80.52');
+    assert.equal(sanitizeWeightInput('1..5'), '1.5');
+    assert.equal(sanitizeWeightInput('..5'), '.5');
+  });
+
+  it('filters out non-numeric characters from weight input', () => {
+    assert.equal(sanitizeWeightInput('100kg'), '100');
+    assert.equal(sanitizeWeightInput('abc 82.5 lbs'), '82.5');
+    assert.equal(sanitizeWeightInput(''), '');
+    assert.equal(sanitizeWeightInput('   '), '');
+  });
+
+  it('sanitizes reps inputs to whole numbers only', () => {
+    assert.equal(sanitizeRepsInput('12'), '12');
+    assert.equal(sanitizeRepsInput('8'), '8');
+    assert.equal(sanitizeRepsInput('12.5'), '125');
+    assert.equal(sanitizeRepsInput('10 reps'), '10');
+    assert.equal(sanitizeRepsInput(''), '');
+    assert.equal(sanitizeRepsInput('abc'), '');
+  });
+});
+
+describe('resolveAddedSetGhostStats', () => {
+  it('carries over straight-set progression from completed set', () => {
+    const sets: WorkoutSet[] = [
+      {
+        id: 's-1',
+        setNumber: 1,
+        type: 'normal',
+        weightKg: 80,
+        reps: 10,
+        isCompleted: true,
+        isWeightEdited: true,
+      },
+    ];
+    const ghost = resolveAddedSetGhostStats(sets);
+    assert.equal(ghost.previousWeightKg, 80);
+    assert.equal(ghost.previousReps, 10);
+    assert.equal(ghost.provenanceSet, undefined);
+  });
+
+  it('preserves 0 kg bodyweight sets without dropping to undefined', () => {
+    const sets: WorkoutSet[] = [
+      {
+        id: 's-1',
+        setNumber: 1,
+        type: 'normal',
+        weightKg: 0,
+        reps: 15,
+        isCompleted: true,
+        isWeightEdited: true,
+      },
+    ];
+    const ghost = resolveAddedSetGhostStats(sets);
+    assert.equal(ghost.previousWeightKg, 0);
+    assert.equal(ghost.previousReps, 15);
+  });
+
+  it('skips uncompleted empty sets and finds the most recent completed or edited set', () => {
+    const sets: WorkoutSet[] = [
+      {
+        id: 's-1',
+        setNumber: 1,
+        type: 'normal',
+        weightKg: 100,
+        reps: 6,
+        isCompleted: true,
+        isWeightEdited: true,
+      },
+      {
+        id: 's-2',
+        setNumber: 2,
+        type: 'normal',
+        weightKg: 0,
+        reps: 0,
+        isCompleted: false,
+        isWeightEdited: false,
+      },
+    ];
+    const ghost = resolveAddedSetGhostStats(sets);
+    assert.equal(ghost.previousWeightKg, 100);
+    assert.equal(ghost.previousReps, 6);
+  });
+
+  it('falls back to ghost suggestions from past workouts if no set completed yet', () => {
+    const sets: WorkoutSet[] = [
+      {
+        id: 's-1',
+        setNumber: 1,
+        type: 'normal',
+        weightKg: 0,
+        reps: 0,
+        isCompleted: false,
+        isWeightEdited: false,
+        previousWeightKg: 65,
+        previousReps: 12,
+        previousGymId: 'gym-east',
+        previousGymName: 'East Gym',
+      },
+      {
+        id: 's-2',
+        setNumber: 2,
+        type: 'normal',
+        weightKg: 0,
+        reps: 0,
+        isCompleted: false,
+        isWeightEdited: false,
+        previousWeightKg: 65,
+        previousReps: 10,
+        previousGymId: 'gym-east',
+        previousGymName: 'East Gym',
+      },
+    ];
+    const ghost = resolveAddedSetGhostStats(sets);
+    assert.equal(ghost.previousWeightKg, 65);
+    assert.equal(ghost.previousReps, 10);
+    assert.equal(ghost.provenanceSet?.previousGymId, 'gym-east');
+  });
+
+  it('handles empty sets array gracefully', () => {
+    const ghost = resolveAddedSetGhostStats([]);
+    assert.equal(ghost.previousWeightKg, undefined);
+    assert.equal(ghost.previousReps, undefined);
+  });
+});
+
+describe('createWorkoutSetsFromSuggestions', () => {
+  it('creates sets matching suggestion count when history has more sets than targetSets', () => {
+    const suggestions = [
+      { weightKg: 80, reps: 10 },
+      { weightKg: 80, reps: 10 },
+      { weightKg: 80, reps: 8 },
+      { weightKg: 75, reps: 8 },
+    ];
+    const sets = createWorkoutSetsFromSuggestions({
+      activeExerciseId: 'ex-1',
+      targetSets: 3,
+      targetReps: '8-10',
+      suggestions,
+    });
+    assert.equal(sets.length, 4);
+    assert.equal(sets[0].previousWeightKg, 80);
+    assert.equal(sets[3].previousWeightKg, 75);
+    assert.equal(sets[3].previousReps, 8);
+  });
+
+  it('carries forward the last known suggestion to extra sets', () => {
+    const suggestions = [
+      { weightKg: 90, reps: 5 },
+      { weightKg: 90, reps: 5 },
+    ];
+    const sets = createWorkoutSetsFromSuggestions({
+      activeExerciseId: 'ex-2',
+      targetSets: 4,
+      targetReps: '5',
+      suggestions,
+    });
+    assert.equal(sets.length, 4);
+    assert.equal(sets[0].previousWeightKg, 90);
+    assert.equal(sets[1].previousWeightKg, 90);
+    assert.equal(sets[2].previousWeightKg, 90, 'Set 3 inherits last known suggestion');
+    assert.equal(sets[3].previousWeightKg, 90, 'Set 4 inherits last known suggestion');
+  });
+
+  it('clears gym provenance when suggestion gym matches current gym', () => {
+    const suggestions = [
+      { weightKg: 100, reps: 8, sourceGymId: 'gym-metro', sourceGymName: 'Metro Gym' },
+      { weightKg: 100, reps: 8, sourceGymId: 'gym-iron', sourceGymName: 'Iron Gym' },
+    ];
+    const sets = createWorkoutSetsFromSuggestions({
+      activeExerciseId: 'ex-3',
+      targetSets: 2,
+      suggestions,
+      currentGymId: 'gym-metro',
+    });
+    assert.equal(sets[0].previousGymId, undefined);
+    assert.equal(sets[0].previousGymName, undefined);
+    assert.equal(sets[1].previousGymId, 'gym-iron');
+    assert.equal(sets[1].previousGymName, 'Iron Gym');
+  });
+});
+
+

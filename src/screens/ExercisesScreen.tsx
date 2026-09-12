@@ -26,8 +26,8 @@ import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
-import { ExercisePodium, extractExercisePodium } from '../workout/pr';
-import { ExercisePodiumView } from '../components/ExercisePodiumView';
+import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
+
 
 const MUSCLE_GROUPS = [
   'All',
@@ -154,7 +154,6 @@ export const ExercisesScreen: React.FC = () => {
 
   // Exercise personal stats
   const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
-  const [exercisePodium, setExercisePodium] = useState<ExercisePodium | null>(null);
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [currentGym, setCurrentGym] = useState<Gym | null>(null);
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
@@ -167,35 +166,28 @@ export const ExercisesScreen: React.FC = () => {
       setCurrentGym(null);
       setExerciseScope(null);
       setGyms([]);
-      setExercisePodium(null);
     }
     setExerciseStats(null);
-    setExercisePodium(null);
 
     try {
-      const [gymList, defaultGym, scope, completedWorkouts] = await Promise.all([
+      const [gymList, defaultGym, scope] = await Promise.all([
         getGyms(),
         getDefaultGym(),
         getExerciseGymScope(exercise.id),
-        getCompletedWorkoutsForExercise(exercise.id),
       ]);
       const selectedGym = gymList.find(gym => gym.id === defaultGym.id) || gymList[0] || defaultGym;
       const stats = await getExerciseStats(exercise.id, selectedGym.id);
-      const allowedGymIds = getAllowedGymIds(exercise, scope || undefined, selectedGym.id);
-      const podium = extractExercisePodium(completedWorkouts, exercise.id, gymList, allowedGymIds);
 
       if (requestId !== exerciseLoadRequestRef.current) return;
       setGyms(gymList);
       setCurrentGym(selectedGym);
       setExerciseScope(scope);
       setExerciseStats(stats);
-      setExercisePodium(podium);
     } catch (e) {
       if (requestId !== exerciseLoadRequestRef.current) return;
       setCurrentGym(null);
       setExerciseScope(null);
       setExerciseStats(null);
-      setExercisePodium(null);
       console.error('Error loading exercise stats:', e);
     }
   }, []);
@@ -224,35 +216,6 @@ export const ExercisesScreen: React.FC = () => {
     }
   };
 
-  const statsCard = (label: string, stats: DualExerciseStats['global']) => (
-    <View style={styles.statsCard}>
-      <Text style={styles.statsTierTitle}>{label}</Text>
-      <View style={styles.statsGrid}>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>HEAVIEST LIFT</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.maxWeightKg > 0 ? formatWeight(stats.maxWeightKg, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>MAX SET VOLUME</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>ESTIMATED 1RM</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.estimated1RM > 0 ? formatWeight(stats.estimated1RM, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>SESSIONS</Text>
-          <Text style={styles.statBoxValue}>{stats.sessionCount}</Text>
-        </View>
-      </View>
-    </View>
-  );
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -523,147 +486,15 @@ export const ExercisesScreen: React.FC = () => {
       )}
 
       {/* Exercise Detail Modal */}
-      <Modal 
-        visible={activeDetail !== null} 
-        animationType="slide"
-        onRequestClose={() => setActiveDetail(null)}
-      >
-        <View style={styles.detailContainer}>
-          <View style={styles.detailHeader}>
-            <TouchableOpacity onPress={() => setActiveDetail(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-            <Text style={styles.detailHeaderTitle}>Exercise Details</Text>
-            {activeDetail?.isCustom ? (
-              <TouchableOpacity
-                style={styles.headerEditBtn}
-                onPress={() => handleOpenEditCustom(activeDetail)}
-                accessibilityRole="button"
-                accessibilityLabel="Edit custom exercise"
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Edit2 size={16} color="#3B82F6" />
-                <Text style={styles.headerEditBtnText}>Edit</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={{ width: 24 }} />
-            )}
-          </View>
+      <ExerciseDetailModal
+        visible={activeDetail !== null}
+        exercise={activeDetail}
+        currentGym={currentGym}
+        onClose={() => setActiveDetail(null)}
+        onEditCustom={handleOpenEditCustom}
+        onEditScope={() => setShowScopeModal(true)}
+      />
 
-          {activeDetail && (
-            <ScrollView 
-              style={styles.detailContent} 
-              contentContainerStyle={{ paddingBottom: 40 }}
-              keyboardShouldPersistTaps="handled"
-            >
-              {activeDetail.isCustom && (
-                <View style={styles.detailCustomBadge}>
-                  <Text style={styles.detailCustomBadgeText}>CUSTOM EXERCISE</Text>
-                </View>
-              )}
-              <Text style={styles.detailName}>{activeDetail.name}</Text>
-
-              {/* Tag Badges */}
-              <View style={styles.detailBadgeRow}>
-                <View style={styles.badgePrimary}>
-                  <Text style={styles.badgePrimaryText}>
-                    Primary: {activeDetail.primaryMuscles.join(', ')}
-                  </Text>
-                </View>
-                <View style={styles.badgeSecondary}>
-                  <Text style={styles.badgeSecondaryText}>Equipment: {activeDetail.equipment}</Text>
-                </View>
-              </View>
-
-              {activeDetail.isCustom && (
-                <TouchableOpacity
-                  style={styles.editCustomActionBtn}
-                  onPress={() => handleOpenEditCustom(activeDetail)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit custom exercise details"
-                >
-                  <Edit2 size={16} color="#3B82F6" />
-                  <Text style={styles.editCustomActionBtnText}>Edit Custom Exercise</Text>
-                </TouchableOpacity>
-              )}
-
-              {activeDetail.secondaryMuscles && activeDetail.secondaryMuscles.length > 0 && (
-                <Text style={styles.secondaryMusclesText}>
-                  Secondary: {activeDetail.secondaryMuscles.join(', ')}
-                </Text>
-              )}
-
-              {/* All-Time Podium Showcase */}
-              {exercisePodium && (
-                <ExercisePodiumView
-                  podium={exercisePodium}
-                  unit={unit}
-                  isBodyweight={Boolean(activeDetail.equipment?.toLowerCase().includes('body'))}
-                  gymTrackingEnabled={gymTrackingEnabled}
-                />
-              )}
-
-              {/* Personal Bests & Stats Card */}
-              {exerciseStats && currentGym && (
-                <>
-                  <View style={styles.statsHeader}>
-                    <Trophy size={16} color="#F59E0B" />
-                    <Text style={styles.statsHeaderTitle}>PERSONAL BESTS & STATS</Text>
-                  </View>
-                  {statsCard('Global', exerciseStats.global)}
-                  {statsCard(currentGym.name, exerciseStats.gym)}
-                </>
-              )}
-
-              {gymTrackingEnabled && currentGym && (
-                <View style={styles.scopeCard}>
-                  <View style={styles.scopeText}>
-                    <Text style={styles.scopeLabel}>EFFECTIVE SCOPE</Text>
-                    <Text style={styles.scopeValue}>
-                      {exerciseScope ? (
-                        exerciseScope.scopeType === 'linked_group'
-                          ? `Linked gyms (${exerciseScope.linkedGymIds?.length ?? 0})`
-                          : exerciseScope.scopeType === 'gym_specific' ? 'Gym-specific' : 'Global'
-                      ) : `${resolveExerciseScope(activeDetail, undefined) === 'gym_specific' ? 'Gym-specific' : 'Global'} (equipment default)`}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.scopeButton}
-                    onPress={() => setShowScopeModal(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Edit exercise scope"
-                  >
-                    <Text style={styles.scopeButtonText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Instructions */}
-              <View style={styles.instructionsBox}>
-                <View style={styles.instructionHeadRow}>
-                  <Info size={16} color="#3B82F6" />
-                  <Text style={styles.instructionsHeading}>HOW TO PERFORM</Text>
-                </View>
-
-                {activeDetail.instructions && activeDetail.instructions.length > 0 ? (
-                  activeDetail.instructions.map((step, idx) => (
-                    <View key={idx} style={styles.stepRow}>
-                      <View style={styles.stepNum}>
-                        <Text style={styles.stepNumText}>{idx + 1}</Text>
-                      </View>
-                      <Text style={styles.stepText}>{step}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.noInstructionsText}>
-                    Perform with controlled technique and full range of motion.
-                  </Text>
-                )}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
 
       <ExerciseScopeModal
         visible={gymTrackingEnabled && showScopeModal && activeDetail !== null}

@@ -1,4 +1,4 @@
-import { ActiveExercise, Exercise } from '../types';
+import { ActiveExercise, Exercise, PreviousSetSuggestion, WorkoutSet } from '../types';
 
 export type ExerciseMoveDirection = -1 | 1;
 
@@ -82,11 +82,39 @@ export function getExerciseDropIndex(
 export function replaceActiveExercise(
   exercises: ActiveExercise[],
   activeExerciseId: string,
-  replacement: Exercise
+  replacement: Exercise,
+  suggestions?: PreviousSetSuggestion[],
+  currentGymId?: string,
 ): ActiveExercise[] {
-  return exercises.map(exercise => (
-    exercise.id === activeExerciseId
-      ? { ...exercise, exerciseId: replacement.id, exercise: replacement }
-      : exercise
-  ));
+  return exercises.map(exercise => {
+    if (exercise.id !== activeExerciseId) return exercise;
+
+    if (!suggestions) {
+      return { ...exercise, exerciseId: replacement.id, exercise: replacement };
+    }
+
+    const updatedSets: WorkoutSet[] = exercise.sets.map((set, idx) => {
+      if (set.isCompleted) return set;
+      const ghost = suggestions[idx] ?? (suggestions.length > 0 ? suggestions[suggestions.length - 1] : undefined);
+      const isSameGym = Boolean(currentGymId && ghost?.sourceGymId === currentGymId);
+      return {
+        ...set,
+        weightKg: 0,
+        reps: 0,
+        isWeightEdited: false,
+        previousWeightKg: ghost ? ghost.weightKg : undefined,
+        previousReps: ghost ? ghost.reps : undefined,
+        previousGymId: isSameGym ? undefined : ghost?.sourceGymId,
+        previousGymName: isSameGym ? undefined : ghost?.sourceGymName,
+      };
+    });
+
+    return {
+      ...exercise,
+      exerciseId: replacement.id,
+      exercise: replacement,
+      sets: updatedSets,
+    };
+  });
 }
+
