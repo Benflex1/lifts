@@ -44,7 +44,7 @@ export interface Store {
   saveRoutine(
     name: string,
     folderName: string,
-    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number }[],
+    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number; supersetId?: string }[],
     notes?: string,
     existingId?: string
   ): Promise<string>;

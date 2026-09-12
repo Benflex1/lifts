@@ -701,7 +701,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   async function saveRoutine(
     name: string,
     folderName: string,
-    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number }[],
+    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number; supersetId?: string }[],
     notes?: string,
     existingId?: string
   ): Promise<string> {
@@ -734,6 +734,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         targetSets: item.targetSets,
         targetReps: item.targetReps,
         restTimerSeconds: item.restTimerSeconds,
+        supersetId: item.supersetId,
       })),
     };
 

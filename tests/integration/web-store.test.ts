@@ -1142,4 +1142,57 @@ describe('webStore persistence and lease handling', () => {
 
     if (store.close) await store.close();
   });
+
+  it('persists supersetId across routine creation, retrieval, and duplication in web store', async () => {
+    const fixture = await createStoreFixture('web');
+    const store = fixture.store;
+
+    const supersetGroupId = 'ss-web-routine-group';
+    const routineId = await store.saveRoutine(
+      'Web Superset Routine',
+      'Full Body',
+      [
+        {
+          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+          targetSets: 3,
+          targetReps: '8-12',
+          restTimerSeconds: 60,
+          supersetId: supersetGroupId,
+        },
+        {
+          exerciseId: 'Incline_Dumbbell_Press',
+          targetSets: 3,
+          targetReps: '10',
+          restTimerSeconds: 90,
+          supersetId: supersetGroupId,
+        },
+        {
+          exerciseId: 'Barbell_Curl',
+          targetSets: 4,
+          targetReps: '12',
+          restTimerSeconds: 60,
+        },
+      ],
+      'Test web superset routine'
+    );
+
+    const routine = await store.getRoutineById(routineId);
+    assert.ok(routine);
+    assert.equal(routine.exercises.length, 3);
+    assert.equal(routine.exercises[0].supersetId, supersetGroupId);
+    assert.equal(routine.exercises[1].supersetId, supersetGroupId);
+    assert.equal(routine.exercises[2].supersetId, undefined);
+
+    // Duplicate routine
+    const dupId = await store.duplicateRoutine(routineId);
+    const dupRoutine = await store.getRoutineById(dupId);
+    assert.ok(dupRoutine);
+    assert.equal(dupRoutine.exercises.length, 3);
+    // Preserves grouping and has supersetId
+    assert.ok(dupRoutine.exercises[0].supersetId);
+    assert.equal(dupRoutine.exercises[0].supersetId, dupRoutine.exercises[1].supersetId);
+    assert.equal(dupRoutine.exercises[2].supersetId, undefined);
+
+    await fixture.dispose();
+  });
 });

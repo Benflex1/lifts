@@ -322,4 +322,20 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       await driver.runAsync('INSERT INTO schema_migrations (version, applied_at) VALUES (5, ?)', new Date().toISOString());
     });
   }
+
+  // Migration 6: superset support for workout and routine exercises
+  if (!applied.has(6) && (options?.maxVersion === undefined || options.maxVersion >= 6)) {
+    await driver.withTransactionAsync(async () => {
+      const reCols = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(routine_exercises);');
+      if (!reCols.some(c => c.name === 'superset_id')) {
+        await driver.execAsync('ALTER TABLE routine_exercises ADD COLUMN superset_id TEXT;');
+      }
+      const weCols = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workout_exercises);');
+      if (!weCols.some(c => c.name === 'superset_id')) {
+        await driver.execAsync('ALTER TABLE workout_exercises ADD COLUMN superset_id TEXT;');
+      }
+      if (options?.failAtVersion === 6) throw new Error('Injected migration failure at version 6');
+      await driver.runAsync('INSERT INTO schema_migrations (version, applied_at) VALUES (6, ?)', new Date().toISOString());
+    });
+  }
 }

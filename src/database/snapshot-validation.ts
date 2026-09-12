@@ -122,6 +122,7 @@ function validateActiveExerciseRecord(
   });
   requireOptionalString(value.notes, `${label}.notes`, true);
   if (value.targetReps !== undefined && value.targetReps !== null) requireString(value.targetReps, `${label}.targetReps`, true);
+  requireOptionalString(value.supersetId, `${label}.supersetId`);
   requireFiniteNumber(value.restTimerSeconds, `${label}.restTimerSeconds`, 0);
   if ('orderIndex' in value) requireInteger(value.orderIndex, `${label}.orderIndex`, 0);
   if (nestedIds.incomingWorkoutExerciseIds.has(value.id)) {
@@ -148,6 +149,7 @@ function validateRoutineExerciseRecord(
   requireInteger(value.orderIndex, `${label}.orderIndex`, 0);
   requireInteger(value.targetSets, `${label}.targetSets`, 0);
   requireString(value.targetReps, `${label}.targetReps`, true);
+  requireOptionalString(value.supersetId, `${label}.supersetId`);
   requireFiniteNumber(value.restTimerSeconds, `${label}.restTimerSeconds`, 0);
   if (nestedIds.incomingRoutineExerciseIds.has(value.id)) {
     throw new Error(`Duplicate routine exercise ID in ${label}: ${value.id}`);

@@ -59,6 +59,7 @@ export interface ActiveExercise {
   notes?: string;
   targetReps?: string;
   restTimerSeconds: number;
+  supersetId?: string;
 }
 
 export interface Workout {
@@ -82,6 +83,7 @@ export interface RoutineExercise {
   targetSets: number;
   targetReps: string;
   restTimerSeconds: number;
+  supersetId?: string;
 }
 
 export interface Routine {

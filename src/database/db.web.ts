@@ -34,7 +34,7 @@ export async function getRoutines(): Promise<Routine[]> {
 export async function saveRoutine(
   name: string,
   folderName: string,
-  exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number }[],
+  exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number; supersetId?: string }[],
   notes?: string,
   existingId?: string
 ): Promise<string> {
