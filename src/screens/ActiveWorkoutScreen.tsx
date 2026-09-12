@@ -60,6 +60,7 @@ import { formatPreviousMetric } from '../workout/gym-display';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from '../components/PRBadge';
+import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { applyPreviousSetStats } from '../workout/gym-session';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
@@ -143,6 +144,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   // PR Tracking & Historical baseline cache
   const [exerciseWorkouts, setExerciseWorkouts] = useState<Record<string, Workout[]>>({});
   const [exerciseScopes, setExerciseScopes] = useState<Record<string, ExerciseGymScope | undefined>>({});
+  const [prCelebrationEvent, setPrCelebrationEvent] = useState<PRCelebrationEvent | null>(null);
 
   useEffect(() => {
     if (!activeWorkout) return;
@@ -217,6 +219,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch (_) {}
+          for (const ex of activeWorkout.exercises) {
+            const foundSet = ex.sets.find((s) => s.id === setId);
+            if (foundSet) {
+              setPrCelebrationEvent({
+                exerciseName: ex.exercise?.name || 'Exercise',
+                weightKg: foundSet.weightKg,
+                reps: foundSet.reps,
+                achievement: pr.primary,
+                secondaryCount: Math.max(0, pr.achievements.length - 1),
+              });
+              break;
+            }
+          }
         }
       }
     }
@@ -722,6 +737,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                               achievement={prSummary.setPRs.get(set.id)!.primary!}
                               compact
                               showGym={gymTrackingEnabled}
+                              additionalCount={Math.max(0, (prSummary.setPRs.get(set.id)?.achievements.length || 0) - 1)}
                               onPress={() =>
                                 openSetOptions(activeEx.id, activeEx.exercise?.name || 'Exercise', set)
                               }
@@ -870,6 +886,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
       {/* Floating Rest Timer Overlay */}
       <RestTimerOverlay />
+
+      {/* Floating PR Celebration Toast */}
+      <PRCelebrationToast
+        event={prCelebrationEvent}
+        unit={unit}
+        onDismiss={() => setPrCelebrationEvent(null)}
+      />
 
       {/* Exercise Picker Modal */}
       <ExercisePickerModal
