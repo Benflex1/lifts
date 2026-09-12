@@ -52,7 +52,7 @@ import { RPE_CHIPS } from '../workout/sets';
 import { getExerciseDropIndex } from '../workout/active-exercises';
 import type { ExerciseLayout } from '../workout/active-exercises';
 import { formatPreviousMetric } from '../workout/gym-display';
-import { getCompletedWorkoutsForExercise, getExerciseGymScope } from '../database/db';
+import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from '../components/PRBadge';
 
@@ -133,34 +133,26 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   useEffect(() => {
     if (!activeWorkout) return;
-    const missingIds = activeWorkout.exercises
-      .map((ex) => ex.exerciseId)
-      .filter((id) => !(id in exerciseWorkouts));
+    const missingIds = Array.from(
+      new Set(activeWorkout.exercises.map((ex) => ex.exerciseId))
+    ).filter((id) => !(id in exerciseWorkouts));
 
     if (missingIds.length === 0) return;
 
     let mounted = true;
-    Promise.all(
-      missingIds.map(async (id) => {
-        const [workouts, scope] = await Promise.all([
-          getCompletedWorkoutsForExercise(id),
-          getExerciseGymScope(id),
-        ]);
-        return { id, workouts, scope: scope || undefined };
-      })
-    ).then((results) => {
+    Promise.all([
+      getCompletedWorkoutsForExercises(missingIds),
+      Promise.all(missingIds.map((id) => getExerciseGymScope(id))),
+    ]).then(([workoutsByEx, scopes]) => {
       if (!mounted) return;
-      setExerciseWorkouts((prev) => {
-        const next = { ...prev };
-        results.forEach((r) => {
-          next[r.id] = r.workouts;
-        });
-        return next;
-      });
+      setExerciseWorkouts((prev) => ({
+        ...prev,
+        ...workoutsByEx,
+      }));
       setExerciseScopes((prev) => {
         const next = { ...prev };
-        results.forEach((r) => {
-          next[r.id] = r.scope;
+        missingIds.forEach((id, idx) => {
+          next[id] = scopes[idx] || undefined;
         });
         return next;
       });
@@ -182,24 +174,45 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     );
   }, [activeWorkout, exerciseWorkouts, gyms, gymTrackingEnabled, exerciseScopes]);
 
-  const handleToggleSetWithHaptics = (exerciseId: string, setId: string) => {
-    const targetSet = activeWorkout?.exercises
-      .find((e) => e.id === exerciseId)
-      ?.sets.find((s) => s.id === setId);
+  const previousCompletedSetIdsRef = useRef<Set<string> | null>(null);
 
-    const willComplete = !targetSet?.isCompleted;
-    toggleSetComplete(exerciseId, setId);
+  useEffect(() => {
+    if (!activeWorkout) {
+      previousCompletedSetIdsRef.current = null;
+      return;
+    }
 
-    if (willComplete) {
-      setTimeout(() => {
+    const currentCompleted = new Set<string>();
+    for (const ex of activeWorkout.exercises) {
+      for (const s of ex.sets) {
+        if (s.isCompleted) {
+          currentCompleted.add(s.id);
+        }
+      }
+    }
+
+    if (previousCompletedSetIdsRef.current === null) {
+      // Seed initial set IDs without firing haptics (e.g. initial mount or resume)
+      previousCompletedSetIdsRef.current = currentCompleted;
+      return;
+    }
+
+    for (const setId of currentCompleted) {
+      if (!previousCompletedSetIdsRef.current.has(setId)) {
         const pr = prSummary?.setPRs.get(setId);
         if (pr?.primary) {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch (_) {}
         }
-      }, 50);
+      }
     }
+
+    previousCompletedSetIdsRef.current = currentCompleted;
+  }, [activeWorkout, prSummary]);
+
+  const handleToggleSetWithHaptics = (exerciseId: string, setId: string) => {
+    toggleSetComplete(exerciseId, setId);
   };
 
   // Accordion state: which exercises are expanded

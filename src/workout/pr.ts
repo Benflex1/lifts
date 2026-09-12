@@ -13,6 +13,7 @@ export interface PRAchievement {
   scope: PRScope;
   value: number;
   previousRecord?: number;
+  isTie?: boolean;
   gymId?: string;
   gymName?: string;
 }
@@ -70,7 +71,7 @@ export function insertSortedDistinct(arr: number[], val: number): void {
 export function evaluateRank(
   value: number,
   priorRecords?: readonly number[]
-): { rank: PRRank; previousRecord?: number } | null {
+): { rank: PRRank; previousRecord?: number; isTie?: boolean } | null {
   if (value <= 0) return null;
   const records = priorRecords ?? [];
 
@@ -79,31 +80,32 @@ export function evaluateRank(
     return { rank: 1 };
   }
 
-  // Case 2: Beats 1st place
+  // Case 2: Beats or ties 1st place
   if (value > records[0]) {
-    return { rank: 1, previousRecord: records[0] };
+    return { rank: 1, previousRecord: records[0], isTie: false };
+  }
+  if (value === records[0]) {
+    return { rank: 1, previousRecord: records[0], isTie: true };
   }
 
-  // Case 3: 2nd place
-  if (records.length >= 2) {
-    if (value > records[1] && value < records[0]) {
-      return { rank: 2, previousRecord: records[1] };
-    }
-  } else if (records.length === 1) {
-    // Only 1 prior record; qualify for 2nd if it represents a meaningful working load (>= 80%)
-    if (value < records[0] && value >= 0.8 * records[0]) {
+  // Case 3: 2nd place (must be strictly < records[0] and at least 80% of records[0] to filter light warmups)
+  if (value < records[0] && value >= 0.8 * records[0]) {
+    if (records.length >= 2) {
+      if (value > records[1]) {
+        return { rank: 2, previousRecord: records[1] };
+      }
+    } else {
       return { rank: 2 };
     }
   }
 
-  // Case 4: 3rd place
-  if (records.length >= 3) {
-    if (value > records[2] && value < records[1]) {
-      return { rank: 3, previousRecord: records[2] };
-    }
-  } else if (records.length === 2) {
-    // Only 2 prior records; qualify for 3rd if it represents a meaningful load (>= 80% of 2nd)
-    if (value < records[1] && value >= 0.8 * records[1]) {
+  // Case 4: 3rd place (must be strictly < records[1] and at least 75% of records[0] to filter light warmups)
+  if (records.length >= 2 && value < records[1] && value >= 0.75 * records[0]) {
+    if (records.length >= 3) {
+      if (value > records[2]) {
+        return { rank: 3, previousRecord: records[2] };
+      }
+    } else {
       return { rank: 3 };
     }
   }
@@ -164,6 +166,10 @@ export function extractLeaderboard(
  */
 export function compareAchievements(a: PRAchievement, b: PRAchievement): number {
   if (a.rank !== b.rank) return a.rank - b.rank; // 1 < 2 < 3
+  if (a.isTie !== b.isTie) {
+    if (!a.isTie && b.isTie) return -1;
+    if (a.isTie && !b.isTie) return 1;
+  }
   if (a.scope !== b.scope) {
     // If ranks are equal, Global is highest honor (e.g. All-Time Gold > Gym Gold)
     if (a.scope === 'global') return -1;
@@ -213,12 +219,15 @@ export function evaluateWorkoutPRs(
     const priorWorkouts = priorWorkoutsByExercise[exerciseId] || [];
 
     // Build initial leaderboards strictly before this workout started
-    const globalLeaderboard = extractLeaderboard(
-      priorWorkouts,
-      exerciseId,
-      null,
-      workout.startTime
-    );
+    const globalLeaderboard = !isGymSpecific
+      ? extractLeaderboard(
+          priorWorkouts,
+          exerciseId,
+          null,
+          workout.startTime
+        )
+      : { weight: [], '1rm': [], volume: [], reps: [] };
+
     const gymLeaderboard = isGymSpecific
       ? extractLeaderboard(
           priorWorkouts,
@@ -281,8 +290,8 @@ export function evaluateWorkoutPRs(
           continue;
         }
 
-        // 1. Gym-specific evaluation
         if (isGymSpecific) {
+          // Gym-specific evaluation ONLY for machine / cable exercises
           const gymResult = evaluateRank(value, runningGym[metric]);
           if (gymResult) {
             setAchievements.push({
@@ -291,32 +300,30 @@ export function evaluateWorkoutPRs(
               scope: 'gym',
               value,
               previousRecord: gymResult.previousRecord,
+              isTie: gymResult.isTie,
               gymId: workout.gymId,
               gymName: currentGymName,
             });
           }
-        }
-
-        // 2. Global evaluation (all-time)
-        const globalResult = evaluateRank(value, runningGlobal[metric]);
-        if (globalResult) {
-          setAchievements.push({
-            rank: globalResult.rank,
-            metric,
-            scope: 'global',
-            value,
-            previousRecord: globalResult.previousRecord,
-          });
+          insertSortedDistinct(runningGym[metric], value);
+        } else {
+          // Global evaluation for global exercises (barbell, dumbbell, bodyweight)
+          const globalResult = evaluateRank(value, runningGlobal[metric]);
+          if (globalResult) {
+            setAchievements.push({
+              rank: globalResult.rank,
+              metric,
+              scope: 'global',
+              value,
+              previousRecord: globalResult.previousRecord,
+              isTie: globalResult.isTie,
+            });
+          }
+          insertSortedDistinct(runningGlobal[metric], value);
         }
 
         // Update session max
         sessionMax[metric] = Math.max(sessionMax[metric], value);
-
-        // Update running leaderboards with this set's value
-        insertSortedDistinct(runningGlobal[metric], value);
-        if (isGymSpecific) {
-          insertSortedDistinct(runningGym[metric], value);
-        }
       }
 
       if (setAchievements.length > 0) {
@@ -362,7 +369,7 @@ export function evaluateWorkoutPRs(
  */
 export function formatPRBadgeLabel(achievement: PRAchievement, showGymName = false): string {
   const medal = achievement.rank === 1 ? '🥇' : achievement.rank === 2 ? '🥈' : '🥉';
-  const rankLabel = achievement.rank === 1 ? 'PR' : achievement.rank === 2 ? '2nd' : '3rd';
+  const rankLabel = achievement.rank === 1 ? (achievement.isTie ? 'Tied PR' : 'PR') : achievement.rank === 2 ? '2nd' : '3rd';
 
   if (achievement.scope === 'gym') {
     if (showGymName && achievement.gymName) {
@@ -378,7 +385,7 @@ export function formatPRBadgeLabel(achievement: PRAchievement, showGymName = fal
  */
 export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit = 'kg'): string {
   const medal = achievement.rank === 1 ? '🥇 Gold' : achievement.rank === 2 ? '🥈 Silver' : '🥉 Bronze';
-  const rankStr = achievement.rank === 1 ? 'Best' : achievement.rank === 2 ? '2nd Best' : '3rd Best';
+  const rankStr = achievement.rank === 1 ? (achievement.isTie ? 'Tied Best' : 'Best') : achievement.rank === 2 ? '2nd Best' : '3rd Best';
   const metricStr =
     achievement.metric === 'weight'
       ? 'Weight Record'
@@ -395,12 +402,15 @@ export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit
         : 'Gym Record'
       : 'All-Time';
 
-  const prevStr =
-    achievement.previousRecord !== undefined && achievement.previousRecord > 0
-      ? achievement.metric === 'weight' || achievement.metric === '1rm'
-        ? ` (beats ${formatWeight(achievement.previousRecord, unit)})`
-        : ` (beats ${achievement.previousRecord})`
-      : '';
+  let prevStr = '';
+  if (achievement.previousRecord !== undefined && achievement.previousRecord > 0) {
+    const action = achievement.isTie ? 'ties' : 'beats';
+    if (achievement.metric === 'weight' || achievement.metric === '1rm' || achievement.metric === 'volume') {
+      prevStr = ` (${action} ${formatWeight(achievement.previousRecord, unit)})`;
+    } else if (achievement.metric === 'reps') {
+      prevStr = ` (${action} ${achievement.previousRecord} reps)`;
+    }
+  }
 
   return `${medal} (${rankStr}) · ${scopeStr} ${metricStr}${prevStr}`;
 }

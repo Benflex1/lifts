@@ -16,7 +16,7 @@ import { formatWeight } from '../utils/units';
 import { GymPickerModal } from './GymPickerModal';
 import { useDialog } from '../context/DialogContext';
 import { reassignWorkoutGym } from '../workout/workout-edit';
-import { getCompletedWorkoutsForExercise, getExerciseGymScope } from '../database/db';
+import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from './PRBadge';
 
@@ -47,21 +47,20 @@ export function WorkoutSummaryModal({
     }
 
     let mounted = true;
-    Promise.all(
-      workout.exercises.map(async (ex) => {
-        const [workouts, scope] = await Promise.all([
-          getCompletedWorkoutsForExercise(ex.exerciseId),
-          getExerciseGymScope(ex.exerciseId),
-        ]);
-        return { exerciseId: ex.exerciseId, workouts, scope };
-      })
-    ).then((results) => {
+    const distinctExerciseIds = Array.from(
+      new Set(workout.exercises.map((ex) => ex.exerciseId))
+    );
+
+    if (distinctExerciseIds.length === 0) return;
+
+    Promise.all([
+      getCompletedWorkoutsForExercises(distinctExerciseIds),
+      Promise.all(distinctExerciseIds.map((id) => getExerciseGymScope(id))),
+    ]).then(([workoutsByEx, scopes]) => {
       if (!mounted) return;
-      const workoutsByEx: Record<string, Workout[]> = {};
       const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
-      results.forEach((r) => {
-        workoutsByEx[r.exerciseId] = r.workouts;
-        scopesByEx[r.exerciseId] = r.scope || undefined;
+      distinctExerciseIds.forEach((id, idx) => {
+        scopesByEx[id] = scopes[idx] || undefined;
       });
 
       const summary = evaluateWorkoutPRs(

@@ -91,6 +91,11 @@ export async function getCompletedWorkoutsForExercise(exerciseId: string): Promi
   return store.getCompletedWorkoutsForExercise(exerciseId);
 }
 
+export async function getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
+  const store = await getStore();
+  return store.getCompletedWorkoutsForExercises(exerciseIds);
+}
+
 export async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
   const store = await getStore();
   return store.getExerciseStats(exerciseId, currentGymId);

@@ -37,30 +37,37 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
 
     // 2. Full top 3 history: [100, 90, 80]
     const history = [100, 90, 80];
-    assert.deepEqual(evaluateRank(105, history), { rank: 1, previousRecord: 100 });
+    assert.deepEqual(evaluateRank(105, history), { rank: 1, previousRecord: 100, isTie: false });
+    assert.deepEqual(evaluateRank(100, history), { rank: 1, previousRecord: 100, isTie: true }); // Tie 1st!
     assert.deepEqual(evaluateRank(95, history), { rank: 2, previousRecord: 90 });
     assert.deepEqual(evaluateRank(85, history), { rank: 3, previousRecord: 80 });
     assert.equal(evaluateRank(75, history), null); // Below 3rd
-    assert.equal(evaluateRank(100, history), null); // Tie 1st
-    assert.equal(evaluateRank(90, history), null); // Tie 2nd
-    assert.equal(evaluateRank(80, history), null); // Tie 3rd
+    assert.equal(evaluateRank(90, history), null); // Tie 2nd (no duplicate)
+    assert.equal(evaluateRank(80, history), null); // Tie 3rd (no duplicate)
 
     // 3. Only 2 historical records: [100, 90]
     const twoHistory = [100, 90];
-    assert.deepEqual(evaluateRank(105, twoHistory), { rank: 1, previousRecord: 100 });
+    assert.deepEqual(evaluateRank(105, twoHistory), { rank: 1, previousRecord: 100, isTie: false });
     assert.deepEqual(evaluateRank(95, twoHistory), { rank: 2, previousRecord: 90 });
-    // 85 is < 90, but >= 0.8 * 90 (72) -> Bronze (3rd)
+    // 85 is < 90, but >= 0.75 * 100 (75) -> Bronze (3rd)
     assert.deepEqual(evaluateRank(85, twoHistory), { rank: 3 });
-    // 50 is < 72 -> No medal (filters out trivial warmup)
+    // 50 is < 75 -> No medal (filters out trivial warmup)
     assert.equal(evaluateRank(50, twoHistory), null);
 
     // 4. Only 1 historical record: [100]
     const oneHistory = [100];
-    assert.deepEqual(evaluateRank(105, oneHistory), { rank: 1, previousRecord: 100 });
+    assert.deepEqual(evaluateRank(105, oneHistory), { rank: 1, previousRecord: 100, isTie: false });
     // 90 is < 100, but >= 0.8 * 100 (80) -> Silver (2nd)
     assert.deepEqual(evaluateRank(90, oneHistory), { rank: 2 });
     // 60 is < 80 -> No medal
     assert.equal(evaluateRank(60, oneHistory), null);
+
+    // 5. Warmup safeguard when history contains a light warmup/empty bar: [100, 20]
+    const warmupHistory = [100, 20];
+    // 25 kg is > 20, but < 80 kg (0.8 * 100) -> MUST NOT award Silver!
+    assert.equal(evaluateRank(25, warmupHistory), null);
+    // 85 kg is >= 80 kg -> Silver (2nd)
+    assert.deepEqual(evaluateRank(85, warmupHistory), { rank: 2, previousRecord: 20 });
   });
 
   const barbellBench: Exercise = {
@@ -265,6 +272,70 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     // 180 < 200, so it's 2nd best all-time (Silver) rather than Gold Gym PR
     assert.equal(summaryDisabled.setPRs.get('s-gb-1')?.primary?.rank, 2);
     assert.equal(summaryDisabled.setPRs.get('s-gb-1')?.primary?.scope, 'global');
+
+    // Crucial isolation test: If user does 250 kg at Gym B (heavier than Gym A 200 kg):
+    // It must award a Gym PR at FitX, and must NOT be awarded as a global PR!
+    const gymBHeavyWorkout: Workout = {
+      id: 'w-gymB-heavy',
+      name: 'Heavy Legs at FitX',
+      gymId: gymB.id,
+      startTime: '2026-09-02T10:00:00.000Z',
+      durationSeconds: 3000,
+      totalVolumeKg: 2500,
+      exercises: [
+        {
+          id: 'ae-lp-b2',
+          exerciseId: legPressMachine.id,
+          exercise: legPressMachine,
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's-gb-heavy', setNumber: 1, type: 'normal', weightKg: 250, reps: 10, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const summaryHeavy = evaluateWorkoutPRs(
+      gymBHeavyWorkout,
+      { [legPressMachine.id]: [gymAWorkout] },
+      allGyms,
+      true // gym tracking enabled
+    );
+    const heavyPr = summaryHeavy.setPRs.get('s-gb-heavy')?.primary;
+    assert.ok(heavyPr);
+    assert.equal(heavyPr.rank, 1);
+    assert.equal(heavyPr.scope, 'gym'); // Stays gym isolated!
+    assert.equal(heavyPr.gymName, 'FitX');
+  });
+
+  it('formats tied PRs and imperial volume correctly', () => {
+    // 1. Tied PR formatting
+    const tiedPR = {
+      rank: 1 as const,
+      metric: 'weight' as const,
+      scope: 'global' as const,
+      value: 100,
+      previousRecord: 100,
+      isTie: true,
+    };
+    assert.equal(formatPRBadgeLabel(tiedPR), '🥇 Tied PR');
+    const tiedDesc = formatPRDescription(tiedPR, 'kg');
+    assert.ok(tiedDesc.includes('(ties 100 kg)'));
+
+    // 2. Imperial volume formatting
+    const volumePR = {
+      rank: 1 as const,
+      metric: 'volume' as const,
+      scope: 'global' as const,
+      value: 1000, // 1000 kg volume
+      previousRecord: 900, // 900 kg volume
+    };
+    const descKg = formatPRDescription(volumePR, 'kg');
+    assert.ok(descKg.includes('beats 900 kg'));
+
+    const descLb = formatPRDescription(volumePR, 'lb');
+    // 900 kg / 0.453592 = 1984.2 lb
+    assert.ok(descLb.includes('beats 1984.2 lb'));
   });
 
   it('evaluates bodyweight exercises on reps', () => {

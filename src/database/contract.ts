@@ -72,6 +72,7 @@ export interface Store {
     currentGymId?: string,
   ): Promise<PreviousSetSuggestion[]>;
   getCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]>;
+  getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>>;
   getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats>;
 
   getAllExercises(): Promise<Exercise[]>;

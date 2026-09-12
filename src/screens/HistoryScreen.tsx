@@ -28,6 +28,7 @@ import {
   getGyms,
   saveCompletedWorkout,
   getCompletedWorkoutsForExercise,
+  getCompletedWorkoutsForExercises,
   getExerciseGymScope,
 } from '../database/db';
 import { formatDuration } from '../utils/calculator';
@@ -41,7 +42,7 @@ import { updateWorkoutHistorySummary } from '../workout/history-summary';
 import { WorkoutEditModal } from '../components/WorkoutEditModal';
 import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { PRBadge } from '../components/PRBadge';
-import { evaluateWorkoutPRs, WorkoutPRSummary } from '../workout/pr';
+import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 
 interface HistoryScreenProps {
   workoutUpdate?: Workout | null;
@@ -85,20 +86,19 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
 
   const loadWorkoutPRs = async (targetWorkout: Workout, currentGyms: Gym[]) => {
     try {
-      const results = await Promise.all(
-        targetWorkout.exercises.map(async (ex) => {
-          const [workouts, scope] = await Promise.all([
-            getCompletedWorkoutsForExercise(ex.exerciseId),
-            getExerciseGymScope(ex.exerciseId),
-          ]);
-          return { exerciseId: ex.exerciseId, workouts, scope };
-        })
+      const distinctExerciseIds = Array.from(
+        new Set(targetWorkout.exercises.map((ex) => ex.exerciseId))
       );
-      const workoutsByEx: Record<string, Workout[]> = {};
+      if (distinctExerciseIds.length === 0) return null;
+
+      const [workoutsByEx, scopes] = await Promise.all([
+        getCompletedWorkoutsForExercises(distinctExerciseIds),
+        Promise.all(distinctExerciseIds.map((id) => getExerciseGymScope(id))),
+      ]);
+
       const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
-      results.forEach((r) => {
-        workoutsByEx[r.exerciseId] = r.workouts;
-        scopesByEx[r.exerciseId] = r.scope || undefined;
+      distinctExerciseIds.forEach((id, idx) => {
+        scopesByEx[id] = scopes[idx] || undefined;
       });
 
       const summary = evaluateWorkoutPRs(
@@ -124,22 +124,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
       if (requestId !== historyLoadRequestRef.current) return;
       setHistory(list);
       setGyms(gymList);
-
-      // Preload PRs for top 5 recent workouts in the background
-      const recent = list.slice(0, 5);
-      for (const item of recent) {
-        void (async () => {
-          try {
-            const detail = await getWorkoutDetail(item.id);
-            if (detail && requestId === historyLoadRequestRef.current) {
-              setWorkoutDetails((prev) => ({ ...prev, [item.id]: detail }));
-              await loadWorkoutPRs(detail, gymList);
-            }
-          } catch {
-            // Ignore preload error
-          }
-        })();
-      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -530,6 +514,22 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                                           achievement={setPR.primary}
                                           compact
                                           showGym={gymTrackingEnabled}
+                                          onPress={() => {
+                                            const desc = setPR.achievements
+                                              .map((a) => `• ${formatPRDescription(a, unit)}`)
+                                              .join('\n');
+                                            notify({
+                                              title:
+                                                setPR.primary?.rank === 1
+                                                  ? setPR.primary?.isTie
+                                                    ? 'Tied Personal Record 🥇'
+                                                    : 'Personal Record 🥇'
+                                                  : setPR.primary?.rank === 2
+                                                  ? 'Silver Record 🥈'
+                                                  : 'Bronze Record 🥉',
+                                              message: `${ex.exercise.name} (Set #${s.setNumber})\n\n${desc}`,
+                                            });
+                                          }}
                                         />
                                       )}
                                       {s.type !== 'normal' && (

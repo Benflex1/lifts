@@ -941,19 +941,30 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
-  async function getCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]> {
+  async function getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
     const database = await openDb();
+    const idSet = new Set(exerciseIds);
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
-        const workouts = (req.result as Workout[]).map(normalizeWorkout)
-          .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
-        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
-        resolve(workouts);
+        const allWorkouts = (req.result as Workout[])
+          .map(normalizeWorkout)
+          .filter(workout => !(workout as any).inProgress);
+        allWorkouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
+        const result: Record<string, Workout[]> = {};
+        for (const id of idSet) {
+          result[id] = allWorkouts.filter(workout => workout.exercises.some(item => item.exerciseId === id));
+        }
+        resolve(result);
       };
       req.onerror = () => reject(req.error);
     });
+  }
+
+  async function getCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]> {
+    const results = await getCompletedWorkoutsForExercises([exerciseId]);
+    return results[exerciseId] || [];
   }
 
   async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
@@ -1250,6 +1261,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     deleteWorkout,
     getPreviousSetsForExercise,
     getCompletedWorkoutsForExercise,
+    getCompletedWorkoutsForExercises,
     getExerciseStats,
     getAllExercises,
     searchExercises,

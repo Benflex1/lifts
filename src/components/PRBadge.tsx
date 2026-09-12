@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { PRAchievement } from '../workout/pr';
+import { PRAchievement, formatPRBadgeLabel } from '../workout/pr';
 
 interface PRBadgeProps {
   achievement: PRAchievement;
@@ -15,7 +15,7 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
   showGym = false,
   onPress,
 }) => {
-  const { rank, scope, gymName, metric } = achievement;
+  const { rank, metric } = achievement;
 
   const isGold = rank === 1;
   const isSilver = rank === 2;
@@ -25,26 +25,20 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
         bg: '#78350F35',
         border: '#F59E0B70',
         text: '#FBBF24',
-        emoji: '🥇',
-        badgeTitle: scope === 'gym' ? 'Gym PR' : 'PR',
       }
     : isSilver
     ? {
         bg: '#33415545',
         border: '#94A3B870',
         text: '#F1F5F9',
-        emoji: '🥈',
-        badgeTitle: scope === 'gym' ? 'Gym 2nd' : '2nd',
       }
     : {
         bg: '#451A0345',
         border: '#D9770660',
         text: '#FED7AA',
-        emoji: '🥉',
-        badgeTitle: scope === 'gym' ? 'Gym 3rd' : '3rd',
       };
 
-  const gymLabel = showGym && gymName ? ` (${gymName})` : '';
+  const badgeText = formatPRBadgeLabel(achievement, showGym);
   const metricLabel =
     metric === 'weight'
       ? 'Weight'
@@ -56,15 +50,12 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
 
   const content = compact ? (
     <View style={[styles.compactContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
-      <Text style={styles.compactEmoji}>{theme.emoji}</Text>
-      <Text style={[styles.compactText, { color: theme.text }]}>{theme.badgeTitle}</Text>
+      <Text style={[styles.compactText, { color: theme.text }]}>{badgeText}</Text>
     </View>
   ) : (
     <View style={[styles.fullContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
-      <Text style={styles.fullEmoji}>{theme.emoji}</Text>
       <Text style={[styles.fullText, { color: theme.text }]}>
-        {theme.badgeTitle} · {metricLabel}
-        {gymLabel}
+        {badgeText} · {metricLabel}
       </Text>
     </View>
   );
@@ -75,7 +66,7 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
         onPress={onPress}
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel={`${theme.badgeTitle} ${metricLabel}`}
+        accessibilityLabel={`${badgeText} ${metricLabel}`}
       >
         {content}
       </TouchableOpacity>
