@@ -962,47 +962,63 @@ export const AnalyticsScreen: React.FC = () => {
               {/* Timeframe & Metric Filters */}
               <View style={styles.filterControlsRow}>
                 <View style={styles.filterGroup}>
-                  {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => (
-                    <TouchableOpacity
-                      key={tf}
-                      style={[
-                        styles.filterChip,
-                        progressionTimeframe === tf && styles.filterChipActive,
-                      ]}
-                      onPress={() => setProgressionTimeframe(tf)}
-                    >
-                      <Text
+                  {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => {
+                    const isSelected = progressionTimeframe === tf;
+                    const label = tf === 'ALL' ? 'All time' : `Past ${tf}`;
+                    return (
+                      <TouchableOpacity
+                        key={tf}
                         style={[
-                          styles.filterChipText,
-                          progressionTimeframe === tf && styles.filterChipTextActive,
+                          styles.filterChip,
+                          isSelected && styles.filterChipActive,
                         ]}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Timeframe: ${label}`}
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => setProgressionTimeframe(tf)}
                       >
-                        {tf}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            isSelected && styles.filterChipTextActive,
+                          ]}
+                        >
+                          {tf}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 <View style={styles.filterGroup}>
-                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[
-                        styles.filterChip,
-                        progressionMetric === m && styles.filterChipActive,
-                      ]}
-                      onPress={() => setProgressionMetric(m)}
-                    >
-                      <Text
+                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => {
+                    const isSelected = progressionMetric === m;
+                    const label = m === 'e1rm' ? 'Estimated 1RM' : m === 'max_weight' ? 'Heaviest Weight' : m === 'max_reps' ? 'Max Reps' : 'Total Volume';
+                    return (
+                      <TouchableOpacity
+                        key={m}
                         style={[
-                          styles.filterChipText,
-                          progressionMetric === m && styles.filterChipTextActive,
+                          styles.filterChip,
+                          isSelected && styles.filterChipActive,
                         ]}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={label}
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => setProgressionMetric(m)}
                       >
-                        {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            isSelected && styles.filterChipTextActive,
+                          ]}
+                        >
+                          {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
 
@@ -1014,6 +1030,10 @@ export const AnalyticsScreen: React.FC = () => {
                       styles.gymChip,
                       progressionGymFilter === null && styles.gymChipActive,
                     ]}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Filter by all gyms"
+                    accessibilityState={{ selected: progressionGymFilter === null }}
                     onPress={() => setProgressionGymFilter(null)}
                   >
                     <Text
@@ -1032,6 +1052,10 @@ export const AnalyticsScreen: React.FC = () => {
                         styles.gymChip,
                         progressionGymFilter === gym.id && styles.gymChipActive,
                       ]}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Filter by ${gym.name}`}
+                      accessibilityState={{ selected: progressionGymFilter === gym.id }}
                       onPress={() => setProgressionGymFilter(gym.id)}
                     >
                       <Text
@@ -1070,25 +1094,33 @@ export const AnalyticsScreen: React.FC = () => {
                 <Text style={styles.breakdownTitleText}>TRAINING BREAKDOWN</Text>
               </View>
               <View style={styles.breakdownTimeframeRow}>
-                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => (
-                  <TouchableOpacity
-                    key={tf}
-                    style={[
-                      styles.breakdownChip,
-                      dashboardTimeframe === tf && styles.breakdownChipActive,
-                    ]}
-                    onPress={() => setDashboardTimeframe(tf)}
-                  >
-                    <Text
+                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => {
+                  const isSelected = dashboardTimeframe === tf;
+                  const label = tf === 'ALL' ? 'All time' : `Past ${tf}`;
+                  return (
+                    <TouchableOpacity
+                      key={tf}
                       style={[
-                        styles.breakdownChipText,
-                        dashboardTimeframe === tf && styles.breakdownChipTextActive,
+                        styles.breakdownChip,
+                        isSelected && styles.breakdownChipActive,
                       ]}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Breakdown timeframe: ${label}`}
+                      accessibilityState={{ selected: isSelected }}
+                      onPress={() => setDashboardTimeframe(tf)}
                     >
-                      {tf}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.breakdownChipText,
+                          isSelected && styles.breakdownChipTextActive,
+                        ]}
+                      >
+                        {tf}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
@@ -1104,34 +1136,34 @@ export const AnalyticsScreen: React.FC = () => {
                 </Text>
 
                 <View style={styles.zoneStackedBar}>
-                  {repRangeDistribution.percentages.strength > 0 && (
+                  {repRangeDistribution.strength > 0 && (
                     <View
                       style={[
                         styles.zoneBarSegment,
                         {
-                          width: `${repRangeDistribution.percentages.strength}%`,
+                          flex: repRangeDistribution.strength,
                           backgroundColor: '#EF4444',
                         },
                       ]}
                     />
                   )}
-                  {repRangeDistribution.percentages.hypertrophy > 0 && (
+                  {repRangeDistribution.hypertrophy > 0 && (
                     <View
                       style={[
                         styles.zoneBarSegment,
                         {
-                          width: `${repRangeDistribution.percentages.hypertrophy}%`,
+                          flex: repRangeDistribution.hypertrophy,
                           backgroundColor: '#38BDF8',
                         },
                       ]}
                     />
                   )}
-                  {repRangeDistribution.percentages.endurance > 0 && (
+                  {repRangeDistribution.endurance > 0 && (
                     <View
                       style={[
                         styles.zoneBarSegment,
                         {
-                          width: `${repRangeDistribution.percentages.endurance}%`,
+                          flex: repRangeDistribution.endurance,
                           backgroundColor: '#10B981',
                         },
                       ]}
@@ -1173,6 +1205,10 @@ export const AnalyticsScreen: React.FC = () => {
                   <View style={styles.distToggleWrap}>
                     <TouchableOpacity
                       style={[styles.distToggleBtn, distMode === 'volume' && styles.distToggleBtnActive]}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="View volume distribution"
+                      accessibilityState={{ selected: distMode === 'volume' }}
                       onPress={() => setDistMode('volume')}
                     >
                       <Text style={[styles.distToggleText, distMode === 'volume' && styles.distToggleTextActive]}>
@@ -1181,6 +1217,10 @@ export const AnalyticsScreen: React.FC = () => {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.distToggleBtn, distMode === 'sets' && styles.distToggleBtnActive]}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="View sets distribution"
+                      accessibilityState={{ selected: distMode === 'sets' }}
                       onPress={() => setDistMode('sets')}
                     >
                       <Text style={[styles.distToggleText, distMode === 'sets' && styles.distToggleTextActive]}>

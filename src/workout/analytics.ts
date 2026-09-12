@@ -111,6 +111,12 @@ export interface ProgressionDataPoint {
   totalVolumeKg: number;
   maxReps: number;
   isPr: boolean;
+  prMetrics?: {
+    e1rm?: boolean;
+    maxWeight?: boolean;
+    volume?: boolean;
+    maxReps?: boolean;
+  };
   topSet: {
     weightKg: number;
     reps: number;
@@ -182,7 +188,7 @@ export function extractExerciseProgression(
 
     const workoutDate = new Date(workout.startTime);
     const timestamp = workoutDate.getTime();
-    if (Number.isNaN(timestamp) || timestamp < cutoffMs) {
+    if (Number.isNaN(timestamp)) {
       continue;
     }
 
@@ -210,8 +216,8 @@ export function extractExerciseProgression(
       const est1RM = calc.average;
       if (est1RM > best1RM) best1RM = est1RM;
 
-      // Score set priority for topSet metadata: prefer higher 1RM, tie-break by weight
-      const score = est1RM * 1000 + weight;
+      // Score set priority for topSet metadata: prefer higher 1RM, tie-break by weight, then reps for bodyweight
+      const score = est1RM * 10000 + weight * 100 + reps;
       if (score > topSetScore) {
         topSetScore = score;
         topSet = set;
@@ -243,24 +249,37 @@ export function extractExerciseProgression(
     });
   }
 
-  // Chronological sort: oldest to newest
+  // Chronological sort: oldest to newest across full history
   rawPoints.sort((a, b) => a.timestamp - b.timestamp);
 
-  // Compute PR flags as records fall chronologically
+  // Compute PR flags as records fall chronologically across full history
   let runningBest1RM = 0;
   let runningBestWeight = 0;
+  let runningBestVolume = 0;
   let runningBestReps = 0;
 
   for (let i = 0; i < rawPoints.length; i++) {
     const p = rawPoints[i];
-    if (i > 0 && (p.e1rmKg > runningBest1RM || p.maxWeightKg > runningBestWeight || (runningBestWeight === 0 && p.maxReps > runningBestReps))) {
-      p.isPr = true;
-    }
+    const is1rmPr = i > 0 && p.e1rmKg > runningBest1RM && p.e1rmKg > 0;
+    const isWeightPr = i > 0 && p.maxWeightKg > runningBestWeight && p.maxWeightKg > 0;
+    const isVolPr = i > 0 && p.totalVolumeKg > runningBestVolume && p.totalVolumeKg > 0;
+    const isRepsPr = i > 0 && p.maxReps > runningBestReps && p.maxReps > 0;
+
+    p.prMetrics = {
+      e1rm: is1rmPr,
+      maxWeight: isWeightPr,
+      volume: isVolPr,
+      maxReps: isRepsPr,
+    };
+    p.isPr = is1rmPr || isWeightPr || (runningBestWeight === 0 && isRepsPr);
+
     if (p.e1rmKg > runningBest1RM) runningBest1RM = p.e1rmKg;
     if (p.maxWeightKg > runningBestWeight) runningBestWeight = p.maxWeightKg;
+    if (p.totalVolumeKg > runningBestVolume) runningBestVolume = p.totalVolumeKg;
     if (p.maxReps > runningBestReps) runningBestReps = p.maxReps;
   }
 
+  // True all-time bests across full history
   const allTimeBest1RM = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.e1rmKg)) : 0;
   const allTimeBestWeight = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxWeightKg)) : 0;
   const allTimeBestReps = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxReps)) : 0;
@@ -268,26 +287,29 @@ export function extractExerciseProgression(
   const currentWeight = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxWeightKg : 0;
   const currentReps = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxReps : 0;
 
+  // Filter points to timeframe window after calculating true PRs and all-time bests
+  const filteredPoints = cutoffMs > 0 ? rawPoints.filter((p) => p.timestamp >= cutoffMs) : rawPoints;
+
   let changePercent1RM = 0;
   let changePercentReps = 0;
-  if (rawPoints.length >= 2) {
-    const firstVal = rawPoints[0].e1rmKg;
-    const lastVal = rawPoints[rawPoints.length - 1].e1rmKg;
+  if (filteredPoints.length >= 2) {
+    const firstVal = filteredPoints[0].e1rmKg;
+    const lastVal = filteredPoints[filteredPoints.length - 1].e1rmKg;
     if (firstVal > 0) {
       changePercent1RM = Number((((lastVal - firstVal) / firstVal) * 100).toFixed(1));
     }
-    const firstReps = rawPoints[0].maxReps;
-    const lastReps = rawPoints[rawPoints.length - 1].maxReps;
+    const firstReps = filteredPoints[0].maxReps;
+    const lastReps = filteredPoints[filteredPoints.length - 1].maxReps;
     if (firstReps > 0) {
       changePercentReps = Number((((lastReps - firstReps) / firstReps) * 100).toFixed(1));
     }
   }
 
-  const totalVolumeKg = rawPoints.reduce((sum, p) => sum + p.totalVolumeKg, 0);
+  const totalVolumeKg = filteredPoints.reduce((sum, p) => sum + p.totalVolumeKg, 0);
 
   return {
     exerciseId,
-    points: rawPoints,
+    points: filteredPoints,
     summary: {
       allTimeBest1RM,
       allTimeBestWeight,
@@ -297,10 +319,26 @@ export function extractExerciseProgression(
       currentReps,
       changePercent1RM,
       changePercentReps,
-      totalSessions: rawPoints.length,
+      totalSessions: filteredPoints.length,
       totalVolumeKg,
     },
   };
+}
+
+export function isPointPrForMetric(point: ProgressionDataPoint, metric: ProgressionMetric): boolean {
+  if (point.prMetrics) {
+    switch (metric) {
+      case 'e1rm':
+        return Boolean(point.prMetrics.e1rm);
+      case 'max_weight':
+        return Boolean(point.prMetrics.maxWeight);
+      case 'volume':
+        return Boolean(point.prMetrics.volume);
+      case 'max_reps':
+        return Boolean(point.prMetrics.maxReps);
+    }
+  }
+  return point.isPr;
 }
 
 export interface MuscleDistributionPoint {
@@ -340,10 +378,14 @@ export function buildTrainingDistribution(
       grandTotalVolume += totalExVolume;
       grandTotalSets += totalExSets;
 
+      const muscleCount = Math.max(1, muscles.length);
+      const splitVolume = totalExVolume / muscleCount;
+      const splitSets = totalExSets / muscleCount;
+
       for (const m of muscles) {
         const existing = muscleMap.get(m) || { volumeKg: 0, setsCount: 0 };
-        existing.volumeKg += totalExVolume;
-        existing.setsCount += totalExSets;
+        existing.volumeKg += splitVolume;
+        existing.setsCount += splitSets;
         muscleMap.set(m, existing);
       }
     }
@@ -352,8 +394,8 @@ export function buildTrainingDistribution(
   return Array.from(muscleMap.entries())
     .map(([muscle, data]) => ({
       muscle,
-      volumeKg: data.volumeKg,
-      setsCount: data.setsCount,
+      volumeKg: Number(data.volumeKg.toFixed(1)),
+      setsCount: data.setsCount % 1 === 0 ? data.setsCount : Number(data.setsCount.toFixed(1)),
       percentage: grandTotalVolume > 0 ? Number(((data.volumeKg / grandTotalVolume) * 100).toFixed(1)) : 0,
       setsPercentage: grandTotalSets > 0 ? Number(((data.setsCount / grandTotalSets) * 100).toFixed(1)) : 0,
     }))

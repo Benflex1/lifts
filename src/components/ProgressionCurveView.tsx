@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,10 +21,13 @@ import {
   ExerciseProgressionSeries,
   ProgressionDataPoint,
   ProgressionMetric,
+  isPointPrForMetric,
 } from '../workout/analytics';
 import { formatWeight, kgToDisplay, WeightUnit } from '../utils/units';
 import { Trophy, TrendingUp, TrendingDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+
+export { isPointPrForMetric };
 
 export interface ProgressionCurveViewProps {
   series: ExerciseProgressionSeries;
@@ -46,7 +49,12 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
   const [containerWidth, setContainerWidth] = useState<number>(340);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
+  useEffect(() => {
+    setSelectedIndex(null);
+  }, [series.exerciseId, series.points.length, metric]);
+
   const points = series.points;
+
 
   const handleLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -318,10 +326,18 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
         <View style={styles.calloutCard}>
           <View style={styles.calloutHeader}>
             <Text style={styles.calloutDate}>{activePoint.dateLabel}</Text>
-            {activePoint.isPr && (
+            {isPointPrForMetric(activePoint, metric) && (
               <View style={styles.prBadge}>
                 <Trophy size={11} color="#F59E0B" />
-                <Text style={styles.prBadgeText}>NEW PR</Text>
+                <Text style={styles.prBadgeText}>
+                  {metric === 'e1rm'
+                    ? 'NEW 1RM PR'
+                    : metric === 'max_weight'
+                    ? 'NEW WEIGHT PR'
+                    : metric === 'volume'
+                    ? 'NEW VOL PR'
+                    : 'NEW REPS PR'}
+                </Text>
               </View>
             )}
           </View>
@@ -363,7 +379,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
         onResponderGrant={handleTouch}
         onResponderMove={handleTouch}
       >
-        <Svg width={containerWidth} height={height}>
+        <Svg width={containerWidth} height={height} pointerEvents="none">
           <Defs>
             <LinearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor="#38BDF8" stopOpacity="0.28" />
@@ -429,7 +445,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
           {/* Data Points */}
           {coords.map((c, idx) => {
             const isSelected = idx === activeIndex;
-            const isPr = c.point.isPr;
+            const isPr = isPointPrForMetric(c.point, metric);
 
             return (
               <G key={c.point.workoutId || idx}>

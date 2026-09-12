@@ -8,6 +8,7 @@ import {
   buildConsistencySummary,
   buildLifetimeTrainingStats,
   getTimeframeCutoff,
+  isPointPrForMetric,
 } from '../../src/workout/analytics';
 
 const makeExercise = (
@@ -330,4 +331,134 @@ describe('calisthenics and rep PR progression', () => {
     assert.equal(series.summary.currentReps, 10);
     assert.equal(series.summary.changePercentReps, 25); // (10 - 8) / 8 * 100 = 25%
   });
+
+  it('prioritizes higher rep count for bodyweight exercises when picking topSet', () => {
+    const workouts = [
+      makeWorkout('w1', '2026-09-01T10:00:00.000Z', 'gym-1', [
+        makeExercise('pull-up', ['lats'], [
+          { weightKg: 0, reps: 5 },
+          { weightKg: 0, reps: 20 },
+          { weightKg: 0, reps: 10 },
+        ]),
+      ]),
+    ];
+
+    const series = extractExerciseProgression(workouts, 'pull-up', { now });
+    assert.equal(series.points.length, 1);
+    assert.equal(series.points[0].topSet.reps, 20, 'topSet should be the 20-rep set, not the first 5-rep set');
+    assert.equal(series.points[0].topSet.weightKg, 0);
+  });
 });
+
+describe('timeframe-filtered progression PR accuracy', () => {
+  const now = new Date('2026-09-12T12:00:00.000Z');
+
+  it('preserves true all-time best and does not award false PR badges in narrow timeframes', () => {
+    const workouts = [
+      // 6 months ago: all-time bench press PR of 140 kg
+      makeWorkout('w1', '2026-03-01T10:00:00.000Z', 'gym-1', [
+        makeExercise('bench', ['chest'], [{ weightKg: 140, reps: 1 }]),
+      ]),
+      // 20 days ago (within 1M): returning to training with 90 kg
+      makeWorkout('w2', '2026-08-23T10:00:00.000Z', 'gym-1', [
+        makeExercise('bench', ['chest'], [{ weightKg: 90, reps: 5 }]),
+      ]),
+      // 5 days ago (within 1M): progressed to 100 kg
+      makeWorkout('w3', '2026-09-07T10:00:00.000Z', 'gym-1', [
+        makeExercise('bench', ['chest'], [{ weightKg: 100, reps: 5 }]),
+      ]),
+    ];
+
+    // Filter down to 1M window
+    const series = extractExerciseProgression(workouts, 'bench', { timeframe: '1M', now });
+
+    // Only 2 points within the 1M window
+    assert.equal(series.points.length, 2);
+    assert.equal(series.points[0].workoutId, 'w2');
+    assert.equal(series.points[1].workoutId, 'w3');
+
+    // True all-time best is preserved from w1 (140 kg), NOT truncated to 100 kg
+    assert.equal(series.summary.allTimeBestWeight, 140);
+
+    // w3 did 100 kg, which is well below all-time 140 kg PR, so isPr MUST be false
+    assert.equal(series.points[0].isPr, false);
+    assert.equal(series.points[1].isPr, false, 'w3 (100 kg) must not be flagged as PR when all-time best was 140 kg');
+
+    // Current metrics match latest session in window
+    assert.equal(series.summary.currentWeight, 100);
+  });
+});
+
+describe('multi-muscle volume and sets distribution splitting', () => {
+  const now = new Date('2026-09-12T12:00:00.000Z');
+
+  it('splits volume and sets evenly across multiple primary muscles without exceeding 100%', () => {
+    const workouts = [
+      makeWorkout('w1', '2026-09-01T10:00:00.000Z', 'gym-1', [
+        makeExercise('halo-extension', ['shoulders', 'triceps'], [
+          { weightKg: 20, reps: 10 },
+          { weightKg: 20, reps: 10 },
+          { weightKg: 20, reps: 10 },
+          { weightKg: 20, reps: 10 },
+        ]),
+      ]),
+    ];
+
+    const distribution = buildTrainingDistribution(workouts, 'ALL', now);
+    assert.equal(distribution.length, 2);
+
+    const shoulders = distribution.find((d) => d.muscle === 'shoulders');
+    const triceps = distribution.find((d) => d.muscle === 'triceps');
+
+    assert.ok(shoulders, 'shoulders present');
+    assert.ok(triceps, 'triceps present');
+
+    // Total volume was 800 kg (4 sets * 200 kg). Each muscle should receive 400 kg.
+    assert.equal(shoulders.volumeKg, 400);
+    assert.equal(triceps.volumeKg, 400);
+
+    // Total sets was 4. Each muscle should receive 2 sets.
+    assert.equal(shoulders.setsCount, 2);
+    assert.equal(triceps.setsCount, 2);
+
+    // Percentage should be 50% each, summing to exactly 100%
+    assert.equal(shoulders.percentage, 50);
+    assert.equal(triceps.percentage, 50);
+    assert.equal(shoulders.setsPercentage, 50);
+    assert.equal(triceps.setsPercentage, 50);
+
+    const totalPercentage = distribution.reduce((sum, d) => sum + d.percentage, 0);
+    assert.equal(totalPercentage, 100);
+  });
+});
+
+describe('isPointPrForMetric', () => {
+  it('correctly discriminates PR status by specific metric', () => {
+    const point = {
+      workoutId: 'w1',
+      workoutName: 'Workout 1',
+      date: '2026-09-01',
+      dateLabel: 'Sep 1',
+      timestamp: 1234567,
+      gymId: 'gym-1',
+      e1rmKg: 120,
+      maxWeightKg: 100,
+      totalVolumeKg: 500,
+      maxReps: 10,
+      isPr: true,
+      prMetrics: {
+        e1rm: true,
+        maxWeight: false,
+        volume: false,
+        maxReps: false,
+      },
+      topSet: { weightKg: 100, reps: 5 },
+    };
+
+    assert.equal(isPointPrForMetric(point, 'e1rm'), true);
+    assert.equal(isPointPrForMetric(point, 'max_weight'), false);
+    assert.equal(isPointPrForMetric(point, 'volume'), false);
+    assert.equal(isPointPrForMetric(point, 'max_reps'), false);
+  });
+});
+

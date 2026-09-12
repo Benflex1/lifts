@@ -265,49 +265,65 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   <Text style={styles.progressionTitleText}>STRENGTH PROGRESSION</Text>
                 </View>
                 <View style={styles.metricTabsRow}>
-                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[
-                        styles.metricTab,
-                        selectedMetric === m && styles.metricTabActive,
-                      ]}
-                      onPress={() => setSelectedMetric(m)}
-                    >
-                      <Text
+                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => {
+                    const isSelected = selectedMetric === m;
+                    const label = m === 'e1rm' ? 'Estimated 1RM' : m === 'max_weight' ? 'Heaviest Weight' : m === 'max_reps' ? 'Max Reps' : 'Total Volume';
+                    return (
+                      <TouchableOpacity
+                        key={m}
                         style={[
-                          styles.metricTabText,
-                          selectedMetric === m && styles.metricTabTextActive,
+                          styles.metricTab,
+                          isSelected && styles.metricTabActive,
                         ]}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={label}
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => setSelectedMetric(m)}
                       >
-                        {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.metricTabText,
+                            isSelected && styles.metricTabTextActive,
+                          ]}
+                        >
+                          {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
 
               {/* Timeframe selector row */}
               <View style={styles.timeframeTabsRow}>
-                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => (
-                  <TouchableOpacity
-                    key={tf}
-                    style={[
-                      styles.timeframeChip,
-                      selectedTimeframe === tf && styles.timeframeChipActive,
-                    ]}
-                    onPress={() => setSelectedTimeframe(tf)}
-                  >
-                    <Text
+                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => {
+                  const isSelected = selectedTimeframe === tf;
+                  const label = tf === 'ALL' ? 'All time' : `Past ${tf}`;
+                  return (
+                    <TouchableOpacity
+                      key={tf}
                       style={[
-                        styles.timeframeChipText,
-                        selectedTimeframe === tf && styles.timeframeChipTextActive,
+                        styles.timeframeChip,
+                        isSelected && styles.timeframeChipActive,
                       ]}
+                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Timeframe: ${label}`}
+                      accessibilityState={{ selected: isSelected }}
+                      onPress={() => setSelectedTimeframe(tf)}
                     >
-                      {tf}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.timeframeChipText,
+                          isSelected && styles.timeframeChipTextActive,
+                        ]}
+                      >
+                        {tf}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               <ProgressionCurveView
@@ -316,7 +332,13 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 unit={unit}
                 height={190}
                 gymTrackingEnabled={gymTrackingEnabled}
-                onPointPress={(p) => setHighlightedWorkoutId(p.workoutId)}
+                onPointPress={(p) => {
+                  setHighlightedWorkoutId(p.workoutId);
+                  const isOutsideTop5 = filteredHistoryWorkouts.slice(0, 5).every((w) => w.id !== p.workoutId);
+                  if (isOutsideTop5) {
+                    setShowAllHistory(true);
+                  }
+                }}
               />
             </View>
           )}
@@ -335,6 +357,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.historyGymFilterScroll}>
                 <TouchableOpacity
                   style={[styles.historyGymFilterPill, historyGymFilter === null && styles.historyGymFilterPillActive]}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Filter by all gyms"
+                  accessibilityState={{ selected: historyGymFilter === null }}
                   onPress={() => setHistoryGymFilter(null)}
                 >
                   <Text style={[styles.historyGymFilterPillText, historyGymFilter === null && styles.historyGymFilterPillTextActive]}>
@@ -345,6 +371,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   <TouchableOpacity
                     key={g.id}
                     style={[styles.historyGymFilterPill, historyGymFilter === g.id && styles.historyGymFilterPillActive]}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter by ${g.name}`}
+                    accessibilityState={{ selected: historyGymFilter === g.id }}
                     onPress={() => setHistoryGymFilter(g.id)}
                   >
                     <Text style={[styles.historyGymFilterPillText, historyGymFilter === g.id && styles.historyGymFilterPillTextActive]}>

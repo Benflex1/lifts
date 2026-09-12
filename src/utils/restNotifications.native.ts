@@ -26,7 +26,8 @@ export function isExpoGoAndroid(): boolean {
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const Constants = require('expo-constants')?.default;
+      const mod = require('expo-constants');
+      const Constants = mod?.default ?? mod;
       if (
         Constants?.appOwnership === 'expo' ||
         Constants?.executionEnvironment === 'storeClient'
