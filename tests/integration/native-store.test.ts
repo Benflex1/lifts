@@ -927,6 +927,7 @@ describe('nativeStore and migration safety', () => {
     // Preserves grouping and has supersetId
     assert.ok(dupRoutine.exercises[0].supersetId);
     assert.equal(dupRoutine.exercises[0].supersetId, dupRoutine.exercises[1].supersetId);
+    assert.notEqual(dupRoutine.exercises[0].supersetId, supersetGroupId);
     assert.equal(dupRoutine.exercises[2].supersetId, undefined);
 
     driver.close();

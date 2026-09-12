@@ -457,7 +457,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     if (!setOptionsModal) return;
     const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
     const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
-    const prevSet = setIdx > 0 ? modalEx?.sets[setIdx - 1] : undefined;
+    // Find the previous working set (ignoring warmups and unweighted sets)
+    const prevWorkingSet = modalEx?.sets
+      .slice(0, setIdx)
+      .reverse()
+      .find((s) => s.type !== 'warmup' && s.weightKg > 0);
 
     let updatedWeightKg = setOptionsModal.set.weightKg;
     let isWeightEdited = setOptionsModal.set.isWeightEdited;
@@ -465,11 +469,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     if (
       type === 'drop' &&
       (!updatedWeightKg || !isWeightEdited) &&
-      prevSet &&
-      prevSet.weightKg > 0
+      prevWorkingSet &&
+      prevWorkingSet.weightKg > 0
     ) {
       const inc = getDefaultIncrement(unit);
-      const prevDisp = kgToDisplay(prevSet.weightKg, unit);
+      const prevDisp = kgToDisplay(prevWorkingSet.weightKg, unit);
       updatedWeightKg = displayToKg(roundToIncrement(prevDisp * 0.80, inc), unit);
       isWeightEdited = true;
     }
@@ -1224,11 +1228,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 if (setOptionsModal?.set.type !== 'drop') return null;
                 const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
                 const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
-                const prevSet = setIdx > 0 ? modalEx?.sets[setIdx - 1] : undefined;
-                if (!prevSet || !prevSet.weightKg || prevSet.weightKg <= 0) return null;
+                const prevWorkingSet = modalEx?.sets
+                  .slice(0, setIdx)
+                  .reverse()
+                  .find((s) => s.type !== 'warmup' && s.weightKg > 0);
+                if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0) return null;
 
                 const inc = getDefaultIncrement(unit);
-                const prevDisplay = kgToDisplay(prevSet.weightKg, unit);
+                const prevDisplay = kgToDisplay(prevWorkingSet.weightKg, unit);
                 const dropReductions = [
                   { pct: 20, kg: displayToKg(roundToIncrement(prevDisplay * 0.80, inc), unit) },
                   { pct: 25, kg: displayToKg(roundToIncrement(prevDisplay * 0.75, inc), unit) },
@@ -1239,7 +1246,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   <View style={styles.dropHelperBox}>
                     <Text style={styles.dropHelperTitle}>DROP SET WEIGHT SUGGESTIONS</Text>
                     <Text style={styles.dropHelperDesc}>
-                      Based on Set #{prevSet.setNumber} ({prevDisplay} {unit}):
+                      Based on Set #{prevWorkingSet.setNumber} ({prevDisplay} {unit}):
                     </Text>
                     <View style={styles.dropChipsRow}>
                       {dropReductions.map((r) => {

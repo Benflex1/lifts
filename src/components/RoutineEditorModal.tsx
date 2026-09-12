@@ -31,7 +31,11 @@ import { ExercisePickerModal } from './ExercisePickerModal';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
 import { saveRoutine } from '../database/db';
 import { validateTargetReps } from '../workout/sets';
-import { getSupersetMetadata } from '../workout/supersets';
+import {
+  getSupersetMetadata,
+  linkExercisesInGroup,
+  unlinkExerciseFromGroup,
+} from '../workout/supersets';
 
 interface Props {
   visible: boolean;
@@ -124,39 +128,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
   const handleLinkSuperset = (index: number) => {
     if (index >= draftExercises.length - 1) return;
-    const current = draftExercises[index];
-    const next = draftExercises[index + 1];
-    const existingSupersetId = current.supersetId || next.supersetId;
-    const supersetId =
-      existingSupersetId || `ss-routine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-    setDraftExercises(prev =>
-      prev.map((item, idx) => {
-        if (idx === index || idx === index + 1) {
-          return { ...item, supersetId };
-        }
-        return item;
-      })
-    );
+    const fallbackId = `ss-routine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setDraftExercises(prev => linkExercisesInGroup(prev, index, index + 1, fallbackId));
   };
 
   const handleUnlinkSuperset = (index: number) => {
-    const target = draftExercises[index];
-    if (!target?.supersetId) return;
-    const oldId = target.supersetId;
-
-    setDraftExercises(prev => {
-      const updated = prev.map((item, idx) =>
-        idx === index ? { ...item, supersetId: undefined } : item
-      );
-      const remaining = updated.filter(item => item.supersetId === oldId);
-      if (remaining.length < 2) {
-        return updated.map(item =>
-          item.supersetId === oldId ? { ...item, supersetId: undefined } : item
-        );
-      }
-      return updated;
-    });
+    setDraftExercises(prev => unlinkExerciseFromGroup(prev, index));
   };
 
   const handleAddExercise = (exercise: Exercise) => {

@@ -30,6 +30,7 @@ import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { resolveInitialStartGymId } from '../workout/gym-session';
 import { useSettings } from '../context/SettingsContext';
 import { useDialog } from '../context/DialogContext';
+import { getSupersetMetadata } from '../workout/supersets';
 
 export const WorkoutScreen: React.FC = () => {
   const { startWorkout, gyms, refreshGyms } = useWorkout();
@@ -264,7 +265,7 @@ export const WorkoutScreen: React.FC = () => {
                       <Text style={styles.folderBadgeText}>{routine.folderName}</Text>
                     </View>
                   )}
-                  {routine.exercises.some(e => Boolean(e.supersetId)) && (
+                  {getSupersetMetadata(routine.exercises).size > 0 && (
                     <View style={styles.supersetTagBadge}>
                       <Layers size={11} color="#A855F7" />
                       <Text style={styles.supersetTagBadgeText}>Supersets</Text>

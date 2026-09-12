@@ -98,8 +98,19 @@ export function resolveNextSupersetTarget(
   const currentEx = workout.exercises.find((e) => e.id === completedExerciseId);
   if (!currentEx || !currentEx.supersetId) return null;
 
-  const currentSetIndex = currentEx.sets.findIndex((s) => s.id === completedSetId);
-  if (currentSetIndex === -1) return null;
+  const currentSet = currentEx.sets.find((s) => s.id === completedSetId);
+  if (!currentSet) return null;
+
+  // Warmup sets do not trigger superset circuit switching.
+  // Lifters perform warmups locally at their station before beginning working superset rounds.
+  if (currentSet.type === 'warmup') {
+    return null;
+  }
+
+  // Working sets in current exercise
+  const currentWorkingSets = currentEx.sets.filter((s) => s.type !== 'warmup');
+  const currentWorkingIndex = currentWorkingSets.findIndex((s) => s.id === completedSetId);
+  if (currentWorkingIndex === -1) return null;
 
   // Find all exercises belonging to the same superset
   const supersetExercises = workout.exercises.filter(
@@ -113,10 +124,16 @@ export function resolveNextSupersetTarget(
   const isLastExerciseInGroup = currentExGroupIndex === supersetExercises.length - 1;
 
   if (!isLastExerciseInGroup) {
-    // Next exercise in the same round
+    // Next exercise in the same working set round
     const nextEx = supersetExercises[currentExGroupIndex + 1];
-    // Find matching set index or first incomplete set in nextEx
-    const matchingSet = nextEx.sets[currentSetIndex] || nextEx.sets.find((s) => !s.isCompleted);
+    const nextWorkingSets = nextEx.sets.filter((s) => s.type !== 'warmup');
+
+    // Find corresponding working set index or first incomplete working set in nextEx
+    const matchingSet =
+      (!nextWorkingSets[currentWorkingIndex]?.isCompleted
+        ? nextWorkingSets[currentWorkingIndex]
+        : undefined) ?? nextWorkingSets.find((s) => !s.isCompleted);
+
     if (matchingSet && !matchingSet.isCompleted) {
       return {
         nextExerciseId: nextEx.id,
@@ -127,18 +144,23 @@ export function resolveNextSupersetTarget(
       };
     }
   } else {
-    // Last exercise in group completed this set -> this round is complete!
-    // Check if there are subsequent rounds remaining in the superset
+    // Last exercise in group completed this working set -> this round is complete!
+    // Check if subsequent working rounds remain in the superset
     const firstEx = supersetExercises[0];
-    const nextRoundIndex = currentSetIndex + 1;
-    const hasMoreSets = supersetExercises.some((e) => e.sets.length > nextRoundIndex && !e.sets[nextRoundIndex].isCompleted);
+    const firstExWorkingSets = firstEx.sets.filter((s) => s.type !== 'warmup');
+    const nextRoundIndex = currentWorkingIndex + 1;
 
-    if (hasMoreSets && firstEx.sets[nextRoundIndex]) {
+    const hasMoreSets = supersetExercises.some((e) => {
+      const wSets = e.sets.filter((s) => s.type !== 'warmup');
+      return wSets.length > nextRoundIndex && !wSets[nextRoundIndex].isCompleted;
+    });
+
+    if (hasMoreSets && firstExWorkingSets[nextRoundIndex]) {
       return {
         nextExerciseId: firstEx.id,
         nextExerciseName: firstEx.exercise?.name || 'Exercise',
-        nextSetId: firstEx.sets[nextRoundIndex].id,
-        nextSetNumber: firstEx.sets[nextRoundIndex].setNumber,
+        nextSetId: firstExWorkingSets[nextRoundIndex].id,
+        nextSetNumber: firstExWorkingSets[nextRoundIndex].setNumber,
         isRoundComplete: true,
       };
     }
@@ -153,4 +175,67 @@ export function resolveNextSupersetTarget(
   }
 
   return null;
+}
+
+/**
+ * Merges or creates superset grouping between two exercise items.
+ * If either item already belongs to a group, or if both belong to separate groups,
+ * merges all members of both groups into one unified superset ID.
+ */
+export function linkExercisesInGroup<T extends { supersetId?: string }>(
+  items: T[],
+  firstIndex: number,
+  secondIndex: number,
+  fallbackNewId: string
+): T[] {
+  if (
+    firstIndex < 0 ||
+    firstIndex >= items.length ||
+    secondIndex < 0 ||
+    secondIndex >= items.length
+  ) {
+    return items;
+  }
+  const current = items[firstIndex];
+  const next = items[secondIndex];
+  const oldId1 = current.supersetId;
+  const oldId2 = next.supersetId;
+  const supersetId = oldId1 || oldId2 || fallbackNewId;
+
+  return items.map((item, idx) => {
+    if (
+      idx === firstIndex ||
+      idx === secondIndex ||
+      (oldId1 && item.supersetId === oldId1) ||
+      (oldId2 && item.supersetId === oldId2)
+    ) {
+      return { ...item, supersetId };
+    }
+    return item;
+  });
+}
+
+/**
+ * Removes an exercise from its superset group.
+ * If the remaining group has fewer than 2 members, cleans up the orphaned member.
+ */
+export function unlinkExerciseFromGroup<T extends { supersetId?: string }>(
+  items: T[],
+  targetIndex: number
+): T[] {
+  if (targetIndex < 0 || targetIndex >= items.length) return items;
+  const target = items[targetIndex];
+  if (!target.supersetId) return items;
+  const oldId = target.supersetId;
+
+  const updated = items.map((item, idx) =>
+    idx === targetIndex ? { ...item, supersetId: undefined } : item
+  );
+  const remainingCount = updated.filter((item) => item.supersetId === oldId).length;
+  if (remainingCount < 2) {
+    return updated.map((item) =>
+      item.supersetId === oldId ? { ...item, supersetId: undefined } : item
+    );
+  }
+  return updated;
 }

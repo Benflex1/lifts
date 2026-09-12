@@ -108,6 +108,7 @@ export interface WorkoutHistorySummary {
   totalSets: number;
   exerciseNames: string[];
   notes?: string;
+  hasSupersets?: boolean;
 }
 
 export interface ExerciseStats {

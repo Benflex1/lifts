@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PRAchievement, formatPRDescription } from '../workout/pr';
 import { WeightUnit } from '../utils/units';
 
@@ -31,6 +32,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
   unit,
   onDismiss,
 }) => {
+  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-80)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,6 +103,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
       style={[
         styles.container,
         {
+          top: Math.max(Platform.OS === 'ios' ? 52 : 36, insets.top + 8),
           transform: [{ translateY: slideAnim }],
           opacity: opacityAnim,
         },

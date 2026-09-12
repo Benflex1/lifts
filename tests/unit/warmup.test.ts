@@ -247,6 +247,70 @@ describe('Warmup Set Progression Calculator', () => {
     assert.equal(applied[2].weightKg, 85);
     assert.equal(applied[2].reps, 1); // unedited default
   });
+
+  it('correctly toggles warmup exclusion in Set', () => {
+    let excluded = new Set<number>();
+
+    // Helper simulating toggleIncludeStep
+    const toggle = (idx: number) => {
+      const next = new Set(excluded);
+      if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
+      excluded = next;
+    };
+
+    // Initially not excluded
+    assert.equal(excluded.has(1), false);
+
+    // Toggle once -> excluded
+    toggle(1);
+    assert.equal(excluded.has(1), true);
+
+    // Toggle second time -> unexcluded
+    toggle(1);
+    assert.equal(excluded.has(1), false);
+  });
+
+  it('preserves already completed warmup sets when replacing warmups', () => {
+    const existingSets = [
+      { id: 'w1', setNumber: 1, type: 'warmup' as const, weightKg: 20, reps: 10, isCompleted: true },
+      { id: 'w2', setNumber: 2, type: 'warmup' as const, weightKg: 50, reps: 5, isCompleted: false }, // not completed
+      { id: 'work1', setNumber: 3, type: 'normal' as const, weightKg: 100, reps: 5, isCompleted: false },
+    ];
+
+    const completedWarmups = existingSets.filter((s) => s.type === 'warmup' && s.isCompleted);
+    const nonWarmups = existingSets.filter((s) => s.type !== 'warmup');
+
+    const newWarmups = [
+      { id: 'new-w2', setNumber: 1, type: 'warmup' as const, weightKg: 60, reps: 4, isCompleted: false },
+      { id: 'new-w3', setNumber: 2, type: 'warmup' as const, weightKg: 80, reps: 2, isCompleted: false },
+    ];
+
+    const combined = [...completedWarmups, ...newWarmups, ...nonWarmups].map((s, idx) => ({
+      ...s,
+      setNumber: idx + 1,
+    }));
+
+    // Should have 1 completed warmup + 2 new warmups + 1 working set = 4 sets
+    assert.equal(combined.length, 4);
+    assert.equal(combined[0].id, 'w1');
+    assert.equal(combined[0].isCompleted, true);
+    assert.equal(combined[0].setNumber, 1);
+
+    assert.equal(combined[1].id, 'new-w2');
+    assert.equal(combined[1].weightKg, 60);
+    assert.equal(combined[1].setNumber, 2);
+
+    assert.equal(combined[2].id, 'new-w3');
+    assert.equal(combined[2].weightKg, 80);
+    assert.equal(combined[2].setNumber, 3);
+
+    assert.equal(combined[3].id, 'work1');
+    assert.equal(combined[3].setNumber, 4);
+  });
 });
 
 describe('Barbell Sleeve Visual & Plate Color Specs', () => {

@@ -216,6 +216,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
           notes: '',
           targetReps: resolveHistoricalTargetReps(ex.targetReps, ex.sets[0]?.targetReps),
           restTimerSeconds: ex.restTimerSeconds ?? 90,
+          supersetId: ex.supersetId,
           sets: ex.sets.map((s, sIdx) => ({
             id: `set-${activeExId}-${sIdx + 1}-${Crypto.randomUUID().slice(0, 6)}`,
             setNumber: sIdx + 1,
@@ -440,7 +441,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                     <Text style={styles.metricText}>{item.totalSets} sets</Text>
                   </View>
 
-                  {supersetMetaMap.size > 0 && (
+                  {(supersetMetaMap.size > 0 || Boolean(item.hasSupersets)) && (
                     <View style={styles.metric}>
                       <Layers size={14} color="#8B5CF6" />
                       <Text style={[styles.metricText, { color: '#C4B5FD', fontWeight: '700' }]}>

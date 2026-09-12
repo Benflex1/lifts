@@ -38,6 +38,10 @@ import {
   scheduleRestNotification,
   cancelRestNotification,
 } from '../utils/restNotifications';
+import {
+  linkExercisesInGroup,
+  unlinkExerciseFromGroup,
+} from '../workout/supersets';
 
 interface RestTimerState {
   isActive: boolean;
@@ -880,9 +884,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updatedExercises = state.workout.exercises.map((ex) => {
       if (ex.id !== activeExerciseId) return ex;
 
-      const remainingWorkingSets = replaceExisting
-        ? ex.sets.filter((s) => s.type !== 'warmup')
-        : [...ex.sets];
+      const completedWarmupSets = ex.sets.filter((s) => s.type === 'warmup' && s.isCompleted);
+      const nonWarmupSets = ex.sets.filter((s) => s.type !== 'warmup');
 
       const newWarmupSets: WorkoutSet[] = warmupSets.map((ws, i) => ({
         id: `set-${ex.id}-w${i + 1}-${Crypto.randomUUID().slice(0, 6)}`,
@@ -896,7 +899,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isWeightEdited: true,
       }));
 
-      const combinedSets = [...newWarmupSets, ...remainingWorkingSets];
+      const combinedSets = replaceExisting
+        ? [...completedWarmupSets, ...newWarmupSets, ...nonWarmupSets]
+        : [...newWarmupSets, ...ex.sets];
+
       const renumbered = combinedSets.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
       return { ...ex, sets: renumbered };
     });
@@ -916,18 +922,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const ex1 = state.workout.exercises.find((e) => e.id === firstExerciseId);
-    const ex2 = state.workout.exercises.find((e) => e.id === secondExerciseId);
-    if (!ex1 || !ex2) return;
+    const idx1 = state.workout.exercises.findIndex((e) => e.id === firstExerciseId);
+    const idx2 = state.workout.exercises.findIndex((e) => e.id === secondExerciseId);
+    if (idx1 === -1 || idx2 === -1) return;
 
-    const supersetId = ex1.supersetId || ex2.supersetId || `ss-${Crypto.randomUUID().slice(0, 8)}`;
-
-    const updatedExercises = state.workout.exercises.map((e) => {
-      if (e.id === firstExerciseId || e.id === secondExerciseId) {
-        return { ...e, supersetId };
-      }
-      return e;
-    });
+    const fallbackId = `ss-${Crypto.randomUUID().slice(0, 8)}`;
+    const updatedExercises = linkExercisesInGroup(state.workout.exercises, idx1, idx2, fallbackId);
 
     const updated: Workout = {
       ...state.workout,
@@ -942,27 +942,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const targetEx = state.workout.exercises.find((e) => e.id === exerciseId);
-    if (!targetEx || !targetEx.supersetId) return;
-    const oldSupersetId = targetEx.supersetId;
+    const targetIdx = state.workout.exercises.findIndex((e) => e.id === exerciseId);
+    if (targetIdx === -1) return;
 
-    let updatedExercises = state.workout.exercises.map((e) => {
-      if (e.id === exerciseId) {
-        return { ...e, supersetId: undefined };
-      }
-      return e;
-    });
-
-    // Clean up orphaned single exercise if only 1 remains in the superset
-    const remainingCount = updatedExercises.filter((e) => e.supersetId === oldSupersetId).length;
-    if (remainingCount <= 1) {
-      updatedExercises = updatedExercises.map((e) => {
-        if (e.supersetId === oldSupersetId) {
-          return { ...e, supersetId: undefined };
-        }
-        return e;
-      });
-    }
+    const updatedExercises = unlinkExerciseFromGroup(state.workout.exercises, targetIdx);
 
     const updated: Workout = {
       ...state.workout,

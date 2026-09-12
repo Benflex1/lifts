@@ -130,12 +130,32 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
     setExcludedStepIndices((prev) => {
       const next = new Set(prev);
       if (next.has(stepIndex)) {
-        next.add(stepIndex);
-      } else {
         next.delete(stepIndex);
+      } else {
+        next.add(stepIndex);
       }
       return next;
     });
+  };
+
+  const adjustCustomStepPct = (index: number, deltaPct: number) => {
+    setCustomStepRatios((prev) =>
+      prev.map((step, idx) => {
+        if (idx !== index) return step;
+        const newPct = Math.max(0, Math.min(0.95, Math.round((step.percentage + deltaPct) * 100) / 100));
+        return { ...step, percentage: newPct, useBarIfAvailable: newPct === 0 };
+      })
+    );
+  };
+
+  const adjustCustomStepReps = (index: number, deltaReps: number) => {
+    setCustomStepRatios((prev) =>
+      prev.map((step, idx) => {
+        if (idx !== index) return step;
+        const newReps = Math.max(1, Math.min(50, step.reps + deltaReps));
+        return { ...step, reps: newReps };
+      })
+    );
   };
 
   const adjustStepReps = (stepIndex: number, delta: number, defaultReps: number) => {
@@ -323,13 +343,52 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                     {customStepRatios.map((cs, cIdx) => (
                       <View key={`custom-${cIdx}`} style={styles.customStepRow}>
                         <Text style={styles.customStepNum}>#{cIdx + 1}</Text>
-                        <View style={styles.customStepInputs}>
+                        
+                        {/* Percentage Stepper */}
+                        <View style={styles.customStepper}>
+                          <TouchableOpacity
+                            style={styles.customStepBtn}
+                            onPress={() => adjustCustomStepPct(cIdx, -0.05)}
+                            disabled={cs.percentage <= 0}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Minus size={10} color={cs.percentage <= 0 ? '#4B5563' : '#9CA3AF'} />
+                          </TouchableOpacity>
                           <Text style={styles.customStepLabel}>
                             {cs.percentage === 0 && cs.useBarIfAvailable ? 'Bar' : `${Math.round(cs.percentage * 100)}%`}
                           </Text>
-                          <Text style={styles.customStepSeparator}>·</Text>
-                          <Text style={styles.customStepReps}>{cs.reps} reps</Text>
+                          <TouchableOpacity
+                            style={styles.customStepBtn}
+                            onPress={() => adjustCustomStepPct(cIdx, 0.05)}
+                            disabled={cs.percentage >= 0.95}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Plus size={10} color={cs.percentage >= 0.95 ? '#4B5563' : '#9CA3AF'} />
+                          </TouchableOpacity>
                         </View>
+
+                        <Text style={styles.customStepSeparator}>·</Text>
+
+                        {/* Reps Stepper */}
+                        <View style={styles.customStepper}>
+                          <TouchableOpacity
+                            style={styles.customStepBtn}
+                            onPress={() => adjustCustomStepReps(cIdx, -1)}
+                            disabled={cs.reps <= 1}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Minus size={10} color={cs.reps <= 1 ? '#4B5563' : '#9CA3AF'} />
+                          </TouchableOpacity>
+                          <Text style={styles.customStepReps}>{cs.reps} reps</Text>
+                          <TouchableOpacity
+                            style={styles.customStepBtn}
+                            onPress={() => adjustCustomStepReps(cIdx, 1)}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Plus size={10} color="#9CA3AF" />
+                          </TouchableOpacity>
+                        </View>
+
                         {customStepRatios.length > 1 && (
                           <TouchableOpacity
                             style={styles.deleteCustomBtn}
@@ -761,7 +820,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#6B7280',
-    width: 24,
+    width: 20,
+  },
+  customStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  customStepBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: '#262D3D',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   customStepInputs: {
     flexDirection: 'row',

@@ -643,8 +643,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
           new Date().toISOString()
         );
 
+        const supersetMap = new Map<string, string>();
         for (let i = 0; i < exRows.length; i++) {
           const e = exRows[i];
+          let remappedSupersetId: string | null = null;
+          if (e.superset_id) {
+            if (!supersetMap.has(e.superset_id)) {
+              supersetMap.set(e.superset_id, createScopedId('ss'));
+            }
+            remappedSupersetId = supersetMap.get(e.superset_id)!;
+          }
           await driver.runAsync(
             `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds, superset_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -655,7 +663,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             e.target_sets,
             e.target_reps,
             e.rest_timer_seconds,
-            e.superset_id || null
+            remappedSupersetId
           );
         }
       });
@@ -740,7 +748,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
     const rows = await driver.getAllAsync<any>(
       `SELECT w.*, 
-              COUNT(DISTINCT s.id) as total_sets
+              COUNT(DISTINCT s.id) as total_sets,
+              MAX(CASE WHEN we.superset_id IS NOT NULL THEN 1 ELSE 0 END) as has_supersets
        FROM workouts w
        LEFT JOIN workout_exercises we ON w.id = we.workout_id
        LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
@@ -781,6 +790,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       exerciseNames: namesByWorkout.get(r.id) || [],
       gymId: r.gym_id || 'gym-default',
       notes: r.notes,
+      hasSupersets: Boolean(r.has_supersets),
     }));
   }
 
