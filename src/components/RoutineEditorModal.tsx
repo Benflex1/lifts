@@ -31,10 +31,12 @@ import { ExercisePickerModal } from './ExercisePickerModal';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
 import { saveRoutine } from '../database/db';
 import { validateTargetReps } from '../workout/sets';
+import { SupersetModal } from './SupersetModal';
 import {
   getSupersetMetadata,
   linkExercisesInGroup,
   unlinkExerciseFromGroup,
+  setSupersetGroupInList,
 } from '../workout/supersets';
 
 interface Props {
@@ -121,10 +123,35 @@ export const RoutineEditorModal: React.FC<Props> = ({
     }
   }, [routineToEdit, visible]);
 
+  const [supersetModalExerciseId, setSupersetModalExerciseId] = useState<string | null>(null);
+
   const supersetMetaMap = useMemo(
     () => getSupersetMetadata(draftExercises),
     [draftExercises]
   );
+
+  const supersetModalExercises = useMemo(() => {
+    return draftExercises.map((e) => ({
+      id: e.id,
+      name: e.exercise.name,
+      category: e.exercise.category,
+      equipment: e.exercise.equipment,
+      supersetId: e.supersetId,
+      targetSets: e.targetSets,
+    }));
+  }, [draftExercises]);
+
+  const handleSaveSupersetGroup = (selectedIds: string[]) => {
+    const fallbackId = `ss-routine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setDraftExercises((prev) => setSupersetGroupInList(prev, selectedIds, fallbackId));
+  };
+
+  const handleUngroupSupersetById = (exerciseId: string) => {
+    const targetIdx = draftExercises.findIndex((e) => e.id === exerciseId);
+    if (targetIdx !== -1) {
+      setDraftExercises((prev) => unlinkExerciseFromGroup(prev, targetIdx));
+    }
+  };
 
   const handleLinkSuperset = (index: number) => {
     if (index >= draftExercises.length - 1) return;
@@ -478,17 +505,21 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   <React.Fragment key={item.id}>
                     {ssMeta?.isFirst && (
                       <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
-                        <View
+                        <TouchableOpacity
                           style={[
                             styles.supersetPill,
                             { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
                           ]}
+                          onPress={() => setSupersetModalExerciseId(item.id)}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit ${ssMeta.label}`}
                         >
                           <Layers size={13} color={ssMeta.color} />
                           <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
                             {ssMeta.label}
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                         <Text style={styles.supersetCountText}>
                           {ssMeta.totalInGroup} Exercises · Alternating Sets
                         </Text>
@@ -540,25 +571,14 @@ export const RoutineEditorModal: React.FC<Props> = ({
                         </View>
                       </TouchableOpacity>
                       <View style={styles.compactActions}>
-                        {ssMeta ? (
-                          <TouchableOpacity
-                            style={styles.compactActionBtn}
-                            onPress={() => handleUnlinkSuperset(idx)}
-                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                            accessibilityLabel="Unlink superset"
-                          >
-                            <Layers size={14} color={ssMeta.color} />
-                          </TouchableOpacity>
-                        ) : idx < draftExercises.length - 1 ? (
-                          <TouchableOpacity
-                            style={styles.compactActionBtn}
-                            onPress={() => handleLinkSuperset(idx)}
-                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                            accessibilityLabel="Link with next exercise as superset"
-                          >
-                            <Layers size={14} color="#6B7280" />
-                          </TouchableOpacity>
-                        ) : null}
+                        <TouchableOpacity
+                          style={styles.compactActionBtn}
+                          onPress={() => setSupersetModalExerciseId(item.id)}
+                          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          accessibilityLabel={ssMeta ? `Edit ${ssMeta.label}` : 'Create superset'}
+                        >
+                          <Layers size={14} color={ssMeta ? ssMeta.color : '#8B5CF6'} />
+                        </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.compactActionBtn}
                           onPress={() => handleStartReplace(idx)}
@@ -628,17 +648,21 @@ export const RoutineEditorModal: React.FC<Props> = ({
                 <React.Fragment key={item.id}>
                   {ssMeta?.isFirst && (
                     <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
-                      <View
+                      <TouchableOpacity
                         style={[
                           styles.supersetPill,
                           { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
                         ]}
+                        onPress={() => setSupersetModalExerciseId(item.id)}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit ${ssMeta.label}`}
                       >
                         <Layers size={13} color={ssMeta.color} />
                         <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
                           {ssMeta.label}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                       <Text style={styles.supersetCountText}>
                         {ssMeta.totalInGroup} Exercises · Alternating Sets
                       </Text>
@@ -849,38 +873,38 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       <Text style={styles.configLabel}>SUPERSET</Text>
                       {ssMeta ? (
                         <View style={styles.ssActiveControlRow}>
-                          <View
+                          <TouchableOpacity
                             style={[
                               styles.ssActiveBadge,
                               { borderColor: ssMeta.color, backgroundColor: ssMeta.color + '1A' },
                             ]}
+                            onPress={() => setSupersetModalExerciseId(item.id)}
+                            activeOpacity={0.8}
                           >
                             <Layers size={13} color={ssMeta.color} />
                             <Text style={[styles.ssActiveBadgeText, { color: ssMeta.color }]}>
-                              {ssMeta.label} ({ssMeta.positionInGroup}/{ssMeta.totalInGroup})
+                              {ssMeta.label} ({ssMeta.positionInGroup}/{ssMeta.totalInGroup}) · Edit
                             </Text>
-                          </View>
+                          </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.ssUnlinkBtn}
                             onPress={() => handleUnlinkSuperset(idx)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
-                            <Text style={styles.ssUnlinkBtnText}>Unlink</Text>
+                            <Text style={styles.ssUnlinkBtnText}>Ungroup</Text>
                           </TouchableOpacity>
                         </View>
-                      ) : idx < draftExercises.length - 1 ? (
+                      ) : (
                         <TouchableOpacity
                           style={styles.ssLinkBtn}
-                          onPress={() => handleLinkSuperset(idx)}
+                          onPress={() => setSupersetModalExerciseId(item.id)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                         >
                           <Layers size={13} color="#A855F7" />
                           <Text style={styles.ssLinkBtnText}>
-                            Link with #{idx + 2} ({draftExercises[idx + 1].exercise.name})
+                            + Create / Add to Superset...
                           </Text>
                         </TouchableOpacity>
-                      ) : (
-                        <Text style={styles.ssNoneText}>None (last exercise)</Text>
                       )}
                     </View>
                   </View>
@@ -1042,6 +1066,16 @@ export const RoutineEditorModal: React.FC<Props> = ({
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
+
+        {/* Superset Manager Modal */}
+        <SupersetModal
+          visible={supersetModalExerciseId !== null}
+          currentExerciseId={supersetModalExerciseId}
+          exercises={supersetModalExercises}
+          onClose={() => setSupersetModalExerciseId(null)}
+          onSaveSuperset={handleSaveSupersetGroup}
+          onUngroupSuperset={handleUngroupSupersetById}
+        />
       </View>
     </Modal>
   );

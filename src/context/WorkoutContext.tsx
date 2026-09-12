@@ -41,6 +41,7 @@ import {
 import {
   linkExercisesInGroup,
   unlinkExerciseFromGroup,
+  setSupersetGroupInList,
 } from '../workout/supersets';
 
 interface RestTimerState {
@@ -89,6 +90,7 @@ interface WorkoutContextType {
   ) => void;
   linkSuperset: (firstExerciseId: string, secondExerciseId: string) => void;
   unlinkSuperset: (exerciseId: string) => void;
+  setSupersetGroup: (selectedExerciseIds: string[]) => void;
   removeSet: (activeExerciseId: string, setId: string) => void;
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
@@ -954,6 +956,31 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
+  const setSupersetGroup = (selectedExerciseIds: string[]) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const fallbackId = `ss-${Crypto.randomUUID().slice(0, 8)}`;
+    const updatedExercises = setSupersetGroupInList(
+      state.workout.exercises,
+      selectedExerciseIds,
+      fallbackId
+    );
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+  };
+
   const removeSet = (activeExerciseId: string, setId: string) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
@@ -1164,6 +1191,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         insertWarmupSets,
         linkSuperset,
         unlinkSuperset,
+        setSupersetGroup,
         removeSet,
         updateSet,
         updateExerciseNotes,

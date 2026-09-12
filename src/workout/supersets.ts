@@ -239,3 +239,115 @@ export function unlinkExerciseFromGroup<T extends { supersetId?: string }>(
   }
   return updated;
 }
+
+/**
+ * Sets or updates a superset group from a list of selected exercise IDs.
+ * - If selectedExerciseIds has fewer than 2 members:
+ *   Cleans up / unlinks any of those exercises. If an existing group drops to < 2 members,
+ *   dissolves that group as well.
+ * - If selectedExerciseIds has 2 or more members:
+ *   - Uses an existing supersetId from any of the selected exercises (if present),
+ *     or assigns fallbackNewId.
+ *   - Any former members of those superset groups that are NOT in selectedExerciseIds
+ *     have their supersetId cleared.
+ *   - Moves the selected exercises to be contiguous in the array, starting at the
+ *     index where the first selected exercise currently sits, preserving the order of
+ *     selected exercises and the relative order of unselected exercises.
+ */
+export function setSupersetGroupInList<T extends { id: string; supersetId?: string }>(
+  items: T[],
+  selectedExerciseIds: string[],
+  fallbackNewId: string = `ss-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+): T[] {
+  const selectedSet = new Set(selectedExerciseIds);
+
+  if (selectedSet.size < 2) {
+    // Ungroup the exercises that were selected, and clean up any groups left with < 2 members
+    let updated = items.map((item) =>
+      selectedSet.has(item.id) ? { ...item, supersetId: undefined } : item
+    );
+    const counts = new Map<string, number>();
+    for (const it of updated) {
+      if (it.supersetId) {
+        counts.set(it.supersetId, (counts.get(it.supersetId) || 0) + 1);
+      }
+    }
+    return updated.map((it) => {
+      if (it.supersetId && (counts.get(it.supersetId) || 0) < 2) {
+        return { ...it, supersetId: undefined };
+      }
+      return it;
+    });
+  }
+
+  // Find existing superset ID among selected exercises (if any)
+  let targetSupersetId: string | undefined;
+  const involvedOldGroupIds = new Set<string>();
+  for (const item of items) {
+    if (selectedSet.has(item.id) && item.supersetId) {
+      if (!targetSupersetId) {
+        targetSupersetId = item.supersetId;
+      }
+      involvedOldGroupIds.add(item.supersetId);
+    }
+  }
+  const chosenSupersetId = targetSupersetId || fallbackNewId;
+
+  // Update superset IDs:
+  // - Selected exercises receive chosenSupersetId
+  // - Unselected exercises that belonged to one of the involved groups lose their supersetId
+  let updatedItems = items.map((item) => {
+    if (selectedSet.has(item.id)) {
+      return { ...item, supersetId: chosenSupersetId };
+    }
+    if (item.supersetId && involvedOldGroupIds.has(item.supersetId)) {
+      return { ...item, supersetId: undefined };
+    }
+    return item;
+  });
+
+  // Dissolve any other groups that dropped below 2 members
+  const counts = new Map<string, number>();
+  for (const it of updatedItems) {
+    if (it.supersetId) {
+      counts.set(it.supersetId, (counts.get(it.supersetId) || 0) + 1);
+    }
+  }
+  updatedItems = updatedItems.map((it) => {
+    if (it.supersetId && (counts.get(it.supersetId) || 0) < 2) {
+      return { ...it, supersetId: undefined };
+    }
+    return it;
+  });
+
+  // Arrange selected exercises consecutively starting at the index of the first selected item
+  const firstSelectedIndex = items.findIndex((it) => selectedSet.has(it.id));
+  if (firstSelectedIndex === -1) return updatedItems;
+
+  const selectedItems: T[] = [];
+  for (const it of updatedItems) {
+    if (selectedSet.has(it.id)) {
+      selectedItems.push(it);
+    }
+  }
+
+  const nonSelectedItems = updatedItems.filter((it) => !selectedSet.has(it.id));
+
+  return [
+    ...nonSelectedItems.slice(0, firstSelectedIndex),
+    ...selectedItems,
+    ...nonSelectedItems.slice(firstSelectedIndex),
+  ];
+}
+
+/**
+ * Dissolves an entire superset group by ID.
+ */
+export function dissolveSupersetInList<T extends { id: string; supersetId?: string }>(
+  items: T[],
+  supersetId: string
+): T[] {
+  return items.map((it) =>
+    it.supersetId === supersetId ? { ...it, supersetId: undefined } : it
+  );
+}

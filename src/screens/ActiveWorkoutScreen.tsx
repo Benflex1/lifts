@@ -64,7 +64,8 @@ import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../wo
 import { PRBadge } from '../components/PRBadge';
 import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { WarmupModal } from '../components/WarmupModal';
-import { roundToIncrement, getDefaultIncrement } from '../workout/warmup';
+import { SupersetModal } from '../components/SupersetModal';
+import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
 
@@ -86,6 +87,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     insertWarmupSets,
     linkSuperset,
     unlinkSuperset,
+    setSupersetGroup,
     removeSet,
     updateSet,
     updateExerciseNotes,
@@ -125,12 +127,63 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [selectedDetailExercise, setSelectedDetailExercise] = useState<Exercise | null>(null);
   const [warmupModalExercise, setWarmupModalExercise] = useState<ActiveExercise | null>(null);
+  const [supersetModalExerciseId, setSupersetModalExerciseId] = useState<string | null>(null);
   const [supersetNextUpCue, setSupersetNextUpCue] = useState<string | null>(null);
   const exerciseLayoutsRef = useRef<Record<string, ExerciseLayout>>({});
 
   const supersetMetaMap = useMemo(() => {
     return getSupersetMetadata(activeWorkout?.exercises || []);
   }, [activeWorkout?.exercises]);
+
+  const supersetModalExercises = useMemo(() => {
+    return (activeWorkout?.exercises || []).map((e) => ({
+      id: e.id,
+      name: e.exercise?.name || 'Exercise',
+      category: e.exercise?.category,
+      equipment: e.exercise?.equipment,
+      supersetId: e.supersetId,
+      setsCount: e.sets.length,
+    }));
+  }, [activeWorkout?.exercises]);
+
+  const handleAddQuickWarmup = (activeEx: ActiveExercise) => {
+    const defaultBar = getDefaultBarWeight(
+      activeEx.exercise?.equipment,
+      activeEx.exercise?.category,
+      unit
+    );
+
+    let targetWorkingWeight = 0;
+    const workingSet = activeEx.sets.find((s) => s.type !== 'warmup' && s.weightKg > 0);
+    if (workingSet) {
+      targetWorkingWeight = workingSet.weightKg;
+    } else {
+      const ghostSet = activeEx.sets.find((s) => (s.previousWeightKg || 0) > 0);
+      targetWorkingWeight =
+        ghostSet?.previousWeightKg ||
+        (defaultBar > 0 ? (unit === 'lb' ? displayToKg(135, 'lb') : 60) : 0);
+    }
+
+    const inc = getDefaultIncrement(unit);
+    const displayWorking = kgToDisplay(targetWorkingWeight, unit);
+    const displayWarmup = Math.max(
+      roundToIncrement(displayWorking * 0.5, inc),
+      defaultBar
+    );
+    const warmupWeightKg = displayToKg(displayWarmup, unit);
+
+    insertWarmupSets(
+      activeEx.id,
+      [{ weightKg: warmupWeightKg, reps: 8 }],
+      false
+    );
+
+    if (Platform.OS !== 'web') {
+      try {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+    }
+  };
 
   const handleExerciseLayout = (itemId: string, layout: ExerciseLayout) => {
     exerciseLayoutsRef.current[itemId] = layout;
@@ -955,26 +1008,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 );
               })}
 
-              {/* Bottom of Card Actions - Add Set & Warmup Buttons */}
-              <View style={styles.cardBottomActionsRow}>
-                <TouchableOpacity
-                  style={styles.addSetBtnWide}
-                  onPress={() => addSet(activeEx.id, 'normal')}
-                >
-                  <Plus size={16} color="#FFFFFF" />
-                  <Text style={styles.addSetBtnWideText}>Add Set</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.warmupRampBtn}
-                  onPress={() => setWarmupModalExercise(activeEx)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Calculate warmup sets"
-                >
-                  <Flame size={15} color="#F97316" />
-                  <Text style={styles.warmupRampBtnText}>+ Warmup</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Add Set Button */}
+              <TouchableOpacity
+                style={styles.addSetBtnWide}
+                onPress={() => addSet(activeEx.id, 'normal')}
+                accessibilityRole="button"
+                accessibilityLabel="Add set"
+              >
+                <Plus size={16} color="#FFFFFF" />
+                <Text style={styles.addSetBtnWideText}>Add Set</Text>
+              </TouchableOpacity>
               </View>
             </DraggableExerciseCard>
           );
@@ -983,17 +1026,21 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             <React.Fragment key={activeEx.id}>
               {ssMeta?.isFirst && (
                 <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
-                  <View
+                  <TouchableOpacity
                     style={[
                       styles.supersetPill,
                       { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
                     ]}
+                    onPress={() => setSupersetModalExerciseId(activeEx.id)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${ssMeta.label}`}
                   >
                     <Layers size={13} color={ssMeta.color} />
                     <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
                       {ssMeta.label}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                   <Text style={styles.supersetCountText}>
                     {ssMeta.totalInGroup} Exercises · Alternating Sets
                   </Text>
@@ -1069,6 +1116,22 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             insertWarmupSets(warmupModalExercise.id, warmupSets, replaceExisting);
             setWarmupModalExercise(null);
           }
+        }}
+      />
+
+      {/* Superset Selection Modal */}
+      <SupersetModal
+        visible={supersetModalExerciseId !== null}
+        currentExerciseId={supersetModalExerciseId}
+        exercises={supersetModalExercises}
+        onClose={() => setSupersetModalExerciseId(null)}
+        onSaveSuperset={(selectedIds) => {
+          setSupersetGroup(selectedIds);
+          setSupersetModalExerciseId(null);
+        }}
+        onUngroupSuperset={(exId) => {
+          unlinkSuperset(exId);
+          setSupersetModalExerciseId(null);
         }}
       />
 
@@ -1489,32 +1552,43 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 if (menuActiveExercise) {
                   const ex = menuActiveExercise;
                   setMenuActiveExercise(null);
-                  setWarmupModalExercise(ex);
+                  handleAddQuickWarmup(ex);
                 }
               }}
             >
               <Flame size={18} color="#F97316" />
-              <Text style={styles.menuItemText}>Warmup Calculator</Text>
+              <Text style={styles.menuItemText}>Add Warm-up Set</Text>
             </TouchableOpacity>
 
-            {menuNextExercise && (
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  if (menuActiveExercise && menuNextExercise) {
-                    linkSuperset(menuActiveExercise.id, menuNextExercise.id);
-                    setMenuActiveExercise(null);
-                  }
-                }}
-              >
-                <Layers size={18} color="#A855F7" />
-                <Text style={styles.menuItemText}>
-                  {menuActiveExercise?.supersetId
-                    ? `Add "${menuNextExercise.exercise?.name || 'Next'}" to Superset`
-                    : `Link with "${menuNextExercise.exercise?.name || 'Next'}" (Superset)`}
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  const ex = menuActiveExercise;
+                  setMenuActiveExercise(null);
+                  setWarmupModalExercise(ex);
+                }
+              }}
+            >
+              <Calculator size={18} color="#F97316" />
+              <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                if (menuActiveExercise) {
+                  const exId = menuActiveExercise.id;
+                  setMenuActiveExercise(null);
+                  setSupersetModalExerciseId(exId);
+                }
+              }}
+            >
+              <Layers size={18} color="#A855F7" />
+              <Text style={styles.menuItemText}>
+                {menuActiveExercise?.supersetId ? 'Edit Superset' : 'Create Superset'}
+              </Text>
+            </TouchableOpacity>
 
             {menuActiveExercise?.supersetId && (
               <TouchableOpacity
@@ -1526,8 +1600,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   }
                 }}
               >
-                <Layers size={18} color="#9CA3AF" />
-                <Text style={styles.menuItemText}>Unlink from Superset</Text>
+                <Layers size={18} color="#EF4444" />
+                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Ungroup Superset</Text>
               </TouchableOpacity>
             )}
 

@@ -42,7 +42,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
   onClose,
   onApplyWarmupSets,
 }) => {
-  const [selectedPreset, setSelectedPreset] = useState<WarmupPreset>('strength');
+  const [selectedPreset, setSelectedPreset] = useState<WarmupPreset>('single');
   const [workingWeightDisplay, setWorkingWeightDisplay] = useState<number>(0);
   const [barWeightDisplay, setBarWeightDisplay] = useState<number>(20);
   const [replaceExisting, setReplaceExisting] = useState<boolean>(true);
@@ -295,7 +295,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
             <View style={styles.presetsSection}>
               <Text style={styles.fieldLabel}>Warmup Protocol</Text>
               <View style={styles.presetButtonsGrid}>
-                {(['strength', 'hypertrophy', 'quick', 'heavy', 'custom'] as WarmupPreset[]).map((presetKey) => {
+                {(['single', 'quick', 'strength', 'hypertrophy', 'heavy', 'custom'] as WarmupPreset[]).map((presetKey) => {
                   const p = WARMUP_PRESETS[presetKey];
                   const isSelected = selectedPreset === presetKey;
                   const stepCount = presetKey === 'custom' ? customStepRatios.length : p.steps.length;

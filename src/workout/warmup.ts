@@ -2,7 +2,7 @@ import { WeightUnit, kgToDisplay, displayToKg } from '../utils/units';
 import { calculatePlates, LB_PLATES, KG_PLATES } from '../utils/calculator';
 import { PlateCalculation } from '../types';
 
-export type WarmupPreset = 'strength' | 'hypertrophy' | 'quick' | 'heavy' | 'custom';
+export type WarmupPreset = 'single' | 'quick' | 'strength' | 'hypertrophy' | 'heavy' | 'custom';
 
 export interface WarmupStepRatio {
   percentage: number; // 0 to 1 (e.g. 0.5 for 50%)
@@ -18,15 +18,21 @@ export interface WarmupPresetConfig {
 }
 
 export const WARMUP_PRESETS: Record<WarmupPreset, WarmupPresetConfig> = {
-  strength: {
-    id: 'strength',
-    name: 'Standard Strength',
-    description: '4-step ramp optimal for compound strength lifts (Bar, 50%, 70%, 85%)',
+  single: {
+    id: 'single',
+    name: '1 Set (Quick)',
+    description: '1 single warmup set at ~50% of working weight',
     steps: [
-      { percentage: 0, reps: 10, useBarIfAvailable: true },
+      { percentage: 0.50, reps: 8 },
+    ],
+  },
+  quick: {
+    id: 'quick',
+    name: 'Quick / Express',
+    description: '2-step fast warmup for time-crunched workouts (50%, 75%)',
+    steps: [
       { percentage: 0.50, reps: 5 },
-      { percentage: 0.70, reps: 3 },
-      { percentage: 0.85, reps: 1 },
+      { percentage: 0.75, reps: 3 },
     ],
   },
   hypertrophy: {
@@ -39,13 +45,15 @@ export const WARMUP_PRESETS: Record<WarmupPreset, WarmupPresetConfig> = {
       { percentage: 0.80, reps: 3 },
     ],
   },
-  quick: {
-    id: 'quick',
-    name: 'Quick / Express',
-    description: '2-step fast warmup for time-crunched workouts (50%, 75%)',
+  strength: {
+    id: 'strength',
+    name: 'Standard Strength',
+    description: '4-step ramp optimal for compound strength lifts (Bar, 50%, 70%, 85%)',
     steps: [
+      { percentage: 0, reps: 10, useBarIfAvailable: true },
       { percentage: 0.50, reps: 5 },
-      { percentage: 0.75, reps: 3 },
+      { percentage: 0.70, reps: 3 },
+      { percentage: 0.85, reps: 1 },
     ],
   },
   heavy: {

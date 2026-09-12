@@ -125,6 +125,20 @@ describe('Warmup Set Progression Calculator', () => {
     assert.equal(ramp[1].reps, 3);
   });
 
+  it('generates 1-step single ramp (default lightweight warmup)', () => {
+    const ramp = generateWarmupRamp({
+      workingWeightKg: 100,
+      barWeightKg: 20,
+      unit: 'kg',
+      preset: 'single',
+    });
+
+    assert.equal(ramp.length, 1);
+    assert.equal(ramp[0].displayWeight, 50); // 50% x 8
+    assert.equal(ramp[0].reps, 8);
+    assert.equal(ramp[0].label, '50%');
+  });
+
   it('generates 5-step heavy / powerlifting ramp', () => {
     const ramp = generateWarmupRamp({
       workingWeightKg: 140,

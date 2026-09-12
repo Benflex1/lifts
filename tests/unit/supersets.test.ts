@@ -5,6 +5,8 @@ import {
   resolveNextSupersetTarget,
   linkExercisesInGroup,
   unlinkExerciseFromGroup,
+  setSupersetGroupInList,
+  dissolveSupersetInList,
   SUPERSET_PALETTE,
 } from '../../src/workout/supersets';
 import { Workout, ActiveExercise } from '../../src/types';
@@ -357,3 +359,96 @@ describe('Superset Link & Unlink Membership Management', () => {
     assert.equal(unlinked[2].supersetId, undefined);
   });
 });
+
+describe('Interactive Superset Grouping & Reordering Engine', () => {
+  it('groups non-adjacent exercises contiguously into a new superset', () => {
+    const list = [
+      { id: 'ex-bench' },
+      { id: 'ex-squat' },
+      { id: 'ex-overhead' },
+      { id: 'ex-row' },
+      { id: 'ex-curls' },
+    ];
+
+    // Select bench (idx 0) and row (idx 3)
+    const result = setSupersetGroupInList(list, ['ex-bench', 'ex-row']);
+
+    // Length preserved
+    assert.equal(result.length, 5);
+
+    // Order: bench, row, squat, overhead, curls
+    assert.equal(result[0].id, 'ex-bench');
+    assert.equal(result[1].id, 'ex-row');
+    assert.equal(result[2].id, 'ex-squat');
+    assert.equal(result[3].id, 'ex-overhead');
+    assert.equal(result[4].id, 'ex-curls');
+
+    // Superset IDs assigned to bench and row
+    assert.ok(result[0].supersetId);
+    assert.equal(result[0].supersetId, result[1].supersetId);
+    assert.equal(result[2].supersetId, undefined);
+    assert.equal(result[3].supersetId, undefined);
+    assert.equal(result[4].supersetId, undefined);
+  });
+
+  it('preserves existing superset ID when editing a group', () => {
+    const list = [
+      { id: 'ex-1', supersetId: 'ss-existing' },
+      { id: 'ex-2', supersetId: 'ss-existing' },
+      { id: 'ex-3' },
+    ];
+
+    // Add ex-3 to the group
+    const result = setSupersetGroupInList(list, ['ex-1', 'ex-2', 'ex-3']);
+    assert.equal(result.length, 3);
+    assert.equal(result[0].supersetId, 'ss-existing');
+    assert.equal(result[1].supersetId, 'ss-existing');
+    assert.equal(result[2].supersetId, 'ss-existing');
+  });
+
+  it('dissolves orphaned singletons when an exercise is removed from a 2-exercise group', () => {
+    const list = [
+      { id: 'ex-1', supersetId: 'ss-pair' },
+      { id: 'ex-2', supersetId: 'ss-pair' },
+      { id: 'ex-3' },
+      { id: 'ex-4' },
+    ];
+
+    // User forms a new superset between ex-2 and ex-3, removing ex-2 from the ex-1/ex-2 pair.
+    // ex-1 becomes a singleton and should have its supersetId cleared!
+    const result = setSupersetGroupInList(list, ['ex-2', 'ex-3']);
+    assert.equal(result.find((e) => e.id === 'ex-1')?.supersetId, undefined);
+    const ss2 = result.find((e) => e.id === 'ex-2')?.supersetId;
+    const ss3 = result.find((e) => e.id === 'ex-3')?.supersetId;
+    assert.ok(ss2);
+    assert.equal(ss2, ss3);
+  });
+
+  it('dissolves group if fewer than 2 exercises are provided to setSupersetGroupInList', () => {
+    const list = [
+      { id: 'ex-1', supersetId: 'ss-pair' },
+      { id: 'ex-2', supersetId: 'ss-pair' },
+    ];
+
+    const result = setSupersetGroupInList(list, ['ex-1']);
+    assert.equal(result[0].supersetId, undefined);
+    assert.equal(result[1].supersetId, undefined);
+  });
+
+  it('dissolveSupersetInList clears supersetId for all group members without reordering', () => {
+    const list = [
+      { id: 'ex-1', supersetId: 'ss-target' },
+      { id: 'ex-2', supersetId: 'ss-other' },
+      { id: 'ex-3', supersetId: 'ss-target' },
+      { id: 'ex-4', supersetId: 'ss-other' },
+    ];
+
+    const result = dissolveSupersetInList(list, 'ss-target');
+    assert.equal(result[0].supersetId, undefined);
+    assert.equal(result[1].supersetId, 'ss-other');
+    assert.equal(result[2].supersetId, undefined);
+    assert.equal(result[3].supersetId, 'ss-other');
+    assert.equal(result.map((e) => e.id).join(','), 'ex-1,ex-2,ex-3,ex-4');
+  });
+});
+
