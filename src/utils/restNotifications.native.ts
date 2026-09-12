@@ -1,12 +1,84 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+
+type NotificationsModule = typeof import('expo-notifications');
 
 let channelCreated = false;
 let handlerConfigured = false;
 let permissionRequested = false;
 let lastScheduledId: string | null = null;
+let notificationsModule: NotificationsModule | null = null;
+let notificationsModuleLoaded = false;
+let didLogExpoGoWarning = false;
+
+export function isExpoGoAndroid(): boolean {
+  try {
+    if (Platform.OS !== 'android') {
+      return false;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const expo = require('expo');
+      if (typeof expo?.isRunningInExpoGo === 'function' && expo.isRunningInExpoGo()) {
+        return true;
+      }
+    } catch {}
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require('expo-constants');
+      const Constants = mod?.default ?? mod;
+      if (
+        Constants?.appOwnership === 'expo' ||
+        Constants?.executionEnvironment === 'storeClient'
+      ) {
+        return true;
+      }
+    } catch {}
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function getNotificationsModule(): NotificationsModule | null {
+  if (notificationsModuleLoaded) {
+    return notificationsModule;
+  }
+
+  if (isExpoGoAndroid()) {
+    if (!didLogExpoGoWarning && (globalThis as any).__DEV__) {
+      didLogExpoGoWarning = true;
+      console.info(
+        '[restNotifications] Expo Go on Android does not support expo-notifications in SDK 53+. Local in-app rest timer and haptics remain active; background system notifications are bypassed. Use a development build for background notifications.'
+      );
+    }
+    notificationsModuleLoaded = true;
+    notificationsModule = null;
+    return null;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    notificationsModule = require('expo-notifications');
+  } catch (error) {
+    if ((globalThis as any).__DEV__) {
+      console.warn('[restNotifications] Failed to load expo-notifications module:', error);
+    }
+    notificationsModule = null;
+  }
+
+  notificationsModuleLoaded = true;
+  return notificationsModule;
+}
 
 export async function initRestNotifications(): Promise<void> {
+  const Notifications = getNotificationsModule();
+  if (!Notifications) {
+    return;
+  }
+
   if (!handlerConfigured) {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
@@ -48,13 +120,16 @@ export async function initRestNotifications(): Promise<void> {
   }
 }
 
-
 export async function scheduleRestNotification(
   endsAtMs: number,
   exerciseName?: string
 ): Promise<string | null> {
-  await initRestNotifications();
+  const Notifications = getNotificationsModule();
+  if (!Notifications) {
+    return null;
+  }
 
+  await initRestNotifications();
   await cancelRestNotification();
 
   const now = Date.now();
@@ -93,6 +168,12 @@ export async function scheduleRestNotification(
 }
 
 export async function cancelRestNotification(): Promise<void> {
+  const Notifications = getNotificationsModule();
+  if (!Notifications) {
+    lastScheduledId = null;
+    return;
+  }
+
   try {
     if (lastScheduledId) {
       await Notifications.cancelScheduledNotificationAsync(lastScheduledId).catch(() => {});
@@ -104,3 +185,4 @@ export async function cancelRestNotification(): Promise<void> {
     console.warn('Failed to cancel rest notification:', e);
   }
 }
+

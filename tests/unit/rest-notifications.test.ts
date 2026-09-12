@@ -4,6 +4,7 @@ import {
   initRestNotifications,
   scheduleRestNotification,
   cancelRestNotification,
+  isExpoGoAndroid,
 } from '../../src/utils/restNotifications';
 
 describe('restNotifications', () => {
@@ -24,4 +25,15 @@ describe('restNotifications', () => {
     const res = await scheduleRestNotification(pastTimestamp, 'Bench Press');
     assert.equal(res, null);
   });
+
+  it('detects isExpoGoAndroid as false in standard Node/test environments', () => {
+    assert.equal(isExpoGoAndroid(), false);
+  });
+
+  it('does not reject when scheduling with future timestamp in non-native environment', async () => {
+    const futureTimestamp = Date.now() + 60000;
+    const res = await scheduleRestNotification(futureTimestamp, 'Squat');
+    assert.equal(res, null);
+  });
 });
+
