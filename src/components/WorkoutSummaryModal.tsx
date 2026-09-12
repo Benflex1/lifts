@@ -19,6 +19,7 @@ import { reassignWorkoutGym } from '../workout/workout-edit';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from './PRBadge';
+import { ConfettiCelebration } from './ConfettiCelebration';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
@@ -119,6 +120,7 @@ export function WorkoutSummaryModal({
         onRequestClose={onDismiss}
       >
       <SafeAreaView style={styles.overlay}>
+        {prSummary && prSummary.totalCount > 0 && <ConfettiCelebration />}
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>

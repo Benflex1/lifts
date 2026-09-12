@@ -80,12 +80,9 @@ export function evaluateRank(
     return { rank: 1 };
   }
 
-  // Case 2: Beats or ties 1st place
+  // Case 2: Beats 1st place
   if (value > records[0]) {
     return { rank: 1, previousRecord: records[0], isTie: false };
-  }
-  if (value === records[0]) {
-    return { rank: 1, previousRecord: records[0], isTie: true };
   }
 
   // Case 3: 2nd place (must be strictly < records[0] and at least 80% of records[0] to filter light warmups)
@@ -237,103 +234,66 @@ export function evaluateWorkoutPRs(
         )
       : { weight: [], '1rm': [], volume: [], reps: [] };
 
-    // Running copies that update with each set in the current workout
-    const runningGlobal: ExerciseLeaderboard = {
-      weight: [...globalLeaderboard.weight],
-      '1rm': [...globalLeaderboard['1rm']],
-      volume: [...globalLeaderboard.volume],
-      reps: [...globalLeaderboard.reps],
-    };
-    const runningGym: ExerciseLeaderboard = {
-      weight: [...gymLeaderboard.weight],
-      '1rm': [...gymLeaderboard['1rm']],
-      volume: [...gymLeaderboard.volume],
-      reps: [...gymLeaderboard.reps],
-    };
+    const targetLeaderboard = isGymSpecific ? gymLeaderboard : globalLeaderboard;
+    const completedSets = activeEx.sets.filter((s) => s.isCompleted && s.type !== 'warmup');
+    const metrics: PRMetric[] = ['weight', '1rm', 'volume', 'reps'];
 
-    // Tracks max value achieved so far in this session for this exercise occurrence
-    const sessionMax: Record<PRMetric, number> = {
-      weight: 0,
-      '1rm': 0,
-      volume: 0,
-      reps: 0,
-    };
+    // Map each set ID to its earned achievements in this session
+    const setAchievementsMap = new Map<string, PRAchievement[]>();
 
-    for (const set of activeEx.sets) {
-      if (!set.isCompleted || set.type === 'warmup') {
-        continue;
-      }
+    for (const metric of metrics) {
+      let bestVal = 0;
+      let bestSet: WorkoutSet | null = null;
 
-      const activeMetrics: Array<{ metric: PRMetric; value: number }> = [];
-
-      if (set.weightKg > 0) {
-        activeMetrics.push({ metric: 'weight', value: set.weightKg });
-        if (set.reps > 0) {
-          activeMetrics.push({
-            metric: '1rm',
-            value: calculate1RM(set.weightKg, set.reps).average,
-          });
-          activeMetrics.push({
-            metric: 'volume',
-            value: set.weightKg * set.reps,
-          });
-        }
-      } else if (set.reps > 0) {
-        activeMetrics.push({ metric: 'reps', value: set.reps });
-      }
-
-      const setAchievements: PRAchievement[] = [];
-
-      for (const { metric, value } of activeMetrics) {
-        // Must improve upon what was already done in this workout on this metric
-        if (value <= sessionMax[metric]) {
-          continue;
+      for (const set of completedSets) {
+        let val = 0;
+        if (metric === 'weight' && set.weightKg > 0) {
+          val = set.weightKg;
+        } else if (metric === '1rm' && set.weightKg > 0 && set.reps > 0) {
+          val = calculate1RM(set.weightKg, set.reps).average;
+        } else if (metric === 'volume' && set.weightKg > 0 && set.reps > 0) {
+          val = set.weightKg * set.reps;
+        } else if (metric === 'reps' && set.weightKg === 0 && set.reps > 0) {
+          val = set.reps;
         }
 
-        if (isGymSpecific) {
-          // Gym-specific evaluation ONLY for machine / cable exercises
-          const gymResult = evaluateRank(value, runningGym[metric]);
-          if (gymResult) {
-            setAchievements.push({
-              rank: gymResult.rank,
-              metric,
-              scope: 'gym',
-              value,
-              previousRecord: gymResult.previousRecord,
-              isTie: gymResult.isTie,
-              gymId: workout.gymId,
-              gymName: currentGymName,
-            });
-          }
-          insertSortedDistinct(runningGym[metric], value);
-        } else {
-          // Global evaluation for global exercises (barbell, dumbbell, bodyweight)
-          const globalResult = evaluateRank(value, runningGlobal[metric]);
-          if (globalResult) {
-            setAchievements.push({
-              rank: globalResult.rank,
-              metric,
-              scope: 'global',
-              value,
-              previousRecord: globalResult.previousRecord,
-              isTie: globalResult.isTie,
-            });
-          }
-          insertSortedDistinct(runningGlobal[metric], value);
+        if (val > bestVal) {
+          bestVal = val;
+          bestSet = set;
         }
-
-        // Update session max
-        sessionMax[metric] = Math.max(sessionMax[metric], value);
       }
 
-      if (setAchievements.length > 0) {
-        setAchievements.sort(compareAchievements);
-        const primary = setAchievements[0];
+      if (bestVal > 0 && bestSet) {
+        const rankResult = evaluateRank(bestVal, targetLeaderboard[metric]);
+        if (rankResult) {
+          const ach: PRAchievement = {
+            rank: rankResult.rank,
+            metric,
+            scope: isGymSpecific ? 'gym' : 'global',
+            value: bestVal,
+            previousRecord: rankResult.previousRecord,
+            isTie: rankResult.isTie,
+            gymId: isGymSpecific ? workout.gymId : undefined,
+            gymName: isGymSpecific ? currentGymName : undefined,
+          };
+
+          const list = setAchievementsMap.get(bestSet.id) || [];
+          list.push(ach);
+          setAchievementsMap.set(bestSet.id, list);
+        }
+      }
+    }
+
+    for (const set of completedSets) {
+      const achievements = setAchievementsMap.get(set.id);
+      if (achievements && achievements.length > 0) {
+        achievements.sort(compareAchievements);
+        const primary = achievements[0];
 
         setPRs.set(set.id, {
           setId: set.id,
           primary,
-          achievements: setAchievements,
+          achievements,
         });
 
         achievementsList.push({
@@ -414,3 +374,165 @@ export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit
 
   return `${medal} (${rankStr}) · ${scopeStr} ${metricStr}${prevStr}`;
 }
+
+export interface PodiumEntry {
+  rank: PRRank;
+  metric: PRMetric;
+  value: number;
+  weightKg: number;
+  reps: number;
+  date: string;
+  gymId: string;
+  gymName?: string;
+  workoutId: string;
+  workoutName: string;
+}
+
+export interface ExercisePodium {
+  weight: PodiumEntry[];
+  '1rm': PodiumEntry[];
+  volume: PodiumEntry[];
+  reps: PodiumEntry[];
+}
+
+/**
+ * Extracts top 3 all-time distinct historical podium performances (1st Gold, 2nd Silver, 3rd Bronze)
+ * for an exercise, respecting gym scoping rules.
+ */
+export function extractExercisePodium(
+  workouts: Workout[],
+  exerciseId: string,
+  gyms: Gym[],
+  allowedGymIds: Set<string> | null
+): ExercisePodium {
+  const gymMap = new Map(gyms.map((g) => [g.id, g.name]));
+
+  interface CandidateSet {
+    weightKg: number;
+    reps: number;
+    date: string;
+    gymId: string;
+    gymName?: string;
+    workoutId: string;
+    workoutName: string;
+    weight: number;
+    '1rm': number;
+    volume: number;
+    repsMetric: number;
+  }
+
+  const candidates: CandidateSet[] = [];
+
+  for (const w of workouts) {
+    if (allowedGymIds !== null && !allowedGymIds.has(w.gymId)) continue;
+    const currentGymName = gymMap.get(w.gymId);
+
+    for (const ex of w.exercises) {
+      if (ex.exerciseId !== exerciseId) continue;
+      for (const s of ex.sets) {
+        if (!s.isCompleted || s.type === 'warmup') continue;
+
+        const weight = s.weightKg > 0 ? s.weightKg : 0;
+        const oneRM = s.weightKg > 0 && s.reps > 0 ? calculate1RM(s.weightKg, s.reps).average : 0;
+        const volume = s.weightKg > 0 && s.reps > 0 ? s.weightKg * s.reps : 0;
+        const repsMetric = s.weightKg === 0 && s.reps > 0 ? s.reps : 0;
+
+        candidates.push({
+          weightKg: s.weightKg,
+          reps: s.reps,
+          date: w.startTime,
+          gymId: w.gymId,
+          gymName: currentGymName,
+          workoutId: w.id,
+          workoutName: w.name,
+          weight,
+          '1rm': oneRM,
+          volume,
+          repsMetric,
+        });
+      }
+    }
+  }
+
+  const buildPodiumForMetric = (
+    metric: PRMetric,
+    getValue: (c: CandidateSet) => number
+  ): PodiumEntry[] => {
+    const valueMap = new Map<number, CandidateSet>();
+    for (const c of candidates) {
+      const val = getValue(c);
+      if (val <= 0) continue;
+      const existing = valueMap.get(val);
+      if (!existing || c.date < existing.date) {
+        valueMap.set(val, c);
+      }
+    }
+
+    const distinctValues = Array.from(valueMap.keys()).sort((a, b) => b - a);
+    if (distinctValues.length === 0) return [];
+
+    const podium: PodiumEntry[] = [];
+    const rank1Val = distinctValues[0];
+    const candidate1 = valueMap.get(rank1Val)!;
+    podium.push({
+      rank: 1,
+      metric,
+      value: rank1Val,
+      weightKg: candidate1.weightKg,
+      reps: candidate1.reps,
+      date: candidate1.date,
+      gymId: candidate1.gymId,
+      gymName: candidate1.gymName,
+      workoutId: candidate1.workoutId,
+      workoutName: candidate1.workoutName,
+    });
+
+    if (distinctValues.length >= 2) {
+      const rank2Val = distinctValues[1];
+      if (rank2Val >= 0.8 * rank1Val) {
+        const candidate2 = valueMap.get(rank2Val)!;
+        podium.push({
+          rank: 2,
+          metric,
+          value: rank2Val,
+          weightKg: candidate2.weightKg,
+          reps: candidate2.reps,
+          date: candidate2.date,
+          gymId: candidate2.gymId,
+          gymName: candidate2.gymName,
+          workoutId: candidate2.workoutId,
+          workoutName: candidate2.workoutName,
+        });
+      }
+    }
+
+    if (distinctValues.length >= 3) {
+      const rank3Val = distinctValues[2];
+      if (rank3Val >= 0.75 * rank1Val) {
+        const candidate3 = valueMap.get(rank3Val)!;
+        podium.push({
+          rank: 3,
+          metric,
+          value: rank3Val,
+          weightKg: candidate3.weightKg,
+          reps: candidate3.reps,
+          date: candidate3.date,
+          gymId: candidate3.gymId,
+          gymName: candidate3.gymName,
+          workoutId: candidate3.workoutId,
+          workoutName: candidate3.workoutName,
+        });
+      }
+    }
+
+    return podium;
+  };
+
+  return {
+    weight: buildPodiumForMetric('weight', (c) => c.weight),
+    '1rm': buildPodiumForMetric('1rm', (c) => c['1rm']),
+    volume: buildPodiumForMetric('volume', (c) => c.volume),
+    reps: buildPodiumForMetric('reps', (c) => c.repsMetric),
+  };
+}
+

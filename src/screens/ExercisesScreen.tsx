@@ -20,11 +20,14 @@ import {
   getExerciseStats,
   getExerciseGymScope,
   getGyms,
+  getCompletedWorkoutsForExercise,
 } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
-import { resolveExerciseScope } from '../workout/gym-scope';
+import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
+import { ExercisePodium, extractExercisePodium } from '../workout/pr';
+import { ExercisePodiumView } from '../components/ExercisePodiumView';
 
 const MUSCLE_GROUPS = [
   'All',
@@ -151,6 +154,7 @@ export const ExercisesScreen: React.FC = () => {
 
   // Exercise personal stats
   const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
+  const [exercisePodium, setExercisePodium] = useState<ExercisePodium | null>(null);
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [currentGym, setCurrentGym] = useState<Gym | null>(null);
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
@@ -163,27 +167,35 @@ export const ExercisesScreen: React.FC = () => {
       setCurrentGym(null);
       setExerciseScope(null);
       setGyms([]);
+      setExercisePodium(null);
     }
     setExerciseStats(null);
+    setExercisePodium(null);
 
     try {
-      const [gymList, defaultGym, scope] = await Promise.all([
+      const [gymList, defaultGym, scope, completedWorkouts] = await Promise.all([
         getGyms(),
         getDefaultGym(),
         getExerciseGymScope(exercise.id),
+        getCompletedWorkoutsForExercise(exercise.id),
       ]);
       const selectedGym = gymList.find(gym => gym.id === defaultGym.id) || gymList[0] || defaultGym;
       const stats = await getExerciseStats(exercise.id, selectedGym.id);
+      const allowedGymIds = getAllowedGymIds(exercise, scope || undefined, selectedGym.id);
+      const podium = extractExercisePodium(completedWorkouts, exercise.id, gymList, allowedGymIds);
+
       if (requestId !== exerciseLoadRequestRef.current) return;
       setGyms(gymList);
       setCurrentGym(selectedGym);
       setExerciseScope(scope);
       setExerciseStats(stats);
+      setExercisePodium(podium);
     } catch (e) {
       if (requestId !== exerciseLoadRequestRef.current) return;
       setCurrentGym(null);
       setExerciseScope(null);
       setExerciseStats(null);
+      setExercisePodium(null);
       console.error('Error loading exercise stats:', e);
     }
   }, []);
@@ -579,6 +591,16 @@ export const ExercisesScreen: React.FC = () => {
                 <Text style={styles.secondaryMusclesText}>
                   Secondary: {activeDetail.secondaryMuscles.join(', ')}
                 </Text>
+              )}
+
+              {/* All-Time Podium Showcase */}
+              {exercisePodium && (
+                <ExercisePodiumView
+                  podium={exercisePodium}
+                  unit={unit}
+                  isBodyweight={Boolean(activeDetail.equipment?.toLowerCase().includes('body'))}
+                  gymTrackingEnabled={gymTrackingEnabled}
+                />
               )}
 
               {/* Personal Bests & Stats Card */}

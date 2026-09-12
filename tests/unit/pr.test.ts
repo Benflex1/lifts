@@ -6,6 +6,7 @@ import {
   evaluateWorkoutPRs,
   formatPRBadgeLabel,
   formatPRDescription,
+  extractExercisePodium,
 } from '../../src/workout/pr';
 import { Exercise, Gym, Workout } from '../../src/types';
 
@@ -38,7 +39,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     // 2. Full top 3 history: [100, 90, 80]
     const history = [100, 90, 80];
     assert.deepEqual(evaluateRank(105, history), { rank: 1, previousRecord: 100, isTie: false });
-    assert.deepEqual(evaluateRank(100, history), { rank: 1, previousRecord: 100, isTie: true }); // Tie 1st!
+    assert.equal(evaluateRank(100, history), null); // Tie 1st returns null (no PR inflation)
     assert.deepEqual(evaluateRank(95, history), { rank: 2, previousRecord: 90 });
     assert.deepEqual(evaluateRank(85, history), { rank: 3, previousRecord: 80 });
     assert.equal(evaluateRank(75, history), null); // Below 3rd
@@ -126,11 +127,12 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     const summary1 = evaluateWorkoutPRs(workout1, {}, allGyms, true);
     // Warmup is excluded
     assert.equal(summary1.setPRs.get('w1-s1'), undefined);
-    // Set 2 gets Gold (initial record)
-    assert.equal(summary1.setPRs.get('w1-s2')?.primary?.rank, 1);
+    // Set 2 was 90 kg (ramp-up set in same session), so it does not get a duplicate PR
+    assert.equal(summary1.setPRs.get('w1-s2'), undefined);
     // Set 3 improves to 100 kg, gets Gold
     assert.equal(summary1.setPRs.get('w1-s3')?.primary?.rank, 1);
     assert.equal(summary1.setPRs.get('w1-s3')?.primary?.metric, 'weight');
+    assert.equal(summary1.goldCount, 1);
 
     // Workout 2: Silver PR session (top lift is 95 kg, which beats 90 kg to become 2nd best ever)
     const workout2: Workout = {
@@ -196,6 +198,38 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     assert.equal(summary3.setPRs.get('w3-s1')?.primary?.previousRecord, 100);
     // Back-off set 100 kg does not earn another medal
     assert.equal(summary3.setPRs.get('w3-s2'), undefined);
+    assert.equal(summary3.goldCount, 1);
+
+    // Workout 4: Repeating existing top lift (105 kg) does NOT award tied PR
+    const workout4: Workout = {
+      id: 'w4',
+      name: 'Chest Day 4',
+      gymId: gymA.id,
+      startTime: '2026-09-15T10:00:00.000Z',
+      durationSeconds: 3600,
+      totalVolumeKg: 2000,
+      exercises: [
+        {
+          id: 'ae4',
+          exerciseId: barbellBench.id,
+          exercise: barbellBench,
+          restTimerSeconds: 90,
+          sets: [
+            { id: 'w4-s1', setNumber: 1, type: 'normal', weightKg: 105, reps: 5, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const summary4 = evaluateWorkoutPRs(
+      workout4,
+      { [barbellBench.id]: [workout1, workout2, workout3] },
+      allGyms,
+      true
+    );
+    assert.equal(summary4.setPRs.get('w4-s1'), undefined);
+    assert.equal(summary4.goldCount, 0);
+    assert.equal(summary4.totalCount, 0);
   });
 
   it('evaluates machine exercise with Multi-Gym isolation', () => {
@@ -362,14 +396,89 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     };
 
     const summary = evaluateWorkoutPRs(workout, {}, allGyms, true);
-    assert.equal(summary.setPRs.get('s-pu-1')?.primary?.rank, 1);
-    assert.equal(summary.setPRs.get('s-pu-1')?.primary?.metric, 'reps');
+    // Set 1 hit 12 reps, but Set 2 hit 15 reps in the same workout, so Set 1 is not awarded a duplicate PR
+    assert.equal(summary.setPRs.get('s-pu-1'), undefined);
 
-    // Set 2 hit 15 reps (beats 12) -> Gold Reps PR
+    // Set 2 hit 15 reps (top performance in session) -> Gold Reps PR
     assert.equal(summary.setPRs.get('s-pu-2')?.primary?.rank, 1);
     assert.equal(summary.setPRs.get('s-pu-2')?.primary?.metric, 'reps');
+    assert.equal(summary.goldCount, 1);
 
     // Set 3 hit 10 reps (less than 15) -> No medal
     assert.equal(summary.setPRs.get('s-pu-3'), undefined);
+  });
+
+  it('extractExercisePodium returns 1st, 2nd, and 3rd best performances respecting thresholds', () => {
+    const w1: Workout = {
+      id: 'w1',
+      name: 'Bench Session 1',
+      gymId: gymA.id,
+      startTime: '2026-08-01T10:00:00.000Z',
+      durationSeconds: 3000,
+      totalVolumeKg: 1000,
+      exercises: [
+        {
+          id: 'ae1',
+          exerciseId: barbellBench.id,
+          exercise: barbellBench,
+          sets: [
+            { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const w2: Workout = {
+      id: 'w2',
+      name: 'Bench Session 2',
+      gymId: gymA.id,
+      startTime: '2026-08-10T10:00:00.000Z',
+      durationSeconds: 3000,
+      totalVolumeKg: 1000,
+      exercises: [
+        {
+          id: 'ae2',
+          exerciseId: barbellBench.id,
+          exercise: barbellBench,
+          sets: [
+            { id: 's2', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const w3: Workout = {
+      id: 'w3',
+      name: 'Bench Session 3',
+      gymId: gymA.id,
+      startTime: '2026-08-20T10:00:00.000Z',
+      durationSeconds: 3000,
+      totalVolumeKg: 1000,
+      exercises: [
+        {
+          id: 'ae3',
+          exerciseId: barbellBench.id,
+          exercise: barbellBench,
+          sets: [
+            { id: 's3', setNumber: 1, type: 'normal', weightKg: 105, reps: 5, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const podium = extractExercisePodium([w1, w2, w3], barbellBench.id, allGyms, null);
+
+    assert.equal(podium.weight.length, 3);
+    assert.equal(podium.weight[0].rank, 1);
+    assert.equal(podium.weight[0].value, 110);
+    assert.equal(podium.weight[0].date, '2026-08-10T10:00:00.000Z');
+
+    assert.equal(podium.weight[1].rank, 2);
+    assert.equal(podium.weight[1].value, 105);
+    assert.equal(podium.weight[1].date, '2026-08-20T10:00:00.000Z');
+
+    assert.equal(podium.weight[2].rank, 3);
+    assert.equal(podium.weight[2].value, 100);
+    assert.equal(podium.weight[2].date, '2026-08-01T10:00:00.000Z');
   });
 });
