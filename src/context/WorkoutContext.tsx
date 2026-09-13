@@ -141,6 +141,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
   const { confirm, notify } = useDialog();
+  const { healthSyncEnabled, loading: settingsLoading } = useSettings();
 
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
@@ -154,7 +155,18 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const gymSwitchRequestRef = useRef(0);
   const lastBuzzedSecondRef = useRef<number | null>(null);
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
-  const { healthSyncEnabled } = useSettings();
+  const pendingHealthSyncsRef = useRef<Workout[]>([]);
+  const healthSyncSettingsRef = useRef({ enabled: healthSyncEnabled, loading: settingsLoading });
+  healthSyncSettingsRef.current = { enabled: healthSyncEnabled, loading: settingsLoading };
+
+  useEffect(() => {
+    if (settingsLoading) return;
+
+    const pendingWorkouts = pendingHealthSyncsRef.current.splice(0);
+    for (const workout of pendingWorkouts) {
+      enqueueCompletedWorkoutSync(workout, healthSyncEnabled);
+    }
+  }, [healthSyncEnabled, settingsLoading]);
 
   const toggleExerciseExpanded = useCallback((activeExerciseId: string) => {
     setExpandedExercises((prev) => ({
@@ -656,10 +668,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const finished = await finishWorkoutWithHealthSync(
-        () => ctrl.finish(),
-        healthSyncEnabled,
-      );
+      const finished = await ctrl.finish();
+      const settings = healthSyncSettingsRef.current;
+      if (settings.loading) {
+        pendingHealthSyncsRef.current.push(finished);
+      } else {
+        enqueueCompletedWorkoutSync(finished, settings.enabled);
+      }
       setIsMinimized(false);
       setExpandedExercises({});
       stopRestTimer();
@@ -671,7 +686,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         title: 'Save Error',
         message: 'Failed to save workout. Please try again.',
       });
-      throw e;
+      return null;
     }
   };
 
