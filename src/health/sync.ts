@@ -43,7 +43,6 @@ async function syncOnce(
   }
 
   if (existing?.status === 'synced') return existing;
-  if (existing && existing.payloadFingerprint !== payloadFingerprint) return existing;
 
   const pending: HealthSyncRecord = {
     workoutId: workout.id,

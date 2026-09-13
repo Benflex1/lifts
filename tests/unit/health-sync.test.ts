@@ -152,6 +152,32 @@ test('retries pending and failed records with the same fingerprint', async () =>
   assert.equal(result?.status, 'synced');
 });
 
+test('retries a failed record with the current payload when its fingerprint changed', async () => {
+  const { store, writes } = createFakeStore();
+  let attempts = 0;
+  const { provider, payloads } = createProvider('healthkit', async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error('temporary provider failure');
+  });
+
+  const first = await syncWorkoutWithProvider(store, workout(), provider, now);
+  assert.equal(first?.status, 'failed');
+  writes.length = 0;
+
+  const changedWorkout = workout({ name: 'Changed title' });
+  const result = await syncWorkoutWithProvider(
+    store,
+    changedWorkout,
+    provider,
+    '2026-09-13T11:00:00.000Z',
+  );
+
+  assert.equal(payloads.length, 2);
+  assert.equal(payloads[1].title, 'Changed title');
+  assert.equal(writes[0].status, 'pending');
+  assert.equal(result?.status, 'synced');
+});
+
 test('retries pending and failed ledger rows, skipping missing workouts', async () => {
   const completed = workout({ id: 'completed' });
   const { store, records } = createFakeStore([completed]);

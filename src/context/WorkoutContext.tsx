@@ -112,6 +112,8 @@ interface WorkoutContextType {
 
 type EnqueueWorkoutHealthSync = (workout: Workout, enabled: boolean) => void;
 
+// Test seam for exercising completion ordering; production completion uses the context-aware
+// finishWorkout implementation below, including the settings-loading buffer.
 export async function finishWorkoutWithHealthSync(
   finish: () => Promise<Workout>,
   healthSyncEnabled: boolean,

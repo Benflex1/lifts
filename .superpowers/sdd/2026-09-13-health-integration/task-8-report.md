@@ -28,5 +28,18 @@ The baseline found the generic Expo Go development instructions at `README.md:80
 ## Concerns
 
 - iOS HealthKit custom-build device acceptance remains unverified.
-- Android Health Connect custom-build device acceptance remains unverified.
-- The release rows accurately defer both device checks until user-performed custom-build testing; no Expo Go health validation is claimed.
+- Android Health Connect custom-build device acceptance was user-verified on the current branch's standalone Android APK: Health Connect and health sync were enabled, a workout was completed, and the workout export was confirmed to work. Device details were not recorded.
+- iOS HealthKit custom-build device acceptance remains unverified; no iOS validation is claimed.
+- No Expo Go health validation is claimed.
+
+## Task 8 review fix
+
+- Corrected the Android prerequisite to Build-Tools 36.0.0 and Platform SDK 36 to match the committed Expo compile/target SDK configuration.
+- Clarified in the README and roadmap that the provider payload includes the workout title, strength-workout type, and session start/end timing and duration, while retaining the no-reads and no-set-level-export limits.
+- Fix commit: `945d0bba85b6123ceb196e3854c190c81def69e3`
+
+## Task 8 review fix follow-up
+
+- Corrected the README and roadmap to state that workout title is included only in the Health Connect payload; HealthKit includes only the strength-workout type and session start/end timing and duration.
+- Preserved the no-reads and no-set-level-export limits.
+- Fix commit: `5380cf10562a214d5d11f2a9a3c184ce13d342fe`
