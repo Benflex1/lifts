@@ -6,16 +6,6 @@ import { getPlatformHealthProvider } from "../../src/health/provider.native";
 
 const canMockModules = typeof mock.module === "function";
 
-function mockModule(specifier: string, exports: Record<string, unknown>): void {
-  const filename = require.resolve(specifier);
-  require.cache[filename] = {
-    id: filename,
-    filename,
-    loaded: true,
-    exports,
-  } as NodeJS.Module;
-}
-
 async function withNodeVersion<T>(
   nodeVersion: string | undefined,
   callback: () => Promise<T>,
@@ -146,25 +136,31 @@ test(
   },
 );
 
-test("wires the Health Connect provider permission action to the installed adapter export", async () => {
-  let opened = 0;
-  mockModule("react-native-health-connect", {
-    ExerciseType: { STRENGTH_TRAINING: "StrengthTraining" },
-    SdkAvailabilityStatus: { SDK_AVAILABLE: 3 },
-    getSdkStatus: async () => 3,
-    initialize: async () => true,
-    insertRecords: async () => [],
-    openHealthConnectSettings: () => {
-      opened += 1;
-    },
-    requestPermission: async () => [],
-  });
+test(
+  "wires the Health Connect provider permission action to the installed adapter export",
+  { skip: !canMockModules },
+  async (t) => {
+    let opened = 0;
+    t.mock.module("react-native-health-connect", {
+      exports: {
+        ExerciseType: { STRENGTH_TRAINING: "StrengthTraining" },
+        SdkAvailabilityStatus: { SDK_AVAILABLE: 3 },
+        getSdkStatus: async () => 3,
+        initialize: async () => true,
+        insertRecords: async () => [],
+        openHealthConnectSettings: () => {
+          opened += 1;
+        },
+        requestPermission: async () => [],
+      },
+    });
 
-  const { createHealthConnectProvider } =
-    await import("../../src/health/health-connect");
-  const provider = createHealthConnectProvider();
+    const { createHealthConnectProvider } =
+      await import("../../src/health/health-connect");
+    const provider = createHealthConnectProvider();
 
-  assert.equal(typeof provider.openPermissionSettings, "function");
-  provider.openPermissionSettings?.();
-  assert.equal(opened, 1);
-});
+    assert.equal(typeof provider.openPermissionSettings, "function");
+    provider.openPermissionSettings?.();
+    assert.equal(opened, 1);
+  },
+);
