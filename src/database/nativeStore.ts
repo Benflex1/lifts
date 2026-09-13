@@ -1314,6 +1314,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
         // Merge settings (only missing keys)
         for (const [k, v] of Object.entries(snapshot.settings)) {
+          if (k === 'health_sync_enabled') continue;
           await driver.runAsync(
             'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
             k,

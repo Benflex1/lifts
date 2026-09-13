@@ -1259,6 +1259,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const sStore = tx.objectStore('settings');
       for (const [k, v] of Object.entries(snapshot.settings)) {
+        if (k === 'health_sync_enabled') continue;
         const getReq = sStore.get(k);
         getReq.onsuccess = () => {
           if (!getReq.result) {

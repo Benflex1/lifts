@@ -324,6 +324,45 @@ describe('Backup Roundtrip & Merge Safety', () => {
     await fixture.dispose();
   });
 
+  it('keeps health sync opt-in device-local across backup and restore', async () => {
+    const sourceFixture = await createStoreFixture('native');
+    const protectedDestination = await createStoreFixture('native');
+    const emptyDestination = await createStoreFixture('native');
+    try {
+      await sourceFixture.store.setSetting('health_sync_enabled', 'true');
+      await sourceFixture.store.setSetting('unit', 'lb');
+
+      const exported = JSON.parse(await buildBackupJson(sourceFixture.store));
+      assert.equal(exported.settings.health_sync_enabled, undefined);
+      assert.equal(exported.settings.unit, 'lb');
+
+      await protectedDestination.store.setSetting('health_sync_enabled', 'true');
+      await restoreBackup(JSON.stringify({
+        ...exported,
+        settings: { ...exported.settings, health_sync_enabled: 'false', imported_setting: 'kept' },
+      }), protectedDestination.store);
+      assert.equal(await protectedDestination.store.getSetting('health_sync_enabled'), 'true');
+      assert.equal(await protectedDestination.store.getSetting('imported_setting'), 'kept');
+
+      await restoreBackup(JSON.stringify({
+        ...exported,
+        settings: { ...exported.settings, health_sync_enabled: 'true' },
+      }), emptyDestination.store);
+      assert.equal(await emptyDestination.store.getSetting('health_sync_enabled'), null);
+
+      const emptySnapshot = await emptyDestination.store.readSnapshot();
+      await emptyDestination.store.mergeSnapshot({
+        ...emptySnapshot,
+        settings: { ...emptySnapshot.settings, health_sync_enabled: 'true' },
+      });
+      assert.equal(await emptyDestination.store.getSetting('health_sync_enabled'), null);
+    } finally {
+      await sourceFixture.dispose();
+      await protectedDestination.dispose();
+      await emptyDestination.dispose();
+    }
+  });
+
   it('conflicting record ID aborts restore without modifying destination', async () => {
     const fixture = await createStoreFixture('native');
     await populateSourceStore(fixture.store);

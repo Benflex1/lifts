@@ -75,3 +75,20 @@ Fix-round verification:
 Fix-round commit:
 
 - `d67788a test: cover native health ledger schema constraints` — test-only fix.
+
+## Fix round: device-local health sync opt-in backup isolation
+
+Addressed the whole-branch review finding in the backup/restore slice. `health_sync_enabled` is now omitted by `buildBackupJson`, ignored while preparing restore settings, and ignored by both native and web snapshot merges. All other settings continue to export and import normally. Added integration coverage proving a local `true` value is absent from exports, an incoming legacy value cannot overwrite an existing local value, cannot create a value on an empty destination, and cannot be introduced through direct snapshot merge.
+
+Fix-round TDD and verification:
+
+- RED: `npx tsx --test tests/integration/backup-roundtrip.test.ts` — 29 passed, 1 failed; the new assertion observed `health_sync_enabled` in the exported settings.
+- GREEN: `npx tsx --test tests/integration/backup-roundtrip.test.ts` — 30 passed, 0 failed.
+- `npx tsx --test tests/integration/backup-roundtrip.test.ts tests/integration/health-ledger.test.ts tests/integration/native-store.test.ts tests/integration/web-store.test.ts` — 81 passed, 0 failed.
+- `npm test` — 349 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `git diff --check` — passed.
+
+Fix commit:
+
+- One fix commit was created for this backup/restore isolation round; its ID is included in the handoff.
