@@ -13,7 +13,7 @@ This document details the environment requirements, build procedures, and device
 
 ### Android Local Build Prerequisites
 - **JDK**: OpenJDK 17
-- **Android SDK**: Build-Tools 35.0.0, Platform SDK 35 (Android 15)
+- **Android SDK**: Build-Tools 36.0.0, Platform SDK 36
 - **Environment Variables**:
   - `ANDROID_HOME`: path to Android SDK directory
   - `JAVA_HOME`: path to JDK 17 installation

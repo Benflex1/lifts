@@ -96,7 +96,7 @@
 - [x] **CSV / Strong / Hevy / Lyfta Data Import**: Cross-platform importer supporting Hevy, Strong, Lyfta, FitNotes, and generic CSV exports with fuzzy exercise matching, synonym expansion, interactive exercise library assignment & custom creation picker, unit normalization, duplicate workout detection, and dry-run preview.
 
 ### Phase 4: Ecosystem & Rich Media [Planned]
-- [x] **Health Connect (Android) & Apple Health (iOS)**: Opt-in export of the completed workout session summary (strength-workout type and session timing/duration) after local completion. No health reads or set-level export; standard web/non-health native work remains local-first and custom native builds are required. Implementation is complete; iOS and Android custom-build device acceptance remains unverified.
+- [x] **Health Connect (Android) & Apple Health (iOS)**: Opt-in export of the completed workout session summary (workout title, strength-workout type, and session start/end timing and duration) after local completion. No health reads or set-level export; standard web/non-health native work remains local-first and custom native builds are required. Implementation is complete; iOS and Android custom-build device acceptance remains unverified.
 - [ ] **Rich Exercise Media & Visual Demonstration Guides**: Offline anatomical vector maps, step-by-step form cues, and looped vector/GIF animations.
 - [ ] **Wear OS / Apple Watch Companion**: Companion app for quick set logging and wrist rest countdowns.
 - [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities.
