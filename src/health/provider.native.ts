@@ -1,11 +1,7 @@
 import type { HealthProvider } from "./contract";
 
 function isNodeEnvironment(): boolean {
-  return (
-    typeof (globalThis as any).__DEV__ === "undefined" &&
-    typeof process !== "undefined" &&
-    Boolean(process.versions?.node)
-  );
+  return typeof process !== "undefined" && Boolean(process.versions?.node);
 }
 
 export async function getPlatformHealthProvider(): Promise<HealthProvider | null> {
