@@ -95,6 +95,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       persist: (value) => setSetting('health_sync_enabled', value ? 'true' : 'false'),
       setState: setHealthSyncEnabledState,
       notify,
+      retryPendingHealthSyncs,
+      logRetryFailure: (error) => {
+        console.error('Unable to retry pending health syncs', error);
+      },
     });
   }, [healthSyncEnabled, notify]);
 

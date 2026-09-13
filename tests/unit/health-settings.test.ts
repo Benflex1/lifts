@@ -37,6 +37,15 @@ function dependencies(
   };
 }
 
+type RetryableDependencies = HealthSyncSettingDependencies & {
+  retryPendingHealthSyncs: () => Promise<unknown>;
+  logRetryFailure: (error: unknown) => void;
+};
+
+function retryableDependencies(): RetryableDependencies {
+  return dependencies() as RetryableDependencies;
+}
+
 describe('authorizeHealthSync', () => {
   it('rejects a missing provider with a user-readable unavailable error', async () => {
     await assert.rejects(
@@ -118,6 +127,36 @@ describe('health sync setting transitions', () => {
     assert.deepEqual(deps.persisted, [true]);
   });
 
+  it('starts retrying after persistence without blocking a successful enable', async () => {
+    const deps = retryableDependencies();
+    const events: string[] = [];
+    let releaseRetry: (() => void) | undefined;
+    deps.persist = async () => { events.push('persist'); };
+    deps.retryPendingHealthSyncs = () => {
+      events.push('retry');
+      return new Promise<void>((resolve) => { releaseRetry = resolve; });
+    };
+
+    const result = await updateHealthSyncSetting(true, false, deps);
+
+    assert.equal(result, true);
+    assert.deepEqual(events, ['persist', 'retry']);
+    releaseRetry?.();
+  });
+
+  it('logs retry failures without changing the successful enable result', async () => {
+    const deps = retryableDependencies();
+    const logged: string[] = [];
+    deps.retryPendingHealthSyncs = async () => { throw new Error('retry failed'); };
+    deps.logRetryFailure = (error) => { logged.push((error as Error).message); };
+
+    const result = await updateHealthSyncSetting(true, false, deps);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.equal(result, true);
+    assert.deepEqual(logged, ['retry failed']);
+  });
+
   it('authorizes before persisting an enabled setting', async () => {
     const events: string[] = [];
     const deps = dependencies({
@@ -168,7 +207,10 @@ describe('health sync setting transitions', () => {
   });
 
   it('does nothing when the platform has no provider', async () => {
-    const deps = dependencies({ loadProvider: async () => null });
+    const deps = retryableDependencies();
+    let retries = 0;
+    deps.loadProvider = async () => null;
+    deps.retryPendingHealthSyncs = async () => { retries += 1; };
 
     const result = await updateHealthSyncSetting(true, false, deps);
 
@@ -176,6 +218,7 @@ describe('health sync setting transitions', () => {
     assert.deepEqual(deps.states, []);
     assert.deepEqual(deps.persisted, []);
     assert.deepEqual(deps.notifications, []);
+    assert.equal(retries, 0);
   });
 
   it('rolls back and notifies when loading the platform provider fails', async () => {

@@ -30,6 +30,8 @@ export interface HealthSyncSettingDependencies {
   persist: (enabled: boolean) => Promise<void>;
   setState: (enabled: boolean) => void;
   notify: (options: { title: string; message: string }) => Promise<void> | void;
+  retryPendingHealthSyncs?: () => Promise<unknown>;
+  logRetryFailure?: (error: unknown) => void;
 }
 
 export async function updateHealthSyncSetting(
@@ -47,6 +49,23 @@ export async function updateHealthSyncSetting(
       await authorizeHealthSync(provider);
       dependencies.setState(true);
       await dependencies.persist(true);
+      if (dependencies.retryPendingHealthSyncs) {
+        try {
+          void dependencies.retryPendingHealthSyncs().catch((error) => {
+            if (dependencies.logRetryFailure) {
+              dependencies.logRetryFailure(error);
+            } else {
+              console.error('Unable to retry pending health syncs', error);
+            }
+          });
+        } catch (error) {
+          if (dependencies.logRetryFailure) {
+            dependencies.logRetryFailure(error);
+          } else {
+            console.error('Unable to retry pending health syncs', error);
+          }
+        }
+      }
       return true;
     } catch (error) {
       dependencies.setState(current);
