@@ -60,3 +60,18 @@ The brief specifies only a composite IndexedDB key and a status index, so web de
 
 - `c895dd0 feat: persist health sync ledger`
 
+## Fix round: native schema regression coverage
+
+Addressed the medium test-quality finding without production changes. The native migration test now verifies `PRAGMA foreign_keys`, the named status index via `PRAGMA index_list`, the composite `workouts(id)` foreign key and `ON DELETE CASCADE` via `PRAGMA foreign_key_list`, both provider/status CHECK clauses from the table definition, and rejection of invalid provider/status inserts.
+
+Fix-round verification:
+
+- `npx tsx --test tests/integration/health-ledger.test.ts` — 5 passed, 0 failed.
+- `npx tsx --test tests/integration/health-ledger.test.ts tests/integration/native-store.test.ts tests/integration/web-store.test.ts tests/integration/backup-roundtrip.test.ts` — 80 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `npm test` — 308 passed, 0 failed.
+- `git diff --check` — passed.
+
+Fix-round commit:
+
+- `d67788a test: cover native health ledger schema constraints` — test-only fix.
