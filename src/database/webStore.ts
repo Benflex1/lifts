@@ -1,5 +1,6 @@
 import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
+import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
 import { DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
@@ -53,6 +54,12 @@ function compareBinaryStrings(a: string, b: string): number {
     if (difference !== 0) return difference;
   }
   return aCodePoints.length - bCodePoints.length;
+}
+
+function compareHealthSyncRecords(a: HealthSyncRecord, b: HealthSyncRecord): number {
+  return compareBinaryStrings(a.attemptedAt, b.attemptedAt)
+    || compareBinaryStrings(a.workoutId, b.workoutId)
+    || compareBinaryStrings(a.provider, b.provider);
 }
 
 function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
@@ -168,7 +175,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (db) return db;
 
     return new Promise((resolve, reject) => {
-      const req = idb.open(name, 2);
+      const req = idb.open(name, 3);
 
       req.onupgradeneeded = () => {
         const d = req.result;
@@ -198,6 +205,12 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
           const scopes = d.createObjectStore('exercise_gym_scopes', { keyPath: 'exerciseId' });
           scopes.createIndex('scopeType', 'scopeType', { unique: false });
           scopes.createIndex('linkedGymIds', 'linkedGymIds', { unique: false, multiEntry: true });
+        }
+        if (!d.objectStoreNames.contains('health_sync_records')) {
+          const health = d.createObjectStore('health_sync_records', {
+            keyPath: ['workoutId', 'provider'],
+          });
+          health.createIndex('status', 'status', { unique: false });
         }
         const gyms = req.transaction!.objectStore('gyms');
         gyms.put(DEFAULT_GYM);
@@ -901,10 +914,54 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('workouts', 'readwrite');
+      const tx = database.transaction(['workouts', 'health_sync_records'], 'readwrite');
       tx.objectStore('workouts').delete(workoutId);
+      const healthStore = tx.objectStore('health_sync_records');
+      const healthRows = healthStore.getAll();
+      healthRows.onsuccess = () => {
+        for (const row of healthRows.result as HealthSyncRecord[]) {
+          if (row.workoutId === workoutId) healthStore.delete([row.workoutId, row.provider]);
+        }
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function getHealthSyncRecord(workoutId: string, provider: HealthProviderId): Promise<HealthSyncRecord | null> {
+    const database = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction('health_sync_records', 'readonly');
+      const request = tx.objectStore('health_sync_records').get([workoutId, provider]);
+      request.onsuccess = () => resolve((request.result as HealthSyncRecord) || null);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function getHealthSyncRecords(status?: HealthSyncStatus): Promise<HealthSyncRecord[]> {
+    const database = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction('health_sync_records', 'readonly');
+      const request = tx.objectStore('health_sync_records').getAll();
+      request.onsuccess = () => {
+        const rows = (request.result as HealthSyncRecord[])
+          .filter(record => status === undefined || record.status === status)
+          .sort(compareHealthSyncRecords);
+        resolve(rows);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async function saveHealthSyncRecord(record: HealthSyncRecord): Promise<void> {
+    const database = await openDb();
+    await verifyAndRenewLease(database);
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction('health_sync_records', 'readwrite');
+      tx.objectStore('health_sync_records').put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('Health sync record save aborted'));
     });
   }
 
@@ -1202,6 +1259,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const sStore = tx.objectStore('settings');
       for (const [k, v] of Object.entries(snapshot.settings)) {
+        if (k === 'health_sync_enabled') continue;
         const getReq = sStore.get(k);
         getReq.onsuccess = () => {
           if (!getReq.result) {
@@ -1272,6 +1330,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     getWorkoutHistory,
     getWorkoutDetail,
     deleteWorkout,
+    getHealthSyncRecord,
+    getHealthSyncRecords,
+    saveHealthSyncRecord,
     getPreviousSetsForExercise,
     getCompletedWorkoutsForExercise,
     getCompletedWorkoutsForExercises,

@@ -11,6 +11,7 @@ import {
   WorkoutSet,
 } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
+import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
 import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
@@ -73,6 +74,18 @@ function mapGymRow(r: any): Gym {
 function mapScopeRow(r: any): ExerciseGymScope {
   const linkedGymIds = r.linked_gym_ids ? JSON.parse(r.linked_gym_ids) : undefined;
   return { exerciseId: r.exercise_id, scopeType: r.scope_type, ...(linkedGymIds ? { linkedGymIds } : {}) };
+}
+
+function mapHealthSyncRow(r: any): HealthSyncRecord {
+  return {
+    workoutId: r.workout_id,
+    provider: r.provider,
+    payloadFingerprint: r.payload_fingerprint,
+    status: r.status,
+    attemptedAt: r.attempted_at,
+    ...(r.synced_at === null || r.synced_at === undefined ? {} : { syncedAt: r.synced_at }),
+    ...(r.last_error === null || r.last_error === undefined ? {} : { lastError: r.last_error }),
+  };
 }
 
 function normalizeDraftPayload(data: string): WorkoutDraft | null {
@@ -857,6 +870,44 @@ export function createNativeStore(driver: SqliteDriver): Store {
     });
   }
 
+  async function getHealthSyncRecord(workoutId: string, provider: HealthProviderId): Promise<HealthSyncRecord | null> {
+    const row = await driver.getFirstAsync<any>(
+      'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records WHERE workout_id = ? AND provider = ?',
+      workoutId,
+      provider,
+    );
+    return row ? mapHealthSyncRow(row) : null;
+  }
+
+  async function getHealthSyncRecords(status?: HealthSyncStatus): Promise<HealthSyncRecord[]> {
+    const rows = status === undefined
+      ? await driver.getAllAsync<any>(
+        'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records ORDER BY attempted_at ASC, workout_id ASC, provider ASC'
+      )
+      : await driver.getAllAsync<any>(
+        'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records WHERE status = ? ORDER BY attempted_at ASC, workout_id ASC, provider ASC',
+        status,
+      );
+    return rows.map(mapHealthSyncRow);
+  }
+
+  async function saveHealthSyncRecord(record: HealthSyncRecord): Promise<void> {
+    return writeQueue(async () => {
+      await driver.runAsync(
+        `INSERT OR REPLACE INTO health_sync_records
+         (workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        record.workoutId,
+        record.provider,
+        record.payloadFingerprint,
+        record.status,
+        record.attemptedAt,
+        record.syncedAt ?? null,
+        record.lastError ?? null,
+      );
+    });
+  }
+
   async function loadCompletedExerciseOccurrences(
     exerciseId: string,
     occurrenceIndex: number,
@@ -1263,6 +1314,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
         // Merge settings (only missing keys)
         for (const [k, v] of Object.entries(snapshot.settings)) {
+          if (k === 'health_sync_enabled') continue;
           await driver.runAsync(
             'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
             k,
@@ -1294,6 +1346,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
     getWorkoutHistory,
     getWorkoutDetail,
     deleteWorkout,
+    getHealthSyncRecord,
+    getHealthSyncRecords,
+    saveHealthSyncRecord,
     getGyms,
     getDefaultGym,
     createGym,

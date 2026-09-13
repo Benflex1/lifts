@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Switch,
+  Platform,
 } from 'react-native';
 import { X, Check } from 'lucide-react-native';
 import { useSettings } from '../context/SettingsContext';
@@ -20,7 +21,14 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const { unit, setUnit, gymTrackingEnabled, setGymTrackingEnabled } = useSettings();
+  const {
+    unit,
+    setUnit,
+    gymTrackingEnabled,
+    setGymTrackingEnabled,
+    healthSyncEnabled,
+    setHealthSyncEnabled,
+  } = useSettings();
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
   const [showGymProfiles, setShowGymProfiles] = useState(false);
@@ -44,6 +52,18 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setIsSaving(true);
     try {
       await setGymTrackingEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleHealthSyncChange = async (enabled: boolean) => {
+    if (isSaving || enabled === healthSyncEnabled) return;
+    setIsSaving(true);
+    try {
+      await setHealthSyncEnabled(enabled);
     } catch {
       // Error handled by SettingsContext notification.
     } finally {
@@ -109,6 +129,29 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               <Text style={styles.manageButtonText}>Manage Gyms</Text>
             </TouchableOpacity>
           </View>
+
+          {Platform.OS !== 'web' && (
+            <View style={styles.section}>
+              <View style={styles.settingHeaderRow}>
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.sectionTitle}>Sync completed workouts</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Lifts writes workout sessions to Apple Health or Health Connect and does not read health data.
+                  </Text>
+                </View>
+                <Switch
+                  value={healthSyncEnabled}
+                  onValueChange={handleHealthSyncChange}
+                  disabled={isSaving}
+                  trackColor={{ false: '#374151', true: '#2563EB' }}
+                  thumbColor={healthSyncEnabled ? '#FFFFFF' : '#9CA3AF'}
+                  accessibilityLabel="Sync completed workouts"
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: healthSyncEnabled, disabled: isSaving }}
+                />
+              </View>
+            </View>
+          )}
 
           {/* Unit Setting Section */}
           <View style={styles.section}>

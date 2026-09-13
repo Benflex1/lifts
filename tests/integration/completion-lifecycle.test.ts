@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { createStoreFixture } from '../helpers/storeFixture';
+import { enqueueCompletedWorkoutSync } from '../../src/health';
 import { createSessionController } from '../../src/workout/session';
 import { Workout } from '../../src/types';
 
@@ -57,6 +58,11 @@ describe('Completion & Dialog Lifecycle', () => {
       // Finish workout
       const completed = await ctrl.finish();
       assert.ok(completed, 'Completed workout should be returned');
+      const syncCalls: Workout[] = [];
+      enqueueCompletedWorkoutSync(completed, true, async (workout) => {
+        syncCalls.push(workout);
+      });
+      assert.deepEqual(syncCalls, [completed]);
       assert.equal(ctrl.getState().phase, 'idle');
       assert.equal(ctrl.getState().workout, null);
 

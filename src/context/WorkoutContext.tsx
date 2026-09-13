@@ -28,6 +28,7 @@ import {
 } from '../workout/gym-session';
 import { resolveActiveGymAfterRefresh } from '../workout/gym-profile';
 import { useDialog } from './DialogContext';
+import { useSettings } from './SettingsContext';
 import {
   PAUSED_WORKOUT_CONFIRM_LABEL,
   PAUSED_WORKOUT_DIALOG_MESSAGE,
@@ -43,6 +44,7 @@ import {
   unlinkExerciseFromGroup,
   setSupersetGroupInList,
 } from '../workout/supersets';
+import { enqueueCompletedWorkoutSync } from '../health';
 
 interface RestTimerState {
   isActive: boolean;
@@ -108,6 +110,20 @@ interface WorkoutContextType {
   collapseAllExercises: () => void;
 }
 
+type EnqueueWorkoutHealthSync = (workout: Workout, enabled: boolean) => void;
+
+// Test seam for exercising completion ordering; production completion uses the context-aware
+// finishWorkout implementation below, including the settings-loading buffer.
+export async function finishWorkoutWithHealthSync(
+  finish: () => Promise<Workout>,
+  healthSyncEnabled: boolean,
+  enqueueSync: EnqueueWorkoutHealthSync = enqueueCompletedWorkoutSync,
+): Promise<Workout> {
+  const completedWorkout = await finish();
+  enqueueSync(completedWorkout, healthSyncEnabled);
+  return completedWorkout;
+}
+
 const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
 
 export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -127,6 +143,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
   const { confirm, notify } = useDialog();
+  const { healthSyncEnabled, loading: settingsLoading } = useSettings();
 
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
@@ -140,6 +157,18 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const gymSwitchRequestRef = useRef(0);
   const lastBuzzedSecondRef = useRef<number | null>(null);
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
+  const pendingHealthSyncsRef = useRef<Workout[]>([]);
+  const healthSyncSettingsRef = useRef({ enabled: healthSyncEnabled, loading: settingsLoading });
+  healthSyncSettingsRef.current = { enabled: healthSyncEnabled, loading: settingsLoading };
+
+  useEffect(() => {
+    if (settingsLoading) return;
+
+    const pendingWorkouts = pendingHealthSyncsRef.current.splice(0);
+    for (const workout of pendingWorkouts) {
+      enqueueCompletedWorkoutSync(workout, healthSyncEnabled);
+    }
+  }, [healthSyncEnabled, settingsLoading]);
 
   const toggleExerciseExpanded = useCallback((activeExerciseId: string) => {
     setExpandedExercises((prev) => ({
@@ -642,6 +671,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     try {
       const finished = await ctrl.finish();
+      const settings = healthSyncSettingsRef.current;
+      if (settings.loading) {
+        pendingHealthSyncsRef.current.push(finished);
+      } else {
+        enqueueCompletedWorkoutSync(finished, settings.enabled);
+      }
       setIsMinimized(false);
       setExpandedExercises({});
       stopRestTimer();

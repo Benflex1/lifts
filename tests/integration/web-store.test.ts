@@ -170,7 +170,7 @@ describe('webStore persistence and lease handling', () => {
     const readOnly: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await readOnly.init();
     const raw = await new Promise<any>((resolve, reject) => {
-      const req = (indexedDB as any).open(dbName, 2);
+      const req = (indexedDB as any).open(dbName, 3);
       req.onsuccess = () => { const db = req.result; const tx = db.transaction('workouts', 'readonly'); const get = tx.objectStore('workouts').get('legacy-workout'); get.onsuccess = () => { db.close(); resolve(get.result); }; get.onerror = () => reject(get.error); };
       req.onerror = () => reject(req.error);
     });

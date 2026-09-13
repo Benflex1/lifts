@@ -8,6 +8,7 @@ import {
   Workout,
   WorkoutHistorySummary,
 } from '../types';
+import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
 
 export interface WorkoutDraft {
   version: 1;
@@ -56,6 +57,9 @@ export interface Store {
   getWorkoutHistory(): Promise<WorkoutHistorySummary[]>;
   getWorkoutDetail(workoutId: string): Promise<Workout | null>;
   deleteWorkout(workoutId: string): Promise<void>;
+  getHealthSyncRecord(workoutId: string, provider: HealthProviderId): Promise<HealthSyncRecord | null>;
+  getHealthSyncRecords(status?: HealthSyncStatus): Promise<HealthSyncRecord[]>;
+  saveHealthSyncRecord(record: HealthSyncRecord): Promise<void>;
   getGyms(): Promise<Gym[]>;
   getDefaultGym(): Promise<Gym>;
   createGym(name: string, color?: string): Promise<Gym>;

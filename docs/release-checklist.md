@@ -13,7 +13,7 @@ This document details the environment requirements, build procedures, and device
 
 ### Android Local Build Prerequisites
 - **JDK**: OpenJDK 17
-- **Android SDK**: Build-Tools 35.0.0, Platform SDK 35 (Android 15)
+- **Android SDK**: Build-Tools 36.0.0, Platform SDK 36
 - **Environment Variables**:
   - `ANDROID_HOME`: path to Android SDK directory
   - `JAVA_HOME`: path to JDK 17 installation
@@ -95,3 +95,17 @@ This document details the environment requirements, build procedures, and device
 | **REL-26** | Multi-Tracker CSV Import | Import workout exports from Lyfta, Hevy, Strong, FitNotes, and Generic CSV formats | Accurately identifies format, parses sets/reps/weights, matches exercises, detects duplicates, and assigns to selected gym | Verified |
 | **REL-27** | Android Backup & Sharing | Tap "Save Backup to Files" and "Share Backup" on Android 11+ | SAF operates with graceful share-sheet fallback; exports write to `cacheDirectory` without FileProvider crashes | Verified |
 
+## 6. Native Health Export Release Gate
+
+Automated acceptance covers the local-first and provider-boundary guarantees. The native provider rows remain unverified until device testing is performed with custom builds.
+
+| Check ID | Verification Area | Test Procedure | Expected Result | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **REL-28** | SQLite migration 6→7 | Run the automated native migration fixture from schema 6, including an injected migration-7 failure | Migration 7 creates the health ledger atomically, preserves the schema-6 database on failure, enforces provider/status constraints, and cascades rows when a workout is deleted | Verified |
+| **REL-29** | IndexedDB migration 2→3 | Open the automated IndexedDB version-2 fixture and inspect existing stores plus the new ledger store | Existing records and stores remain intact; `health_sync_records` has the composite workout/provider key and status index | Verified |
+| **REL-30** | Backup exclusion | Run the automated snapshot, backup, restore, and workout-delete fixture with local health ledger rows | Snapshots and backups contain no health ledger rows; restore does not overwrite destination ledger state; deleting a workout removes its local ledger rows | Verified |
+| **REL-31** | Web no-op | Run the automated web health boundary tests without loading native provider modules | Web health APIs return no provider/no-op results, and the health setting/export path does not require HealthKit or Health Connect | Verified |
+| **REL-32** | Local-completion isolation | Run the automated completion lifecycle tests with a provider failure and with local completion failure | A provider failure cannot reject or roll back a locally completed workout; export is enqueued only after local completion succeeds | Verified |
+| **REL-33** | Retry deduplication | Run the automated health-sync tests for pending/failed retries and concurrent calls for one workout/provider | Retries use the same payload fingerprint, while concurrent or already-synced calls produce at most one provider write | Verified |
+| **REL-34** | iOS HealthKit custom-build device acceptance | On a physical iOS device, build the app with the native HealthKit configuration, authorize write access, complete a workout, retry a failed write, and inspect Apple Health | Only the completed workout session summary is written; no health reads or set-level export occur; local completion remains successful on denial/unavailability/failure | **Unverified — deferred until user performs device testing** |
+| **REL-35** | Android Health Connect custom-build device acceptance | On a physical Android device, build the app with the native Health Connect configuration, authorize write access, complete a workout, retry a failed write, and inspect Health Connect | Only the completed workout session summary is written; no health reads or set-level export occur; local completion remains successful on denial/unavailability/failure | **User-verified on the current branch's standalone Android APK; device details not recorded** |

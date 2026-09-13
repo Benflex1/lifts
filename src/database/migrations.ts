@@ -338,4 +338,31 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       await driver.runAsync('INSERT INTO schema_migrations (version, applied_at) VALUES (6, ?)', new Date().toISOString());
     });
   }
+
+  // Migration 7: native health export sync ledger
+  if (!applied.has(7) && (options?.maxVersion === undefined || options.maxVersion >= 7)) {
+    await driver.withTransactionAsync(async () => {
+      await driver.execAsync(`
+        CREATE TABLE IF NOT EXISTS health_sync_records (
+          workout_id TEXT NOT NULL,
+          provider TEXT NOT NULL CHECK(provider IN ('healthkit', 'health-connect')),
+          payload_fingerprint TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('pending', 'synced', 'failed')),
+          attempted_at TEXT NOT NULL,
+          synced_at TEXT,
+          last_error TEXT,
+          PRIMARY KEY (workout_id, provider),
+          FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS health_sync_records_status_idx
+          ON health_sync_records(status);
+      `);
+
+      if (options?.failAtVersion === 7) throw new Error('Injected migration failure at version 7');
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (7, ?)',
+        new Date().toISOString()
+      );
+    });
+  }
 }

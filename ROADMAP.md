@@ -41,7 +41,7 @@
 | **Progress Charts & Graphs** | Premium feature | Weekly volume, muscle-frequency & 1RM trend curves | Partial (Volume/frequency delivered; 1RM trend curves in Phase 3) |
 | **CSV / Third-Party Import** | Freemium feature | Cross-platform importer for Hevy, Strong, Lyfta, FitNotes & CSV | Completed (Auto-format detection, unit normalization, exercise matching) |
 | **Exercise Demonstration Media**| Premium feature | Visual anatomical cues & looped animations | Planned Phase 4 (Text instructions bundled) |
-| **Apple Health / Health Connect** | Premium feature | Planned Phase 4 | Backlog |
+| **Apple Health / Health Connect** | Premium feature | Opt-in completed-workout session summary export; custom native build required | Current implementation (device acceptance pending) |
 
 ---
 
@@ -96,7 +96,7 @@
 - [x] **CSV / Strong / Hevy / Lyfta Data Import**: Cross-platform importer supporting Hevy, Strong, Lyfta, FitNotes, and generic CSV exports with fuzzy exercise matching, synonym expansion, interactive exercise library assignment & custom creation picker, unit normalization, duplicate workout detection, and dry-run preview.
 
 ### Phase 4: Ecosystem & Rich Media [Planned]
-- [ ] **Health Connect (Android) & Apple Health (iOS)**: Sync completed workouts and exercise duration with platform health services.
+- [x] **Health Connect (Android) & Apple Health (iOS)**: Opt-in export after local completion. The Health Connect payload includes the workout title, strength-workout type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. No health reads or set-level export; standard web/non-health native work remains local-first and custom native builds are required. Implementation is complete; iOS and Android custom-build device acceptance remains unverified.
 - [ ] **Rich Exercise Media & Visual Demonstration Guides**: Offline anatomical vector maps, step-by-step form cues, and looped vector/GIF animations.
 - [ ] **Wear OS / Apple Watch Companion**: Companion app for quick set logging and wrist rest countdowns.
 - [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities.

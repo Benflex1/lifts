@@ -1,14 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Platform } from 'react-native';
 import { WeightUnit } from '../utils/units';
 import { getSetting, setSetting } from '../database/db';
 import { useDialog } from './DialogContext';
-import { parseGymTrackingEnabled } from '../utils/settings';
+import { getPlatformHealthProvider, retryPendingHealthSyncs } from '../health';
+import { updateHealthSyncSetting } from '../health/settings';
+import { parseGymTrackingEnabled, parseHealthSyncEnabled } from '../utils/settings';
 
 export interface SettingsContextType {
   unit: WeightUnit;
   setUnit: (unit: WeightUnit) => Promise<void>;
   gymTrackingEnabled: boolean;
   setGymTrackingEnabled: (enabled: boolean) => Promise<void>;
+  healthSyncEnabled: boolean;
+  setHealthSyncEnabled: (enabled: boolean) => Promise<void>;
   loading: boolean;
 }
 
@@ -17,24 +22,35 @@ const SettingsContext = createContext<SettingsContextType>({
   setUnit: async () => {},
   gymTrackingEnabled: true,
   setGymTrackingEnabled: async () => {},
+  healthSyncEnabled: false,
+  setHealthSyncEnabled: async () => {},
   loading: true,
 });
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [unit, setUnitState] = useState<WeightUnit>('kg');
   const [gymTrackingEnabled, setGymTrackingEnabledState] = useState(true);
+  const [healthSyncEnabled, setHealthSyncEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const { notify } = useDialog();
 
   useEffect(() => {
     (async () => {
       try {
-        const [storedUnit, storedGymTracking] = await Promise.all([
+        const [storedUnit, storedGymTracking, storedHealthSync] = await Promise.all([
           getSetting('unit'),
           getSetting('gym_tracking_enabled'),
+          getSetting('health_sync_enabled'),
         ]);
         if (storedUnit === 'kg' || storedUnit === 'lb') setUnitState(storedUnit);
         setGymTrackingEnabledState(parseGymTrackingEnabled(storedGymTracking));
+        const persistedHealthSync = parseHealthSyncEnabled(storedHealthSync, Platform.OS);
+        setHealthSyncEnabledState(persistedHealthSync);
+        if (persistedHealthSync) {
+          void retryPendingHealthSyncs().catch((error) => {
+            console.error('Unable to retry pending health syncs', error);
+          });
+        }
       } catch (e) {
         // Fallback to default
       } finally {
@@ -73,9 +89,30 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [gymTrackingEnabled, notify]);
 
+  const setHealthSyncEnabled = useCallback(async (enabled: boolean) => {
+    await updateHealthSyncSetting(enabled, healthSyncEnabled, {
+      loadProvider: getPlatformHealthProvider,
+      persist: (value) => setSetting('health_sync_enabled', value ? 'true' : 'false'),
+      setState: setHealthSyncEnabledState,
+      notify,
+      retryPendingHealthSyncs,
+      logRetryFailure: (error) => {
+        console.error('Unable to retry pending health syncs', error);
+      },
+    });
+  }, [healthSyncEnabled, notify]);
+
   return (
     <SettingsContext.Provider
-      value={{ unit, setUnit, gymTrackingEnabled, setGymTrackingEnabled, loading }}
+      value={{
+        unit,
+        setUnit,
+        gymTrackingEnabled,
+        setGymTrackingEnabled,
+        healthSyncEnabled,
+        setHealthSyncEnabled,
+        loading,
+      }}
     >
       {children}
     </SettingsContext.Provider>
