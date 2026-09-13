@@ -124,8 +124,12 @@ export async function retryHealthSyncs(
     }
     if (!workout) continue;
 
-    const result = await syncWorkoutWithProvider(store, workout, provider, now);
-    if (result) results.push(result);
+    try {
+      const result = await syncWorkoutWithProvider(store, workout, provider, now);
+      if (result) results.push(result);
+    } catch (error) {
+      logError('Unable to retry health sync', error);
+    }
   }
 
   return results;

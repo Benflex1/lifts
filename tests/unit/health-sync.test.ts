@@ -13,6 +13,8 @@ import {
   retryPendingHealthSyncs,
   syncCompletedWorkout,
 } from '../../src/health';
+import { fingerprintHealthPayload } from '../../src/health/fingerprint';
+import { toHealthWorkoutPayload } from '../../src/health/mapper';
 import type { Workout } from '../../src/types';
 
 const workout = (overrides: Partial<Workout> = {}): Workout => ({
@@ -186,6 +188,38 @@ test('retries only rows belonging to the selected provider', async () => {
 
   assert.equal(payloads.length, 2);
   assert.equal(records.get('other:health-connect')?.status, 'failed');
+});
+
+test('continues retrying later rows when an eligible workout cannot be mapped', async () => {
+  const invalid = workout({
+    id: 'invalid',
+    endTime: '2026-09-13T07:00:00.000Z',
+  });
+  const valid = workout({ id: 'valid' });
+  const { store, records } = createFakeStore([invalid, valid]);
+  const { provider, payloads } = createProvider();
+
+  records.set('invalid:healthkit', {
+    workoutId: 'invalid',
+    provider: 'healthkit',
+    payloadFingerprint: 'invalid-fingerprint',
+    status: 'failed',
+    attemptedAt: now,
+  });
+  records.set('valid:healthkit', {
+    workoutId: 'valid',
+    provider: 'healthkit',
+    payloadFingerprint: fingerprintHealthPayload(toHealthWorkoutPayload(valid)),
+    status: 'failed',
+    attemptedAt: now,
+  });
+
+  const results = await retryHealthSyncs(store, provider, '2026-09-13T11:00:00.000Z');
+
+  assert.equal(payloads.length, 1);
+  assert.deepEqual(results.map((result) => [result.workoutId, result.status]), [['valid', 'synced']]);
+  assert.equal(records.get('invalid:healthkit')?.status, 'failed');
+  assert.equal(records.get('valid:healthkit')?.status, 'synced');
 });
 
 test('resolves when ledger persistence fails', async () => {
