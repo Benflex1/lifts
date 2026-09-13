@@ -92,3 +92,17 @@ Fix-round TDD and verification:
 Fix commit:
 
 - One fix commit was created for this backup/restore isolation round; its ID is included in the handoff.
+
+## Fix round: native and web device-local setting coverage
+
+Addressed the scoped review finding by running the existing `health_sync_enabled` backup/restore/merge regression against both native and web store fixtures. The web path now explicitly covers export omission, protection of an existing local value, rejection on an empty destination, ordinary setting import, and direct snapshot merge isolation. Fixture disposal remains per-platform and all existing behavior is preserved.
+
+Fix-round TDD and verification:
+
+- RED: with only the web merge guard temporarily removed via `apply_patch`, `npx tsx --test tests/integration/backup-roundtrip.test.ts` produced 29 passed, 1 failed; the web iteration restored `health_sync_enabled` unexpectedly.
+- GREEN: after restoring the guard, `npx tsx --test tests/integration/backup-roundtrip.test.ts` produced 30 passed, 0 failed.
+- `npx tsx --test tests/integration/backup-roundtrip.test.ts tests/integration/health-ledger.test.ts tests/integration/native-store.test.ts tests/integration/web-store.test.ts` — 81 passed, 0 failed.
+- `npx tsc --noEmit` — passed.
+- `git diff --check` — passed.
+
+The fix commit contains only test coverage and this report update; no production behavior was changed in the fix round.
