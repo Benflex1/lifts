@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { Workout } from '../../src/types';
+import { fingerprintHealthPayload } from '../../src/health/fingerprint';
 import { toHealthWorkoutPayload } from '../../src/health/mapper';
 
 const workoutFixture: Workout = {
@@ -85,4 +86,22 @@ test('does not include exercise or set data in the payload', () => {
   ]);
   assert.equal('exercises' in payload, false);
   assert.equal('gymId' in payload, false);
+});
+
+test('fingerprints the five health payload fields in fixed order', () => {
+  const payload = toHealthWorkoutPayload(workoutFixture);
+
+  assert.equal(
+    fingerprintHealthPayload(payload),
+    '["workout-1","Upper Body","2026-09-13T08:00:00.000Z","2026-09-13T09:15:00.000Z",4500]',
+  );
+});
+
+test('changes the fingerprint when a payload field changes', () => {
+  const payload = toHealthWorkoutPayload(workoutFixture);
+
+  assert.notEqual(
+    fingerprintHealthPayload(payload),
+    fingerprintHealthPayload({ ...payload, title: 'Lower Body' }),
+  );
 });
