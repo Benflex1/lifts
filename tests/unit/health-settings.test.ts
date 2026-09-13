@@ -1,0 +1,164 @@
+import { describe, it } from 'node:test';
+import * as assert from 'node:assert/strict';
+import type { HealthProvider } from '../../src/health/contract';
+import {
+  authorizeHealthSync,
+  updateHealthSyncSetting,
+  type HealthSyncSettingDependencies,
+} from '../../src/health/settings';
+
+function provider(overrides: Partial<HealthProvider> = {}): HealthProvider {
+  return {
+    id: 'healthkit',
+    isAvailable: async () => true,
+    requestWriteAuthorization: async () => 'granted',
+    writeStrengthWorkout: async () => undefined,
+    ...overrides,
+  };
+}
+
+function dependencies(
+  overrides: Partial<HealthSyncSettingDependencies> = {},
+): HealthSyncSettingDependencies & { states: boolean[]; persisted: boolean[]; notifications: string[] } {
+  const states: boolean[] = [];
+  const persisted: boolean[] = [];
+  const notifications: string[] = [];
+  return {
+    loadProvider: async () => provider(),
+    persist: async (enabled) => { persisted.push(enabled); },
+    setState: (enabled) => { states.push(enabled); },
+    notify: async ({ message }) => { notifications.push(message); },
+    states,
+    persisted,
+    notifications,
+    ...overrides,
+  };
+}
+
+describe('authorizeHealthSync', () => {
+  it('rejects a missing provider with a user-readable unavailable error', async () => {
+    await assert.rejects(
+      () => authorizeHealthSync(null),
+      (error: Error) => /health sync is unavailable/i.test(error.message),
+    );
+  });
+
+  it('rejects an unavailable provider without requesting authorization', async () => {
+    let requested = false;
+    await assert.rejects(
+      () => authorizeHealthSync(provider({
+        isAvailable: async () => false,
+        requestWriteAuthorization: async () => {
+          requested = true;
+          return 'granted';
+        },
+      })),
+      /health sync is unavailable/i,
+    );
+    assert.equal(requested, false);
+  });
+
+  it('rejects denied and unavailable write authorization', async () => {
+    await assert.rejects(
+      () => authorizeHealthSync(provider({ requestWriteAuthorization: async () => 'denied' })),
+      /health sync permission was denied or is unavailable/i,
+    );
+    await assert.rejects(
+      () => authorizeHealthSync(provider({ requestWriteAuthorization: async () => 'unavailable' })),
+      /health sync permission was denied or is unavailable/i,
+    );
+  });
+
+  it('resolves only after write authorization is granted', async () => {
+    await authorizeHealthSync(provider());
+  });
+});
+
+describe('health sync setting transitions', () => {
+  it('returns immediately without work when the requested value is unchanged', async () => {
+    let loaded = false;
+    const deps = dependencies({ loadProvider: async () => { loaded = true; return provider(); } });
+
+    const result = await updateHealthSyncSetting(false, false, deps);
+
+    assert.equal(result, false);
+    assert.equal(loaded, false);
+    assert.deepEqual(deps.persisted, []);
+  });
+
+  it('leaves the setting disabled and unpersisted when the provider is unavailable', async () => {
+    const deps = dependencies({ loadProvider: async () => provider({ isAvailable: async () => false }) });
+
+    await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /unavailable/i);
+
+    assert.deepEqual(deps.states, [false]);
+    assert.deepEqual(deps.persisted, []);
+    assert.equal(deps.notifications.length, 1);
+  });
+
+  it('leaves the setting disabled and unpersisted when authorization is denied', async () => {
+    const deps = dependencies({ loadProvider: async () => provider({ requestWriteAuthorization: async () => 'denied' }) });
+
+    await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /denied/i);
+
+    assert.deepEqual(deps.states, [false]);
+    assert.deepEqual(deps.persisted, []);
+    assert.equal(deps.notifications.length, 1);
+  });
+
+  it('persists and exposes the setting only after authorization is granted', async () => {
+    const deps = dependencies();
+
+    const result = await updateHealthSyncSetting(true, false, deps);
+
+    assert.equal(result, true);
+    assert.deepEqual(deps.states, [true]);
+    assert.deepEqual(deps.persisted, [true]);
+  });
+
+  it('disables without loading a provider or requesting authorization', async () => {
+    let loaded = false;
+    const deps = dependencies({ loadProvider: async () => { loaded = true; return provider(); } });
+
+    const result = await updateHealthSyncSetting(false, true, deps);
+
+    assert.equal(result, false);
+    assert.equal(loaded, false);
+    assert.deepEqual(deps.states, [false]);
+    assert.deepEqual(deps.persisted, [false]);
+  });
+
+  it('rolls back and notifies when persistence fails', async () => {
+    const deps = dependencies({
+      persist: async () => { throw new Error('storage failed'); },
+    });
+
+    await assert.rejects(() => updateHealthSyncSetting(false, true, deps), /storage failed/);
+
+    assert.deepEqual(deps.states, [false, true]);
+    assert.deepEqual(deps.notifications, ['storage failed']);
+  });
+
+  it('does nothing when the platform has no provider', async () => {
+    const deps = dependencies({ loadProvider: async () => null });
+
+    const result = await updateHealthSyncSetting(true, false, deps);
+
+    assert.equal(result, false);
+    assert.deepEqual(deps.states, []);
+    assert.deepEqual(deps.persisted, []);
+    assert.deepEqual(deps.notifications, []);
+  });
+
+  it('rolls back and notifies when loading the platform provider fails', async () => {
+    const deps = dependencies({
+      loadProvider: async () => { throw new Error('provider load failed'); },
+    });
+
+    await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /provider load failed/);
+
+    assert.deepEqual(deps.states, [false]);
+    assert.deepEqual(deps.persisted, []);
+    assert.deepEqual(deps.notifications, ['provider load failed']);
+  });
+});
