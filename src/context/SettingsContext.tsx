@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Platform } from 'react-native';
 import { WeightUnit } from '../utils/units';
 import { getSetting, setSetting } from '../database/db';
 import { useDialog } from './DialogContext';
@@ -43,7 +44,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ]);
         if (storedUnit === 'kg' || storedUnit === 'lb') setUnitState(storedUnit);
         setGymTrackingEnabledState(parseGymTrackingEnabled(storedGymTracking));
-        const persistedHealthSync = parseHealthSyncEnabled(storedHealthSync);
+        const persistedHealthSync = parseHealthSyncEnabled(storedHealthSync, Platform.OS);
         setHealthSyncEnabledState(persistedHealthSync);
         if (persistedHealthSync) {
           void retryPendingHealthSyncs().catch((error) => {

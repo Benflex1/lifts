@@ -6,6 +6,8 @@ import {
   updateHealthSyncSetting,
   type HealthSyncSettingDependencies,
 } from '../../src/health/settings';
+import * as webHealth from '../../src/health/index.web';
+import type { Workout } from '../../src/types';
 
 function provider(overrides: Partial<HealthProvider> = {}): HealthProvider {
   return {
@@ -116,6 +118,21 @@ describe('health sync setting transitions', () => {
     assert.deepEqual(deps.persisted, [true]);
   });
 
+  it('authorizes before persisting an enabled setting', async () => {
+    const events: string[] = [];
+    const deps = dependencies({
+      loadProvider: async () => provider({
+        isAvailable: async () => { events.push('availability'); return true; },
+        requestWriteAuthorization: async () => { events.push('authorization'); return 'granted'; },
+      }),
+      persist: async () => { events.push('persist'); },
+    });
+
+    await updateHealthSyncSetting(true, false, deps);
+
+    assert.deepEqual(events, ['availability', 'authorization', 'persist']);
+  });
+
   it('disables without loading a provider or requesting authorization', async () => {
     let loaded = false;
     const deps = dependencies({ loadProvider: async () => { loaded = true; return provider(); } });
@@ -139,6 +156,17 @@ describe('health sync setting transitions', () => {
     assert.deepEqual(deps.notifications, ['storage failed']);
   });
 
+  it('rolls back and notifies when enabling cannot be persisted', async () => {
+    const deps = dependencies({
+      persist: async () => { throw new Error('enable storage failed'); },
+    });
+
+    await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /enable storage failed/);
+
+    assert.deepEqual(deps.states, [true, false]);
+    assert.deepEqual(deps.notifications, ['enable storage failed']);
+  });
+
   it('does nothing when the platform has no provider', async () => {
     const deps = dependencies({ loadProvider: async () => null });
 
@@ -160,5 +188,17 @@ describe('health sync setting transitions', () => {
     assert.deepEqual(deps.states, [false]);
     assert.deepEqual(deps.persisted, []);
     assert.deepEqual(deps.notifications, ['provider load failed']);
+  });
+});
+
+describe('web health API boundary', () => {
+  it('exposes no-op sync APIs without requiring native modules', async () => {
+    const workout = {} as Workout;
+
+    assert.equal(typeof webHealth.syncCompletedWorkout, 'function');
+    assert.equal(typeof webHealth.enqueueCompletedWorkoutSync, 'function');
+    assert.equal(await webHealth.syncCompletedWorkout(workout), null);
+    assert.deepEqual(await webHealth.retryPendingHealthSyncs(), []);
+    assert.equal(webHealth.enqueueCompletedWorkoutSync(workout, true), undefined);
   });
 });

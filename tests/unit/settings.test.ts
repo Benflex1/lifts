@@ -17,6 +17,7 @@ describe('health sync setting', () => {
     assert.equal(parseHealthSyncEnabled(''), false);
     assert.equal(parseHealthSyncEnabled('false'), false);
     assert.equal(parseHealthSyncEnabled('true'), true);
+    assert.equal(parseHealthSyncEnabled('true', 'web'), false);
     assert.equal(parseHealthSyncEnabled('TRUE'), false);
     assert.equal(parseHealthSyncEnabled('unexpected'), false);
   });

@@ -27,7 +27,12 @@ async function getHealthStore(): Promise<Store> {
 }
 
 async function getAvailableProvider(): Promise<HealthProvider | null> {
-  const provider = await getPlatformHealthProvider();
+  let provider: HealthProvider | null;
+  try {
+    provider = await getPlatformHealthProvider();
+  } catch {
+    return null;
+  }
   if (!provider) return null;
 
   try {

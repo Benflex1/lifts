@@ -13,20 +13,16 @@ export async function getPlatformHealthProvider(): Promise<HealthProvider | null
     return null;
   }
 
-  try {
-    const { Platform } = await import("react-native");
+  const { Platform } = await import("react-native");
 
-    if (Platform.OS === "ios") {
-      const { createHealthKitProvider } = await import("./healthkit");
-      return createHealthKitProvider();
-    }
+  if (Platform.OS === "ios") {
+    const { createHealthKitProvider } = await import("./healthkit");
+    return createHealthKitProvider();
+  }
 
-    if (Platform.OS === "android") {
-      const { createHealthConnectProvider } = await import("./health-connect");
-      return createHealthConnectProvider();
-    }
-  } catch {
-    return null;
+  if (Platform.OS === "android") {
+    const { createHealthConnectProvider } = await import("./health-connect");
+    return createHealthConnectProvider();
   }
 
   return null;
