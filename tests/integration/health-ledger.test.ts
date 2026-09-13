@@ -92,6 +92,47 @@ describe('health sync ledger persistence', () => {
       assert.ok(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 7'));
       const columns = await driver.getAllAsync<{ name: string; pk: number }>('PRAGMA table_info(health_sync_records)');
       assert.deepEqual(columns.filter(column => column.pk > 0).map(column => column.name), ['workout_id', 'provider']);
+      assert.equal((await driver.getFirstAsync<{ foreign_keys: number }>('PRAGMA foreign_keys'))?.foreign_keys, 1);
+
+      const indexes = await driver.getAllAsync<{ name: string }>('PRAGMA index_list(health_sync_records)');
+      assert.ok(indexes.some(index => index.name === 'health_sync_records_status_idx'));
+
+      const foreignKeys = await driver.getAllAsync<{
+        id: number;
+        seq: number;
+        table: string;
+        from: string;
+        to: string;
+        on_update: string;
+        on_delete: string;
+        match: string;
+      }>('PRAGMA foreign_key_list(health_sync_records)');
+      assert.deepEqual(foreignKeys.map(({ table, from, to, on_delete }) => ({ table, from, to, on_delete })), [{
+        table: 'workouts',
+        from: 'workout_id',
+        to: 'id',
+        on_delete: 'CASCADE',
+      }]);
+
+      const schema = await driver.getFirstAsync<{ sql: string }>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'"
+      );
+      const normalizedSchema = schema!.sql.replace(/\s+/g, ' ');
+      assert.match(normalizedSchema, /CHECK\s*\(provider IN \('healthkit', 'health-connect'\)\)/);
+      assert.match(normalizedSchema, /CHECK\s*\(status IN \('pending', 'synced', 'failed'\)\)/);
+
+      await driver.runAsync(
+        'INSERT INTO workouts (id, name, start_time, in_progress) VALUES (?, ?, ?, 0)',
+        'schema-workout', 'Schema workout', '2026-09-10T07:00:00.000Z'
+      );
+      const insertLedger = (provider: string, status: string) => driver.runAsync(
+        `INSERT INTO health_sync_records
+         (workout_id, provider, payload_fingerprint, status, attempted_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        'schema-workout', provider, 'schema-fingerprint', status, '2026-09-10T08:00:00.000Z'
+      );
+      await assert.rejects(() => insertLedger('invalid-provider', 'pending'), /CHECK constraint failed/);
+      await assert.rejects(() => insertLedger('healthkit', 'invalid-status'), /CHECK constraint failed/);
     } finally {
       driver.close();
     }
