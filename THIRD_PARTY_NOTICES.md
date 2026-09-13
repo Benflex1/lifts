@@ -11,6 +11,22 @@ Lifts incorporates open-source software packages and libraries. This document li
 - **License**: MIT License
 - **URL**: https://github.com/expo/expo
 
+### HealthKit (`@kingstinct/react-native-healthkit` 15.1.0)
+- **License**: MIT License ([authoritative license](https://github.com/kingstinct/react-native-healthkit/blob/main/LICENSE))
+- **URL**: https://github.com/kingstinct/react-native-healthkit
+
+### Nitro Modules (`react-native-nitro-modules` 0.37.1)
+- **License**: MIT License ([authoritative license](https://github.com/mrousavy/nitro/blob/main/LICENSE))
+- **URL**: https://github.com/mrousavy/nitro
+
+### Health Connect (`react-native-health-connect` 4.1.3)
+- **License**: MIT License ([authoritative license](https://github.com/matinzd/react-native-health-connect/blob/main/LICENSE))
+- **URL**: https://github.com/matinzd/react-native-health-connect
+
+### Expo Build Properties (`expo-build-properties` 57.0.17)
+- **License**: MIT License ([authoritative license](https://github.com/expo/expo/blob/main/LICENSE))
+- **URL**: https://github.com/expo/expo/tree/main/packages/expo-build-properties
+
 ### React & React Native (`react`, `react-native`)
 - **Copyright**: Meta Platforms, Inc. and affiliates
 - **License**: MIT License

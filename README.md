@@ -60,6 +60,7 @@ Most modern fitness apps start out great, only to lock your workouts behind expe
 - **Expandable Workout Log**: Drill down into every past workout to inspect completed weights, reps, and RPE pills.
 - **Perform Again**: 1-tap restart of past completed workouts from History, reconstructing all exercises, target sets, reps, and historical weights as suggestions.
 - **Atomic Backup & Restore (v3 export, v2 import)**: New exports include gym profiles and exercise scopes. Existing Schema v2 backups remain importable, and restore merges records safely with collision prevention.
+- **Opt-In Health Export**: After local completion, export the completed workout session summary to Apple Health/HealthKit on iOS or Health Connect on Android. The scope is intentionally limited to the strength-workout session type and session timing/duration: Lifts does not read health data or export sets. The device-local `health_sync_enabled` setting and sync ledger are excluded from backups.
 
 ---
 
@@ -77,7 +78,7 @@ Lifts employs a dual-engine local storage architecture:
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (v18.0.0 or higher)
 - [npm](https://www.npmjs.com/) (v9.0.0 or higher)
-- [Expo Go](https://expo.dev/client) app installed on your iOS or Android device (for development testing)
+- [Expo Go](https://expo.dev/client) app installed on your iOS or Android device (for standard web and non-health native development testing; it does not provide the HealthKit or Health Connect native modules)
 
 ### Installation & Local Run
 
@@ -102,6 +103,12 @@ Lifts employs a dual-engine local storage architecture:
    npm run tunnel
    ```
    Scan the generated QR code using the **Camera app** (iOS) or the **Expo Go app** (Android).
+
+The standard Expo Go workflow is for web and non-health native work, which remains local-first. HealthKit/Health Connect export is opt-in and requires a custom development/native build with the repository's Expo config plugins; it is not available through Expo Go. On native platforms, generate the configured project and run a custom build with `npx expo prebuild --platform ios` or `npx expo prebuild --platform android`, followed by the platform's native development/build command.
+
+### Opt-In Health Export Scope
+
+Health export is disabled by default and hidden/no-op on Web. When enabled in a custom native build, Lifts exports only a completed strength-workout session summary after the local workout transaction succeeds. It does not read HealthKit or Health Connect data and does not export exercises, sets, weights, volume, calories, biometrics, routes, or notes. Provider denial, unavailability, or write failure does not undo local completion; retry metadata stays on the device and outside backup/restore.
 
 ---
 
