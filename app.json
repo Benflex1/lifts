@@ -33,7 +33,9 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthUpdateUsageDescription": "Lifts saves your completed workout sessions to Apple Health."
+          "NSHealthShareUsageDescription": "Lifts does not read your health data.",
+          "NSHealthUpdateUsageDescription": "Lifts saves your completed workout sessions to Apple Health.",
+          "background": false
         }
       ],
       "react-native-health-connect",
