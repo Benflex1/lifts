@@ -80,6 +80,36 @@ describe('authorizeHealthSync', () => {
     );
   });
 
+  it('offers an Open Settings action for denied authorization when supported', async () => {
+    let notification: { action?: { label: string; onPress: () => void | Promise<void> } } | undefined;
+    let opened = 0;
+    const deps = dependencies({
+      loadProvider: async () => provider({
+        requestWriteAuthorization: async () => 'denied',
+        openPermissionSettings: async () => { opened += 1; },
+      }),
+      notify: async (options) => { notification = options; },
+    });
+
+    await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /denied/i);
+
+    assert.equal(notification?.action?.label, 'Open Settings');
+    await notification?.action?.onPress?.();
+    assert.equal(opened, 1);
+  });
+
+  it('does not offer an Open Settings action when the provider cannot open settings', async () => {
+    let notification: { action?: unknown } | undefined;
+    const deps = dependencies({
+      loadProvider: async () => provider({ requestWriteAuthorization: async () => 'unavailable' }),
+      notify: async (options) => { notification = options; },
+    });
+
+    await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /unavailable/i);
+
+    assert.equal(notification?.action, undefined);
+  });
+
   it('resolves only after write authorization is granted', async () => {
     await authorizeHealthSync(provider());
   });

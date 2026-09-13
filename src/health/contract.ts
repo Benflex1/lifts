@@ -15,6 +15,7 @@ export interface HealthProvider {
   isAvailable(): Promise<boolean>;
   requestWriteAuthorization(): Promise<'granted' | 'denied' | 'unavailable'>;
   writeStrengthWorkout(payload: HealthWorkoutPayload): Promise<void>;
+  openPermissionSettings?: () => void | Promise<void>;
 }
 
 export interface HealthSyncRecord {

@@ -20,6 +20,10 @@ export interface NotifyOptions {
   title: string;
   message: string;
   buttonLabel?: string;
+  action?: {
+    label: string;
+    onPress: () => void | Promise<void>;
+  };
 }
 
 export interface DialogContextValue {
@@ -46,6 +50,7 @@ interface DialogState {
   confirmLabel: string;
   cancelLabel: string;
   destructive: boolean;
+  action?: NotifyOptions['action'];
   resolve: (value: any) => void;
 }
 
@@ -75,6 +80,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         confirmLabel: options.buttonLabel || 'OK',
         cancelLabel: '',
         destructive: false,
+        action: options.action,
         resolve,
       });
     });
@@ -84,6 +90,17 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     if (currentDialog) {
       currentDialog.resolve(result);
       setCurrentDialog(null);
+    }
+  };
+
+  const handleAction = async () => {
+    if (!currentDialog?.action) return;
+    try {
+      await currentDialog.action.onPress();
+    } catch (error) {
+      console.error('Unable to open health permission settings', error);
+    } finally {
+      handleClose(true);
     }
   };
 
@@ -107,6 +124,17 @@ export function DialogProvider({ children }: { children: ReactNode }) {
               <Text style={styles.title}>{currentDialog.title}</Text>
               <Text style={styles.message}>{currentDialog.message}</Text>
               <View style={styles.buttonRow}>
+                {currentDialog.action && (
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={handleAction}
+                    accessibilityRole="button"
+                    accessibilityLabel={currentDialog.action.label}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cancelText}>{currentDialog.action.label}</Text>
+                  </TouchableOpacity>
+                )}
                 {currentDialog.type === 'confirm' && (
                   <TouchableOpacity
                     style={styles.cancelBtn}

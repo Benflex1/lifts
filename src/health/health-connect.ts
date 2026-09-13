@@ -4,6 +4,7 @@ import {
   getSdkStatus,
   initialize,
   insertRecords,
+  openHealthConnectSettings,
   requestPermission,
 } from "react-native-health-connect";
 
@@ -75,6 +76,10 @@ export function createHealthConnectProvider(): HealthProvider {
       await insertRecords([
         toHealthConnectExerciseSession(payload, ExerciseType.STRENGTH_TRAINING),
       ]);
+    },
+
+    openPermissionSettings(): void {
+      openHealthConnectSettings();
     },
   };
 }

@@ -3,6 +3,17 @@ import type { HealthProvider } from './contract';
 const unavailableError = 'Health sync is unavailable on this device.';
 const permissionError = 'Health sync permission was denied or is unavailable.';
 
+export interface HealthSyncNotificationAction {
+  label: string;
+  onPress: () => void | Promise<void>;
+}
+
+interface HealthSyncNotification {
+  title: string;
+  message: string;
+  action?: HealthSyncNotificationAction;
+}
+
 export async function authorizeHealthSync(provider: HealthProvider | null): Promise<void> {
   if (!provider) throw new Error(unavailableError);
 
@@ -29,7 +40,7 @@ export interface HealthSyncSettingDependencies {
   loadProvider: () => Promise<HealthProvider | null>;
   persist: (enabled: boolean) => Promise<void>;
   setState: (enabled: boolean) => void;
-  notify: (options: { title: string; message: string }) => Promise<void> | void;
+  notify: (options: HealthSyncNotification) => Promise<void> | void;
   retryPendingHealthSyncs?: () => Promise<unknown>;
   logRetryFailure?: (error: unknown) => void;
 }
@@ -42,11 +53,15 @@ export async function updateHealthSyncSetting(
   if (enabled === current) return current;
 
   if (enabled) {
+    let provider: HealthProvider | null = null;
+    let authorizationFailed = false;
     try {
-      const provider = await dependencies.loadProvider();
+      provider = await dependencies.loadProvider();
       if (!provider) return current;
 
+      authorizationFailed = true;
       await authorizeHealthSync(provider);
+      authorizationFailed = false;
       dependencies.setState(true);
       await dependencies.persist(true);
       if (dependencies.retryPendingHealthSyncs) {
@@ -72,6 +87,12 @@ export async function updateHealthSyncSetting(
       await dependencies.notify({
         title: 'Settings Error',
         message: error instanceof Error ? error.message : 'Failed to save health sync setting.',
+        action: authorizationFailed && provider?.openPermissionSettings
+          ? {
+              label: 'Open Settings',
+              onPress: () => provider!.openPermissionSettings!(),
+            }
+          : undefined,
       });
       throw error;
     }
