@@ -60,7 +60,7 @@ Most modern fitness apps start out great, only to lock your workouts behind expe
 - **Expandable Workout Log**: Drill down into every past workout to inspect completed weights, reps, and RPE pills.
 - **Perform Again**: 1-tap restart of past completed workouts from History, reconstructing all exercises, target sets, reps, and historical weights as suggestions.
 - **Atomic Backup & Restore (v3 export, v2 import)**: New exports include gym profiles and exercise scopes. Existing Schema v2 backups remain importable, and restore merges records safely with collision prevention.
-- **Opt-In Health Export**: After local completion, export the completed workout session summary—including the workout title, strength-workout session type, and session start/end timing and duration—to Apple Health/HealthKit on iOS or Health Connect on Android. The scope is intentionally limited to that session summary: Lifts does not read health data or export sets. The device-local `health_sync_enabled` setting and sync ledger are excluded from backups.
+- **Opt-In Health Export**: After local completion, export the session summary to Apple Health/HealthKit on iOS or Health Connect on Android. The Health Connect payload includes the workout title, strength-workout session type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. Lifts does not read health data or export sets. The device-local `health_sync_enabled` setting and sync ledger are excluded from backups.
 
 ---
 
@@ -108,7 +108,7 @@ The standard Expo Go workflow is for web and non-health native work, which remai
 
 ### Opt-In Health Export Scope
 
-Health export is disabled by default and hidden/no-op on Web. When enabled in a custom native build, Lifts exports only a completed strength-workout session summary—the workout title, strength-workout session type, and session start/end timing and duration—after the local workout transaction succeeds. It does not read HealthKit or Health Connect data and does not export exercises, sets, weights, volume, calories, biometrics, routes, or notes. Provider denial, unavailability, or write failure does not undo local completion; retry metadata stays on the device and outside backup/restore.
+Health export is disabled by default and hidden/no-op on Web. When enabled in a custom native build, Lifts exports after the local workout transaction succeeds. The Health Connect payload contains the workout title, strength-workout session type, and session start/end timing and duration; the HealthKit payload contains only the strength-workout type and session start/end timing and duration. It does not read HealthKit or Health Connect data and does not export exercises, sets, weights, volume, calories, biometrics, routes, or notes. Provider denial, unavailability, or write failure does not undo local completion; retry metadata stays on the device and outside backup/restore.
 
 ---
 
