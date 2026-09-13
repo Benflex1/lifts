@@ -52,7 +52,7 @@ async function syncOnce(
     status: 'pending',
     attemptedAt: now,
   };
-  await saveRecord(store, pending);
+  if (!(await saveRecord(store, pending))) return null;
 
   try {
     await provider.writeStrengthWorkout(payload);

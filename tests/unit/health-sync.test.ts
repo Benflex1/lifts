@@ -222,15 +222,34 @@ test('continues retrying later rows when an eligible workout cannot be mapped', 
   assert.equal(records.get('valid:healthkit')?.status, 'synced');
 });
 
-test('resolves when ledger persistence fails', async () => {
+test('does not call the provider when the pending marker cannot be persisted', async () => {
   const { store } = createFakeStore();
   const { provider, payloads } = createProvider();
   store.saveHealthSyncRecord = async () => {
     throw new Error('storage unavailable');
   };
 
-  await assert.doesNotReject(syncWorkoutWithProvider(store, workout(), provider, now));
+  const result = await syncWorkoutWithProvider(store, workout(), provider, now);
+
+  assert.equal(result, null);
+  assert.equal(payloads.length, 0);
+});
+
+test('keeps final ledger persistence best-effort after the provider writes', async () => {
+  const { store, writes } = createFakeStore();
+  const { provider, payloads } = createProvider();
+  let saveCount = 0;
+  store.saveHealthSyncRecord = async (record) => {
+    saveCount += 1;
+    if (saveCount === 2) throw new Error('final storage unavailable');
+    writes.push({ ...record });
+  };
+
+  const result = await syncWorkoutWithProvider(store, workout(), provider, now);
+
+  assert.equal(result?.status, 'synced');
   assert.equal(payloads.length, 1);
+  assert.equal(writes.length, 1);
 });
 
 test('serializes concurrent calls for the same workout and provider', async () => {
