@@ -88,6 +88,6 @@ Lifts incorporates open-source software packages and libraries. This document li
 - **Asset**: `assets/exercises/workout-guide-plank-frame-1.svg`
 - **Source**: [`bryllim/workout-guide`](https://github.com/bryllim/workout-guide), revision `aac599224bb9780305239607ef98540b7e0ce389`, `packages/workout-guide/assets/plank/frame-1.svg`
 - **Mapping**: Local exercise ID `Plank` → Workout Guide manifest ID `exercise-plank` / slug `plank`; exact exercise name `Plank` verified before vendoring.
-- **Creator**: Bryl Lim ([bryllim.com](https://bryllim.com)); original pose artwork from [Everkinetic](https://github.com/everkinetic/data/blob/main/dist/svg/0042-tension.svg)
+- **Creator**: Bryl Lim ([bryllim.com](https://bryllim.com)), as credited by the pinned Workout Guide metadata
 - **License**: [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/). The verbatim legal code is bundled at [`licenses/CC-BY-SA-4.0.txt`](licenses/CC-BY-SA-4.0.txt); attribution, source revision, and asset hash are recorded in [`assets/exercises/attribution.json`](assets/exercises/attribution.json).
 - **Asset SHA-256**: `0f65a842d151f80918e4ee45d1a9f659dd5a82e2d9857c9ad6ae06832a872e94`
