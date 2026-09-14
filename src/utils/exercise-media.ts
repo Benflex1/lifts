@@ -33,8 +33,18 @@ const normalize = (value: unknown): string => {
     .trim();
 };
 
-const includesAny = (value: string, phrases: readonly string[]): boolean =>
-  phrases.some(phrase => value.includes(phrase));
+const includesAny = (value: string, phrases: readonly string[]): boolean => {
+  const tokens = value.split(' ').filter(Boolean);
+
+  return phrases.some(phrase => {
+    const phraseTokens = phrase.split(' ').filter(Boolean);
+    if (phraseTokens.length === 0 || phraseTokens.length > tokens.length) return false;
+
+    return tokens.some((_, index) =>
+      phraseTokens.every((token, offset) => tokens[index + offset] === token),
+    );
+  });
+};
 
 const selectTemplate = (exercise: Exercise): ExerciseVisualTemplate => {
   const name = normalize(exercise.name);
@@ -51,7 +61,7 @@ const selectTemplate = (exercise: Exercise): ExerciseVisualTemplate => {
     return 'stretch';
   }
   if (includesAny(category, ['cardio', 'aerobic', 'conditioning']) || includesAny(name, [
-    'run', 'jog', 'sprint', 'cycle', 'cycling', 'bike', 'burpee', 'jump rope', 'jumping jack',
+    'run', 'running', 'jog', 'jogging', 'sprint', 'sprinting', 'cycle', 'cycling', 'bike', 'burpee', 'jump rope', 'jumping jack',
   ])) {
     return 'cardio';
   }

@@ -58,6 +58,21 @@ describe('exercise visual resolver', () => {
     }
   });
 
+  it('classifies crunch exercises as core instead of cardio', () => {
+    const crunchNames = ['Crunch', 'Ab Crunch Machine'];
+
+    for (const name of crunchNames) {
+      const descriptor = getExerciseVisual(exercise({
+        id: `test-${name.toLowerCase().replaceAll(' ', '-')}`,
+        name,
+        primaryMuscles: ['abdominals'],
+      }));
+
+      assert.equal(descriptor.kind, 'generated', name);
+      assert.equal(descriptor.kind === 'generated' ? descriptor.template : undefined, 'core', name);
+    }
+  });
+
   it('does not throw for unknown equipment or muscle names', () => {
     assert.doesNotThrow(() => getExerciseVisual(exercise({
       name: 'Unusual Movement',
