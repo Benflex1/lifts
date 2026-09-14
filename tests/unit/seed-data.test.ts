@@ -1,8 +1,17 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { DEFAULT_EXERCISES, buildDefaultRoutines, getBundledExercise } from '../../src/database/seedData';
+import {
+  BUNDLED_EXERCISE_CATALOG_VERSION,
+  DEFAULT_EXERCISES,
+  buildDefaultRoutines,
+  getBundledExercise,
+} from '../../src/database/seedData';
 
 describe('Seed Data Integrity', () => {
+  it('exports the current bundled exercise catalog version', () => {
+    assert.equal(BUNDLED_EXERCISE_CATALOG_VERSION, 2);
+  });
+
   it('contains exactly 876 unique bundled exercises with required fields', () => {
     assert.equal(DEFAULT_EXERCISES.length, 876);
     const idSet = new Set(DEFAULT_EXERCISES.map(e => e.id));
@@ -14,6 +23,9 @@ describe('Seed Data Integrity', () => {
       assert.ok(ex.category, `Exercise ${ex.id} must have a category`);
       assert.ok(Array.isArray(ex.primaryMuscles), `Exercise ${ex.id} must have primaryMuscles array`);
       assert.ok(ex.primaryMuscles.length > 0, `Exercise ${ex.id} must have at least one primary muscle`);
+      assert.ok(Array.isArray(ex.secondaryMuscles), `Exercise ${ex.id} must have secondaryMuscles array`);
+      assert.ok(Array.isArray(ex.instructions), `Exercise ${ex.id} must have instructions array`);
+      assert.ok(ex.instructions.length > 0, `Exercise ${ex.id} must have instructions`);
     }
   });
 

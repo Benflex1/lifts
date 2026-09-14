@@ -1,5 +1,7 @@
 import { Exercise, Routine } from '../types';
 
+export const BUNDLED_EXERCISE_CATALOG_VERSION = 2;
+
 export const DEFAULT_EXERCISES: Exercise[] = require('./defaultExercises.json');
 
 const exerciseMap = new Map<string, Exercise>();

@@ -8,6 +8,8 @@ export interface Exercise {
   primaryMuscles: string[];
   secondaryMuscles?: string[];
   instructions?: string[];
+  instructionUrl?: string;
+  instructionUrlType?: 'website' | 'youtube';
   isCustom?: boolean;
 }
 
