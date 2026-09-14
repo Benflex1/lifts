@@ -6,6 +6,7 @@ import {
   buildDefaultRoutines,
   getBundledExercise,
 } from '../../src/database/seedData';
+import { validateExerciseRecord } from '../../src/database/snapshot-validation';
 
 describe('Seed Data Integrity', () => {
   it('exports the current bundled exercise catalog version', () => {
@@ -21,12 +22,24 @@ describe('Seed Data Integrity', () => {
       assert.ok(ex.id, 'Exercise must have an ID');
       assert.ok(ex.name, `Exercise ${ex.id} must have a name`);
       assert.ok(ex.category, `Exercise ${ex.id} must have a category`);
+      assert.ok(ex.equipment, `Exercise ${ex.id} must have equipment`);
       assert.ok(Array.isArray(ex.primaryMuscles), `Exercise ${ex.id} must have primaryMuscles array`);
       assert.ok(ex.primaryMuscles.length > 0, `Exercise ${ex.id} must have at least one primary muscle`);
+      assert.ok(ex.primaryMuscles.every(muscle => muscle.trim().length > 0), `Exercise ${ex.id} must have non-blank primary muscles`);
       assert.ok(Array.isArray(ex.secondaryMuscles), `Exercise ${ex.id} must have secondaryMuscles array`);
+      assert.ok(ex.secondaryMuscles.every(muscle => muscle.trim().length > 0), `Exercise ${ex.id} must have non-blank secondary muscles`);
       assert.ok(Array.isArray(ex.instructions), `Exercise ${ex.id} must have instructions array`);
       assert.ok(ex.instructions.length > 0, `Exercise ${ex.id} must have instructions`);
+      assert.ok(ex.instructions.every(instruction => instruction.trim().length > 0), `Exercise ${ex.id} must have non-blank instructions`);
+      assert.doesNotThrow(() => validateExerciseRecord(ex, `bundled exercise ${ex.id}`));
     }
+  });
+
+  it('keeps the authored Iron Cross instructions aligned with dumbbell equipment', () => {
+    const ironCross = getBundledExercise('Iron_Cross');
+    assert.equal(ironCross.equipment, 'dumbbell');
+    assert.ok(ironCross.instructions?.some(instruction => /dumbbell/i.test(instruction)));
+    assert.ok(ironCross.instructions?.every(instruction => !/rings?/i.test(instruction)));
   });
 
   it('builds default routines with exact matching exercise identities and definitions', () => {

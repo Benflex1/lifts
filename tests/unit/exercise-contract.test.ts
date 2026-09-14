@@ -29,6 +29,11 @@ describe('Exercise contract', () => {
     }, 'exercise'));
     assert.doesNotThrow(() => validateExerciseRecord({
       ...validExercise,
+      instructionUrl: 'http://example.com/exercises/example',
+      instructionUrlType: 'website',
+    }, 'exercise'));
+    assert.doesNotThrow(() => validateExerciseRecord({
+      ...validExercise,
       instructionUrl: 'https://www.youtube.com/watch?v=example',
       instructionUrlType: 'youtube',
     }, 'exercise'));
@@ -47,6 +52,10 @@ describe('Exercise contract', () => {
     assert.throws(() => validateExerciseRecord({
       ...validExercise,
       instructionUrl: '/exercises/example',
+    }, 'exercise'), /Invalid exercise\.instructionUrl/);
+    assert.throws(() => validateExerciseRecord({
+      ...validExercise,
+      instructionUrl: 'https://',
     }, 'exercise'), /Invalid exercise\.instructionUrl/);
     assert.throws(() => validateExerciseRecord({
       ...validExercise,
