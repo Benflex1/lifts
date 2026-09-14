@@ -1,0 +1,22 @@
+{
+  "assets": [
+    {
+      "assetKey": "workout-guide/plank/frame-1.svg",
+      "localExerciseId": "Plank",
+      "sourceExerciseId": "exercise-plank",
+      "sourceExerciseName": "Plank",
+      "source": "https://github.com/bryllim/workout-guide",
+      "revision": "aac599224bb9780305239607ef98540b7e0ce389",
+      "sourceAsset": "packages/workout-guide/assets/plank/frame-1.svg",
+      "sha256": "0f65a842d151f80918e4ee45d1a9f659dd5a82e2d9857c9ad6ae06832a872e94",
+      "creator": "Bryl Lim",
+      "creatorUrl": "https://bryllim.com",
+      "license": "CC BY-SA 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "originalArtwork": "Everkinetic",
+      "originalArtworkUrl": "https://github.com/everkinetic/data/blob/main/dist/svg/0042-tension.svg",
+      "originalLicense": "CC BY-SA 4.0",
+      "changes": "Vendored unchanged from the reviewed Workout Guide frame."
+    }
+  ]
+}

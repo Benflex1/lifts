@@ -43,3 +43,12 @@ This document tracks the origin, license status, transformation history, and dis
 - **Library**: `lucide-react-native`
 - **Origin**: Lucide project (https://lucide.dev)
 - **License**: ISC License (see `THIRD_PARTY_NOTICES.md`).
+
+## 5. Exercise Visuals
+
+- **Generated visuals**: The default exercise visual is rendered locally and deterministically with `react-native-svg`. It is an application rendering, not a claim that the generic pose exactly depicts every exercise variation.
+- **Reviewed open asset**: `assets/exercises/workout-guide-plank-frame-1.svg` is mapped only from the local catalog ID `Plank` to Workout Guide's manifest entry `exercise-plank` / `plank` after an exact exercise-name match.
+- **Source and revision**: [`bryllim/workout-guide`](https://github.com/bryllim/workout-guide), revision `aac599224bb9780305239607ef98540b7e0ce389`, source path `packages/workout-guide/assets/plank/frame-1.svg`.
+- **Asset integrity**: SHA-256 `0f65a842d151f80918e4ee45d1a9f659dd5a82e2d9857c9ad6ae06832a872e94`.
+- **Attribution and license**: Artwork by Bryl Lim, based on original pose artwork from Everkinetic; both are credited under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The local license text is [`licenses/CC-BY-SA-4.0.txt`](../licenses/CC-BY-SA-4.0.txt), and the local mapping and complete attribution metadata are in [`assets/exercises/attribution.json`](../assets/exercises/attribution.json).
+- **Distribution**: The asset is vendored locally and rendered through a literal code-owned asset map. No remote image URL, CDN request, or computed `require()` path is used. No other open exercise assets are included until their exercise mapping and license are reviewed.
