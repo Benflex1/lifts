@@ -153,6 +153,8 @@ export async function updateCustomExercise(
     primaryMuscles?: string[];
     secondaryMuscles?: string[];
     instructions?: string[];
+    instructionUrl?: string;
+    instructionUrlType?: 'website' | 'youtube';
   }
 ): Promise<Exercise> {
   const store = await getStore();

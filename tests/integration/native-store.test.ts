@@ -9,8 +9,113 @@ import { applyMigrations } from '../../src/database/migrations';
 import { Workout } from '../../src/types';
 import { createStoreFixture } from '../helpers/storeFixture';
 import { createSessionController } from '../../src/workout/session';
+import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES } from '../../src/database/seedData';
 
 describe('nativeStore and migration safety', () => {
+  it('adds link columns to legacy exercises and preserves existing custom rows', async () => {
+    const driver = new NodeSqliteDriver();
+    await applyMigrations(driver, { maxVersion: 7 });
+    await driver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      'built-in-id', 'Built-in Exercise', 'strength', 'barbell', '["chest"]', null, null, 0
+    );
+    await driver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      'custom-id', 'User Exercise', 'strength', 'machine', '["back"]', null, null, 1
+    );
+
+    const store = createNativeStore(driver);
+    await store.init();
+
+    const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises)');
+    assert.ok(columns.some(column => column.name === 'instruction_url'));
+    assert.ok(columns.some(column => column.name === 'instruction_url_type'));
+    assert.equal((await store.getExerciseById('built-in-id'))?.secondaryMuscles instanceof Array, true);
+    assert.equal((await store.getExerciseById('custom-id'))?.name, 'User Exercise');
+    assert.equal(
+      (await driver.getFirstAsync<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'))?.value,
+      String(BUNDLED_EXERCISE_CATALOG_VERSION),
+    );
+
+    await store.init();
+    const columnNames = columns.map(column => column.name);
+    const rereadColumns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises)');
+    assert.equal(rereadColumns.filter(column => column.name === 'instruction_url').length, 1);
+    assert.deepEqual(rereadColumns.map(column => column.name), columnNames);
+    driver.close();
+  });
+
+  it('rolls back migration 8 schema and catalog marker when failure is injected', async () => {
+    const driver = new NodeSqliteDriver();
+    await applyMigrations(driver, { maxVersion: 7 });
+
+    await assert.rejects(
+      () => applyMigrations(driver, { failAtVersion: 8 }),
+      /Injected migration failure at version 8/,
+    );
+
+    const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises)');
+    assert.equal(columns.some(column => column.name === 'instruction_url'), false);
+    assert.equal(columns.some(column => column.name === 'instruction_url_type'), false);
+    assert.equal(await driver.getFirstAsync<any>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'), null);
+    assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 8'), null);
+    driver.close();
+  });
+
+  it('synchronizes built-ins by ID without replacing a custom row with a bundled ID', async () => {
+    const driver = new NodeSqliteDriver();
+    await applyMigrations(driver, { maxVersion: 7 });
+    const bundled = DEFAULT_EXERCISES[0];
+    await driver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+      bundled.id, 'Stale Built-in Name', 'old-category', 'old-equipment', '[]', '[]', '[]'
+    );
+    await driver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      DEFAULT_EXERCISES[1].id, 'User Override', 'custom', 'machine', '["arms"]', '["shoulders"]', '["Keep this"]'
+    );
+
+    const store = createNativeStore(driver);
+    await store.init();
+
+    const synchronized = await store.getExerciseById(bundled.id);
+    assert.ok(synchronized);
+    assert.equal(synchronized.name, bundled.name);
+    assert.deepEqual(synchronized.secondaryMuscles, bundled.secondaryMuscles);
+    assert.deepEqual(synchronized.instructions, bundled.instructions);
+    assert.equal((await store.getExerciseById(DEFAULT_EXERCISES[1].id))?.name, 'User Override');
+    assert.equal((await store.getAllExercises()).length, DEFAULT_EXERCISES.length);
+    driver.close();
+  });
+
+  it('round-trips optional instruction links through native exercise mappings', async () => {
+    const driver = new NodeSqliteDriver();
+    const store = createNativeStore(driver);
+    await store.init();
+
+    const created = await store.createCustomExercise({
+      name: 'Linked Custom Exercise',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+      secondaryMuscles: ['triceps'],
+      instructions: ['Press with control.'],
+      instructionUrl: 'https://example.com/linked-exercise',
+      instructionUrlType: 'website',
+    });
+
+    assert.equal((await store.getExerciseById(created.id))?.instructionUrl, 'https://example.com/linked-exercise');
+    assert.equal((await store.getExerciseById(created.id))?.instructionUrlType, 'website');
+    const raw = await driver.getFirstAsync<any>('SELECT instruction_url, instruction_url_type FROM exercises WHERE id = ?', created.id);
+    assert.equal(raw?.instruction_url, 'https://example.com/linked-exercise');
+    assert.equal(raw?.instruction_url_type, 'website');
+    driver.close();
+  });
+
   it('bootstraps the default gym and backfills legacy workout and draft gym IDs', async () => {
     const tempFile = path.join(os.tmpdir(), `test-native-gym-backfill-${Date.now()}.db`);
     const driver = new NodeSqliteDriver(tempFile);
