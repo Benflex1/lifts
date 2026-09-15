@@ -138,7 +138,7 @@ export const AnalyticsScreen: React.FC = () => {
 
         setHasWorkoutData(workouts.length > 0);
         setWeeklyVolume(buildWeeklyVolume(workouts));
-        setMuscleFrequency(buildMuscleFrequency(workouts));
+        setMuscleFrequency(buildMuscleFrequency(workouts, { exerciseCatalog: allExercisesList }));
 
         if (workouts.length > 0) {
           let foundExerciseId: string | null = null;
@@ -466,7 +466,9 @@ export const AnalyticsScreen: React.FC = () => {
       const workouts: Workout[] = snapshot.workouts || [];
       setHasWorkoutData(workouts.length > 0);
       setWeeklyVolume(buildWeeklyVolume(workouts));
-      setMuscleFrequency(buildMuscleFrequency(workouts));
+      const allExercisesList = await getAllExercises();
+      setAllExerciseList(allExercisesList);
+      setMuscleFrequency(buildMuscleFrequency(workouts, { exerciseCatalog: allExercisesList }));
 
       const importedCount = csvSkipDuplicates ? csvPreview.newWorkoutsCount : csvPreview.totalWorkouts;
       setCsvPreview(null);
@@ -858,7 +860,17 @@ export const AnalyticsScreen: React.FC = () => {
                   <Award size={20} color="#F59E0B" />
                   <Text style={styles.toolTitle}>Muscle Frequency</Text>
                 </View>
-                <Text style={styles.toolSubtitle}>Workouts that trained each primary muscle.</Text>
+                <Text style={styles.toolSubtitle}>Workouts that trained each muscle by primary or secondary role.</Text>
+                <View style={styles.muscleLegend}>
+                  <View style={styles.muscleLegendItem}>
+                    <View style={[styles.muscleLegendSwatch, styles.musclePrimaryBar]} />
+                    <Text style={styles.muscleLegendText}>Primary</Text>
+                  </View>
+                  <View style={styles.muscleLegendItem}>
+                    <View style={[styles.muscleLegendSwatch, styles.muscleSecondaryBar]} />
+                    <Text style={styles.muscleLegendText}>Secondary</Text>
+                  </View>
+                </View>
                 <View style={styles.muscleChart}>
                   {muscleFrequency.map(point => {
                     const maxCount = Math.max(1, ...muscleFrequency.map(item => item.count));
@@ -869,7 +881,24 @@ export const AnalyticsScreen: React.FC = () => {
                           <Text style={styles.muscleCount}>{point.count}</Text>
                         </View>
                         <View style={styles.muscleBarTrack}>
-                          <View style={[styles.muscleBar, { width: `${(point.count / maxCount) * 100}%` }]} />
+                          {point.primaryCount > 0 && (
+                            <View
+                              style={[
+                                styles.muscleBar,
+                                styles.musclePrimaryBar,
+                                { width: `${(point.primaryCount / maxCount) * 100}%` },
+                              ]}
+                            />
+                          )}
+                          {point.secondaryCount > 0 && (
+                            <View
+                              style={[
+                                styles.muscleBar,
+                                styles.muscleSecondaryBar,
+                                { width: `${(point.secondaryCount / maxCount) * 100}%` },
+                              ]}
+                            />
+                          )}
                         </View>
                       </View>
                     );
@@ -1635,6 +1664,26 @@ const styles = StyleSheet.create({
   muscleChart: {
     gap: 9,
   },
+  muscleLegend: {
+    flexDirection: 'row',
+    gap: 14,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  muscleLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  muscleLegendSwatch: {
+    width: 9,
+    height: 9,
+    borderRadius: 2,
+  },
+  muscleLegendText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+  },
   muscleRow: {
     gap: 4,
   },
@@ -1654,14 +1703,19 @@ const styles = StyleSheet.create({
   },
   muscleBarTrack: {
     height: 8,
+    flexDirection: 'row',
     backgroundColor: '#20242E',
     borderRadius: 4,
     overflow: 'hidden',
   },
   muscleBar: {
     height: '100%',
+  },
+  musclePrimaryBar: {
     backgroundColor: '#F59E0B',
-    borderRadius: 4,
+  },
+  muscleSecondaryBar: {
+    backgroundColor: '#38BDF8',
   },
   toolCard: {
     backgroundColor: '#181A20',
@@ -2468,4 +2522,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

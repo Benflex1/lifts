@@ -6,7 +6,8 @@ import { buildMuscleFrequency, buildWeeklyVolume } from '../../src/workout/analy
 const makeExercise = (
   id: string,
   primaryMuscles: string[],
-  completed = true
+  completed = true,
+  secondaryMuscles: string[] = [],
 ): ActiveExercise => ({
   id: `active-${id}`,
   exerciseId: id,
@@ -16,6 +17,7 @@ const makeExercise = (
     category: 'strength',
     equipment: 'barbell',
     primaryMuscles,
+    secondaryMuscles,
   },
   restTimerSeconds: 0,
   sets: [{
@@ -84,10 +86,62 @@ describe('analytics aggregators', () => {
     ];
 
     assert.deepEqual(buildMuscleFrequency(workouts), [
-      { muscle: 'chest', count: 2 },
-      { muscle: 'glutes', count: 1 },
-      { muscle: 'quadriceps', count: 1 },
-      { muscle: 'triceps', count: 1 },
+      { muscle: 'chest', primaryCount: 2, secondaryCount: 0, count: 2 },
+      { muscle: 'glutes', primaryCount: 1, secondaryCount: 0, count: 1 },
+      { muscle: 'quadriceps', primaryCount: 1, secondaryCount: 0, count: 1 },
+      { muscle: 'triceps', primaryCount: 1, secondaryCount: 0, count: 1 },
     ]);
+  });
+
+  it('uses current catalog metadata and counts each role once per workout', () => {
+    const staleEmbeddedExercise = makeExercise('bench', ['chest'], true, ['shoulders']);
+    const workouts = [
+      makeWorkout('first', '2026-09-01T09:00:00.000Z', 100, [
+        staleEmbeddedExercise,
+        makeExercise('bench', ['chest'], true, ['shoulders']),
+      ]),
+      makeWorkout('second', '2026-09-02T09:00:00.000Z', 100, [
+        makeExercise('bench', ['chest'], true, ['shoulders']),
+      ]),
+    ];
+    const catalog = [{
+      ...staleEmbeddedExercise.exercise,
+      secondaryMuscles: ['triceps'],
+    }];
+
+    assert.deepEqual(buildMuscleFrequency(workouts, { exerciseCatalog: catalog }), [
+      { muscle: 'chest', primaryCount: 2, secondaryCount: 0, count: 2 },
+      { muscle: 'triceps', primaryCount: 0, secondaryCount: 2, count: 2 },
+    ]);
+  });
+
+  it('counts a muscle in both roles without collapsing either role', () => {
+    const workouts = [
+      makeWorkout('overlap', '2026-09-01T09:00:00.000Z', 100, [
+        makeExercise('first', ['Chest'], true, ['Shoulders']),
+        makeExercise('second', ['shoulders'], true, ['chest']),
+      ]),
+    ];
+
+    assert.deepEqual(buildMuscleFrequency(workouts), [
+      { muscle: 'chest', primaryCount: 1, secondaryCount: 1, count: 2 },
+      { muscle: 'shoulders', primaryCount: 1, secondaryCount: 1, count: 2 },
+    ]);
+  });
+
+  it('applies the limit after sorting and retains the legacy numeric limit call', () => {
+    const workouts = [
+      makeWorkout('limited', '2026-09-01T09:00:00.000Z', 100, [
+        makeExercise('one', ['back'], true, ['arms']),
+        makeExercise('two', ['chest']),
+        makeExercise('three', ['legs']),
+      ]),
+    ];
+
+    assert.deepEqual(buildMuscleFrequency(workouts, { limit: 2 }), [
+      { muscle: 'arms', primaryCount: 0, secondaryCount: 1, count: 1 },
+      { muscle: 'back', primaryCount: 1, secondaryCount: 0, count: 1 },
+    ]);
+    assert.equal(buildMuscleFrequency(workouts, 1).length, 1);
   });
 });
