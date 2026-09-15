@@ -16,11 +16,11 @@ The exercise-library foundation delivered in September 2026 is limited to struct
   - Normalized the 77 upstream records whose equipment value is `null` to `"body only"` for the app's required string field.
   - Reviewed all 272 records with empty `secondaryMuscles` arrays. Empty arrays remain explicit where the reviewed record has no meaningful secondary target; no secondary muscle was inferred solely to fill the field.
   - Bundled only the structured exercise JSON; no upstream exercise images or videos are included.
-- **Verification snapshot (2026-09-09)**:
+- **Verification snapshot (2026-09-15)**:
   - Local record count: `876`.
-  - Local `src/database/defaultExercises.json` SHA-256: `580dc48d26f48fe15bec8b03a4028d4a4497cc142708988e35f04fc265c62f78`.
+  - Local `src/database/defaultExercises.json` SHA-256: `a1bab5b82423b46ff1e573c97579ae162b31bf3c4ae2161e81719ae8b745469c`.
   - Upstream `dist/exercises.json` SHA-256 at the recorded revision: `5bb747e3fc658f095a60dcbf6d53c96627acdcc6ffb6fffde86f7e26995d40bf`.
-  - All local IDs and ordering match upstream; all fields match except the documented equipment normalization.
+  - All local IDs and ordering match upstream; all fields match except the documented equipment normalization and the five Lifts-authored instruction replacements.
 - **Licensing & Legal Status**:
   - The upstream [`yuhonas` license](https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md) is the Unlicense, including an explicit public-domain dedication and permission to copy, modify, publish, use, sell, and distribute.
   - The credited [`wrkout` repository](https://github.com/wrkout/exercises.json/blob/5994bea047eee4d39a2c0872be3dd8fdd258ba31/package.json) identifies the dataset license as Public Domain; its repository is also distributed under the Unlicense.
