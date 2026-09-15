@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Exercise, DualExerciseStats, Gym, ExerciseGymScope, Workout } from '../types';
 import { useSettings } from '../context/SettingsContext';
@@ -25,6 +25,9 @@ import { ExercisePodiumView } from './ExercisePodiumView';
 import { ProgressionCurveView } from './ProgressionCurveView';
 import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
 import { calculate1RM } from '../utils/calculator';
+import { ExerciseVisual } from './ExerciseVisual';
+import { getExerciseInstructionLink, openExerciseInstructionLink } from '../utils/exercise-links';
+import { useDialog } from '../context/DialogContext';
 
 export interface ExerciseDetailModalProps {
   visible: boolean;
@@ -47,6 +50,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const { unit, gymTrackingEnabled } = useSettings();
+  const { notify } = useDialog();
 
   const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
@@ -136,6 +140,17 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     return null;
   }
 
+  const instructionLink = getExerciseInstructionLink(exercise);
+
+  const handleOpenInstructionLink = () => {
+    void openExerciseInstructionLink(instructionLink).catch(() => {
+      void notify({
+        title: 'Unable to open form guide',
+        message: 'The external form reference could not be opened. Please try again later.',
+      });
+    });
+  };
+
   const renderStatsCard = (label: string, stats: DualExerciseStats['global']) => (
     <View style={styles.statsCard}>
       <Text style={styles.statsTierTitle}>{label}</Text>
@@ -208,6 +223,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <ExerciseVisual
+            exercise={exercise}
+            size="hero"
+            accessibilityLabel={`${exercise.name} exercise visual`}
+          />
+
           {exercise.isCustom && (
             <View style={styles.detailCustomBadge}>
               <Text style={styles.detailCustomBadgeText}>CUSTOM EXERCISE</Text>
@@ -548,6 +569,18 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 Perform with controlled technique and full range of motion.
               </Text>
             )}
+
+            <TouchableOpacity
+              style={styles.instructionLinkButton}
+              onPress={handleOpenInstructionLink}
+              accessibilityRole="button"
+              accessibilityLabel={instructionLink.label}
+              accessibilityHint="Opens an external form reference"
+              activeOpacity={0.75}
+            >
+              <ExternalLink size={16} color="#FFFFFF" />
+              <Text style={styles.instructionLinkButtonText}>{instructionLink.label}</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </View>
@@ -608,6 +641,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: 14,
+  },
+  instructionLinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    marginTop: 8,
+  },
+  instructionLinkButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   detailBadgeRow: {
     flexDirection: 'row',

@@ -10,7 +10,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus, ChevronRight, Edit2 } from 'lucide-react-native';
+import { Search, X, Plus, ChevronRight, Edit2 } from 'lucide-react-native';
 import { Exercise, ExerciseGymScope, Gym } from '../types';
 import {
   searchExercises,
@@ -22,6 +22,7 @@ import {
 import { useSettings } from '../context/SettingsContext';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
+import { ExerciseVisual } from '../components/ExerciseVisual';
 
 
 const MUSCLE_GROUPS = [
@@ -397,9 +398,11 @@ export const ExercisesScreen: React.FC = () => {
                 onPress={() => setActiveDetail(item)}
                 activeOpacity={0.7}
               >
-                <View style={styles.iconWrap}>
-                  <Dumbbell size={20} color="#3B82F6" />
-                </View>
+                <ExerciseVisual
+                  exercise={item}
+                  size="compact"
+                  accessibilityLabel={`${item.name} exercise visual`}
+                />
 
                 <View style={styles.itemInfo}>
                   <View style={styles.itemNameRow}>
@@ -419,6 +422,12 @@ export const ExercisesScreen: React.FC = () => {
                     <Text style={styles.tagDot}>•</Text>
                     <Text style={styles.tagEquipment}>{item.equipment}</Text>
                   </View>
+                  {item.secondaryMuscles && item.secondaryMuscles.length > 0 && (
+                    <Text style={styles.secondaryMusclesRowText} numberOfLines={1}>
+                      Secondary: {item.secondaryMuscles.slice(0, 2).join(', ')}
+                      {item.secondaryMuscles.length > 2 ? ` +${item.secondaryMuscles.length - 2}` : ''}
+                    </Text>
+                  )}
                 </View>
 
                 {!item.isCustom && <ChevronRight size={18} color="#4B5563" />}
@@ -692,14 +701,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#1E2638',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   itemInfo: {
     flex: 1,
   },
@@ -804,6 +805,12 @@ const styles = StyleSheet.create({
   tagEquipment: {
     color: '#9CA3AF',
     fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  secondaryMusclesRowText: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginTop: 3,
     textTransform: 'capitalize',
   },
   centerBox: {
