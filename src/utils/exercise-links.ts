@@ -45,7 +45,7 @@ export function getExerciseInstructionLink(exercise: Exercise): ExerciseInstruct
     };
   }
 
-  if (bundledExerciseIds.has(exercise.id)) {
+  if (exercise.isCustom !== true && bundledExerciseIds.has(exercise.id)) {
     return {
       url: getFreeExerciseDbGuideUrl(exercise.id),
       type: 'website',

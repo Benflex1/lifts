@@ -40,6 +40,7 @@ describe('exercise instruction links', () => {
     assert.deepEqual(getExerciseInstructionLink(exercise({
       instructionUrl: 'https://example.com/bench',
       instructionUrlType: 'website',
+      isCustom: true,
     })), {
       url: 'https://example.com/bench',
       type: 'website',
@@ -90,6 +91,20 @@ describe('exercise instruction links', () => {
     assert.equal(link.url, getFreeExerciseDbGuideUrl(bundled.id));
     assert.equal(link.label, 'Open exercise guide');
     assert.equal(link.isFallback, true);
+  });
+
+  it('does not use the bundled source guide for a custom exercise with a colliding ID', () => {
+    const bundled = DEFAULT_EXERCISES[0];
+    const link = getExerciseInstructionLink({
+      ...bundled,
+      isCustom: true,
+      instructionUrl: undefined,
+      instructionUrlType: undefined,
+    });
+
+    assert.equal(link.type, 'youtube');
+    assert.equal(link.isFallback, true);
+    assert.equal(link.url, `https://www.youtube.com/results?search_query=${encodeURIComponent(`${bundled.name} exercise form`)}`);
   });
 
   it('encodes punctuation, spaces, and non-ASCII exercise names deterministically', () => {

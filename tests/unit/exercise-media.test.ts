@@ -54,6 +54,17 @@ describe('exercise visual resolver', () => {
     assert.deepEqual(getExerciseVisual(unknown), getExerciseVisual(unknown));
   });
 
+  it('does not use bundled remote media for a custom exercise with a colliding ID', () => {
+    const bundled = DEFAULT_EXERCISES[0];
+    const descriptor = getExerciseVisual({
+      ...bundled,
+      isCustom: true,
+      name: 'My Custom Exercise',
+    });
+
+    assert.equal(descriptor.kind, 'generated');
+  });
+
   it('selects the movement template from representative exercise names and categories', () => {
     const cases: Array<[Exercise, string]> = [
       [exercise({ name: 'Bench Press' }), 'push'],

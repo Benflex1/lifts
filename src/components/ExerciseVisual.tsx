@@ -1,6 +1,6 @@
-import React from 'react';
+import * as React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import Svg, { Circle, G, Line, Path, Rect, SvgXml } from 'react-native-svg';
+import { Circle, G, Line, Path, Rect, Svg, SvgXml } from 'react-native-svg';
 import { Exercise } from '../types';
 import { ExerciseVisualDescriptor, ExerciseVisualTemplate, getExerciseVisual } from '../utils/exercise-media';
 import { WORKOUT_GUIDE_PLANK_FRAME_1 } from './exercise-assets';
