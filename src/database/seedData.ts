@@ -1,8 +1,15 @@
 import { Exercise, Routine } from '../types';
+import { getFreeExerciseDbGuideUrl } from './exercise-source';
 
-export const BUNDLED_EXERCISE_CATALOG_VERSION = 2;
+export const BUNDLED_EXERCISE_CATALOG_VERSION = 3;
 
-export const DEFAULT_EXERCISES: Exercise[] = require('./defaultExercises.json');
+const SOURCE_EXERCISES: Exercise[] = require('./defaultExercises.json');
+
+export const DEFAULT_EXERCISES: Exercise[] = SOURCE_EXERCISES.map(exercise => ({
+  ...exercise,
+  instructionUrl: getFreeExerciseDbGuideUrl(exercise.id),
+  instructionUrlType: 'website',
+}));
 
 const exerciseMap = new Map<string, Exercise>();
 for (const ex of DEFAULT_EXERCISES) {

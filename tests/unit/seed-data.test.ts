@@ -7,10 +7,30 @@ import {
   getBundledExercise,
 } from '../../src/database/seedData';
 import { validateExerciseRecord } from '../../src/database/snapshot-validation';
+import {
+  FREE_EXERCISE_DB_REPOSITORY_URL,
+  FREE_EXERCISE_DB_REVISION,
+  getFreeExerciseDbGuideUrl,
+  getFreeExerciseDbImageUrls,
+} from '../../src/database/exercise-source';
 
 describe('Seed Data Integrity', () => {
   it('exports the current bundled exercise catalog version', () => {
-    assert.equal(BUNDLED_EXERCISE_CATALOG_VERSION, 2);
+    assert.equal(BUNDLED_EXERCISE_CATALOG_VERSION, 3);
+  });
+
+  it('constructs deterministic, encoded URLs for the pinned source revision', () => {
+    const id = 'Exercise id/with spaces';
+    assert.equal(FREE_EXERCISE_DB_REVISION, 'a859101d633a01c4a1a920d6a8ce41dabba0705f');
+    assert.equal(FREE_EXERCISE_DB_REPOSITORY_URL, 'https://github.com/yuhonas/free-exercise-db');
+    assert.deepEqual(getFreeExerciseDbImageUrls(id), [
+      `https://raw.githubusercontent.com/yuhonas/free-exercise-db/${FREE_EXERCISE_DB_REVISION}/exercises/Exercise%20id%2Fwith%20spaces/0.jpg`,
+      `https://raw.githubusercontent.com/yuhonas/free-exercise-db/${FREE_EXERCISE_DB_REVISION}/exercises/Exercise%20id%2Fwith%20spaces/1.jpg`,
+    ]);
+    assert.equal(
+      getFreeExerciseDbGuideUrl(id),
+      `${FREE_EXERCISE_DB_REPOSITORY_URL}/blob/${FREE_EXERCISE_DB_REVISION}/exercises/Exercise%20id%2Fwith%20spaces.json`,
+    );
   });
 
   it('contains exactly 876 unique bundled exercises with required fields', () => {
@@ -31,6 +51,8 @@ describe('Seed Data Integrity', () => {
       assert.ok(Array.isArray(ex.instructions), `Exercise ${ex.id} must have instructions array`);
       assert.ok(ex.instructions.length > 0, `Exercise ${ex.id} must have instructions`);
       assert.ok(ex.instructions.every(instruction => instruction.trim().length > 0), `Exercise ${ex.id} must have non-blank instructions`);
+      assert.equal(ex.instructionUrl, getFreeExerciseDbGuideUrl(ex.id));
+      assert.equal(ex.instructionUrlType, 'website');
       assert.doesNotThrow(() => validateExerciseRecord(ex, `bundled exercise ${ex.id}`));
     }
   });

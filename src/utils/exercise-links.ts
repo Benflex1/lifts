@@ -1,4 +1,6 @@
 import { Exercise } from '../types';
+import { DEFAULT_EXERCISES } from '../database/seedData';
+import { getFreeExerciseDbGuideUrl } from '../database/exercise-source';
 
 export interface ExerciseInstructionLink {
   url: string;
@@ -11,6 +13,8 @@ const isYouTubeUrl = (url: URL): boolean => {
   const hostname = url.hostname.toLowerCase();
   return hostname === 'youtu.be' || hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
 };
+
+const bundledExerciseIds = new Set(DEFAULT_EXERCISES.map(exercise => exercise.id));
 
 const isValidCuratedLink = (
   url: unknown,
@@ -38,6 +42,15 @@ export function getExerciseInstructionLink(exercise: Exercise): ExerciseInstruct
       type,
       label: type === 'youtube' ? 'Watch form video' : 'Open exercise guide',
       isFallback: false,
+    };
+  }
+
+  if (bundledExerciseIds.has(exercise.id)) {
+    return {
+      url: getFreeExerciseDbGuideUrl(exercise.id),
+      type: 'website',
+      label: 'Open exercise guide',
+      isFallback: true,
     };
   }
 

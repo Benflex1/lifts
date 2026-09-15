@@ -1,6 +1,8 @@
 import { before, describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { Exercise } from '../../src/types';
+import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getFreeExerciseDbGuideUrl } from '../../src/database/exercise-source';
 
 let openURLImplementation: (url: string) => Promise<void> = async () => {};
 let openedUrl: string | undefined;
@@ -69,6 +71,25 @@ describe('exercise instruction links', () => {
       assert.equal(link.label, 'Find form videos on YouTube');
       assert.equal(link.isFallback, true);
     }
+  });
+
+  it('uses the pinned source guide for a bundled exercise with a missing link', () => {
+    const bundled = DEFAULT_EXERCISES[0];
+    const link = getExerciseInstructionLink({ ...bundled, instructionUrl: undefined, instructionUrlType: undefined });
+    assert.deepEqual(link, {
+      url: getFreeExerciseDbGuideUrl(bundled.id),
+      type: 'website',
+      label: 'Open exercise guide',
+      isFallback: true,
+    });
+  });
+
+  it('uses the pinned source guide for a bundled exercise with an invalid link', () => {
+    const bundled = DEFAULT_EXERCISES[0];
+    const link = getExerciseInstructionLink({ ...bundled, instructionUrl: 'not a URL', instructionUrlType: 'website' });
+    assert.equal(link.url, getFreeExerciseDbGuideUrl(bundled.id));
+    assert.equal(link.label, 'Open exercise guide');
+    assert.equal(link.isFallback, true);
   });
 
   it('encodes punctuation, spaces, and non-ASCII exercise names deterministically', () => {
