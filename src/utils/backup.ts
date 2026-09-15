@@ -1,6 +1,6 @@
 import { DataSnapshot, Store, WorkoutDraft } from '../database/contract';
 import { DEFAULT_EXERCISES } from '../database/seedData';
-import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutSet } from '../types';
+import { ActiveExercise, Exercise, ExerciseGymScope, Gym, Routine, RoutineExercise, Workout, WorkoutSet } from '../types';
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateTargetReps } from '../workout/sets';
@@ -23,6 +23,15 @@ export interface BackupV3 extends DataSnapshot {
   exportedAt: string;
 }
 
+type SerializedExercise = Omit<Exercise, 'primaryMuscles'> & Partial<Pick<Exercise, 'primaryMuscles'>>;
+type SerializedRoutine = Omit<Routine, 'exercises'> & {
+  exercises: Array<Omit<RoutineExercise, 'exercise'> & { exercise: SerializedExercise }>;
+};
+type SerializedWorkout = Omit<Workout, 'exercises'> & {
+  exercises: Array<Omit<ActiveExercise, 'exercise'> & { exercise: SerializedExercise }>;
+};
+type SerializedDraft = Omit<WorkoutDraft, 'workout'> & { workout: SerializedWorkout };
+
 function curatedInstructionFields(exercise: Exercise): Pick<Exercise, 'instructionUrl' | 'instructionUrlType'> {
   const candidate = exercise as Exercise & {
     instructionUrl?: string | null;
@@ -38,7 +47,7 @@ function curatedInstructionFields(exercise: Exercise): Pick<Exercise, 'instructi
   };
 }
 
-function serializeExercise(exercise: Exercise): Exercise {
+function serializeExercise(exercise: Exercise): SerializedExercise {
   return {
     id: exercise.id,
     name: exercise.name,
@@ -52,7 +61,7 @@ function serializeExercise(exercise: Exercise): Exercise {
   };
 }
 
-function serializeRoutine(routine: Routine): Routine {
+function serializeRoutine(routine: Routine): SerializedRoutine {
   return {
     ...routine,
     exercises: routine.exercises.map((exercise) => ({
@@ -62,7 +71,7 @@ function serializeRoutine(routine: Routine): Routine {
   };
 }
 
-function serializeWorkout(workout: Workout): Workout {
+function serializeWorkout(workout: Workout): SerializedWorkout {
   return {
     ...workout,
     exercises: workout.exercises.map((exercise) => ({
@@ -72,7 +81,7 @@ function serializeWorkout(workout: Workout): Workout {
   };
 }
 
-function serializeDraft(draft: WorkoutDraft): WorkoutDraft {
+function serializeDraft(draft: WorkoutDraft): SerializedDraft {
   return {
     ...draft,
     workout: serializeWorkout(draft.workout),
@@ -613,7 +622,7 @@ export async function buildBackupJson(store?: Store): Promise<string> {
     }
   }
 
-  const backup: BackupV3 = {
+  const backup = {
     version: 3,
     exportedAt: new Date().toISOString(),
     workouts: snapshot.workouts.map(serializeWorkout),
