@@ -25,7 +25,9 @@ function isIdenticalExercise(a: Exercise, b: Exercise): boolean {
     Boolean(a.isCustom) === Boolean(b.isCustom) &&
     JSON.stringify(a.primaryMuscles || []) === JSON.stringify(b.primaryMuscles || []) &&
     JSON.stringify(a.secondaryMuscles || []) === JSON.stringify(b.secondaryMuscles || []) &&
-    JSON.stringify(a.instructions || []) === JSON.stringify(b.instructions || [])
+    JSON.stringify(a.instructions || []) === JSON.stringify(b.instructions || []) &&
+    (a.instructionUrl || '') === (b.instructionUrl || '') &&
+    (a.instructionUrlType || '') === (b.instructionUrlType || '')
   );
 }
 

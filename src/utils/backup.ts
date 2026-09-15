@@ -1,4 +1,4 @@
-import { DataSnapshot, Store } from '../database/contract';
+import { DataSnapshot, Store, WorkoutDraft } from '../database/contract';
 import { DEFAULT_EXERCISES } from '../database/seedData';
 import { Exercise, ExerciseGymScope, Gym, Routine, Workout, WorkoutSet } from '../types';
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
@@ -21,6 +21,79 @@ export interface BackupV2 {
 export interface BackupV3 extends DataSnapshot {
   version: 3;
   exportedAt: string;
+}
+
+function curatedInstructionFields(exercise: Exercise): Pick<Exercise, 'instructionUrl' | 'instructionUrlType'> {
+  const candidate = exercise as Exercise & {
+    instructionUrl?: string | null;
+    instructionUrlType?: 'website' | 'youtube' | null;
+  };
+  return {
+    ...(candidate.instructionUrl === undefined || candidate.instructionUrl === null
+      ? {}
+      : { instructionUrl: candidate.instructionUrl }),
+    ...(candidate.instructionUrlType === undefined || candidate.instructionUrlType === null
+      ? {}
+      : { instructionUrlType: candidate.instructionUrlType }),
+  };
+}
+
+function serializeExercise(exercise: Exercise): Exercise {
+  return {
+    id: exercise.id,
+    name: exercise.name,
+    category: exercise.category,
+    equipment: exercise.equipment,
+    ...(Array.isArray(exercise.primaryMuscles) ? { primaryMuscles: [...exercise.primaryMuscles] } : {}),
+    ...(Array.isArray(exercise.secondaryMuscles) ? { secondaryMuscles: [...exercise.secondaryMuscles] } : {}),
+    ...(Array.isArray(exercise.instructions) ? { instructions: [...exercise.instructions] } : {}),
+    ...curatedInstructionFields(exercise),
+    ...(exercise.isCustom === undefined || exercise.isCustom === null ? {} : { isCustom: exercise.isCustom }),
+  };
+}
+
+function serializeRoutine(routine: Routine): Routine {
+  return {
+    ...routine,
+    exercises: routine.exercises.map((exercise) => ({
+      ...exercise,
+      exercise: serializeExercise(exercise.exercise),
+    })),
+  };
+}
+
+function serializeWorkout(workout: Workout): Workout {
+  return {
+    ...workout,
+    exercises: workout.exercises.map((exercise) => ({
+      ...exercise,
+      exercise: serializeExercise(exercise.exercise),
+    })),
+  };
+}
+
+function serializeDraft(draft: WorkoutDraft): WorkoutDraft {
+  return {
+    ...draft,
+    workout: serializeWorkout(draft.workout),
+  };
+}
+
+function instructionLinkFallback(definition: Exercise, bundled?: Exercise): Pick<Exercise, 'instructionUrl' | 'instructionUrlType'> {
+  const source = definition.instructionUrl !== undefined && definition.instructionUrlType !== undefined
+    ? definition
+    : bundled;
+  return source ? curatedInstructionFields(source) : {};
+}
+
+function applyInstructionLinkFallback(target: Record<string, any>, definition: Exercise, bundled?: Exercise): void {
+  const fallback = instructionLinkFallback(definition, bundled);
+  if (target.instructionUrl === undefined && fallback.instructionUrl !== undefined) {
+    target.instructionUrl = fallback.instructionUrl;
+  }
+  if (target.instructionUrlType === undefined && fallback.instructionUrlType !== undefined) {
+    target.instructionUrlType = fallback.instructionUrlType;
+  }
 }
 
 function validateGymId(id: unknown): asserts id is string {
@@ -267,6 +340,7 @@ export function parseBackup(json: string): BackupV3 {
           primaryMuscles,
           secondaryMuscles,
           instructions,
+          ...instructionLinkFallback(def, bundled),
           isCustom: Boolean(def.isCustom),
         };
       } else {
@@ -292,6 +366,7 @@ export function parseBackup(json: string): BackupV3 {
         re.exercise.name = re.exercise.name || def.name || bundled?.name || re.exerciseId;
         re.exercise.category = re.exercise.category || def.category || bundled?.category || 'other';
         re.exercise.equipment = re.exercise.equipment || def.equipment || bundled?.equipment || 'other';
+        applyInstructionLinkFallback(re.exercise, def, bundled);
       }
 
       if (re.targetReps !== undefined && re.targetReps !== null) {
@@ -377,6 +452,7 @@ export function parseBackup(json: string): BackupV3 {
           primaryMuscles,
           secondaryMuscles,
           instructions,
+          ...instructionLinkFallback(def, bundled),
           isCustom: Boolean(def.isCustom),
         };
       } else {
@@ -409,6 +485,7 @@ export function parseBackup(json: string): BackupV3 {
           ? we.exercise.instructions
           : (Array.isArray(def.instructions) ? [...def.instructions] : (bundled?.instructions ? [...bundled.instructions] : []));
         we.exercise.isCustom = we.exercise.isCustom !== undefined ? Boolean(we.exercise.isCustom) : Boolean(def.isCustom);
+        applyInstructionLinkFallback(we.exercise, def, bundled);
       }
 
       if (we.targetReps !== undefined && we.targetReps !== null) {
@@ -539,10 +616,10 @@ export async function buildBackupJson(store?: Store): Promise<string> {
   const backup: BackupV3 = {
     version: 3,
     exportedAt: new Date().toISOString(),
-    workouts: snapshot.workouts,
-    routines: snapshot.routines,
-    exercises: snapshot.exercises,
-    drafts: snapshot.drafts,
+    workouts: snapshot.workouts.map(serializeWorkout),
+    routines: snapshot.routines.map(serializeRoutine),
+    exercises: snapshot.exercises.map(serializeExercise),
+    drafts: snapshot.drafts.map(serializeDraft),
     settings: safeSettings,
     gyms: snapshot.gyms,
     exerciseGymScopes: snapshot.exerciseGymScopes,

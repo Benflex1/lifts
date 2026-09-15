@@ -115,6 +115,8 @@ describe('Backup Roundtrip & Merge Safety', () => {
       equipment: 'barbell',
       targetMuscle: 'quadriceps',
       isCustom: true,
+      instructionUrl: 'https://example.com/pause-squat-guide',
+      instructionUrlType: 'website',
       instructions: ['Pause 2 seconds at the bottom'],
       primaryMuscles: ['quads'],
       secondaryMuscles: ['glutes'],
@@ -258,6 +260,9 @@ describe('Backup Roundtrip & Merge Safety', () => {
       assert.equal(exportedBackup.version, 3);
       assert.ok(Array.isArray(exportedBackup.gyms));
       assert.ok(Array.isArray(exportedBackup.exerciseGymScopes));
+      const exportedCustom = exportedBackup.exercises.find((exercise: Exercise) => exercise.id === 'custom-pause-squat');
+      assert.equal(exportedCustom.instructionUrl, 'https://example.com/pause-squat-guide');
+      assert.equal(exportedCustom.instructionUrlType, 'website');
 
       // Restore into empty destination
       await restoreBackup(backupJson, destFixture.store);
@@ -288,6 +293,8 @@ describe('Backup Roundtrip & Merge Safety', () => {
       const srcCustom = sourceSnap.exercises.filter((e) => e.isCustom);
       assert.equal(destCustom.length, srcCustom.length);
       assert.equal(destCustom[0].name, 'Pause Squat');
+      assert.equal(destCustom[0].instructionUrl, 'https://example.com/pause-squat-guide');
+      assert.equal(destCustom[0].instructionUrlType, 'website');
 
       // Compare drafts
       assert.equal(destSnap.drafts.length, sourceSnap.drafts.length);
@@ -322,6 +329,61 @@ describe('Backup Roundtrip & Merge Safety', () => {
     assert.equal(snap.drafts.length, 1);
 
     await fixture.dispose();
+  });
+
+  it('detects a conflicting curated instruction link during restore', async () => {
+    const fixture = await createStoreFixture('native');
+    await populateSourceStore(fixture.store);
+
+    const backup = JSON.parse(await buildBackupJson(fixture.store));
+    const custom = backup.exercises.find((exercise: Exercise) => exercise.id === 'custom-pause-squat');
+    custom.instructionUrl = 'https://example.com/another-pause-squat-guide';
+
+    await assert.rejects(
+      () => restoreBackup(JSON.stringify(backup), fixture.store),
+      /Conflicting exercise ID: custom-pause-squat/,
+    );
+
+    await fixture.dispose();
+  });
+
+  it('does not serialize runtime-generated exercise metadata', async () => {
+    const exercise = {
+      id: 'custom-generated-metadata',
+      name: 'Generated Metadata Exercise',
+      category: 'strength',
+      equipment: 'body only',
+      primaryMuscles: ['core'],
+      visual: { kind: 'generated', template: 'core', alt: 'Generated illustration' },
+      generatedInstructionLink: {
+        url: 'https://www.youtube.com/results?search_query=generated',
+        type: 'youtube',
+      },
+    } as Exercise & Record<string, unknown>;
+    const snapshot: DataSnapshot = {
+      exercises: [exercise],
+      routines: [],
+      workouts: [],
+      drafts: [],
+      settings: {},
+      gyms: [{
+        id: 'gym-default',
+        name: 'Default Gym',
+        color: '#3B82F6',
+        isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      }],
+      exerciseGymScopes: [],
+    };
+
+    const backup = JSON.parse(await buildBackupJson({ readSnapshot: async () => snapshot } as Store));
+    assert.deepEqual(backup.exercises[0], {
+      id: 'custom-generated-metadata',
+      name: 'Generated Metadata Exercise',
+      category: 'strength',
+      equipment: 'body only',
+      primaryMuscles: ['core'],
+    });
   });
 
   it('keeps health sync opt-in device-local across backup and restore', async () => {
