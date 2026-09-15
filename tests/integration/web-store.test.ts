@@ -234,7 +234,7 @@ describe('webStore persistence and lease handling', () => {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '2' });
+    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '3' });
     metadataDatabase.close();
     await store.close();
   });

@@ -19,3 +19,8 @@
 - Image URLs use `raw.githubusercontent.com`, while guide URLs use the pinned GitHub record pages, matching the source repository layout and spec.
 - The two photographs are referenced remotely at runtime; no upstream image files were downloaded or added.
 - The pre-existing untracked plan/spec files were left untouched.
+
+## Single fix round
+
+- Updated the stale web-store migration assertion from catalog marker `2` to `3`; no migration setup or implementation changes were required.
+- Focused web-store migration test, TypeScript, and diff checks passed after the change.
