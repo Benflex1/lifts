@@ -11,6 +11,21 @@ import { createStoreFixture } from '../helpers/storeFixture';
 import { createSessionController } from '../../src/workout/session';
 import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES } from '../../src/database/seedData';
 
+class FailingCatalogSyncDriver extends NodeSqliteDriver {
+  shouldFail = true;
+  exerciseUpdates = 0;
+
+  override async runAsync(sql: string, ...params: any[]): Promise<{ changes: number; lastInsertRowId: number }> {
+    if (this.shouldFail && sql.trimStart().startsWith('UPDATE exercises')) {
+      this.exerciseUpdates++;
+      if (this.exerciseUpdates === 2) {
+        throw new Error('Injected catalog synchronization failure');
+      }
+    }
+    return super.runAsync(sql, ...params);
+  }
+}
+
 describe('nativeStore and migration safety', () => {
   it('adds link columns to legacy exercises and preserves existing custom rows', async () => {
     const driver = new NodeSqliteDriver();
@@ -92,12 +107,12 @@ describe('nativeStore and migration safety', () => {
     driver.close();
   });
 
-  it('round-trips optional instruction links through native exercise mappings', async () => {
+  it('round-trips curated links and omits null links through native mappings and merges', async () => {
     const driver = new NodeSqliteDriver();
     const store = createNativeStore(driver);
     await store.init();
 
-    const created = await store.createCustomExercise({
+    const linked = await store.createCustomExercise({
       name: 'Linked Custom Exercise',
       category: 'strength',
       equipment: 'barbell',
@@ -107,12 +122,120 @@ describe('nativeStore and migration safety', () => {
       instructionUrl: 'https://example.com/linked-exercise',
       instructionUrlType: 'website',
     });
+    const unlinked = await store.createCustomExercise({
+      name: 'Unlinked Custom Exercise',
+      category: 'strength',
+      equipment: 'machine',
+      primaryMuscles: ['back'],
+    });
 
-    assert.equal((await store.getExerciseById(created.id))?.instructionUrl, 'https://example.com/linked-exercise');
-    assert.equal((await store.getExerciseById(created.id))?.instructionUrlType, 'website');
-    const raw = await driver.getFirstAsync<any>('SELECT instruction_url, instruction_url_type FROM exercises WHERE id = ?', created.id);
+    const directLinked = await store.getExerciseById(linked.id);
+    const directUnlinked = await store.getExerciseById(unlinked.id);
+    assert.equal(directLinked?.instructionUrl, 'https://example.com/linked-exercise');
+    assert.equal(directLinked?.instructionUrlType, 'website');
+    assert.equal('instructionUrl' in (directUnlinked || {}), false);
+    assert.equal('instructionUrlType' in (directUnlinked || {}), false);
+
+    await store.updateCustomExercise(linked.id, { name: 'Edited Linked Custom Exercise' });
+    const edited = await store.getExerciseById(linked.id);
+    assert.equal(edited?.name, 'Edited Linked Custom Exercise');
+    assert.equal(edited?.instructionUrl, 'https://example.com/linked-exercise');
+    assert.equal(edited?.instructionUrlType, 'website');
+
+    const routineId = await store.saveRoutine('Link Mapping Routine', 'Testing', [
+      { exerciseId: linked.id, targetSets: 1, targetReps: '8', restTimerSeconds: 60 },
+      { exerciseId: unlinked.id, targetSets: 1, targetReps: '8', restTimerSeconds: 60 },
+    ]);
+    const routine = await store.getRoutineById(routineId);
+    assert.equal(routine?.exercises[0].exercise.instructionUrl, 'https://example.com/linked-exercise');
+    assert.equal('instructionUrl' in routine!.exercises[1].exercise, false);
+    assert.equal('instructionUrlType' in routine!.exercises[1].exercise, false);
+
+    await store.saveCompletedWorkout({
+      id: 'link-mapping-workout',
+      name: 'Link Mapping Workout',
+      gymId: 'gym-default',
+      startTime: '2026-09-14T08:00:00.000Z',
+      endTime: '2026-09-14T09:00:00.000Z',
+      durationSeconds: 3600,
+      totalVolumeKg: 0,
+      exercises: [
+        { id: 'link-mapping-linked', exerciseId: linked.id, exercise: edited!, sets: [], restTimerSeconds: 60 },
+        { id: 'link-mapping-unlinked', exerciseId: unlinked.id, exercise: directUnlinked!, sets: [], restTimerSeconds: 60 },
+      ],
+    });
+    const workout = await store.getWorkoutDetail('link-mapping-workout');
+    assert.equal(workout?.exercises[0].exercise.instructionUrl, 'https://example.com/linked-exercise');
+    assert.equal('instructionUrl' in workout!.exercises[1].exercise, false);
+    assert.equal('instructionUrlType' in workout!.exercises[1].exercise, false);
+
+    const raw = await driver.getFirstAsync<any>('SELECT instruction_url, instruction_url_type FROM exercises WHERE id = ?', linked.id);
     assert.equal(raw?.instruction_url, 'https://example.com/linked-exercise');
     assert.equal(raw?.instruction_url_type, 'website');
+
+    const destinationDriver = new NodeSqliteDriver();
+    const destination = createNativeStore(destinationDriver);
+    await destination.init();
+    await destination.mergeSnapshot({
+      workouts: [],
+      routines: [],
+      exercises: [edited!, directUnlinked!],
+      drafts: [],
+      settings: {},
+      gyms: [await store.getDefaultGym()],
+      exerciseGymScopes: [],
+    });
+    const mergedLinked = await destination.getExerciseById(linked.id);
+    const mergedUnlinked = await destination.getExerciseById(unlinked.id);
+    assert.equal(mergedLinked?.instructionUrl, 'https://example.com/linked-exercise');
+    assert.equal(mergedLinked?.instructionUrlType, 'website');
+    assert.equal('instructionUrl' in (mergedUnlinked || {}), false);
+    assert.equal('instructionUrlType' in (mergedUnlinked || {}), false);
+    destinationDriver.close();
+    driver.close();
+  });
+
+  it('keeps catalog synchronization data and marker atomic when synchronization fails', async () => {
+    const driver = new FailingCatalogSyncDriver();
+    await applyMigrations(driver, { maxVersion: 7 });
+    await driver.runAsync(
+      `INSERT INTO app_meta (key, value) VALUES (?, ?), (?, ?)`,
+      'exercises_seeded', '1', 'routines_seeded', '1',
+    );
+    const first = DEFAULT_EXERCISES[0];
+    const second = DEFAULT_EXERCISES[1];
+    for (const exercise of [first, second]) {
+      await driver.runAsync(
+        `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+        exercise.id, `Stale ${exercise.name}`, 'stale', 'stale', '[]', '[]', '[]',
+      );
+    }
+    await driver.runAsync(
+      `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      'sync-custom-id', 'Keep Custom', 'custom', 'machine', '[]', '[]',
+    );
+
+    const store = createNativeStore(driver);
+    await assert.rejects(() => store.init(), /Injected catalog synchronization failure/);
+    assert.equal(
+      (await driver.getFirstAsync<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'))?.value,
+      '0',
+    );
+    assert.equal((await store.getExerciseById(first.id))?.name, `Stale ${first.name}`);
+    assert.equal((await store.getExerciseById(second.id))?.name, `Stale ${second.name}`);
+    assert.equal((await store.getExerciseById('sync-custom-id'))?.name, 'Keep Custom');
+
+    driver.shouldFail = false;
+    await store.init();
+    assert.equal(
+      (await driver.getFirstAsync<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'))?.value,
+      String(BUNDLED_EXERCISE_CATALOG_VERSION),
+    );
+    assert.equal((await store.getExerciseById(first.id))?.name, first.name);
+    assert.equal((await store.getExerciseById(second.id))?.name, second.name);
+    assert.equal((await store.getExerciseById('sync-custom-id'))?.name, 'Keep Custom');
     driver.close();
   });
 
