@@ -42,8 +42,9 @@ Most modern fitness apps start out great, only to lock your workouts behind expe
 - **Custom-First Reps & Dropdown Presets**: Direct text entry for custom rep ranges (`8-12`, `5`, `AMRAP`, `10, 8, 6`) with a clean presets dropdown modal.
 - **Customizable Rest Timers**: Default timer is off (`0`), or configure exact rest durations per exercise.
 
-### 870+ Exercise Database & Smart Search
-- **Comprehensive Library**: Over 870 movements categorized by primary/secondary muscle groups and equipment (Barbell, Dumbbell, Cable, Machine, Bodyweight, etc.).
+### 876-Exercise Library & Smart Search
+- **Offline Exercise Guides**: 876 bundled movements with written instructions, primary/secondary muscle metadata, and a local static visual for every record. The Plank uses the one reviewed Workout Guide asset; all other records use Lifts-authored generated SVG visuals.
+- **External Form References**: Each exercise exposes a deterministic external form reference. The default catalog uses an encoded YouTube search fallback; no video is downloaded or bundled.
 - **Smart Slang Search**: Instantly resolves common gym abbreviations (`bench`, `ohp`, `rdl`, `db`, `bb`, `tri`, `bi`, `lat`, etc.).
 - **Custom Exercises**: Create your own exercises with target muscle groups and equipment categories.
 
@@ -155,6 +156,7 @@ To build a standalone debug APK locally without relying on cloud services:
 - [Contributing Guide](CONTRIBUTING.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
 - [Data & Asset Provenance](docs/data-provenance.md)
+- [Exercise Library Source Registry](docs/exercise-library-sources.md)
 
 ---
 
