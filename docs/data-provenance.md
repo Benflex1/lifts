@@ -11,8 +11,9 @@ The exercise-library foundation delivered in September 2026 is limited to struct
 - **Verified upstream source**: [`yuhonas/free-exercise-db`](https://github.com/yuhonas/free-exercise-db/tree/a859101d633a01c4a1a920d6a8ce41dabba0705f), revision `a859101d633a01c4a1a920d6a8ce41dabba0705f`, file [`dist/exercises.json`](https://raw.githubusercontent.com/yuhonas/free-exercise-db/a859101d633a01c4a1a920d6a8ce41dabba0705f/dist/exercises.json).
 - **Credited upstream origin**: The yuhonas README credits [`wrkout/exercises.json`](https://github.com/wrkout/exercises.json/tree/5994bea047eee4d39a2c0872be3dd8fdd258ba31) as the original dataset and says that yuhonas restructured it. The credited repository publishes the dataset as public domain/Unlicense material.
 - **Transformations**:
-  - Retained the upstream 876-record order and IDs, names, categories, primary/secondary muscles, and instructions for 871 records.
-  - Replaced the five empty upstream instruction arrays with Lifts-authored, concise, exercise-specific, offline-safe steps for `Iron_Cross`, `One-Arm_Kettlebell_Swings`, `Push_Press`, `Side_Bridge`, and `Side_Jackknife`. No external exercise text was copied.
+  - Retained the upstream 876-record order and IDs, names, categories, primary/secondary muscles, and instructions for 869 records.
+  - Replaced the five fully empty upstream instruction arrays with Lifts-authored, concise, exercise-specific, offline-safe steps for `Iron_Cross`, `One-Arm_Kettlebell_Swings`, `Push_Press`, `Side_Bridge`, and `Side_Jackknife`.
+  - Also replaced one upstream blank step in each of `Barbell_Squat_To_A_Bench` and `Clean`, retaining the other upstream steps. These seven instruction arrays are the complete instruction differences from the pinned upstream file; no external exercise text was copied.
   - Normalized the 77 upstream records whose equipment value is `null` to `"body only"` for the app's required string field.
   - Reviewed all 272 records with empty `secondaryMuscles` arrays. Empty arrays remain explicit where the reviewed record has no meaningful secondary target; no secondary muscle was inferred solely to fill the field.
   - Bundled only the structured exercise JSON; no upstream exercise images or videos are included.
@@ -20,7 +21,7 @@ The exercise-library foundation delivered in September 2026 is limited to struct
   - Local record count: `876`.
   - Local `src/database/defaultExercises.json` SHA-256: `a1bab5b82423b46ff1e573c97579ae162b31bf3c4ae2161e81719ae8b745469c`.
   - Upstream `dist/exercises.json` SHA-256 at the recorded revision: `5bb747e3fc658f095a60dcbf6d53c96627acdcc6ffb6fffde86f7e26995d40bf`.
-  - All local IDs and ordering match upstream; all fields match except the documented equipment normalization and the five Lifts-authored instruction replacements.
+  - All local IDs and ordering match upstream; all fields match except the documented equipment normalization and the seven Lifts-authored instruction replacements listed above.
 - **Licensing & Legal Status**:
   - The upstream [`yuhonas` license](https://github.com/yuhonas/free-exercise-db/blob/a859101d633a01c4a1a920d6a8ce41dabba0705f/LICENSE.md) is the Unlicense, including an explicit public-domain dedication and permission to copy, modify, publish, use, sell, and distribute.
   - The credited [`wrkout` repository](https://github.com/wrkout/exercises.json/blob/5994bea047eee4d39a2c0872be3dd8fdd258ba31/package.json) identifies the dataset license as Public Domain; its repository is also distributed under the Unlicense.
@@ -29,7 +30,7 @@ The exercise-library foundation delivered in September 2026 is limited to struct
 
 ### 1.1 Catalog enrichment record
 
-The five instruction updates were authored in commit [`fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89`](https://github.com/Benflex1/lifts/commit/fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89), dated 2026-09-15. Their source is the exercise name and equipment already present in the bundled catalog, not a copied third-party instruction source. The explicit empty-secondary review was completed with the catalog contract changes in commits [`fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89`](https://github.com/Benflex1/lifts/commit/fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89) and [`414a658a79773be84f7662caa782b2e8f6863483`](https://github.com/Benflex1/lifts/commit/414a658a79773be84f7662caa782b2e8f6863483), dated 2026-09-15. These are Lifts-authored metadata transformations under the repository's MIT license; no external attribution is required for the authored text.
+The seven instruction-array updates are `Iron_Cross`, `One-Arm_Kettlebell_Swings`, `Push_Press`, `Side_Bridge`, `Side_Jackknife`, `Barbell_Squat_To_A_Bench`, and `Clean`. The five fully empty arrays were authored in commit [`fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89`](https://github.com/Benflex1/lifts/commit/fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89), dated 2026-09-15; the latter two records each replace one upstream blank step while retaining their other upstream steps. Their source is the exercise name, equipment, and existing catalog context, not a copied third-party instruction source. The explicit empty-secondary review was completed with the catalog contract changes in commits [`fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89`](https://github.com/Benflex1/lifts/commit/fbaf4b5cc6a87fde2eb267497c966d41f3ae1b89) and [`414a658a79773be84f7662caa782b2e8f6863483`](https://github.com/Benflex1/lifts/commit/414a658a79773be84f7662caa782b2e8f6863483), dated 2026-09-15. These are Lifts-authored metadata transformations under the repository's MIT license; no external attribution is required for the authored text.
 
 ## 2. Default Seed Routines (`src/database/seedData.ts`)
 
