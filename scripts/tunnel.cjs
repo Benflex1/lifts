@@ -16,23 +16,17 @@ if (
   env.EXPO_UNSTABLE_HEADLESS = '1';
 }
 
-const expoCommand = path.resolve(
+const expoCli = path.resolve(
   __dirname,
   '..',
-  'node_modules',
-  '.bin',
-  process.platform === 'win32' ? 'expo.cmd' : 'expo',
+  'node_modules/expo/bin/cli',
 );
 const expoArgs = ['start', '--tunnel', ...process.argv.slice(2)];
-const child = spawn(
-  process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : expoCommand,
-  process.platform === 'win32' ? ['/d', '/s', '/c', expoCommand, ...expoArgs] : expoArgs,
-  {
-    cwd: path.resolve(__dirname, '..'),
-    env,
-    stdio: 'inherit',
-  },
-);
+const child = spawn(process.execPath, [expoCli, ...expoArgs], {
+  cwd: path.resolve(__dirname, '..'),
+  env,
+  stdio: 'inherit',
+});
 
 const signals = process.platform === 'win32'
   ? ['SIGINT', 'SIGTERM']
