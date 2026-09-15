@@ -35,6 +35,7 @@ Thank you for contributing to Lifts! Lifts is a free, local-first, open-source g
    ```bash
    npm run tunnel
    ```
+   The default tunnel is container-safe; in headless environments, use the printed public URL instead of relying on a QR code. Use `npm run tunnel:ngrok` for the classic Ngrok alternative.
 
 ---
 

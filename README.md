@@ -103,7 +103,7 @@ Lifts employs a dual-engine local storage architecture:
    ```bash
    npm run tunnel
    ```
-   Scan the generated QR code using the **Camera app** (iOS) or the **Expo Go app** (Android).
+   The default tunnel is container-safe; in headless environments, use the printed public URL instead of relying on a QR code. For the classic Ngrok tunnel, run `npm run tunnel:ngrok`. Otherwise, scan the QR code using the **Camera app** (iOS) or the **Expo Go app** (Android).
 
 The standard Expo Go workflow is for web and non-health native work, which remains local-first. HealthKit/Health Connect export is opt-in and requires a custom development/native build with the repository's Expo config plugins; it is not available through Expo Go. On native platforms, generate the configured project and run a custom build with `npx expo prebuild --platform ios` or `npx expo prebuild --platform android`, followed by the platform's native development/build command.
 
