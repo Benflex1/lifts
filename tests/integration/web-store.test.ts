@@ -36,7 +36,198 @@ function openLegacyVersionOneDatabase(name: string): Promise<IDBDatabase> {
   });
 }
 
+function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 3);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      for (const [storeName, keyPath] of [
+        ['exercises', 'id'], ['routines', 'id'], ['workouts', 'id'],
+        ['workout_drafts', 'id'], ['settings', 'key'], ['metadata', 'key'],
+        ['gyms', 'id'], ['exercise_gym_scopes', 'exerciseId'],
+        ['health_sync_records', ['workoutId', 'provider']],
+      ] as [string, string | string[]][]) {
+        const store = db.createObjectStore(storeName, { keyPath });
+        if (storeName === 'gyms') store.createIndex('isDefault', 'isDefault', { unique: false });
+        if (storeName === 'exercise_gym_scopes') {
+          store.createIndex('scopeType', 'scopeType', { unique: false });
+          store.createIndex('linkedGymIds', 'linkedGymIds', { unique: false, multiEntry: true });
+        }
+        if (storeName === 'health_sync_records') store.createIndex('status', 'status', { unique: false });
+      }
+
+      const transaction = request.transaction!;
+      transaction.objectStore('exercises').put({
+        id: 'Barbell_Bench_Press_-_Medium_Grip',
+        name: 'Stale bench press',
+        category: 'stale-category',
+        equipment: 'stale-equipment',
+        primaryMuscles: ['stale-primary'],
+        secondaryMuscles: ['stale-secondary'],
+        instructions: ['Stale instructions'],
+        instructionUrl: 'https://stale.example/bench',
+        instructionUrlType: 'website',
+        isCustom: false,
+      });
+      transaction.objectStore('exercises').put({
+        id: 'Incline_Dumbbell_Press',
+        name: 'My Custom Exercise',
+        category: 'custom-category',
+        equipment: 'custom-equipment',
+        primaryMuscles: ['custom-primary'],
+        secondaryMuscles: ['custom-secondary'],
+        instructions: ['Keep these instructions'],
+        instructionUrl: 'https://custom.example/exercise',
+        instructionUrlType: 'website',
+        isCustom: true,
+      });
+      transaction.objectStore('metadata').put({ key: 'exercises_seeded', value: '1' });
+      transaction.objectStore('metadata').put({ key: 'exercise_catalog_version', value: '1' });
+      transaction.objectStore('gyms').put({
+        id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function readWebDatabase(name: string, version?: number): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, version);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function mutateWebDatabase(
+  name: string,
+  mutate: (stores: { exercises: IDBObjectStore; metadata: IDBObjectStore }) => void,
+): Promise<void> {
+  return readWebDatabase(name).then((database) => new Promise((resolve, reject) => {
+    database.onversionchange = () => database.close();
+    const transaction = database.transaction(['exercises', 'metadata'], 'readwrite');
+    mutate({
+      exercises: transaction.objectStore('exercises'),
+      metadata: transaction.objectStore('metadata'),
+    });
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  }));
+}
+
+function upgradeDatabaseToVersionFour(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 4);
+    request.onsuccess = () => {
+      request.result.close();
+      resolve();
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
 describe('webStore persistence and lease handling', () => {
+  it('upgrades v3 exercise data by catalog ID while preserving custom rows and stores', async () => {
+    const dbName = `test-web-catalog-v4-${Date.now()}`;
+    const legacy = await openLegacyVersionThreeDatabase(dbName);
+    legacy.close();
+
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    const builtIn = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+    const bundled = getBundledExercise('Barbell_Bench_Press_-_Medium_Grip');
+    assert.deepEqual(builtIn, { ...bundled, isCustom: false });
+    assert.ok(await store.getExerciseById('3_4_Sit-Up'), 'missing bundled exercises should be seeded');
+    assert.deepEqual(await store.getExerciseById('Incline_Dumbbell_Press'), {
+      id: 'Incline_Dumbbell_Press',
+      name: 'My Custom Exercise',
+      category: 'custom-category',
+      equipment: 'custom-equipment',
+      primaryMuscles: ['custom-primary'],
+      secondaryMuscles: ['custom-secondary'],
+      instructions: ['Keep these instructions'],
+      instructionUrl: 'https://custom.example/exercise',
+      instructionUrlType: 'website',
+      isCustom: true,
+    });
+
+    const database = await readWebDatabase(dbName);
+    assert.equal(database.version, 4);
+    assert.deepEqual([...database.objectStoreNames].sort(), [
+      'exercise_gym_scopes', 'exercises', 'gyms', 'health_sync_records',
+      'metadata', 'routines', 'settings', 'workout_drafts', 'workouts',
+    ]);
+    const metadata = await new Promise<any>((resolve, reject) => {
+      const transaction = database.transaction('metadata', 'readonly');
+      const request = transaction.objectStore('metadata').get('exercise_catalog_version');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '2' });
+    database.close();
+    await store.close();
+  });
+
+  it('does not synchronize catalog data or metadata from a read-only tab', async () => {
+    const dbName = `test-web-catalog-read-only-${Date.now()}`;
+    const legacy = await openLegacyVersionThreeDatabase(dbName);
+    legacy.close();
+    await upgradeDatabaseToVersionFour(dbName);
+
+    let currentTime = 100000;
+    const now = () => currentTime;
+    const writer: any = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    await writer.init();
+    await mutateWebDatabase(dbName, ({ exercises, metadata }) => {
+      exercises.put({
+        id: 'Barbell_Bench_Press_-_Medium_Grip',
+        name: 'Stale while writer is active',
+        category: 'stale-category',
+        equipment: 'stale-equipment',
+        primaryMuscles: ['stale-primary'],
+        secondaryMuscles: ['stale-secondary'],
+        instructions: ['Stale instructions'],
+        isCustom: false,
+      });
+      metadata.put({ key: 'exercise_catalog_version', value: '1' });
+    });
+
+    const reader: any = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    await reader.init();
+    assert.equal(reader.isReadOnly(), true);
+    assert.deepEqual(await reader.getExerciseById('Barbell_Bench_Press_-_Medium_Grip'), {
+      id: 'Barbell_Bench_Press_-_Medium_Grip',
+      name: 'Stale while writer is active',
+      category: 'stale-category',
+      equipment: 'stale-equipment',
+      primaryMuscles: ['stale-primary'],
+      secondaryMuscles: ['stale-secondary'],
+      instructions: ['Stale instructions'],
+      isCustom: false,
+    });
+
+    const database = await readWebDatabase(dbName);
+    const metadata = await new Promise<any>((resolve, reject) => {
+      const transaction = database.transaction('metadata', 'readonly');
+      const request = transaction.objectStore('metadata').get('exercise_catalog_version');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '1' });
+    database.close();
+    await writer.close();
+    await reader.close();
+  });
+
   it('upgrades legacy records and exposes multi-gym CRUD, scopes, and snapshot arrays', async () => {
     const dbName = `test-web-v2-${Date.now()}`;
     const legacy = await openLegacyVersionOneDatabase(dbName);
@@ -170,7 +361,7 @@ describe('webStore persistence and lease handling', () => {
     const readOnly: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await readOnly.init();
     const raw = await new Promise<any>((resolve, reject) => {
-      const req = (indexedDB as any).open(dbName, 3);
+      const req = (indexedDB as any).open(dbName, 4);
       req.onsuccess = () => { const db = req.result; const tx = db.transaction('workouts', 'readonly'); const get = tx.objectStore('workouts').get('legacy-workout'); get.onsuccess = () => { db.close(); resolve(get.result); }; get.onerror = () => reject(get.error); };
       req.onerror = () => reject(req.error);
     });

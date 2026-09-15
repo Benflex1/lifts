@@ -1,7 +1,7 @@
 import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
-import { DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
+import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
@@ -175,7 +175,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (db) return db;
 
     return new Promise((resolve, reject) => {
-      const req = idb.open(name, 3);
+      const req = idb.open(name, 4);
 
       req.onupgradeneeded = () => {
         const d = req.result;
@@ -200,6 +200,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         if (!d.objectStoreNames.contains('gyms')) {
           const gyms = d.createObjectStore('gyms', { keyPath: 'id' });
           gyms.createIndex('isDefault', 'isDefault', { unique: false });
+          gyms.put(DEFAULT_GYM);
         }
         if (!d.objectStoreNames.contains('exercise_gym_scopes')) {
           const scopes = d.createObjectStore('exercise_gym_scopes', { keyPath: 'exerciseId' });
@@ -212,8 +213,6 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
           });
           health.createIndex('status', 'status', { unique: false });
         }
-        const gyms = req.transaction!.objectStore('gyms');
-        gyms.put(DEFAULT_GYM);
       };
 
       req.onsuccess = () => {
@@ -296,6 +295,90 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
+  async function synchronizeDefaultExercises(database: IDBDatabase): Promise<void> {
+    if (readOnlyMode) return;
+
+    await new Promise<void>((resolve, reject) => {
+      let lease: any;
+      let catalogVersion: any;
+      let exercises: Exercise[];
+      let leaseReady = false;
+      let catalogVersionReady = false;
+      let exercisesReady = false;
+      let synchronized = false;
+      let skippedAfterLeaseLoss = false;
+
+      const tx = database.transaction(['exercises', 'metadata'], 'readwrite');
+      const exerciseStore = tx.objectStore('exercises');
+      const metadataStore = tx.objectStore('metadata');
+
+      const abortAfterLeaseLoss = () => {
+        skippedAfterLeaseLoss = true;
+        setReadOnly(true);
+        try {
+          tx.abort();
+        } catch (_) {
+          // The transaction may already be completing.
+        }
+      };
+
+      const maybeSynchronize = () => {
+        if (!leaseReady || !catalogVersionReady || !exercisesReady) return;
+        if (!lease || lease.ownerId !== tabOwnerId) {
+          abortAfterLeaseLoss();
+          return;
+        }
+        if (catalogVersion?.value === String(BUNDLED_EXERCISE_CATALOG_VERSION)) return;
+
+        const existingById = new Map(exercises.map((exercise) => [exercise.id, exercise]));
+        for (const exercise of DEFAULT_EXERCISES) {
+          const existing = existingById.get(exercise.id);
+          if (existing?.isCustom) continue;
+          exerciseStore.put({ ...exercise, isCustom: false });
+        }
+        metadataStore.put({ key: 'exercise_catalog_version', value: String(BUNDLED_EXERCISE_CATALOG_VERSION) });
+        metadataStore.put({ key: 'exercises_seeded', value: '1' });
+        synchronized = true;
+      };
+
+      const leaseRequest = metadataStore.get('writer_lease');
+      leaseRequest.onsuccess = () => {
+        lease = leaseRequest.result;
+        leaseReady = true;
+        maybeSynchronize();
+      };
+      leaseRequest.onerror = () => reject(leaseRequest.error);
+
+      const catalogVersionRequest = metadataStore.get('exercise_catalog_version');
+      catalogVersionRequest.onsuccess = () => {
+        catalogVersion = catalogVersionRequest.result;
+        catalogVersionReady = true;
+        maybeSynchronize();
+      };
+      catalogVersionRequest.onerror = () => reject(catalogVersionRequest.error);
+
+      const exercisesRequest = exerciseStore.getAll();
+      exercisesRequest.onsuccess = () => {
+        exercises = exercisesRequest.result as Exercise[];
+        exercisesReady = true;
+        maybeSynchronize();
+      };
+      exercisesRequest.onerror = () => reject(exercisesRequest.error);
+
+      tx.oncomplete = () => {
+        if (synchronized) cachedExercises = null;
+        resolve();
+      };
+      tx.onerror = () => {
+        if (!skippedAfterLeaseLoss) reject(tx.error);
+      };
+      tx.onabort = () => {
+        if (skippedAfterLeaseLoss) resolve();
+        else reject(tx.error || new Error('Exercise catalog synchronization aborted'));
+      };
+    });
+  }
+
   async function init(): Promise<void> {
     const database = await openDb();
     await tryAcquireLease();
@@ -324,26 +407,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-      // Seed default exercises if needed
-      const exSeeded = await new Promise<boolean>((resolve, reject) => {
-        const tx = database.transaction('metadata', 'readonly');
-        const req = tx.objectStore('metadata').get('exercises_seeded');
-        req.onsuccess = () => resolve(Boolean(req.result));
-        req.onerror = () => reject(req.error);
-      });
-
-      if (!exSeeded) {
-        await new Promise<void>((resolve, reject) => {
-          const tx = database.transaction(['exercises', 'metadata'], 'readwrite');
-          const exStore = tx.objectStore('exercises');
-          for (const ex of DEFAULT_EXERCISES) {
-            exStore.put(ex);
-          }
-          tx.objectStore('metadata').put({ key: 'exercises_seeded', value: '1' });
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        });
-      }
+      await synchronizeDefaultExercises(database);
 
       // Seed default routines if needed
       const rtSeeded = await new Promise<boolean>((resolve, reject) => {
@@ -564,6 +628,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       primaryMuscles?: string[];
       secondaryMuscles?: string[];
       instructions?: string[];
+      instructionUrl?: string;
+      instructionUrlType?: 'website' | 'youtube';
     }
   ): Promise<Exercise> {
     const database = await openDb();
