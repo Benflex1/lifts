@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import Svg, { Circle, G, Line, Path, Rect, SvgXml } from 'react-native-svg';
 import { Exercise } from '../types';
 import { ExerciseVisualDescriptor, ExerciseVisualTemplate, getExerciseVisual } from '../utils/exercise-media';
@@ -103,14 +103,45 @@ const renderAsset = (descriptor: Extract<ExerciseVisualDescriptor, { kind: 'open
   return <SvgXml xml={xml} width={dimension} height={dimension} accessibilityRole="image" />;
 };
 
+const RemoteExerciseImage: React.FC<{
+  descriptor: Extract<ExerciseVisualDescriptor, { kind: 'remote-image' }>;
+  exercise: Exercise;
+  dimension: number;
+}> = ({ descriptor, exercise, dimension }) => {
+  const [hasError, setHasError] = React.useState(false);
+
+  React.useEffect(() => {
+    setHasError(false);
+  }, [descriptor.imageUrl]);
+
+  if (hasError) {
+    return <GeneratedExerciseSvg exercise={exercise} template={descriptor.fallbackTemplate} dimension={dimension} />;
+  }
+
+  return (
+    <Image
+      source={{ uri: descriptor.imageUrl }}
+      style={{ width: dimension, height: dimension }}
+      resizeMode="contain"
+      accessibilityRole="image"
+      accessibilityLabel={descriptor.alt}
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
 const ExerciseVisualContent: React.FC<{
   exercise: Exercise;
   dimension: number;
 }> = ({ exercise, dimension }) => {
   const descriptor = getExerciseVisual(exercise);
-  return descriptor.kind === 'open-asset'
-    ? renderAsset(descriptor, dimension) || <GeneratedExerciseSvg exercise={exercise} template="general" dimension={dimension} />
-    : <GeneratedExerciseSvg exercise={exercise} template={descriptor.template} dimension={dimension} />;
+  if (descriptor.kind === 'open-asset') {
+    return renderAsset(descriptor, dimension) || <GeneratedExerciseSvg exercise={exercise} template="general" dimension={dimension} />;
+  }
+  if (descriptor.kind === 'remote-image') {
+    return <RemoteExerciseImage descriptor={descriptor} exercise={exercise} dimension={dimension} />;
+  }
+  return <GeneratedExerciseSvg exercise={exercise} template={descriptor.template} dimension={dimension} />;
 };
 
 export const ExerciseVisual: React.FC<ExerciseVisualProps> = ({

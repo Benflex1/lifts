@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { Exercise } from '../../src/types';
+import { DEFAULT_EXERCISES } from '../../src/database/seedData';
 import {
   getExerciseFormGuideViewModel,
   getExerciseRowViewModel,
@@ -62,5 +63,12 @@ describe('exercise UI view models', () => {
       alt: 'Unmapped Movement exercise illustration',
     });
     assert.equal(viewModel.visualAccessibilityLabel, 'Unmapped Movement exercise illustration');
+  });
+
+  it('exposes remote imagery for a bundled exercise row', () => {
+    const viewModel = getExerciseRowViewModel(DEFAULT_EXERCISES[0]);
+
+    assert.equal(viewModel.visual.kind, 'remote-image');
+    assert.equal(viewModel.visualAccessibilityLabel, `${DEFAULT_EXERCISES[0].name} exercise illustration`);
   });
 });

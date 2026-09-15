@@ -1,4 +1,6 @@
 import { Exercise } from '../types';
+import { DEFAULT_EXERCISES } from '../database/seedData';
+import { getFreeExerciseDbImageUrls } from '../database/exercise-source';
 
 export type ExerciseVisualTemplate =
   | 'push'
@@ -13,6 +15,13 @@ export type ExerciseVisualTemplate =
 
 export type ExerciseVisualDescriptor =
   | { kind: 'open-asset'; assetKey: string; alt: string }
+  | {
+      kind: 'remote-image';
+      imageUrl: string;
+      imageUrls: readonly [string, string];
+      alt: string;
+      fallbackTemplate: ExerciseVisualTemplate;
+    }
   | { kind: 'generated'; template: ExerciseVisualTemplate; alt: string };
 
 /**
@@ -22,6 +31,8 @@ export type ExerciseVisualDescriptor =
 export const REVIEWED_EXERCISE_ASSETS: Readonly<Record<string, string>> = Object.freeze({
   Plank: 'workout-guide/plank/frame-1.svg',
 });
+
+const bundledExerciseIds = new Set(DEFAULT_EXERCISES.map(exercise => exercise.id));
 
 const normalize = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -104,6 +115,17 @@ const selectTemplate = (exercise: Exercise): ExerciseVisualTemplate => {
 export function getExerciseVisual(exercise: Exercise): ExerciseVisualDescriptor {
   const alt = `${typeof exercise.name === 'string' && exercise.name.trim() ? exercise.name.trim() : 'Exercise'} exercise illustration`;
   const assetKey = typeof exercise.id === 'string' ? REVIEWED_EXERCISE_ASSETS[exercise.id] : undefined;
+
+  if (typeof exercise.id === 'string' && bundledExerciseIds.has(exercise.id)) {
+    const imageUrls = getFreeExerciseDbImageUrls(exercise.id);
+    return {
+      kind: 'remote-image',
+      imageUrl: imageUrls[0],
+      imageUrls,
+      alt,
+      fallbackTemplate: selectTemplate(exercise),
+    };
+  }
 
   if (assetKey) {
     return { kind: 'open-asset', assetKey, alt };

@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { Exercise } from '../../src/types';
-import { getExerciseVisual } from '../../src/utils/exercise-media';
+import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { FREE_EXERCISE_DB_REVISION, getFreeExerciseDbImageUrls } from '../../src/database/exercise-source';
+import { REVIEWED_EXERCISE_ASSETS, getExerciseVisual } from '../../src/utils/exercise-media';
 
 const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   id: 'test-exercise',
@@ -15,16 +17,30 @@ const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
 });
 
 describe('exercise visual resolver', () => {
-  it('returns the reviewed local asset for an explicit exercise ID match', () => {
-    assert.deepEqual(getExerciseVisual(exercise({
-      id: 'Plank',
-      name: 'Plank',
-      primaryMuscles: ['abdominals'],
-    })), {
-      kind: 'open-asset',
-      assetKey: 'workout-guide/plank/frame-1.svg',
-      alt: 'Plank exercise illustration',
-    });
+  it('keeps the reviewed local Plank asset available as provenance fallback', () => {
+    assert.equal(REVIEWED_EXERCISE_ASSETS.Plank, 'workout-guide/plank/frame-1.svg');
+  });
+
+  it('returns remote images for representative bundled exercises', () => {
+    const expectedFallbackTemplates = ['core', 'hinge', 'core'] as const;
+    for (const [index, bundled] of DEFAULT_EXERCISES.slice(0, 3).entries()) {
+      const descriptor = getExerciseVisual(bundled);
+      assert.equal(descriptor.kind, 'remote-image', bundled.id);
+      if (descriptor.kind !== 'remote-image') continue;
+      assert.equal(descriptor.imageUrl, getFreeExerciseDbImageUrls(bundled.id)[0]);
+      assert.deepEqual(descriptor.imageUrls, getFreeExerciseDbImageUrls(bundled.id));
+      assert.equal(descriptor.fallbackTemplate, expectedFallbackTemplates[index]);
+    }
+  });
+
+  it('returns remote images for every bundled exercise at the pinned revision', () => {
+    for (const bundled of DEFAULT_EXERCISES) {
+      const descriptor = getExerciseVisual(bundled);
+      assert.equal(descriptor.kind, 'remote-image', bundled.id);
+      if (descriptor.kind !== 'remote-image') continue;
+      assert.ok(descriptor.imageUrls.every(url => url.includes(`/${FREE_EXERCISE_DB_REVISION}/`)), bundled.id);
+      assert.deepEqual(descriptor.imageUrls, getFreeExerciseDbImageUrls(bundled.id));
+    }
   });
 
   it('returns a deterministic generated descriptor for an unknown exercise', () => {
