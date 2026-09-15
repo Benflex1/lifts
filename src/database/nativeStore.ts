@@ -39,8 +39,30 @@ export interface SqliteDriver {
   withTransactionAsync(task: () => Promise<void>): Promise<void>;
 }
 
+function normalizeExercise(exercise: Exercise): Exercise {
+  const secondaryMuscles = Array.isArray(exercise.secondaryMuscles) ? exercise.secondaryMuscles : [];
+  const instructions = Array.isArray(exercise.instructions) ? exercise.instructions : [];
+  if (secondaryMuscles === exercise.secondaryMuscles && instructions === exercise.instructions) return exercise;
+  return { ...exercise, secondaryMuscles, instructions };
+}
+
+function normalizeWorkoutExercises(workout: Workout): Workout {
+  if (!Array.isArray(workout.exercises)) return workout;
+  const exercises = workout.exercises.map((activeExercise) => {
+    const exercise = normalizeExercise(activeExercise.exercise);
+    return exercise === activeExercise.exercise ? activeExercise : { ...activeExercise, exercise };
+  });
+  if (exercises.every((exercise, index) => exercise === workout.exercises[index])) return workout;
+  return { ...workout, exercises };
+}
+
+function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
+  const workout = normalizeWorkoutExercises(draft.workout);
+  return workout === draft.workout ? draft : { ...draft, workout };
+}
+
 function mapExerciseRow(r: any): Exercise {
-  return {
+  return normalizeExercise({
     id: r.id,
     name: r.name,
     category: r.category,
@@ -51,11 +73,11 @@ function mapExerciseRow(r: any): Exercise {
     ...(r.instruction_url === null || r.instruction_url === undefined ? {} : { instructionUrl: r.instruction_url }),
     ...(r.instruction_url_type === null || r.instruction_url_type === undefined ? {} : { instructionUrlType: r.instruction_url_type }),
     isCustom: Boolean(r.is_custom),
-  };
+  });
 }
 
 function mapJoinedExerciseRow(r: any, aliases: { primary: string; secondary: string; instructions: string; url: string; urlType: string; custom: string }): Exercise {
-  return {
+  return normalizeExercise({
     id: r.exercise_id,
     name: r.ex_name,
     category: r.ex_category,
@@ -66,7 +88,7 @@ function mapJoinedExerciseRow(r: any, aliases: { primary: string; secondary: str
     ...(r[aliases.url] === null || r[aliases.url] === undefined ? {} : { instructionUrl: r[aliases.url] }),
     ...(r[aliases.urlType] === null || r[aliases.urlType] === undefined ? {} : { instructionUrlType: r[aliases.urlType] }),
     isCustom: Boolean(r[aliases.custom]),
-  };
+  });
 }
 
 function mapSetRow(s: any): WorkoutSet {
@@ -107,8 +129,9 @@ function normalizeDraftPayload(data: string): WorkoutDraft | null {
   try {
     const draft = JSON.parse(data) as WorkoutDraft;
     if (!draft || !draft.workout || typeof draft.workout !== 'object') return null;
-    if (!draft.workout.gymId) draft.workout.gymId = 'gym-default';
-    return draft;
+    const normalized = normalizeDraft(draft);
+    if (normalized.workout.gymId) return normalized;
+    return { ...normalized, workout: { ...normalized.workout, gymId: 'gym-default' } };
   } catch (_) {
     return null;
   }
@@ -439,11 +462,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
     return writeQueue(async () => {
       const newId = (exercise as any).id || createScopedId('custom');
-      const customExercise: Exercise = {
+      const customExercise = normalizeExercise({
         ...exercise,
         id: newId,
         isCustom: true,
-      };
+      });
 
       await driver.runAsync(
         `INSERT INTO exercises
@@ -529,7 +552,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         id
       );
 
-      const updatedExercise: Exercise = {
+      const updatedExercise = normalizeExercise({
         id,
         name: updatedName,
         category: updatedCategory,
@@ -540,7 +563,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         ...(updatedInstructionUrl === null || updatedInstructionUrl === undefined ? {} : { instructionUrl: updatedInstructionUrl }),
         ...(updatedInstructionUrlType === null || updatedInstructionUrlType === undefined ? {} : { instructionUrlType: updatedInstructionUrlType }),
         isCustom: true,
-      };
+      });
 
       // Update any drafts that embed this exercise
       const draftRows = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
@@ -1127,16 +1150,22 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
     return writeQueue(async () => {
-      if (!draft.workout.gymId) draft.workout.gymId = (await getDefaultGym()).id;
+      let normalizedDraft = normalizeDraft(draft);
+      if (!normalizedDraft.workout.gymId) {
+        normalizedDraft = {
+          ...normalizedDraft,
+          workout: { ...normalizedDraft.workout, gymId: (await getDefaultGym()).id },
+        };
+      }
       await driver.runAsync(
         `INSERT OR REPLACE INTO workout_drafts (id, revision, saved_at, rest_timer_ends_at, rest_timer_total_seconds, data)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        draft.workout.id,
-        draft.revision,
-        draft.savedAt,
-        draft.restTimer ? draft.restTimer.endsAt : null,
-        draft.restTimer ? draft.restTimer.totalSeconds : null,
-        JSON.stringify(draft)
+        normalizedDraft.workout.id,
+        normalizedDraft.revision,
+        normalizedDraft.savedAt,
+        normalizedDraft.restTimer ? normalizedDraft.restTimer.endsAt : null,
+        normalizedDraft.restTimer ? normalizedDraft.restTimer.totalSeconds : null,
+        JSON.stringify(normalizedDraft)
       );
     });
   }
@@ -1261,6 +1290,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
         // Exercises must precede scopes because scopes have an exercise foreign key.
         for (const ex of snapshot.exercises) {
+          const normalizedExercise = normalizeExercise(ex);
           await driver.runAsync(
             `INSERT INTO exercises
                (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, instruction_url, instruction_url_type, is_custom)
@@ -1270,16 +1300,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
                secondary_muscles = excluded.secondary_muscles, instructions = excluded.instructions,
                instruction_url = excluded.instruction_url, instruction_url_type = excluded.instruction_url_type,
                is_custom = excluded.is_custom`,
-            ex.id,
-            ex.name,
-            ex.category,
-            ex.equipment,
-            JSON.stringify(ex.primaryMuscles),
-            JSON.stringify(ex.secondaryMuscles || []),
-            JSON.stringify(ex.instructions || []),
-            ex.instructionUrl || null,
-            ex.instructionUrlType || null,
-            ex.isCustom ? 1 : 0
+            normalizedExercise.id,
+            normalizedExercise.name,
+            normalizedExercise.category,
+            normalizedExercise.equipment,
+            JSON.stringify(normalizedExercise.primaryMuscles),
+            JSON.stringify(normalizedExercise.secondaryMuscles),
+            JSON.stringify(normalizedExercise.instructions),
+            normalizedExercise.instructionUrl || null,
+            normalizedExercise.instructionUrlType || null,
+            normalizedExercise.isCustom ? 1 : 0
           );
         }
 
@@ -1374,15 +1404,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
         // Merge drafts
         for (const draft of snapshot.drafts) {
+          const normalizedDraft = normalizeDraft(draft);
           await driver.runAsync(
             `INSERT OR REPLACE INTO workout_drafts (id, revision, saved_at, rest_timer_ends_at, rest_timer_total_seconds, data)
              VALUES (?, ?, ?, ?, ?, ?)`,
-            draft.workout.id,
-            draft.revision,
-            draft.savedAt,
-            draft.restTimer ? draft.restTimer.endsAt : null,
-            draft.restTimer ? draft.restTimer.totalSeconds : null,
-            JSON.stringify({ ...draft, workout: { ...draft.workout, gymId: draft.workout.gymId || 'gym-default' } })
+            normalizedDraft.workout.id,
+            normalizedDraft.revision,
+            normalizedDraft.savedAt,
+            normalizedDraft.restTimer ? normalizedDraft.restTimer.endsAt : null,
+            normalizedDraft.restTimer ? normalizedDraft.restTimer.totalSeconds : null,
+            JSON.stringify({ ...normalizedDraft, workout: { ...normalizedDraft.workout, gymId: normalizedDraft.workout.gymId || 'gym-default' } })
           );
         }
 

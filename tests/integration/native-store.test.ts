@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import { NodeSqliteDriver } from '../helpers/storeFixture';
 import { createNativeStore } from '../../src/database/nativeStore';
 import { applyMigrations } from '../../src/database/migrations';
-import { Workout } from '../../src/types';
+import { Exercise, Workout } from '../../src/types';
 import { createStoreFixture } from '../helpers/storeFixture';
 import { createSessionController } from '../../src/workout/session';
 import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES } from '../../src/database/seedData';
@@ -192,6 +192,133 @@ describe('nativeStore and migration safety', () => {
     assert.equal('instructionUrl' in (mergedUnlinked || {}), false);
     assert.equal('instructionUrlType' in (mergedUnlinked || {}), false);
     destinationDriver.close();
+    driver.close();
+  });
+
+  it('normalizes omitted custom exercise arrays at native create and read boundaries', async () => {
+    const driver = new NodeSqliteDriver();
+    const store = createNativeStore(driver);
+    await store.init();
+
+    const created = await store.createCustomExercise({
+      name: 'Legacy Native Custom',
+      category: 'strength',
+      equipment: 'machine',
+      primaryMuscles: ['back'],
+      instructionUrl: 'https://example.com/legacy-native-custom',
+      instructionUrlType: 'website',
+    });
+
+    assert.deepEqual(created.secondaryMuscles, []);
+    assert.deepEqual(created.instructions, []);
+    assert.equal(created.instructionUrl, 'https://example.com/legacy-native-custom');
+    assert.deepEqual((await store.getExerciseById(created.id))?.secondaryMuscles, []);
+    assert.deepEqual((await store.getExerciseById(created.id))?.instructions, []);
+    assert.equal((await store.getExerciseById(created.id))?.instructionUrlType, 'website');
+    driver.close();
+  });
+
+  it('normalizes omitted and null arrays in native draft save and read payloads', async () => {
+    const driver = new NodeSqliteDriver();
+    const store = createNativeStore(driver);
+    await store.init();
+    const created = await store.createCustomExercise({
+      name: 'Legacy Draft Custom',
+      category: 'strength',
+      equipment: 'body only',
+      primaryMuscles: ['core'],
+    });
+    const legacyEmbedded = {
+      ...created,
+      secondaryMuscles: null,
+      instructions: undefined,
+    } as unknown as Exercise;
+
+    await store.saveDraft({
+      version: 1,
+      savedAt: '2026-09-15T08:00:00.000Z',
+      revision: 1,
+      restTimer: null,
+      workout: {
+        id: 'native-legacy-draft',
+        name: 'Legacy Draft',
+        gymId: 'gym-default',
+        startTime: '2026-09-15T08:00:00.000Z',
+        durationSeconds: 0,
+        totalVolumeKg: 0,
+        exercises: [{
+          id: 'native-legacy-draft-exercise',
+          exerciseId: created.id,
+          exercise: legacyEmbedded,
+          sets: [],
+          restTimerSeconds: 60,
+        }],
+      },
+    });
+
+    const draft = await store.getWorkoutDraft('native-legacy-draft');
+    assert.deepEqual(draft?.workout.exercises[0].exercise.secondaryMuscles, []);
+    assert.deepEqual(draft?.workout.exercises[0].exercise.instructions, []);
+    driver.close();
+  });
+
+  it('normalizes omitted and null arrays in native merged drafts and snapshots', async () => {
+    const driver = new NodeSqliteDriver();
+    const store = createNativeStore(driver);
+    await store.init();
+    const mergedExercise: Exercise = {
+      id: 'native-merged-legacy-custom',
+      name: 'Merged Legacy Custom',
+      category: 'strength',
+      equipment: 'other',
+      primaryMuscles: ['shoulders'],
+      secondaryMuscles: null as unknown as string[],
+      instructions: undefined,
+      instructionUrl: 'https://example.com/merged-legacy-custom',
+      instructionUrlType: 'website',
+      isCustom: true,
+    };
+
+    await store.mergeSnapshot({
+      workouts: [],
+      routines: [],
+      exercises: [mergedExercise],
+      drafts: [{
+        version: 1,
+        savedAt: '2026-09-15T09:00:00.000Z',
+        revision: 1,
+        restTimer: null,
+        workout: {
+          id: 'native-merged-legacy-draft',
+          name: 'Merged Legacy Draft',
+          gymId: 'gym-default',
+          startTime: '2026-09-15T09:00:00.000Z',
+          durationSeconds: 0,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: 'native-merged-legacy-draft-exercise',
+            exerciseId: mergedExercise.id,
+            exercise: mergedExercise,
+            sets: [],
+            restTimerSeconds: 60,
+          }],
+        },
+      }],
+      settings: {},
+      gyms: [],
+      exerciseGymScopes: [],
+    });
+
+    const merged = await store.getExerciseById(mergedExercise.id);
+    assert.deepEqual(merged?.secondaryMuscles, []);
+    assert.deepEqual(merged?.instructions, []);
+    assert.equal(merged?.instructionUrl, mergedExercise.instructionUrl);
+    const draft = await store.getWorkoutDraft('native-merged-legacy-draft');
+    assert.deepEqual(draft?.workout.exercises[0].exercise.secondaryMuscles, []);
+    assert.deepEqual(draft?.workout.exercises[0].exercise.instructions, []);
+    const snapshotDraft = (await store.readSnapshot()).drafts.find(item => item.workout.id === 'native-merged-legacy-draft');
+    assert.deepEqual(snapshotDraft?.workout.exercises[0].exercise.secondaryMuscles, []);
+    assert.deepEqual(snapshotDraft?.workout.exercises[0].exercise.instructions, []);
     driver.close();
   });
 
