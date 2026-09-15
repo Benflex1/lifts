@@ -11,6 +11,7 @@ if (
   process.platform === 'linux' &&
   !env.DISPLAY &&
   !env.WAYLAND_DISPLAY &&
+  (!process.stdin.isTTY || !process.stdout.isTTY) &&
   env.EXPO_UNSTABLE_HEADLESS === undefined
 ) {
   env.EXPO_UNSTABLE_HEADLESS = '1';
