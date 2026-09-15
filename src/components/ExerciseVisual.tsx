@@ -4,6 +4,9 @@ import Svg, { Circle, G, Line, Path, Rect, SvgXml } from 'react-native-svg';
 import { Exercise } from '../types';
 import { ExerciseVisualDescriptor, ExerciseVisualTemplate, getExerciseVisual } from '../utils/exercise-media';
 import { WORKOUT_GUIDE_PLANK_FRAME_1 } from './exercise-assets';
+import { ExerciseVisualErrorBoundary } from './ExerciseVisualErrorBoundary';
+
+export { ExerciseVisualErrorBoundary } from './ExerciseVisualErrorBoundary';
 
 export type ExerciseVisualSize = 'compact' | 'standard' | 'hero';
 
@@ -35,6 +38,9 @@ const COLORS = {
 
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/g, ' ').trim() : '';
+
+const defaultAccessibilityLabel = (exercise: Exercise): string =>
+  `${typeof exercise.name === 'string' && exercise.name.trim() ? exercise.name.trim() : 'Exercise'} exercise illustration`;
 
 const muscleGroups = (exercise: Exercise): string => [
   ...(Array.isArray(exercise.primaryMuscles) ? exercise.primaryMuscles : []),
@@ -97,17 +103,23 @@ const renderAsset = (descriptor: Extract<ExerciseVisualDescriptor, { kind: 'open
   return <SvgXml xml={xml} width={dimension} height={dimension} accessibilityRole="image" />;
 };
 
+const ExerciseVisualContent: React.FC<{
+  exercise: Exercise;
+  dimension: number;
+}> = ({ exercise, dimension }) => {
+  const descriptor = getExerciseVisual(exercise);
+  return descriptor.kind === 'open-asset'
+    ? renderAsset(descriptor, dimension) || <GeneratedExerciseSvg exercise={exercise} template="general" dimension={dimension} />
+    : <GeneratedExerciseSvg exercise={exercise} template={descriptor.template} dimension={dimension} />;
+};
+
 export const ExerciseVisual: React.FC<ExerciseVisualProps> = ({
   exercise,
   size = 'standard',
   accessibilityLabel,
 }) => {
-  const descriptor = getExerciseVisual(exercise);
   const dimension = SIZE[size];
-  const label = accessibilityLabel || descriptor.alt;
-  const visual = descriptor.kind === 'open-asset'
-    ? renderAsset(descriptor, dimension) || <GeneratedExerciseSvg exercise={exercise} template="general" dimension={dimension} />
-    : <GeneratedExerciseSvg exercise={exercise} template={descriptor.template} dimension={dimension} />;
+  const label = accessibilityLabel || defaultAccessibilityLabel(exercise);
 
   return (
     <View
@@ -116,7 +128,9 @@ export const ExerciseVisual: React.FC<ExerciseVisualProps> = ({
       accessibilityLabel={label}
       style={[styles.container, { width: dimension, height: dimension, borderRadius: dimension / 7 }]}
     >
-      {visual}
+      <ExerciseVisualErrorBoundary dimension={dimension} accessibilityLabel={label}>
+        <ExerciseVisualContent exercise={exercise} dimension={dimension} />
+      </ExerciseVisualErrorBoundary>
     </View>
   );
 };

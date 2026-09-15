@@ -1457,6 +1457,78 @@ describe('webStore persistence and lease handling', () => {
     if (store.close) await store.close();
   });
 
+  it('normalizes omitted custom exercise arrays across web persistence boundaries and matches native', async () => {
+    const webFixture = await createStoreFixture('web');
+    const nativeFixture = await createStoreFixture('native');
+    const input = {
+      name: 'Legacy Boundary Exercise',
+      category: 'strength',
+      equipment: 'body only',
+      primaryMuscles: ['core'],
+    };
+
+    try {
+      const webCreated = await webFixture.store.createCustomExercise(input);
+      const nativeCreated = await nativeFixture.store.createCustomExercise(input);
+      const nativePersisted = await nativeFixture.store.getExerciseById(nativeCreated.id);
+      assert.ok(nativePersisted);
+
+      assert.deepEqual(webCreated.secondaryMuscles, []);
+      assert.deepEqual(webCreated.instructions, []);
+      assert.deepEqual(
+        {
+          name: webCreated.name,
+          category: webCreated.category,
+          equipment: webCreated.equipment,
+          primaryMuscles: webCreated.primaryMuscles,
+          secondaryMuscles: webCreated.secondaryMuscles,
+          instructions: webCreated.instructions,
+        },
+        {
+          name: nativePersisted.name,
+          category: nativePersisted.category,
+          equipment: nativePersisted.equipment,
+          primaryMuscles: nativePersisted.primaryMuscles,
+          secondaryMuscles: nativePersisted.secondaryMuscles,
+          instructions: nativePersisted.instructions,
+        },
+      );
+
+      const updated = await webFixture.store.updateCustomExercise(webCreated.id, { name: 'Updated Legacy Boundary Exercise' });
+      assert.deepEqual(updated.secondaryMuscles, []);
+      assert.deepEqual(updated.instructions, []);
+      assert.deepEqual((await webFixture.store.getExerciseById(webCreated.id))?.secondaryMuscles, []);
+      assert.deepEqual((await webFixture.store.getExerciseById(webCreated.id))?.instructions, []);
+
+      await webFixture.store.mergeSnapshot({
+        workouts: [],
+        routines: [],
+        exercises: [{
+          id: 'merged-legacy-custom',
+          name: 'Merged Legacy Custom',
+          category: 'strength',
+          equipment: 'other',
+          primaryMuscles: ['back'],
+          isCustom: true,
+        }],
+        drafts: [],
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      const merged = await webFixture.store.getExerciseById('merged-legacy-custom');
+      assert.deepEqual(merged?.secondaryMuscles, []);
+      assert.deepEqual(merged?.instructions, []);
+      const snapshotExercise = (await webFixture.store.readSnapshot()).exercises.find(exercise => exercise.id === 'merged-legacy-custom');
+      assert.deepEqual(snapshotExercise?.secondaryMuscles, []);
+      assert.deepEqual(snapshotExercise?.instructions, []);
+    } finally {
+      await webFixture.dispose();
+      await nativeFixture.dispose();
+    }
+  });
+
   it('persists supersetId across routine creation, retrieval, and duplication in web store', async () => {
     const fixture = await createStoreFixture('web');
     const store = fixture.store;

@@ -37,12 +37,34 @@ const DEFAULT_GYM: Gym = {
 };
 
 function normalizeWorkout(workout: Workout): Workout {
-  return workout.gymId ? workout : { ...workout, gymId: 'gym-default' };
+  const exercises = workout.exercises.map((activeExercise) => {
+    const exercise = normalizeExercise(activeExercise.exercise);
+    return exercise === activeExercise.exercise ? activeExercise : { ...activeExercise, exercise };
+  });
+  const withGym = workout.gymId ? workout : { ...workout, gymId: 'gym-default' };
+  if (withGym === workout && exercises.every((exercise, index) => exercise === workout.exercises[index])) return workout;
+  return { ...withGym, exercises };
 }
 
 function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
   const workout = normalizeWorkout(draft.workout);
   return workout === draft.workout ? draft : { ...draft, workout };
+}
+
+function normalizeExercise(exercise: Exercise): Exercise {
+  const secondaryMuscles = Array.isArray(exercise.secondaryMuscles) ? exercise.secondaryMuscles : [];
+  const instructions = Array.isArray(exercise.instructions) ? exercise.instructions : [];
+  if (secondaryMuscles === exercise.secondaryMuscles && instructions === exercise.instructions) return exercise;
+  return { ...exercise, secondaryMuscles, instructions };
+}
+
+function normalizeRoutine(routine: Routine): Routine {
+  const exercises = routine.exercises.map((routineExercise) => {
+    const exercise = normalizeExercise(routineExercise.exercise);
+    return exercise === routineExercise.exercise ? routineExercise : { ...routineExercise, exercise };
+  });
+  if (exercises.every((exercise, index) => exercise === routine.exercises[index])) return routine;
+  return { ...routine, exercises };
 }
 
 function compareBinaryStrings(a: string, b: string): number {
@@ -441,9 +463,10 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const req = tx.objectStore('exercises').getAll();
       req.onsuccess = () => {
         const list = req.result as Exercise[];
-        list.sort((a, b) => a.name.localeCompare(b.name));
-        cachedExercises = list;
-        resolve(list);
+        const normalized = list.map(normalizeExercise);
+        normalized.sort((a, b) => a.name.localeCompare(b.name));
+        cachedExercises = normalized;
+        resolve(normalized);
       };
       req.onerror = () => reject(req.error);
     });
@@ -593,7 +616,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return new Promise((resolve, reject) => {
       const tx = database.transaction('exercises', 'readonly');
       const req = tx.objectStore('exercises').get(id);
-      req.onsuccess = () => resolve((req.result as Exercise) || null);
+      req.onsuccess = () => resolve(req.result ? normalizeExercise(req.result as Exercise) : null);
       req.onerror = () => reject(req.error);
     });
   }
@@ -602,11 +625,11 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const database = await openDb();
     await verifyAndRenewLease(database);
 
-    const custom: Exercise = {
+    const custom = normalizeExercise({
       ...exercise,
       id: (exercise as any).id || createScopedId('custom'),
       isCustom: true,
-    };
+    });
 
     await new Promise<void>((resolve, reject) => {
       const tx = database.transaction('exercises', 'readwrite');
@@ -654,14 +677,14 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       throw new Error('Exercise name cannot be empty');
     }
 
-    const updated: Exercise = {
+    const updated = normalizeExercise({
       ...existing,
       ...updates,
       name: updatedName,
       equipment: updates.equipment !== undefined ? updates.equipment.toLowerCase() : existing.equipment,
       id,
       isCustom: true,
-    };
+    });
 
     // 1. Update exercises table
     await new Promise<void>((resolve, reject) => {
@@ -761,7 +784,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const routines = req.result as Routine[];
         routines.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        resolve(routines);
+        resolve(routines.map(normalizeRoutine));
       };
       req.onerror = () => reject(req.error);
     });
@@ -772,7 +795,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return new Promise((resolve, reject) => {
       const tx = database.transaction('routines', 'readonly');
       const req = tx.objectStore('routines').get(id);
-      req.onsuccess = () => resolve((req.result as Routine) || null);
+      req.onsuccess = () => resolve(req.result ? normalizeRoutine(req.result as Routine) : null);
       req.onerror = () => reject(req.error);
     });
   }
@@ -909,7 +932,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       gymRequest.onsuccess = () => {
         try {
           const gymId = validateWorkoutGymId(workout.gymId, gymRequest.result as Gym[]);
-          const validatedWorkout = { ...workout, gymId };
+          const validatedWorkout = normalizeWorkout({ ...workout, gymId });
           tx.objectStore('workouts').put(validatedWorkout);
 
           if (validatedWorkout.routineId) {
@@ -1302,12 +1325,12 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const exStore = tx.objectStore('exercises');
       for (const ex of snapshot.exercises) {
-        exStore.put(ex);
+        exStore.put(normalizeExercise(ex));
       }
 
       const rtStore = tx.objectStore('routines');
       for (const rt of snapshot.routines) {
-        rtStore.put(rt);
+        rtStore.put(normalizeRoutine(rt));
       }
 
       const wStore = tx.objectStore('workouts');
