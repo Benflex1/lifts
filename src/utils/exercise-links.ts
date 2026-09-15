@@ -1,6 +1,7 @@
 import { Exercise } from '../types';
 import { DEFAULT_EXERCISES } from '../database/seedData';
 import { getFreeExerciseDbGuideUrl } from '../database/exercise-source';
+import { Linking } from 'react-native';
 
 export interface ExerciseInstructionLink {
   url: string;
@@ -64,6 +65,5 @@ export function getExerciseInstructionLink(exercise: Exercise): ExerciseInstruct
 }
 
 export async function openExerciseInstructionLink(link: ExerciseInstructionLink): Promise<void> {
-  const { Linking } = await import('react-native');
   await Linking.openURL(link.url);
 }

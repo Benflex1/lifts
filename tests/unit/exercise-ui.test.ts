@@ -1,11 +1,10 @@
-import { describe, it } from 'node:test';
+import { before, describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { Exercise } from '../../src/types';
 import { DEFAULT_EXERCISES } from '../../src/database/seedData';
-import {
-  getExerciseFormGuideViewModel,
-  getExerciseRowViewModel,
-} from '../../src/utils/exercise-ui';
+
+let getExerciseFormGuideViewModel: typeof import('../../src/utils/exercise-ui').getExerciseFormGuideViewModel;
+let getExerciseRowViewModel: typeof import('../../src/utils/exercise-ui').getExerciseRowViewModel;
 
 const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   id: 'ui-test-exercise',
@@ -14,6 +13,17 @@ const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   equipment: 'body only',
   primaryMuscles: ['chest'],
   ...overrides,
+});
+
+before(async (t) => {
+  t.mock.module('react-native', {
+    exports: {
+      Linking: {
+        openURL: async () => {},
+      },
+    },
+  });
+  ({ getExerciseFormGuideViewModel, getExerciseRowViewModel } = await import('../../src/utils/exercise-ui'));
 });
 
 describe('exercise UI view models', () => {

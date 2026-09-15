@@ -18,7 +18,10 @@ const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   ...overrides,
 });
 
-before(async () => {
+before(async (t) => {
+  if (typeof t.mock.module === 'function') {
+    mockLinking(t);
+  }
   ({ getExerciseInstructionLink, openExerciseInstructionLink } = await import('../../src/utils/exercise-links'));
 });
 
@@ -120,7 +123,6 @@ describe('exercise instruction links', () => {
       t.skip('Node module mocks are required to isolate React Native in Node');
       return;
     }
-    mockLinking(t);
     openedUrl = undefined;
     openURLImplementation = async () => {};
     const link = getExerciseInstructionLink(exercise({
@@ -133,12 +135,30 @@ describe('exercise instruction links', () => {
     assert.equal(openedUrl, link.url);
   });
 
+  it('invokes Linking.openURL during the original call stack', async (t) => {
+    if (typeof t.mock.module !== 'function') {
+      t.skip('Node module mocks are required to isolate React Native in Node');
+      return;
+    }
+    const link = getExerciseInstructionLink(exercise({
+      instructionUrl: 'https://example.com/bench',
+      instructionUrlType: 'website',
+    }));
+    let afterCall = false;
+    openURLImplementation = async () => {
+      assert.equal(afterCall, false);
+    };
+
+    const opening = openExerciseInstructionLink(link);
+    afterCall = true;
+    await opening;
+  });
+
   it('propagates an open failure to the caller', async (t) => {
     if (typeof t.mock.module !== 'function') {
       t.skip('Node module mocks are required to isolate React Native in Node');
       return;
     }
-    mockLinking(t);
     const expected = new Error('Unable to open exercise guide');
     openURLImplementation = async () => {
       throw expected;
