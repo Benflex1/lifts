@@ -14,6 +14,7 @@ import { Search, X, Plus, Check, Edit2 } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { searchExercises, createCustomExercise, updateCustomExercise } from '../database/db';
 import { ExerciseVisual } from './ExerciseVisual';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 
 interface Props {
   visible: boolean;
@@ -405,6 +406,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => {
               const isSelected = selectedExercises.has(item.id);
+              const rowViewModel = getExerciseRowViewModel(item);
               return (
                 <View style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}>
                   <TouchableOpacity
@@ -415,7 +417,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
                     <ExerciseVisual
                       exercise={item}
                       size="compact"
-                      accessibilityLabel={`${item.name} exercise visual`}
+                      accessibilityLabel={rowViewModel.visualAccessibilityLabel}
                     />
                     <View style={styles.itemInfo}>
                       <View style={styles.itemNameRow}>

@@ -30,6 +30,7 @@ import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { ExerciseVisual } from './ExerciseVisual';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { saveRoutine } from '../database/db';
 import { validateTargetReps } from '../workout/sets';
 import { SupersetModal } from './SupersetModal';
@@ -650,6 +651,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
           {viewMode === 'detailed' &&
             draftExercises.map((item, idx) => {
               const ssMeta = supersetMetaMap.get(item.id);
+              const rowViewModel = getExerciseRowViewModel(item.exercise);
               return (
                 <React.Fragment key={item.id}>
                   {ssMeta?.isFirst && (
@@ -685,7 +687,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       <ExerciseVisual
                         exercise={item.exercise}
                         size="compact"
-                        accessibilityLabel={`${item.exercise.name} exercise visual`}
+                        accessibilityLabel={rowViewModel.visualAccessibilityLabel}
                       />
                     </View>
 

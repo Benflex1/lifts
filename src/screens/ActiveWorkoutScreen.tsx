@@ -66,6 +66,7 @@ import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrat
 import { WarmupModal } from '../components/WarmupModal';
 import { SupersetModal } from '../components/SupersetModal';
 import { ExerciseVisual } from '../components/ExerciseVisual';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
@@ -650,6 +651,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           const totalCount = activeEx.sets.length;
           const isAllCompleted = totalCount > 0 && completedCount === totalCount;
           const ssMeta = supersetMetaMap.get(activeEx.id);
+          const rowViewModel = activeEx.exercise ? getExerciseRowViewModel(activeEx.exercise) : null;
 
           const cardElement = !isExpanded ? (
             // Collapsed Accordion Row - Lyfta Screenshot 1
@@ -683,7 +685,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     <ExerciseVisual
                       exercise={activeEx.exercise}
                       size="compact"
-                      accessibilityLabel={`${activeEx.exercise.name} exercise visual`}
+                      accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
                     />
                   ) : (
                     <Dumbbell size={20} color="#38BDF8" />
@@ -767,7 +769,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     <ExerciseVisual
                       exercise={activeEx.exercise}
                       size="compact"
-                      accessibilityLabel={`${activeEx.exercise.name} exercise visual`}
+                      accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
                     />
                   ) : (
                     <Dumbbell size={20} color="#38BDF8" />

@@ -26,7 +26,8 @@ import { ProgressionCurveView } from './ProgressionCurveView';
 import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
 import { calculate1RM } from '../utils/calculator';
 import { ExerciseVisual } from './ExerciseVisual';
-import { getExerciseInstructionLink, openExerciseInstructionLink } from '../utils/exercise-links';
+import { openExerciseInstructionLink } from '../utils/exercise-links';
+import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
 import { useDialog } from '../context/DialogContext';
 
 export interface ExerciseDetailModalProps {
@@ -140,10 +141,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     return null;
   }
 
-  const instructionLink = getExerciseInstructionLink(exercise);
+  const instructionLinkViewModel = getExerciseFormGuideViewModel(exercise);
 
   const handleOpenInstructionLink = () => {
-    void openExerciseInstructionLink(instructionLink).catch(() => {
+    void openExerciseInstructionLink(instructionLinkViewModel.link).catch(() => {
       void notify({
         title: 'Unable to open form guide',
         message: 'The external form reference could not be opened. Please try again later.',
@@ -574,12 +575,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               style={styles.instructionLinkButton}
               onPress={handleOpenInstructionLink}
               accessibilityRole="button"
-              accessibilityLabel={instructionLink.label}
+              accessibilityLabel={instructionLinkViewModel.label}
               accessibilityHint="Opens an external form reference"
               activeOpacity={0.75}
             >
               <ExternalLink size={16} color="#FFFFFF" />
-              <Text style={styles.instructionLinkButtonText}>{instructionLink.label}</Text>
+              <Text style={styles.instructionLinkButtonText}>{instructionLinkViewModel.label}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

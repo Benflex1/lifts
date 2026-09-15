@@ -23,6 +23,7 @@ import { useSettings } from '../context/SettingsContext';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { ExerciseVisual } from '../components/ExerciseVisual';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 
 
 const MUSCLE_GROUPS = [
@@ -391,61 +392,64 @@ export const ExercisesScreen: React.FC = () => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <View style={styles.exerciseCard}>
-              <TouchableOpacity
-                style={styles.exerciseCardMain}
-                onPress={() => setActiveDetail(item)}
-                activeOpacity={0.7}
-              >
-                <ExerciseVisual
-                  exercise={item}
-                  size="compact"
-                  accessibilityLabel={`${item.name} exercise visual`}
-                />
+          renderItem={({ item }) => {
+            const rowViewModel = getExerciseRowViewModel(item);
+            return (
+              <View style={styles.exerciseCard}>
+                <TouchableOpacity
+                  style={styles.exerciseCardMain}
+                  onPress={() => setActiveDetail(item)}
+                  activeOpacity={0.7}
+                >
+                  <ExerciseVisual
+                    exercise={item}
+                    size="compact"
+                    accessibilityLabel={rowViewModel.visualAccessibilityLabel}
+                  />
 
-                <View style={styles.itemInfo}>
-                  <View style={styles.itemNameRow}>
-                    <Text style={styles.itemName} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    {item.isCustom && (
-                      <View style={styles.listCustomBadge}>
-                        <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
-                      </View>
+                  <View style={styles.itemInfo}>
+                    <View style={styles.itemNameRow}>
+                      <Text style={styles.itemName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      {item.isCustom && (
+                        <View style={styles.listCustomBadge}>
+                          <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.tagRow}>
+                      <Text style={styles.tagMuscle}>
+                        {item.primaryMuscles.join(', ') || 'General'}
+                      </Text>
+                      <Text style={styles.tagDot}>•</Text>
+                      <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                    </View>
+                    {item.secondaryMuscles && item.secondaryMuscles.length > 0 && (
+                      <Text style={styles.secondaryMusclesRowText} numberOfLines={1}>
+                        Secondary: {item.secondaryMuscles.slice(0, 2).join(', ')}
+                        {item.secondaryMuscles.length > 2 ? ` +${item.secondaryMuscles.length - 2}` : ''}
+                      </Text>
                     )}
                   </View>
-                  <View style={styles.tagRow}>
-                    <Text style={styles.tagMuscle}>
-                      {item.primaryMuscles.join(', ') || 'General'}
-                    </Text>
-                    <Text style={styles.tagDot}>•</Text>
-                    <Text style={styles.tagEquipment}>{item.equipment}</Text>
-                  </View>
-                  {item.secondaryMuscles && item.secondaryMuscles.length > 0 && (
-                    <Text style={styles.secondaryMusclesRowText} numberOfLines={1}>
-                      Secondary: {item.secondaryMuscles.slice(0, 2).join(', ')}
-                      {item.secondaryMuscles.length > 2 ? ` +${item.secondaryMuscles.length - 2}` : ''}
-                    </Text>
-                  )}
-                </View>
 
-                {!item.isCustom && <ChevronRight size={18} color="#4B5563" />}
-              </TouchableOpacity>
-
-              {item.isCustom && (
-                <TouchableOpacity
-                  style={styles.itemEditBtn}
-                  onPress={() => handleOpenEditCustom(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit ${item.name}`}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Edit2 size={16} color="#3B82F6" />
+                  {!item.isCustom && <ChevronRight size={18} color="#4B5563" />}
                 </TouchableOpacity>
-              )}
-            </View>
-          )}
+
+                {item.isCustom && (
+                  <TouchableOpacity
+                    style={styles.itemEditBtn}
+                    onPress={() => handleOpenEditCustom(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${item.name}`}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Edit2 size={16} color="#3B82F6" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No exercises found.</Text>
