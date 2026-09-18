@@ -1,6 +1,6 @@
 import { Exercise } from '../types';
 import { DEFAULT_EXERCISES } from '../database/seedData';
-import { getFreeExerciseDbGuideUrl } from '../database/exercise-source';
+import { getMuscleWikiGuideUrl } from '../database/exercise-guides';
 import { Linking } from 'react-native';
 
 export interface ExerciseInstructionLink {
@@ -17,6 +17,11 @@ const isYouTubeUrl = (url: URL): boolean => {
 
 const bundledExerciseIds = new Set(DEFAULT_EXERCISES.map(exercise => exercise.id));
 
+const isGitHubHost = (hostname: string): boolean => {
+  const normalized = hostname.toLowerCase();
+  return normalized === 'github.com' || normalized.endsWith('.github.com');
+};
+
 const isValidCuratedLink = (
   url: unknown,
   type: unknown,
@@ -32,6 +37,7 @@ const isValidCuratedLink = (
   }
 
   if (!parsed.hostname || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) return false;
+  if (isGitHubHost(parsed.hostname)) return false;
   return (type === 'youtube') === isYouTubeUrl(parsed);
 };
 
@@ -47,12 +53,15 @@ export function getExerciseInstructionLink(exercise: Exercise): ExerciseInstruct
   }
 
   if (exercise.isCustom !== true && bundledExerciseIds.has(exercise.id)) {
-    return {
-      url: getFreeExerciseDbGuideUrl(exercise.id),
-      type: 'website',
-      label: 'Open exercise guide',
-      isFallback: true,
-    };
+    const muscleWikiGuideUrl = getMuscleWikiGuideUrl(exercise.id);
+    if (muscleWikiGuideUrl) {
+      return {
+        url: muscleWikiGuideUrl,
+        type: 'website',
+        label: 'Open exercise guide',
+        isFallback: true,
+      };
+    }
   }
 
   const query = exercise.name + ' exercise form';

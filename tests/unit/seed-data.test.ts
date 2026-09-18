@@ -10,13 +10,12 @@ import { validateExerciseRecord } from '../../src/database/snapshot-validation';
 import {
   FREE_EXERCISE_DB_REPOSITORY_URL,
   FREE_EXERCISE_DB_REVISION,
-  getFreeExerciseDbGuideUrl,
   getFreeExerciseDbImageUrls,
 } from '../../src/database/exercise-source';
 
 describe('Seed Data Integrity', () => {
   it('exports the current bundled exercise catalog version', () => {
-    assert.equal(BUNDLED_EXERCISE_CATALOG_VERSION, 3);
+    assert.equal(BUNDLED_EXERCISE_CATALOG_VERSION, 4);
   });
 
   it('constructs deterministic, encoded URLs for the pinned source revision', () => {
@@ -27,10 +26,6 @@ describe('Seed Data Integrity', () => {
       `https://raw.githubusercontent.com/yuhonas/free-exercise-db/${FREE_EXERCISE_DB_REVISION}/exercises/Exercise%20id%2Fwith%20spaces/0.jpg`,
       `https://raw.githubusercontent.com/yuhonas/free-exercise-db/${FREE_EXERCISE_DB_REVISION}/exercises/Exercise%20id%2Fwith%20spaces/1.jpg`,
     ]);
-    assert.equal(
-      getFreeExerciseDbGuideUrl(id),
-      `${FREE_EXERCISE_DB_REPOSITORY_URL}/blob/${FREE_EXERCISE_DB_REVISION}/exercises/Exercise%20id%2Fwith%20spaces.json`,
-    );
   });
 
   it('contains exactly 876 unique bundled exercises with required fields', () => {
@@ -51,9 +46,28 @@ describe('Seed Data Integrity', () => {
       assert.ok(Array.isArray(ex.instructions), `Exercise ${ex.id} must have instructions array`);
       assert.ok(ex.instructions.length > 0, `Exercise ${ex.id} must have instructions`);
       assert.ok(ex.instructions.every(instruction => instruction.trim().length > 0), `Exercise ${ex.id} must have non-blank instructions`);
-      assert.equal(ex.instructionUrl, getFreeExerciseDbGuideUrl(ex.id));
-      assert.equal(ex.instructionUrlType, 'website');
+      assert.doesNotMatch(ex.instructionUrl || '', /github\.com/i);
+      if (ex.instructionUrl !== undefined) assert.equal(ex.instructionUrlType, 'website');
       assert.doesNotThrow(() => validateExerciseRecord(ex, `bundled exercise ${ex.id}`));
+    }
+  });
+
+  it('contains only the explicitly verified MuscleWiki guide mappings', () => {
+    const expected = new Map([
+      ['Barbell_Bench_Press_-_Medium_Grip', 'https://musclewiki.com/exercise/barbell-bench-press'],
+      ['Barbell_Deadlift', 'https://musclewiki.com/exercise/barbell-deadlift'],
+      ['Barbell_Curl', 'https://musclewiki.com/exercise/barbell-curl'],
+      ['Dumbbell_Bench_Press', 'https://musclewiki.com/exercise/dumbbell-bench-press'],
+      ['Incline_Dumbbell_Press', 'https://musclewiki.com/exercise/dumbbell-incline-bench-press'],
+      ['Pushups', 'https://musclewiki.com/exercise/push-up'],
+    ]);
+
+    assert.equal(DEFAULT_EXERCISES.filter(exercise => exercise.instructionUrl !== undefined).length, expected.size);
+    for (const [id, url] of expected) {
+      const record = DEFAULT_EXERCISES.find(exercise => exercise.id === id);
+      assert.ok(record, `Missing bundled exercise ${id}`);
+      assert.equal(record.instructionUrl, url);
+      assert.equal(record.instructionUrlType, 'website');
     }
   });
 

@@ -107,6 +107,40 @@ describe('nativeStore and migration safety', () => {
     driver.close();
   });
 
+  it('replaces a legacy GitHub guide during catalog v4 sync while preserving a custom row', async () => {
+    const driver = new NodeSqliteDriver();
+    await applyMigrations(driver);
+    const bundled = DEFAULT_EXERCISES.find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
+    const custom = DEFAULT_EXERCISES.find(exercise => exercise.id === 'Incline_Dumbbell_Press')!;
+    const legacyGuide = 'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json';
+
+    await driver.runAsync(
+      `INSERT INTO exercises
+        (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, instruction_url, instruction_url_type, is_custom)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      bundled.id, 'Legacy Bench', 'legacy', 'barbell', '[]', '[]', '[]', legacyGuide, 'website',
+    );
+    await driver.runAsync(
+      `INSERT INTO exercises
+        (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, instruction_url, instruction_url_type, is_custom)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      custom.id, 'My Custom Incline Press', 'custom', 'dumbbell', '["chest"]', '[]', '["Keep this"]',
+      'https://example.com/my-custom-guide', 'website',
+    );
+    await driver.runAsync(
+      `INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?), (?, ?), (?, ?)`,
+      'exercises_seeded', '1', 'routines_seeded', '1', 'exercise_catalog_version', '3',
+    );
+
+    const store = createNativeStore(driver);
+    await store.init();
+
+    assert.equal((await store.getExerciseById(bundled.id))?.instructionUrl, 'https://musclewiki.com/exercise/barbell-bench-press');
+    assert.equal((await store.getExerciseById(custom.id))?.name, 'My Custom Incline Press');
+    assert.equal((await store.getExerciseById(custom.id))?.instructionUrl, 'https://example.com/my-custom-guide');
+    driver.close();
+  });
+
   it('round-trips curated links and omits null links through native mappings and merges', async () => {
     const driver = new NodeSqliteDriver();
     const store = createNativeStore(driver);

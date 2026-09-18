@@ -7,7 +7,3 @@ export function getFreeExerciseDbImageUrls(exerciseId: string): readonly [string
   const path = `${FREE_EXERCISE_DB_RAW_URL}/${FREE_EXERCISE_DB_REVISION}/exercises/${encodeURIComponent(exerciseId)}`;
   return [`${path}/0.jpg`, `${path}/1.jpg`];
 }
-
-export function getFreeExerciseDbGuideUrl(exerciseId: string): string {
-  return `${FREE_EXERCISE_DB_REPOSITORY_URL}/blob/${FREE_EXERCISE_DB_REVISION}/exercises/${encodeURIComponent(exerciseId)}.json`;
-}

@@ -96,7 +96,7 @@ function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
         primaryMuscles: ['stale-primary'],
         secondaryMuscles: ['stale-secondary'],
         instructions: ['Stale instructions'],
-        instructionUrl: 'https://stale.example/bench',
+        instructionUrl: 'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json',
         instructionUrlType: 'website',
         isCustom: false,
       });
@@ -116,7 +116,7 @@ function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
         transaction.objectStore(storeName).put(sentinel);
       }
       transaction.objectStore('metadata').put({ key: 'exercises_seeded', value: '1' });
-      transaction.objectStore('metadata').put({ key: 'exercise_catalog_version', value: '1' });
+      transaction.objectStore('metadata').put({ key: 'exercise_catalog_version', value: '3' });
       transaction.objectStore('gyms').put({
         id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
         createdAt: '2026-09-10T00:00:00.000Z',
@@ -204,6 +204,7 @@ describe('webStore persistence and lease handling', () => {
     const builtIn = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
     const bundled = getBundledExercise('Barbell_Bench_Press_-_Medium_Grip');
     assert.deepEqual(builtIn, { ...bundled, isCustom: false });
+    assert.equal(builtIn?.instructionUrl, 'https://musclewiki.com/exercise/barbell-bench-press');
     assert.ok(await store.getExerciseById('3_4_Sit-Up'), 'missing bundled exercises should be seeded');
     assert.deepEqual(await store.getExerciseById('Incline_Dumbbell_Press'), {
       id: 'Incline_Dumbbell_Press',
@@ -234,7 +235,7 @@ describe('webStore persistence and lease handling', () => {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '3' });
+    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '4' });
     metadataDatabase.close();
     await store.close();
   });

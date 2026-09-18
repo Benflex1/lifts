@@ -64,8 +64,11 @@ The seven instruction-array updates are `Iron_Cross`, `One-Arm_Kettlebell_Swings
 
 ## 6. External form references
 
-- The default catalog does not bundle curated exercise URLs. Each record receives a deterministic fallback reference derived at runtime as an encoded YouTube search for `<exercise name> exercise form`.
+- Verified MuscleWiki pages are linked only as external, human-facing exercise guides for the explicitly mapped bundled IDs. Lifts does not call the MuscleWiki API and does not copy, rehost, or bundle MuscleWiki text, images, or videos.
+- Free Exercise DB GitHub remains internal dataset and media provenance only. Its GitHub repository and raw image URLs are not user-facing exercise guide links.
+- Bundled catalog version 4 replaces legacy bundled GitHub guide URLs during native and web synchronization. Existing custom rows, including their valid non-GitHub website or YouTube links, are preserved by `isCustom`.
+- Unmapped bundled records and records with missing or rejected guide links receive a deterministic fallback reference derived at runtime as an encoded YouTube search for `<exercise name> exercise form`.
 - The fallback is a URL string only: Lifts does not download, cache, re-host, or bundle YouTube videos. A user may choose to open the external search result from the exercise detail UI.
-- Optional curated website or direct YouTube links are validated when supplied by another catalog or custom exercise, but their support does not represent bundled third-party media.
+- Optional curated website or direct YouTube links are validated when supplied by another catalog or custom exercise; GitHub hosts and subdomains are rejected, and their support does not represent bundled third-party media.
 
 See the [exercise-library source registry](exercise-library-sources.md) for the field-level catalog record.
