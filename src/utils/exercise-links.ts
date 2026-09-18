@@ -18,7 +18,7 @@ const isYouTubeUrl = (url: URL): boolean => {
 const bundledExerciseIds = new Set(DEFAULT_EXERCISES.map(exercise => exercise.id));
 
 const isGitHubHost = (hostname: string): boolean => {
-  const normalized = hostname.toLowerCase();
+  const normalized = hostname.toLowerCase().replace(/\.+$/, '');
   return normalized === 'github.com' || normalized.endsWith('.github.com');
 };
 

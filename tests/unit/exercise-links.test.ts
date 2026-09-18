@@ -111,11 +111,33 @@ describe('exercise instruction links', () => {
     assert.doesNotMatch(link.url, /github\.com/i);
   });
 
+  it('rejects a trailing-dot GitHub root hostname and falls back to YouTube', () => {
+    const link = getExerciseInstructionLink({
+      ...exercise(),
+      instructionUrl: 'https://github.com./example/guide',
+      instructionUrlType: 'website',
+    });
+    assert.equal(link.type, 'youtube');
+    assert.equal(link.isFallback, true);
+    assert.doesNotMatch(link.url, /github\.com/i);
+  });
+
   it('rejects GitHub subdomains for YouTube-typed links', () => {
     const link = getExerciseInstructionLink({
       ...exercise(),
       instructionUrl: 'https://docs.github.com/example/guide',
       instructionUrlType: 'youtube',
+    });
+    assert.equal(link.type, 'youtube');
+    assert.equal(link.isFallback, true);
+    assert.doesNotMatch(link.url, /github\.com/i);
+  });
+
+  it('rejects a trailing-dot GitHub subdomain and falls back to YouTube', () => {
+    const link = getExerciseInstructionLink({
+      ...exercise(),
+      instructionUrl: 'https://docs.github.com./example/guide',
+      instructionUrlType: 'website',
     });
     assert.equal(link.type, 'youtube');
     assert.equal(link.isFallback, true);
