@@ -10,5 +10,7 @@ const MUSCLEWIKI_GUIDES: Readonly<Record<string, string>> = Object.freeze({
 });
 
 export function getMuscleWikiGuideUrl(exerciseId: string): string | undefined {
-  return MUSCLEWIKI_GUIDES[exerciseId];
+  return Object.prototype.hasOwnProperty.call(MUSCLEWIKI_GUIDES, exerciseId)
+    ? MUSCLEWIKI_GUIDES[exerciseId]
+    : undefined;
 }

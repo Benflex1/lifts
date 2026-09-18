@@ -1,6 +1,7 @@
 import { before, describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { Exercise } from '../../src/types';
+import { getMuscleWikiGuideUrl } from '../../src/database/exercise-guides';
 import { DEFAULT_EXERCISES } from '../../src/database/seedData';
 
 let openURLImplementation: (url: string) => Promise<void> = async () => {};
@@ -38,6 +39,12 @@ function mockLinking(t: { mock: { module: (specifier: string, options: { exports
 }
 
 describe('exercise instruction links', () => {
+  it('returns undefined for unregistered prototype property IDs', () => {
+    for (const exerciseId of ['toString', 'constructor', '__proto__']) {
+      assert.equal(getMuscleWikiGuideUrl(exerciseId), undefined);
+    }
+  });
+
   it('prefers a valid curated website link', () => {
     assert.deepEqual(getExerciseInstructionLink(exercise({
       instructionUrl: 'https://example.com/bench',
