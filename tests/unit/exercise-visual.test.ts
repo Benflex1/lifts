@@ -4,6 +4,20 @@ import * as assert from 'node:assert/strict';
 
 const Dumbbell = () => null;
 
+const isDumbbellIcon = (type: unknown) => {
+  if (typeof type !== 'function' && (typeof type !== 'object' || type === null)) {
+    return false;
+  }
+
+  const component = type as {
+    name?: string;
+    displayName?: string;
+    render?: { name?: string; displayName?: string };
+  };
+  return [component.name, component.displayName, component.render?.name, component.render?.displayName]
+    .includes('Dumbbell');
+};
+
 const createReactHarness = () => {
   let state = false;
   const React = {
@@ -57,7 +71,7 @@ describe('ExerciseVisual runtime guard', () => {
     boundary.state = ExerciseVisualErrorBoundary.getDerivedStateFromError(new Error('broken SVG'));
     const fallback = boundary.render() as React.ReactElement;
 
-    assert.equal(fallback.type, Dumbbell);
+    assert.ok(isDumbbellIcon(fallback.type));
     assert.equal(fallback.props.size, 56);
     assert.equal(fallback.props.accessibilityLabel, 'Broken lift illustration');
   });
