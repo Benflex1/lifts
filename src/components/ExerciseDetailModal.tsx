@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp, ExternalLink, ArrowRightLeft } from 'lucide-react-native';
+import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp, ExternalLink, ArrowRightLeft, Play, Pause } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Exercise, DualExerciseStats, Gym, ExerciseGymScope, Workout } from '../types';
 import { useSettings } from '../context/SettingsContext';
@@ -29,6 +29,7 @@ import { calculate1RM } from '../utils/calculator';
 import { ExerciseVisual } from './ExerciseVisual';
 import { openExerciseInstructionLink } from '../utils/exercise-links';
 import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
+import { getExerciseVisual } from '../utils/exercise-media';
 import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
 
@@ -72,6 +73,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const [gymNamesMap, setGymNamesMap] = useState<Map<string, string>>(new Map());
   const [showTransferPicker, setShowTransferPicker] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [isPlayingAnimation, setIsPlayingAnimation] = useState(true);
+  const [activeFrameIndex, setActiveFrameIndex] = useState<0 | 1>(0);
   const requestCounterRef = useRef(0);
 
   const handleSelectTransferTarget = async (targetExercise: Exercise) => {
@@ -127,9 +130,13 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       setSelectedTimeframe('ALL');
       setHistoryGymFilter(null);
       setHighlightedWorkoutId(null);
+      setIsPlayingAnimation(true);
+      setActiveFrameIndex(0);
       return;
     }
 
+    setIsPlayingAnimation(true);
+    setActiveFrameIndex(0);
     const requestId = ++requestCounterRef.current;
 
     async function loadData() {
@@ -188,6 +195,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   if (!exercise) {
     return null;
   }
+
+  const visualDescriptor = React.useMemo(() => getExerciseVisual(exercise), [exercise]);
+  const hasTwoFrames =
+    visualDescriptor.kind === 'remote-image' &&
+    Array.isArray(visualDescriptor.imageUrls) &&
+    visualDescriptor.imageUrls.length >= 2;
 
   const instructionLinkViewModel = getExerciseFormGuideViewModel(exercise);
 
@@ -272,11 +285,106 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <ExerciseVisual
-            exercise={exercise}
-            size="hero"
-            accessibilityLabel={`${exercise.name} exercise visual`}
-          />
+          <View style={styles.heroVisualSection}>
+            <TouchableOpacity
+              activeOpacity={hasTwoFrames ? 0.9 : 1}
+              onPress={hasTwoFrames ? () => setIsPlayingAnimation((prev) => !prev) : undefined}
+              accessibilityRole={hasTwoFrames ? 'button' : 'none'}
+              accessibilityLabel={
+                hasTwoFrames
+                  ? `${exercise.name} movement animation. Tap to ${isPlayingAnimation ? 'pause' : 'play'}.`
+                  : `${exercise.name} exercise visual`
+              }
+              style={styles.heroVisualWrap}
+            >
+              <ExerciseVisual
+                exercise={exercise}
+                size="hero"
+                animated={hasTwoFrames && isPlayingAnimation}
+                frameIndex={hasTwoFrames && !isPlayingAnimation ? activeFrameIndex : undefined}
+                onFrameChange={setActiveFrameIndex}
+                accessibilityLabel={`${exercise.name} exercise visual`}
+              />
+            </TouchableOpacity>
+
+            {hasTwoFrames && (
+              <View style={styles.formGalleryBar}>
+                <TouchableOpacity
+                  style={[
+                    styles.galleryPlayBtn,
+                    isPlayingAnimation && styles.galleryPlayBtnActive,
+                  ]}
+                  onPress={() => setIsPlayingAnimation((prev) => !prev)}
+                  accessibilityRole="button"
+                  accessibilityLabel={isPlayingAnimation ? 'Pause movement animation' : 'Play movement animation'}
+                  accessibilityState={{ selected: isPlayingAnimation }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {isPlayingAnimation ? (
+                    <Pause size={13} color="#38BDF8" />
+                  ) : (
+                    <Play size={13} color="#94A3B8" />
+                  )}
+                  <Text
+                    style={[
+                      styles.galleryPlayBtnText,
+                      isPlayingAnimation && styles.galleryPlayBtnTextActive,
+                    ]}
+                  >
+                    {isPlayingAnimation ? 'Pause' : 'Play'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.galleryPillGroup}>
+                  <TouchableOpacity
+                    style={[
+                      styles.galleryPill,
+                      activeFrameIndex === 0 && styles.galleryPillActive,
+                    ]}
+                    onPress={() => {
+                      setIsPlayingAnimation(false);
+                      setActiveFrameIndex(0);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="View starting position"
+                    accessibilityState={{ selected: activeFrameIndex === 0 }}
+                  >
+                    <Text
+                      style={[
+                        styles.galleryPillText,
+                        activeFrameIndex === 0 && styles.galleryPillTextActive,
+                      ]}
+                    >
+                      1. Setup
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.galleryPill,
+                      activeFrameIndex === 1 && styles.galleryPillActive,
+                    ]}
+                    onPress={() => {
+                      setIsPlayingAnimation(false);
+                      setActiveFrameIndex(1);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="View peak contraction"
+                    accessibilityState={{ selected: activeFrameIndex === 1 }}
+                  >
+                    <Text
+                      style={[
+                        styles.galleryPillText,
+                        activeFrameIndex === 1 && styles.galleryPillTextActive,
+                      ]}
+                    >
+                      2. Contraction
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
 
           {exercise.isCustom && (
             <View style={styles.detailCustomBadge}>
@@ -1232,6 +1340,76 @@ const styles = StyleSheet.create({
   dataToolButtonText: {
     color: '#FBBF24',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  heroVisualSection: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  heroVisualWrap: {
+    borderRadius: 220 / 7,
+    overflow: 'hidden',
+  },
+  formGalleryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: 220,
+    marginTop: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    backgroundColor: '#14161D',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#262A34',
+  },
+  galleryPlayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#1E2330',
+  },
+  galleryPlayBtnActive: {
+    backgroundColor: '#0F263B',
+    borderWidth: 1,
+    borderColor: '#0284C7',
+  },
+  galleryPlayBtnText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  galleryPlayBtnTextActive: {
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
+  galleryPillGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  galleryPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#181A20',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  galleryPillActive: {
+    backgroundColor: '#0284C720',
+    borderColor: '#38BDF8',
+  },
+  galleryPillText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  galleryPillTextActive: {
+    color: '#38BDF8',
     fontWeight: '700',
   },
 });
