@@ -253,3 +253,102 @@ test('runs successful sequential initDatabase calls independently', async (t) =>
 
   assert.equal(initCalls, 2);
 });
+
+test('resets a failed native initialization so retry opens a fresh database', async (t) => {
+  if (typeof t.mock.module !== 'function') {
+    t.skip('Node module mocks are required to isolate expo-sqlite');
+    return;
+  }
+
+  let openCalls = 0;
+  let initCalls = 0;
+  let closeCalls = 0;
+  const databaseOne = {
+    closeAsync: async () => {
+      closeCalls += 1;
+    },
+  };
+  const databaseTwo = {
+    closeAsync: async () => {},
+  };
+  const databases: unknown[] = [];
+  const initError = new Error('first init failed');
+  const store = {
+    init: async () => {
+      initCalls += 1;
+      if (initCalls === 1) throw initError;
+    },
+  };
+
+  t.mock.module('expo-sqlite', {
+    exports: {
+      openDatabaseAsync: async () => {
+        openCalls += 1;
+        const database = openCalls === 1 ? databaseOne : databaseTwo;
+        databases.push(database);
+        return database;
+      },
+    },
+  });
+  t.mock.module('../../src/database/nativeStore.ts', {
+    exports: {
+      createNativeStore: () => store,
+    },
+  });
+
+  const { initDatabase } = await import('../../src/database/db.native?init-failed-reset');
+
+  await assert.rejects(initDatabase(), (error: unknown) => error === initError);
+  assert.equal(closeCalls, 1);
+
+  await initDatabase();
+
+  assert.equal(openCalls, 2);
+  assert.deepEqual(databases, [databaseOne, databaseTwo]);
+});
+
+test('preserves the init error when failed database cleanup rejects and still retries', async (t) => {
+  if (typeof t.mock.module !== 'function') {
+    t.skip('Node module mocks are required to isolate expo-sqlite');
+    return;
+  }
+
+  let openCalls = 0;
+  let initCalls = 0;
+  const databaseOne = {
+    closeAsync: async () => {
+      throw new Error('close failed');
+    },
+  };
+  const databaseTwo = {
+    closeAsync: async () => {},
+  };
+  const initError = new Error('original init failed');
+  const store = {
+    init: async () => {
+      initCalls += 1;
+      if (initCalls === 1) throw initError;
+    },
+  };
+
+  t.mock.module('expo-sqlite', {
+    exports: {
+      openDatabaseAsync: async () => {
+        openCalls += 1;
+        return openCalls === 1 ? databaseOne : databaseTwo;
+      },
+    },
+  });
+  t.mock.module('../../src/database/nativeStore.ts', {
+    exports: {
+      createNativeStore: () => store,
+    },
+  });
+
+  const { initDatabase } = await import('../../src/database/db.native?init-close-failure');
+
+  await assert.rejects(initDatabase(), (error: unknown) => error === initError);
+  await initDatabase();
+
+  assert.equal(openCalls, 2);
+});

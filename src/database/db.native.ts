@@ -54,10 +54,31 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase | null> {
   return openDatabase();
 }
 
+async function resetFailedNativeDatabase(): Promise<void> {
+  const database = dbInstance;
+
+  storeInstance = null;
+  storePromise = null;
+  dbInstance = null;
+  databaseOpenPromise = null;
+
+  if (!database) return;
+
+  try {
+    await database.closeAsync();
+  } catch {
+    // Failed cleanup must not mask the original initialization error.
+  }
+}
+
 export async function initDatabase(): Promise<void> {
   if (!initPromise) {
     initPromise = getStore()
       .then((store) => store.init())
+      .catch(async (error) => {
+        await resetFailedNativeDatabase();
+        throw error;
+      })
       .finally(() => {
         initPromise = null;
       });
