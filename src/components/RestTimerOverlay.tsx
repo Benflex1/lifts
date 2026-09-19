@@ -6,9 +6,10 @@ import { formatTimer } from '../utils/calculator';
 
 export interface RestTimerOverlayProps {
   nextUpText?: string | null;
+  bottomOffset?: number;
 }
 
-export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText }) => {
+export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, bottomOffset }) => {
   const { restTimer, adjustRestTimer, stopRestTimer } = useWorkout();
 
   if (!restTimer.isActive || restTimer.remainingSeconds <= 0) {
@@ -24,7 +25,13 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText }
   );
 
   return (
-    <View style={[styles.floatingContainer, isWarning && styles.floatingContainerWarning]}>
+    <View
+      style={[
+        styles.floatingContainer,
+        isWarning && styles.floatingContainerWarning,
+        bottomOffset !== undefined && { bottom: bottomOffset },
+      ]}
+    >
       {/* Progress Line */}
       <View style={styles.progressBarBackground}>
         <View style={[styles.progressBarFill, { width: `${progressPercent}%`, backgroundColor: accentColor }]} />

@@ -1148,6 +1148,61 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined);
   }
 
+  async function reassignExerciseHistory(
+    sourceExerciseId: string,
+    targetExerciseId: string
+  ): Promise<{ updatedWorkouts: number; updatedSets: number }> {
+    if (!sourceExerciseId || !targetExerciseId || sourceExerciseId === targetExerciseId) {
+      return { updatedWorkouts: 0, updatedSets: 0 };
+    }
+
+    return writeQueue(async () => {
+      const targetRows = await driver.getAllAsync<{ id: string }>(
+        'SELECT id FROM exercises WHERE id = ?',
+        targetExerciseId
+      );
+      if (targetRows.length === 0) {
+        throw new Error(`Target exercise ${targetExerciseId} does not exist.`);
+      }
+
+      let updatedWorkouts = 0;
+      let updatedSets = 0;
+
+      await driver.withTransactionAsync(async () => {
+        const setRows = await driver.getAllAsync<{ count: number }>(
+          `SELECT COUNT(s.id) AS count
+           FROM exercise_sets s
+           JOIN workout_exercises we ON s.workout_exercise_id = we.id
+           WHERE we.exercise_id = ?`,
+          sourceExerciseId
+        );
+        updatedSets = setRows[0]?.count || 0;
+
+        const workoutRows = await driver.getAllAsync<{ count: number }>(
+          `SELECT COUNT(DISTINCT workout_id) AS count
+           FROM workout_exercises
+           WHERE exercise_id = ?`,
+          sourceExerciseId
+        );
+        updatedWorkouts = workoutRows[0]?.count || 0;
+
+        await driver.runAsync(
+          'UPDATE workout_exercises SET exercise_id = ? WHERE exercise_id = ?',
+          targetExerciseId,
+          sourceExerciseId
+        );
+
+        await driver.runAsync(
+          'UPDATE routine_exercises SET exercise_id = ? WHERE exercise_id = ?',
+          targetExerciseId,
+          sourceExerciseId
+        );
+      });
+
+      return { updatedWorkouts, updatedSets };
+    });
+  }
+
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
     return writeQueue(async () => {
       let normalizedDraft = normalizeDraft(draft);
@@ -1468,6 +1523,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     getCompletedWorkoutsForExercise: loadCompletedWorkoutsForExercise,
     getCompletedWorkoutsForExercises,
     getExerciseStats,
+    reassignExerciseHistory,
     getAllExercises,
     searchExercises,
     getExerciseById,

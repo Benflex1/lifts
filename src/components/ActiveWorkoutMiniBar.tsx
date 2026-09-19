@@ -1,13 +1,13 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { ChevronUp, Play, Clock, Dumbbell } from 'lucide-react-native';
+import { ChevronUp, Play, Clock, Dumbbell, Timer } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { formatTimer } from '../utils/calculator';
 
 export const ActiveWorkoutMiniBar: React.FC = () => {
-  const { isWorkingOut, isMinimized, activeWorkout, elapsedSeconds, maximizeWorkout } = useWorkout();
+  const { isWorkingOut, isMinimized, activeWorkout, elapsedSeconds, restTimer, maximizeWorkout } = useWorkout();
   const { unit } = useSettings();
 
   if (!isWorkingOut || !isMinimized || !activeWorkout) {
@@ -46,6 +46,17 @@ export const ActiveWorkoutMiniBar: React.FC = () => {
               <Dumbbell size={11} color="#9CA3AF" />
               <Text style={styles.metricText}>{formatWeight(volume, unit)}</Text>
             </View>
+            {restTimer?.isActive && restTimer.remainingSeconds > 0 && (
+              <>
+                <Text style={styles.dot}>•</Text>
+                <View style={styles.metricItem}>
+                  <Timer size={11} color="#10B981" />
+                  <Text style={[styles.metricText, { color: '#10B981', fontWeight: '700' }]}>
+                    Rest: {formatTimer(restTimer.remainingSeconds)}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </View>

@@ -78,6 +78,10 @@ export interface Store {
   getCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]>;
   getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>>;
   getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats>;
+  reassignExerciseHistory(
+    sourceExerciseId: string,
+    targetExerciseId: string
+  ): Promise<{ updatedWorkouts: number; updatedSets: number }>;
 
   getAllExercises(): Promise<Exercise[]>;
   searchExercises(query?: string, muscle?: string, equipment?: string): Promise<Exercise[]>;

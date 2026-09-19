@@ -22,6 +22,7 @@ import {
 import * as Crypto from 'expo-crypto';
 import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise, ExerciseGymScope } from '../types';
 import {
+  getStore,
   getWorkoutHistory,
   getWorkoutDetail,
   deleteWorkout,
@@ -126,6 +127,42 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
       if (requestId !== historyLoadRequestRef.current) return;
       setHistory(list);
       setGyms(gymList);
+
+      // Eagerly compute PRs for all historical workouts so PR badges always show
+      const store = await getStore();
+      const snapshot = await store.readSnapshot();
+      if (requestId !== historyLoadRequestRef.current) return;
+
+      const workoutsByExercise: Record<string, Workout[]> = {};
+      for (const w of snapshot.workouts || []) {
+        for (const ex of w.exercises || []) {
+          if (!workoutsByExercise[ex.exerciseId]) {
+            workoutsByExercise[ex.exerciseId] = [];
+          }
+          workoutsByExercise[ex.exerciseId].push(w);
+        }
+      }
+
+      const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
+      (snapshot.exerciseGymScopes || []).forEach((s) => {
+        scopesByEx[s.exerciseId] = s;
+      });
+
+      const prMap: Record<string, WorkoutPRSummary> = {};
+      const detailsMap: Record<string, Workout> = {};
+      for (const w of snapshot.workouts || []) {
+        detailsMap[w.id] = w;
+        prMap[w.id] = evaluateWorkoutPRs(
+          w,
+          workoutsByExercise,
+          gymList,
+          gymTrackingEnabled,
+          scopesByEx
+        );
+      }
+
+      setWorkoutDetails((prev) => ({ ...detailsMap, ...prev }));
+      setWorkoutPRs(prMap);
     } catch (e) {
       console.error(e);
     } finally {

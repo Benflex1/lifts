@@ -1322,4 +1322,82 @@ describe('nativeStore and migration safety', () => {
     driver.close();
     fs.unlinkSync(tempFile);
   });
+
+  it('reassignExerciseHistory transfers workout history and routines from source to target exercise', async () => {
+    const tempFile = path.join(os.tmpdir(), `reassign-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    const driver = new NodeSqliteDriver(tempFile);
+    const store = createNativeStore(driver);
+    await store.init();
+
+    // Create 2 custom exercises
+    const exA = await store.createCustomExercise({
+      name: 'Wrong Exercise A',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    });
+    const exB = await store.createCustomExercise({
+      name: 'Correct Exercise B',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    });
+
+    const defaultGym = await store.getDefaultGym();
+
+    // Save a completed workout with exA
+    const workoutId = 'w-reassign-1';
+    await store.finishWorkout({
+      id: workoutId,
+      name: 'Test Workout',
+      gymId: defaultGym.id,
+      startTime: new Date().toISOString(),
+      durationSeconds: 1800,
+      totalVolumeKg: 1000,
+      exercises: [
+        {
+          id: 'we-1',
+          exerciseId: exA.id,
+          exercise: exA,
+          restTimerSeconds: 60,
+          sets: [
+            { id: 's-1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+            { id: 's-2', setNumber: 2, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+          ],
+        },
+      ],
+    });
+
+    // Verify exA has the workout
+    const beforeA = await store.getCompletedWorkoutsForExercise(exA.id);
+    assert.equal(beforeA.length, 1);
+    const beforeB = await store.getCompletedWorkoutsForExercise(exB.id);
+    assert.equal(beforeB.length, 0);
+
+    // Reassign exA -> exB
+    const res = await store.reassignExerciseHistory(exA.id, exB.id);
+    assert.equal(res.updatedWorkouts, 1);
+    assert.equal(res.updatedSets, 2);
+
+    // Verify history transferred
+    const afterA = await store.getCompletedWorkoutsForExercise(exA.id);
+    assert.equal(afterA.length, 0);
+    const afterB = await store.getCompletedWorkoutsForExercise(exB.id);
+    assert.equal(afterB.length, 1);
+    assert.equal(afterB[0].exercises[0].exerciseId, exB.id);
+
+    // Same id reassign does nothing
+    const noopRes = await store.reassignExerciseHistory(exB.id, exB.id);
+    assert.equal(noopRes.updatedWorkouts, 0);
+    assert.equal(noopRes.updatedSets, 0);
+
+    // Target not found throws error
+    await assert.rejects(
+      () => store.reassignExerciseHistory(exB.id, 'non-existent-exercise-id'),
+      /does not exist/
+    );
+
+    driver.close();
+    fs.unlinkSync(tempFile);
+  });
 });

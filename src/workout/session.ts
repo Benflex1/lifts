@@ -20,7 +20,7 @@ export interface SessionController {
   update(workout: Workout, restTimer?: { endsAt: number; totalSeconds: number } | null): void;
   flush(): Promise<void>;
   resume(draft: WorkoutDraft): void;
-  finish(): Promise<Workout>;
+  finish(durationSecondsOverride?: number): Promise<Workout>;
   discard(): Promise<void>;
   getState(): SessionState;
   subscribe(listener: (state: SessionState) => void): () => void;
@@ -248,7 +248,7 @@ export function createSessionController(
     notify();
   }
 
-  async function finish(): Promise<Workout> {
+  async function finish(durationSecondsOverride?: number): Promise<Workout> {
     if (state.phase !== 'active' || !state.workout) {
       throw new Error('Cannot finish workout: no active workout');
     }
@@ -264,7 +264,9 @@ export function createSessionController(
     await drainInFlightWrite();
 
     const finalNow = getNow();
-    const finalDuration = Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
+    const finalDuration = durationSecondsOverride !== undefined && durationSecondsOverride >= 0
+      ? Math.floor(durationSecondsOverride)
+      : Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
     const calculatedVolume = (currentWorkout.exercises || []).reduce(
       (sum, ex) =>
         sum +

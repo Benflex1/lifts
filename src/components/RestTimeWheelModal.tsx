@@ -543,4 +543,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+  actionButtonsCol: {
+    gap: 10,
+    width: '100%',
+  },
+  startNowButton: {
+    backgroundColor: '#10B981',
+    minHeight: 52,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  startNowButtonText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  secondaryConfirmButton: {
+    backgroundColor: '#262A34',
+    borderWidth: 1,
+    borderColor: '#374151',
+    minHeight: 46,
+  },
+  secondaryConfirmButtonText: {
+    color: '#D1D5DB',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

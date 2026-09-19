@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react-native';
+import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp, ExternalLink, ArrowRightLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Exercise, DualExerciseStats, Gym, ExerciseGymScope, Workout } from '../types';
 import { useSettings } from '../context/SettingsContext';
@@ -18,6 +18,7 @@ import {
   getGyms,
   getDefaultGym,
   getCompletedWorkoutsForExercise,
+  reassignExerciseHistory,
 } from '../database/db';
 import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
 import { ExercisePodium, extractExercisePodium } from '../workout/pr';
@@ -29,6 +30,7 @@ import { ExerciseVisual } from './ExerciseVisual';
 import { openExerciseInstructionLink } from '../utils/exercise-links';
 import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
 import { useDialog } from '../context/DialogContext';
+import { ExercisePickerModal } from './ExercisePickerModal';
 
 export interface ExerciseDetailModalProps {
   visible: boolean;
@@ -37,6 +39,7 @@ export interface ExerciseDetailModalProps {
   currentGym?: Gym | null;
   onEditCustom?: (exercise: Exercise) => void;
   onEditScope?: (exercise: Exercise) => void;
+  onHistoryTransferred?: () => void;
   refreshKey?: number | string;
 }
 
@@ -47,11 +50,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   currentGym: initialGym,
   onEditCustom,
   onEditScope,
+  onHistoryTransferred,
   refreshKey,
 }) => {
   const insets = useSafeAreaInsets();
   const { unit, gymTrackingEnabled } = useSettings();
-  const { notify } = useDialog();
+  const { notify, confirm } = useDialog();
 
   const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
@@ -66,7 +70,51 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const [highlightedWorkoutId, setHighlightedWorkoutId] = useState<string | null>(null);
   const [availableGyms, setAvailableGyms] = useState<Gym[]>([]);
   const [gymNamesMap, setGymNamesMap] = useState<Map<string, string>>(new Map());
+  const [showTransferPicker, setShowTransferPicker] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
   const requestCounterRef = useRef(0);
+
+  const handleSelectTransferTarget = async (targetExercise: Exercise) => {
+    setShowTransferPicker(false);
+    if (!exercise) return;
+    if (targetExercise.id === exercise.id) {
+      await notify({
+        title: 'Invalid Destination',
+        message: 'Cannot transfer history to the same exercise.',
+      });
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Transfer Exercise History?',
+      message: `Move all past workouts and sets from "${exercise.name}" to "${targetExercise.name}"? This action moves all recorded history and cannot be undone.`,
+      confirmLabel: 'Transfer',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    });
+
+    if (!confirmed) return;
+
+    setIsTransferring(true);
+    try {
+      const result = await reassignExerciseHistory(exercise.id, targetExercise.id);
+      await notify({
+        title: 'History Transferred',
+        message: `Successfully transferred ${result.updatedSets} sets across ${result.updatedWorkouts} workouts to "${targetExercise.name}".`,
+      });
+      if (onHistoryTransferred) {
+        onHistoryTransferred();
+      }
+      onClose();
+    } catch (err: any) {
+      await notify({
+        title: 'Transfer Failed',
+        message: err?.message || 'Failed to transfer exercise history.',
+      });
+    } finally {
+      setIsTransferring(false);
+    }
+  };
 
   useEffect(() => {
     if (!visible || !exercise) {
@@ -583,7 +631,42 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               <Text style={styles.instructionLinkButtonText}>{instructionLinkViewModel.label}</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Exercise History Transfer Tool */}
+          <View style={styles.dataToolCard}>
+            <View style={styles.dataToolHeader}>
+              <View style={styles.dataToolIconCircle}>
+                <ArrowRightLeft size={18} color="#F59E0B" />
+              </View>
+              <View style={styles.dataToolText}>
+                <Text style={styles.dataToolTitle}>Transfer History & Analytics</Text>
+                <Text style={styles.dataToolSubtitle}>
+                  Move all recorded workouts and sets from this exercise to another exercise.
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.dataToolButton}
+              onPress={() => setShowTransferPicker(true)}
+              disabled={isTransferring}
+              accessibilityRole="button"
+              accessibilityLabel="Transfer exercise history to another exercise"
+              activeOpacity={0.75}
+            >
+              <ArrowRightLeft size={15} color="#FBBF24" />
+              <Text style={styles.dataToolButtonText}>
+                {isTransferring ? 'Transferring...' : 'Transfer History to Another Exercise'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
+
+        <ExercisePickerModal
+          visible={showTransferPicker}
+          title="Transfer History To..."
+          onClose={() => setShowTransferPicker(false)}
+          onSelectExercise={handleSelectTransferTarget}
+        />
       </View>
     </Modal>
   );
@@ -795,6 +878,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#262A34',
     marginTop: 6,
+    marginBottom: 20,
   },
   instructionHeadRow: {
     flexDirection: 'row',
@@ -1095,5 +1179,59 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: '#CBD5E1',
+  },
+  dataToolCard: {
+    backgroundColor: '#161922',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#262A34',
+    padding: 16,
+    marginTop: 10,
+    marginBottom: 36,
+    gap: 14,
+  },
+  dataToolHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  dataToolIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dataToolText: {
+    flex: 1,
+  },
+  dataToolTitle: {
+    color: '#F3F4F6',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  dataToolSubtitle: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  dataToolButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+  },
+  dataToolButtonText: {
+    color: '#FBBF24',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

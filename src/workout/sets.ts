@@ -158,3 +158,19 @@ export function sanitizeRepsInput(input: string): string {
   // Whole numbers only
   return input.replace(/[^0-9]/g, '');
 }
+
+export function moveWorkoutSet(
+  sets: WorkoutSet[],
+  setId: string,
+  direction: -1 | 1
+): WorkoutSet[] {
+  const currentIndex = sets.findIndex((s) => s.id === setId);
+  const targetIndex = currentIndex + direction;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= sets.length) {
+    return sets;
+  }
+  const updated = [...sets];
+  const [moved] = updated.splice(currentIndex, 1);
+  updated.splice(targetIndex, 0, moved);
+  return updated.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+}
