@@ -80,6 +80,20 @@ Lifts incorporates open-source software packages and libraries. This document li
 - **Upstream**: [`yuhonas/free-exercise-db`](https://github.com/yuhonas/free-exercise-db/tree/a859101d633a01c4a1a920d6a8ce41dabba0705f), revision `a859101d633a01c4a1a920d6a8ce41dabba0705f`
 - **Credited original dataset**: [`wrkout/exercises.json`](https://github.com/wrkout/exercises.json/tree/5994bea047eee4d39a2c0872be3dd8fdd258ba31)
 - **License**: Unlicense / public-domain dedication
-- **Lifts transformation**: Lifts retains the 876 upstream records, IDs, order, names, categories, muscle fields, and instructions. It normalizes 77 upstream `null` equipment values to `body only`. Lifts does not bundle upstream images or videos.
+- **Lifts transformation**: Lifts retains the 876 upstream records, IDs, order, names, categories, and muscle fields. It retains upstream instructions for 869 records. Seven instruction arrays differ: Lifts authors concise offline-safe instructions for the five fully empty records `Iron_Cross`, `One-Arm_Kettlebell_Swings`, `Push_Press`, `Side_Bridge`, and `Side_Jackknife`, and replaces one upstream blank step in each of `Barbell_Squat_To_A_Bench` and `Clean`. It also normalizes 77 upstream `null` equipment values to `body only`. Lifts reviews and preserves 272 explicit empty `secondaryMuscles` arrays where no meaningful secondary target is established. Lifts does not bundle upstream images, videos, or animations.
 - **License text**: [`licenses/UNLICENSE`](licenses/UNLICENSE)
 - **Detailed provenance and verification hashes**: [`docs/data-provenance.md`](docs/data-provenance.md)
+
+### Workout Guide exercise illustration
+- **Asset**: `assets/exercises/workout-guide-plank-frame-1.svg`
+- **Source**: [`bryllim/workout-guide`](https://github.com/bryllim/workout-guide), revision `aac599224bb9780305239607ef98540b7e0ce389`, `packages/workout-guide/assets/plank/frame-1.svg`
+- **Mapping**: Local exercise ID `Plank` → Workout Guide manifest ID `exercise-plank` / slug `plank`; exact exercise name `Plank` verified before vendoring.
+- **Creator**: Bryl Lim ([bryllim.com](https://bryllim.com)), as credited by the pinned Workout Guide metadata
+- **License**: [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/). The verbatim legal code is bundled at [`licenses/CC-BY-SA-4.0.txt`](licenses/CC-BY-SA-4.0.txt); attribution, source revision, and asset hash are recorded in [`assets/exercises/attribution.json`](assets/exercises/attribution.json).
+- **Asset SHA-256**: `0f65a842d151f80918e4ee45d1a9f659dd5a82e2d9857c9ad6ae06832a872e94`
+
+### Lifts-authored exercise-library output
+
+- Written instructions for the seven records named above and generated SVG exercise visuals are authored by Lifts and distributed under the repository's MIT license. The generated visuals are static and local; they are not bundled animations or videos.
+- The exercise detail form reference for the default catalog is a runtime-derived, URL-encoded YouTube search string. Lifts does not download, cache, re-host, or distribute the resulting videos. An external destination is not a bundled media asset.
+- The source registry and complete transformation notes are in [`docs/exercise-library-sources.md`](docs/exercise-library-sources.md). No upstream exercise images are included merely because an upstream repository publishes structured data under an open-data license; those image files remain excluded pending file-level rights review.

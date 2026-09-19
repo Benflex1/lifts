@@ -10,7 +10,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus, ChevronRight, Edit2 } from 'lucide-react-native';
+import { Search, X, Plus, ChevronRight, Edit2 } from 'lucide-react-native';
 import { Exercise, ExerciseGymScope, Gym } from '../types';
 import {
   searchExercises,
@@ -22,6 +22,8 @@ import {
 import { useSettings } from '../context/SettingsContext';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
+import { ExerciseVisual } from '../components/ExerciseVisual';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 
 
 const MUSCLE_GROUPS = [
@@ -390,53 +392,64 @@ export const ExercisesScreen: React.FC = () => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <View style={styles.exerciseCard}>
-              <TouchableOpacity
-                style={styles.exerciseCardMain}
-                onPress={() => setActiveDetail(item)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.iconWrap}>
-                  <Dumbbell size={20} color="#3B82F6" />
-                </View>
+          renderItem={({ item }) => {
+            const rowViewModel = getExerciseRowViewModel(item);
+            return (
+              <View style={styles.exerciseCard}>
+                <TouchableOpacity
+                  style={styles.exerciseCardMain}
+                  onPress={() => setActiveDetail(item)}
+                  activeOpacity={0.7}
+                >
+                  <ExerciseVisual
+                    exercise={item}
+                    size="compact"
+                    accessibilityLabel={rowViewModel.visualAccessibilityLabel}
+                  />
 
-                <View style={styles.itemInfo}>
-                  <View style={styles.itemNameRow}>
-                    <Text style={styles.itemName} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    {item.isCustom && (
-                      <View style={styles.listCustomBadge}>
-                        <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
-                      </View>
+                  <View style={styles.itemInfo}>
+                    <View style={styles.itemNameRow}>
+                      <Text style={styles.itemName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      {item.isCustom && (
+                        <View style={styles.listCustomBadge}>
+                          <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.tagRow}>
+                      <Text style={styles.tagMuscle}>
+                        {item.primaryMuscles.join(', ') || 'General'}
+                      </Text>
+                      <Text style={styles.tagDot}>•</Text>
+                      <Text style={styles.tagEquipment}>{item.equipment}</Text>
+                    </View>
+                    {item.secondaryMuscles && item.secondaryMuscles.length > 0 && (
+                      <Text style={styles.secondaryMusclesRowText} numberOfLines={1}>
+                        Secondary: {item.secondaryMuscles.slice(0, 2).join(', ')}
+                        {item.secondaryMuscles.length > 2 ? ` +${item.secondaryMuscles.length - 2}` : ''}
+                      </Text>
                     )}
                   </View>
-                  <View style={styles.tagRow}>
-                    <Text style={styles.tagMuscle}>
-                      {item.primaryMuscles.join(', ') || 'General'}
-                    </Text>
-                    <Text style={styles.tagDot}>•</Text>
-                    <Text style={styles.tagEquipment}>{item.equipment}</Text>
-                  </View>
-                </View>
 
-                {!item.isCustom && <ChevronRight size={18} color="#4B5563" />}
-              </TouchableOpacity>
-
-              {item.isCustom && (
-                <TouchableOpacity
-                  style={styles.itemEditBtn}
-                  onPress={() => handleOpenEditCustom(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit ${item.name}`}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Edit2 size={16} color="#3B82F6" />
+                  {!item.isCustom && <ChevronRight size={18} color="#4B5563" />}
                 </TouchableOpacity>
-              )}
-            </View>
-          )}
+
+                {item.isCustom && (
+                  <TouchableOpacity
+                    style={styles.itemEditBtn}
+                    onPress={() => handleOpenEditCustom(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${item.name}`}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Edit2 size={16} color="#3B82F6" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          }}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No exercises found.</Text>
@@ -692,14 +705,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#1E2638',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   itemInfo: {
     flex: 1,
   },
@@ -804,6 +809,12 @@ const styles = StyleSheet.create({
   tagEquipment: {
     color: '#9CA3AF',
     fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  secondaryMusclesRowText: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginTop: 3,
     textTransform: 'capitalize',
   },
   centerBox: {

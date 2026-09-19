@@ -92,6 +92,62 @@ describe('Backup validation (parseBackup)', () => {
     assert.deepEqual(parsed.exerciseGymScopes[0].linkedGymIds, ['gym-default', 'gym-a']);
   });
 
+  it('preserves curated instruction links when reconstructing an omitted embedded exercise', () => {
+    const v3Backup = {
+      ...validBaseBackup,
+      version: 3,
+      workouts: validBaseBackup.workouts.map((workout) => ({ ...workout, gymId: 'gym-default' })),
+      exercises: [{
+        ...validBaseBackup.exercises[0],
+        instructionUrl: 'https://example.com/bench-press-guide',
+        instructionUrlType: 'website',
+      }],
+      gyms: [{
+        id: 'gym-default',
+        name: 'Default Gym',
+        color: '#3B82F6',
+        isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      }],
+      exerciseGymScopes: [],
+    };
+
+    const parsed = parseBackup(JSON.stringify(v3Backup));
+    assert.equal(parsed.exercises[0].instructionUrl, 'https://example.com/bench-press-guide');
+    assert.equal(parsed.exercises[0].instructionUrlType, 'website');
+    assert.equal(parsed.workouts[0].exercises[0].exercise?.instructionUrl, 'https://example.com/bench-press-guide');
+    assert.equal(parsed.workouts[0].exercises[0].exercise?.instructionUrlType, 'website');
+  });
+
+  it('rejects malformed curated instruction links in backups', () => {
+    const v3 = {
+      ...validBaseBackup,
+      version: 3,
+      workouts: validBaseBackup.workouts.map((workout) => ({ ...workout, gymId: 'gym-default' })),
+      gyms: [{
+        id: 'gym-default',
+        name: 'Default Gym',
+        color: '#3B82F6',
+        isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      }],
+      exerciseGymScopes: [],
+    };
+
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      exercises: [{ ...v3.exercises[0], instructionUrl: '/relative/path' }],
+    })), /Invalid exercise\[0\]\.instructionUrl/);
+    assert.throws(() => parseBackup(JSON.stringify({
+      ...v3,
+      exercises: [{
+        ...v3.exercises[0],
+        instructionUrl: 'https://example.com/guide',
+        instructionUrlType: 'youtube',
+      }],
+    })), /Invalid exercise\[0\]\.instructionUrlType/);
+  });
+
   it('trims gym names and rejects numeric or malformed gym timestamps', () => {
     const v3 = {
       ...validBaseBackup,

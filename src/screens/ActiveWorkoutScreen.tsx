@@ -65,6 +65,8 @@ import { PRBadge } from '../components/PRBadge';
 import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { WarmupModal } from '../components/WarmupModal';
 import { SupersetModal } from '../components/SupersetModal';
+import { ExerciseVisual } from '../components/ExerciseVisual';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
@@ -649,6 +651,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           const totalCount = activeEx.sets.length;
           const isAllCompleted = totalCount > 0 && completedCount === totalCount;
           const ssMeta = supersetMetaMap.get(activeEx.id);
+          const rowViewModel = activeEx.exercise ? getExerciseRowViewModel(activeEx.exercise) : null;
 
           const cardElement = !isExpanded ? (
             // Collapsed Accordion Row - Lyfta Screenshot 1
@@ -678,7 +681,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   accessibilityRole="button"
                   accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
                 >
-                  <Dumbbell size={20} color="#38BDF8" />
+                  {activeEx.exercise ? (
+                    <ExerciseVisual
+                      exercise={activeEx.exercise}
+                      size="compact"
+                      accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
+                    />
+                  ) : (
+                    <Dumbbell size={20} color="#38BDF8" />
+                  )}
                 </TouchableOpacity>
 
                 <View style={styles.collapsedContent}>
@@ -701,6 +712,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     >
                       {completedCount}/{totalCount} done
                     </Text>
+                    {activeEx.exercise?.secondaryMuscles && activeEx.exercise.secondaryMuscles.length > 0 && (
+                      <Text style={styles.collapsedSecondary} numberOfLines={1}>
+                        +{activeEx.exercise.secondaryMuscles.length} secondary
+                      </Text>
+                    )}
                     {isAllCompleted && (
                       <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
                     )}
@@ -749,7 +765,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   accessibilityRole="button"
                   accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
                 >
-                  <Dumbbell size={20} color="#38BDF8" />
+                  {activeEx.exercise ? (
+                    <ExerciseVisual
+                      exercise={activeEx.exercise}
+                      size="compact"
+                      accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
+                    />
+                  ) : (
+                    <Dumbbell size={20} color="#38BDF8" />
+                  )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -772,6 +796,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     ) : null}
                     {activeEx.targetReps ? (
                       <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
+                    ) : null}
+                    {activeEx.exercise?.secondaryMuscles && activeEx.exercise.secondaryMuscles.length > 0 ? (
+                      <Text style={styles.secondaryMuscleBadge} numberOfLines={1}>
+                        +{activeEx.exercise.secondaryMuscles.length} secondary
+                      </Text>
                     ) : null}
                     {ssMeta && (
                       <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color }]}>
@@ -1849,8 +1878,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   exerciseAvatar: {
-    width: 42,
-    height: 42,
+    width: 56,
+    height: 56,
     borderRadius: 10,
     backgroundColor: '#20242E',
     alignItems: 'center',
@@ -1872,6 +1901,12 @@ const styles = StyleSheet.create({
   collapsedMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  collapsedSecondary: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginLeft: 8,
+    flexShrink: 1,
   },
   collapsedSubtitle: {
     color: '#9CA3AF',
@@ -1939,6 +1974,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  secondaryMuscleBadge: {
+    color: '#6B7280',
+    fontSize: 10,
+    textTransform: 'capitalize',
   },
   headerActions: {
     flexDirection: 'row',

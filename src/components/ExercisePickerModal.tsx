@@ -10,9 +10,11 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Dumbbell, Plus, Check, Edit2 } from 'lucide-react-native';
+import { Search, X, Plus, Check, Edit2 } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { searchExercises, createCustomExercise, updateCustomExercise } from '../database/db';
+import { ExerciseVisual } from './ExerciseVisual';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 
 interface Props {
   visible: boolean;
@@ -404,6 +406,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => {
               const isSelected = selectedExercises.has(item.id);
+              const rowViewModel = getExerciseRowViewModel(item);
               return (
                 <View style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}>
                   <TouchableOpacity
@@ -411,9 +414,11 @@ export const ExercisePickerModal: React.FC<Props> = ({
                     onPress={() => handleItemPress(item)}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.iconThumb, isSelected && styles.iconThumbSelected]}>
-                      <Dumbbell size={20} color={isSelected ? '#10B981' : '#3B82F6'} />
-                    </View>
+                    <ExerciseVisual
+                      exercise={item}
+                      size="compact"
+                      accessibilityLabel={rowViewModel.visualAccessibilityLabel}
+                    />
                     <View style={styles.itemInfo}>
                       <View style={styles.itemNameRow}>
                         <Text style={[styles.itemName, isSelected && styles.itemNameSelected]} numberOfLines={1}>
@@ -430,6 +435,12 @@ export const ExercisePickerModal: React.FC<Props> = ({
                         <Text style={styles.tagDot}>•</Text>
                         <Text style={styles.tagEquipment}>{item.equipment}</Text>
                       </View>
+                      {item.secondaryMuscles && item.secondaryMuscles.length > 0 && (
+                        <Text style={styles.secondaryMusclesText} numberOfLines={1}>
+                          Secondary: {item.secondaryMuscles.slice(0, 2).join(', ')}
+                          {item.secondaryMuscles.length > 2 ? ` +${item.secondaryMuscles.length - 2}` : ''}
+                        </Text>
+                      )}
                     </View>
                   </TouchableOpacity>
                   {item.isCustom && (
@@ -733,17 +744,6 @@ const styles = StyleSheet.create({
     borderColor: '#10B981',
     backgroundColor: '#132822',
   },
-  iconThumb: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: '#1E2638',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconThumbSelected: {
-    backgroundColor: '#10382E',
-  },
   itemInfo: {
     flex: 1,
   },
@@ -842,6 +842,12 @@ const styles = StyleSheet.create({
   tagEquipment: {
     color: '#9CA3AF',
     fontSize: 12,
+    textTransform: 'capitalize',
+  },
+  secondaryMusclesText: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginTop: 3,
     textTransform: 'capitalize',
   },
   centerContainer: {

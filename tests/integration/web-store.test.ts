@@ -36,7 +36,293 @@ function openLegacyVersionOneDatabase(name: string): Promise<IDBDatabase> {
   });
 }
 
+const LEGACY_V3_SENTINELS = {
+  routines: {
+    id: 'legacy-routine-v3', name: 'Legacy Routine', folderName: 'Legacy',
+    notes: 'Keep this routine', createdAt: '2026-09-10T07:00:00.000Z', exercises: [],
+  },
+  workouts: {
+    id: 'legacy-workout-v3', name: 'Legacy Workout', gymId: 'gym-default',
+    startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 10, totalVolumeKg: 20,
+    exercises: [],
+  },
+  workout_drafts: {
+    id: 'legacy-draft-v3', version: 1, savedAt: '2026-09-10T08:01:00.000Z', revision: 1,
+    restTimer: null,
+    workout: {
+      id: 'legacy-draft-v3', name: 'Legacy Draft', gymId: 'gym-default',
+      startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 10, totalVolumeKg: 0, exercises: [],
+    },
+  },
+  settings: { key: 'legacy-setting-v3', value: 'keep-me' },
+  exercise_gym_scopes: { exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'global' },
+  health_sync_records: {
+    workoutId: 'legacy-workout-v3', provider: 'healthkit', status: 'pending',
+    attemptedAt: '2026-09-10T08:02:00.000Z', attemptCount: 2, lastError: 'Keep this error',
+  },
+  gyms: {
+    id: 'legacy-gym-v3', name: 'Legacy Gym', color: '#10B981', isDefault: false,
+    createdAt: '2026-09-10T06:00:00.000Z',
+  },
+  metadata: { key: 'legacy-metadata-v3', value: 'keep-this-metadata' },
+};
+
+function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 3);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      for (const [storeName, keyPath] of [
+        ['exercises', 'id'], ['routines', 'id'], ['workouts', 'id'],
+        ['workout_drafts', 'id'], ['settings', 'key'], ['metadata', 'key'],
+        ['gyms', 'id'], ['exercise_gym_scopes', 'exerciseId'],
+        ['health_sync_records', ['workoutId', 'provider']],
+      ] as [string, string | string[]][]) {
+        const store = db.createObjectStore(storeName, { keyPath });
+        if (storeName === 'gyms') store.createIndex('isDefault', 'isDefault', { unique: false });
+        if (storeName === 'exercise_gym_scopes') {
+          store.createIndex('scopeType', 'scopeType', { unique: false });
+          store.createIndex('linkedGymIds', 'linkedGymIds', { unique: false, multiEntry: true });
+        }
+        if (storeName === 'health_sync_records') store.createIndex('status', 'status', { unique: false });
+      }
+
+      const transaction = request.transaction!;
+      transaction.objectStore('exercises').put({
+        id: 'Barbell_Bench_Press_-_Medium_Grip',
+        name: 'Stale bench press',
+        category: 'stale-category',
+        equipment: 'stale-equipment',
+        primaryMuscles: ['stale-primary'],
+        secondaryMuscles: ['stale-secondary'],
+        instructions: ['Stale instructions'],
+        instructionUrl: 'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json',
+        instructionUrlType: 'website',
+        isCustom: false,
+      });
+      transaction.objectStore('exercises').put({
+        id: 'Incline_Dumbbell_Press',
+        name: 'My Custom Exercise',
+        category: 'custom-category',
+        equipment: 'custom-equipment',
+        primaryMuscles: ['custom-primary'],
+        secondaryMuscles: ['custom-secondary'],
+        instructions: ['Keep these instructions'],
+        instructionUrl: 'https://custom.example/exercise',
+        instructionUrlType: 'website',
+        isCustom: true,
+      });
+      for (const [storeName, sentinel] of Object.entries(LEGACY_V3_SENTINELS)) {
+        transaction.objectStore(storeName).put(sentinel);
+      }
+      transaction.objectStore('metadata').put({ key: 'exercises_seeded', value: '1' });
+      transaction.objectStore('metadata').put({ key: 'exercise_catalog_version', value: '3' });
+      transaction.objectStore('gyms').put({
+        id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
+        createdAt: '2026-09-10T00:00:00.000Z',
+      });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function readWebDatabase(name: string, version?: number): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, version);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function mutateWebDatabase(
+  name: string,
+  mutate: (stores: { exercises: IDBObjectStore; metadata: IDBObjectStore }) => void,
+): Promise<void> {
+  return readWebDatabase(name).then((database) => new Promise((resolve, reject) => {
+    database.onversionchange = () => database.close();
+    const transaction = database.transaction(['exercises', 'metadata'], 'readwrite');
+    mutate({
+      exercises: transaction.objectStore('exercises'),
+      metadata: transaction.objectStore('metadata'),
+    });
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  }));
+}
+
+function upgradeDatabaseToVersionFour(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 4);
+    request.onsuccess = () => {
+      request.result.close();
+      resolve();
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function readLegacyV3Sentinels(name: string): Promise<Record<string, unknown>> {
+  return readWebDatabase(name).then((database) => new Promise((resolve, reject) => {
+    const storeNames = Object.keys(LEGACY_V3_SENTINELS);
+    const transaction = database.transaction(storeNames, 'readonly');
+    const records: Record<string, unknown> = {};
+    for (const storeName of storeNames) {
+      const key = storeName === 'health_sync_records'
+        ? ['legacy-workout-v3', 'healthkit']
+        : storeName === 'exercise_gym_scopes'
+          ? 'Barbell_Bench_Press_-_Medium_Grip'
+          : (LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as { key?: string; id?: string }).key
+            || (LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as { key?: string; id?: string }).id;
+      const request = transaction.objectStore(storeName).get(key);
+      request.onsuccess = () => { records[storeName] = request.result; };
+      request.onerror = () => reject(request.error);
+    }
+    transaction.oncomplete = () => {
+      database.close();
+      resolve(records);
+    };
+    transaction.onerror = () => reject(transaction.error);
+  }));
+}
+
 describe('webStore persistence and lease handling', () => {
+  it('upgrades v3 exercise data by catalog ID while preserving custom rows and stores', async () => {
+    const dbName = `test-web-catalog-v4-${Date.now()}`;
+    const legacy = await openLegacyVersionThreeDatabase(dbName);
+    legacy.close();
+
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    const builtIn = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+    const bundled = getBundledExercise('Barbell_Bench_Press_-_Medium_Grip');
+    assert.deepEqual(builtIn, { ...bundled, isCustom: false });
+    assert.equal(builtIn?.instructionUrl, 'https://musclewiki.com/exercise/barbell-bench-press');
+    assert.ok(await store.getExerciseById('3_4_Sit-Up'), 'missing bundled exercises should be seeded');
+    assert.deepEqual(await store.getExerciseById('Incline_Dumbbell_Press'), {
+      id: 'Incline_Dumbbell_Press',
+      name: 'My Custom Exercise',
+      category: 'custom-category',
+      equipment: 'custom-equipment',
+      primaryMuscles: ['custom-primary'],
+      secondaryMuscles: ['custom-secondary'],
+      instructions: ['Keep these instructions'],
+      instructionUrl: 'https://custom.example/exercise',
+      instructionUrlType: 'website',
+      isCustom: true,
+    });
+
+    const database = await readWebDatabase(dbName);
+    assert.equal(database.version, 4);
+    assert.deepEqual([...database.objectStoreNames].sort(), [
+      'exercise_gym_scopes', 'exercises', 'gyms', 'health_sync_records',
+      'metadata', 'routines', 'settings', 'workout_drafts', 'workouts',
+    ]);
+    database.close();
+    assert.deepEqual(await readLegacyV3Sentinels(dbName), LEGACY_V3_SENTINELS);
+
+    const metadataDatabase = await readWebDatabase(dbName);
+    const metadata = await new Promise<any>((resolve, reject) => {
+      const transaction = metadataDatabase.transaction('metadata', 'readonly');
+      const request = transaction.objectStore('metadata').get('exercise_catalog_version');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '4' });
+    metadataDatabase.close();
+    await store.close();
+  });
+
+  it('refreshes a primed exercise cache when the catalog marker becomes outdated', async () => {
+    const dbName = `test-web-catalog-cache-${Date.now()}`;
+    const legacy = await openLegacyVersionThreeDatabase(dbName);
+    legacy.close();
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+
+    await mutateWebDatabase(dbName, ({ exercises }) => {
+      exercises.put({
+        id: 'Barbell_Bench_Press_-_Medium_Grip',
+        name: 'Stale cached bench',
+        category: 'stale-category',
+        equipment: 'stale-equipment',
+        primaryMuscles: ['stale-primary'],
+        secondaryMuscles: ['stale-secondary'],
+        instructions: ['Stale instructions'],
+        isCustom: false,
+      });
+    });
+    assert.equal((await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip'))?.name, 'Stale cached bench');
+
+    await mutateWebDatabase(dbName, ({ metadata }) => {
+      metadata.put({ key: 'exercise_catalog_version', value: '1' });
+    });
+    await store.init();
+
+    const refreshed = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
+    assert.equal(refreshed?.name, 'Barbell Bench Press - Medium Grip');
+    assert.deepEqual(refreshed?.secondaryMuscles, ['shoulders', 'triceps']);
+    await store.close();
+  });
+
+  it('does not synchronize catalog data or metadata from a read-only tab', async () => {
+    const dbName = `test-web-catalog-read-only-${Date.now()}`;
+    const legacy = await openLegacyVersionThreeDatabase(dbName);
+    legacy.close();
+    await upgradeDatabaseToVersionFour(dbName);
+
+    let currentTime = 100000;
+    const now = () => currentTime;
+    const writer: any = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    await writer.init();
+    await mutateWebDatabase(dbName, ({ exercises, metadata }) => {
+      exercises.put({
+        id: 'Barbell_Bench_Press_-_Medium_Grip',
+        name: 'Stale while writer is active',
+        category: 'stale-category',
+        equipment: 'stale-equipment',
+        primaryMuscles: ['stale-primary'],
+        secondaryMuscles: ['stale-secondary'],
+        instructions: ['Stale instructions'],
+        isCustom: false,
+      });
+      metadata.put({ key: 'exercise_catalog_version', value: '1' });
+    });
+
+    const reader: any = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    await reader.init();
+    assert.equal(reader.isReadOnly(), true);
+    assert.deepEqual(await reader.getExerciseById('Barbell_Bench_Press_-_Medium_Grip'), {
+      id: 'Barbell_Bench_Press_-_Medium_Grip',
+      name: 'Stale while writer is active',
+      category: 'stale-category',
+      equipment: 'stale-equipment',
+      primaryMuscles: ['stale-primary'],
+      secondaryMuscles: ['stale-secondary'],
+      instructions: ['Stale instructions'],
+      isCustom: false,
+    });
+
+    const database = await readWebDatabase(dbName);
+    const metadata = await new Promise<any>((resolve, reject) => {
+      const transaction = database.transaction('metadata', 'readonly');
+      const request = transaction.objectStore('metadata').get('exercise_catalog_version');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    assert.deepEqual(metadata, { key: 'exercise_catalog_version', value: '1' });
+    database.close();
+    await writer.close();
+    await reader.close();
+  });
+
   it('upgrades legacy records and exposes multi-gym CRUD, scopes, and snapshot arrays', async () => {
     const dbName = `test-web-v2-${Date.now()}`;
     const legacy = await openLegacyVersionOneDatabase(dbName);
@@ -170,7 +456,7 @@ describe('webStore persistence and lease handling', () => {
     const readOnly: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await readOnly.init();
     const raw = await new Promise<any>((resolve, reject) => {
-      const req = (indexedDB as any).open(dbName, 3);
+      const req = (indexedDB as any).open(dbName, 4);
       req.onsuccess = () => { const db = req.result; const tx = db.transaction('workouts', 'readonly'); const get = tx.objectStore('workouts').get('legacy-workout'); get.onsuccess = () => { db.close(); resolve(get.result); }; get.onerror = () => reject(get.error); };
       req.onerror = () => reject(req.error);
     });
@@ -1105,26 +1391,55 @@ describe('webStore persistence and lease handling', () => {
       { exerciseId: created.id, targetSets: 3, targetReps: '10-12', restTimerSeconds: 60 },
     ]);
 
+    await store.saveCompletedWorkout({
+      id: 'custom-url-workout',
+      name: 'Custom URL Workout',
+      gymId: 'gym-default',
+      startTime: '2026-09-10T08:00:00.000Z',
+      durationSeconds: 60,
+      totalVolumeKg: 0,
+      exercises: [{
+        id: 'custom-url-workout-exercise',
+        exerciseId: created.id,
+        exercise: created,
+        restTimerSeconds: 60,
+        sets: [],
+      }],
+    });
+
     // 3. Update the custom exercise
     const updated = await store.updateCustomExercise(created.id, {
       name: 'Updated Web Custom Press',
       equipment: 'machine',
       primaryMuscles: ['shoulders', 'triceps'],
+      instructionUrl: 'https://example.com/web-custom-press',
+      instructionUrlType: 'website',
     });
 
     assert.equal(updated.id, created.id);
     assert.equal(updated.name, 'Updated Web Custom Press');
     assert.equal(updated.equipment, 'machine');
+    assert.equal(updated.instructionUrl, 'https://example.com/web-custom-press');
+    assert.equal(updated.instructionUrlType, 'website');
 
     // Verify getExerciseById
     const fetched = await store.getExerciseById(created.id);
     assert.ok(fetched);
     assert.equal(fetched.name, 'Updated Web Custom Press');
+    assert.equal(fetched.instructionUrl, 'https://example.com/web-custom-press');
+    assert.equal(fetched.instructionUrlType, 'website');
 
     // Verify routine has updated embedded exercise
     const routine = await store.getRoutineById(routineId);
     assert.ok(routine);
     assert.equal(routine.exercises[0].exercise.name, 'Updated Web Custom Press');
+    assert.equal(routine.exercises[0].exercise.instructionUrl, 'https://example.com/web-custom-press');
+    assert.equal(routine.exercises[0].exercise.instructionUrlType, 'website');
+
+    const workout = await store.getWorkoutDetail('custom-url-workout');
+    assert.ok(workout);
+    assert.equal(workout.exercises[0].exercise.instructionUrl, 'https://example.com/web-custom-press');
+    assert.equal(workout.exercises[0].exercise.instructionUrlType, 'website');
 
     // 4. Reject editing built-in exercise
     await assert.rejects(async () => {
@@ -1141,6 +1456,78 @@ describe('webStore persistence and lease handling', () => {
     }, /Exercise name cannot be empty/);
 
     if (store.close) await store.close();
+  });
+
+  it('normalizes omitted custom exercise arrays across web persistence boundaries and matches native', async () => {
+    const webFixture = await createStoreFixture('web');
+    const nativeFixture = await createStoreFixture('native');
+    const input = {
+      name: 'Legacy Boundary Exercise',
+      category: 'strength',
+      equipment: 'body only',
+      primaryMuscles: ['core'],
+    };
+
+    try {
+      const webCreated = await webFixture.store.createCustomExercise(input);
+      const nativeCreated = await nativeFixture.store.createCustomExercise(input);
+      const nativePersisted = await nativeFixture.store.getExerciseById(nativeCreated.id);
+      assert.ok(nativePersisted);
+
+      assert.deepEqual(webCreated.secondaryMuscles, []);
+      assert.deepEqual(webCreated.instructions, []);
+      assert.deepEqual(
+        {
+          name: webCreated.name,
+          category: webCreated.category,
+          equipment: webCreated.equipment,
+          primaryMuscles: webCreated.primaryMuscles,
+          secondaryMuscles: webCreated.secondaryMuscles,
+          instructions: webCreated.instructions,
+        },
+        {
+          name: nativePersisted.name,
+          category: nativePersisted.category,
+          equipment: nativePersisted.equipment,
+          primaryMuscles: nativePersisted.primaryMuscles,
+          secondaryMuscles: nativePersisted.secondaryMuscles,
+          instructions: nativePersisted.instructions,
+        },
+      );
+
+      const updated = await webFixture.store.updateCustomExercise(webCreated.id, { name: 'Updated Legacy Boundary Exercise' });
+      assert.deepEqual(updated.secondaryMuscles, []);
+      assert.deepEqual(updated.instructions, []);
+      assert.deepEqual((await webFixture.store.getExerciseById(webCreated.id))?.secondaryMuscles, []);
+      assert.deepEqual((await webFixture.store.getExerciseById(webCreated.id))?.instructions, []);
+
+      await webFixture.store.mergeSnapshot({
+        workouts: [],
+        routines: [],
+        exercises: [{
+          id: 'merged-legacy-custom',
+          name: 'Merged Legacy Custom',
+          category: 'strength',
+          equipment: 'other',
+          primaryMuscles: ['back'],
+          isCustom: true,
+        }],
+        drafts: [],
+        settings: {},
+        gyms: [],
+        exerciseGymScopes: [],
+      });
+
+      const merged = await webFixture.store.getExerciseById('merged-legacy-custom');
+      assert.deepEqual(merged?.secondaryMuscles, []);
+      assert.deepEqual(merged?.instructions, []);
+      const snapshotExercise = (await webFixture.store.readSnapshot()).exercises.find(exercise => exercise.id === 'merged-legacy-custom');
+      assert.deepEqual(snapshotExercise?.secondaryMuscles, []);
+      assert.deepEqual(snapshotExercise?.instructions, []);
+    } finally {
+      await webFixture.dispose();
+      await nativeFixture.dispose();
+    }
   });
 
   it('persists supersetId across routine creation, retrieval, and duplication in web store', async () => {

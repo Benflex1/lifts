@@ -21,7 +21,7 @@
 | **Active Session Minimization** | Minimizes to bottom bar while browsing | Floating mini-bar | Completed with Android BackHandler minimization |
 | **Set Logging & Auto-Fill** | Auto-copies previous set weight/reps | 1-tap straight-set auto-fill & 1-tap clickable ghost stats | Completed (Straight-set auto-fill & 1-tap ghost stats) |
 | **Touch Targets & Sizing** | Large, high-visibility numbers | Large 44–54px gym-first touch targets | Completed (Scaled checkmarks, sets, pills, inputs & icons) |
-| **Exercise Library** | ~500 exercises with animations | 876 categorized exercises + rich media | 876 exercises bundled with in-workout form guide & instructions; animations in Phase 4 |
+| **Exercise Library** | ~500 exercises with animations | 876 categorized exercises + offline static visuals | 876 exercises with written instructions, primary/secondary muscle metadata, local static visuals, and external form references; animation remains Phase 4 |
 | **Set Check Haptics** | Subtle vibration on check | Tactile haptic ticks on every set completion & PR alerts | Completed (Tactile feedback on every set check + PR alerts) |
 | **Exercise History & PRs** | Displays past weight/reps for that lift | Heaviest lift, Est. 1RM, session tally & full chronological log | Partial (Scalar stats completed; deep chronological log in Phase 3) |
 | **Workout History Drill-Down** | Detailed set view | Expandable set & rep breakdown | Completed (Detailed set breakdown + safe deletion) |
@@ -38,9 +38,9 @@
 | **RPE Tracking** | Premium feature | Interactive RPE cycle badge (optional, None by default) | Completed (Interactive cycle badge with None by default) |
 | **Supersets & Giant Sets** | Premium feature | Planned Phase 3 | Backlog |
 | **Warmup Set Progression** | Premium feature | Planned Phase 3 | Backlog |
-| **Progress Charts & Graphs** | Premium feature | Weekly volume, muscle-frequency & 1RM trend curves | Partial (Volume/frequency delivered; 1RM trend curves in Phase 3) |
+| **Progress Charts & Graphs** | Premium feature | Weekly volume, muscle-frequency & 1RM trend curves | Partial (Volume/frequency delivered with separate primary/secondary roles; 1RM trend curves in Phase 3) |
 | **CSV / Third-Party Import** | Freemium feature | Cross-platform importer for Hevy, Strong, Lyfta, FitNotes & CSV | Completed (Auto-format detection, unit normalization, exercise matching) |
-| **Exercise Demonstration Media**| Premium feature | Visual anatomical cues & looped animations | Planned Phase 4 (Text instructions bundled) |
+| **Exercise Demonstration Media**| Premium feature | Static visual cues, written instructions & form references | Static visuals, instructions, and external form references delivered; animation and richer media remain planned for Phase 4 |
 | **Apple Health / Health Connect** | Premium feature | Opt-in completed-workout session summary export; custom native build required | Current implementation (device acceptance pending) |
 
 ---
@@ -88,7 +88,8 @@
 ### Phase 3: Advanced Training & Deep Analytics [Completed]
 - [x] **Supersets & Giant Sets**: Visual grouping brackets connecting two or more exercises with alternating set navigation, group color coding, and routine template support.
 - [x] **Warmup Progression Calculator**: Automatic warmup ramp generator with Olympic plate rounding (2.5 kg / 5 lb), empty bar baselines, customizable presets (Strength, Hypertrophy, Quick, Heavy), and visual plate breakdowns.
-- [x] **Weekly Volume & Muscle-Frequency Charts**: Delivered weekly completed-set volume and primary-muscle workout-frequency views.
+- [x] **Weekly Volume & Muscle-Frequency Charts**: Delivered weekly completed-set volume and role-aware primary/secondary muscle-frequency views.
+- [x] **Exercise Library Foundation**: Delivered 876 offline exercise records with written instructions, primary/secondary muscle metadata, local static visuals, and deterministic external form references.
 - [x] **Per-Exercise Chronological History Drill-Down**: Full set-by-set workout logs per exercise with dates, gyms, loads, reps, volume, and session notes.
 - [x] **Strength / 1RM Progression Curves**: Interactive strength, volume, and estimated-1RM trend views per exercise or muscle group.
 - [x] **Personal Record (PR) Badges & Celebrations**: Visual badges and celebration cues when achieving a new weight, volume, or rep record.
@@ -97,6 +98,6 @@
 
 ### Phase 4: Ecosystem & Rich Media [Planned]
 - [x] **Health Connect (Android) & Apple Health (iOS)**: Opt-in export after local completion. The Health Connect payload includes the workout title, strength-workout type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. No health reads or set-level export; standard web/non-health native work remains local-first and custom native builds are required. Implementation is complete; iOS and Android custom-build device acceptance remains unverified.
-- [ ] **Rich Exercise Media & Visual Demonstration Guides**: Offline anatomical vector maps, step-by-step form cues, and looped vector/GIF animations.
+- [ ] **Rich Exercise Media & Visual Demonstration Guides**: Additional rich media and looped vector/GIF animations beyond the delivered static visuals, written instructions, and external form references.
 - [ ] **Wear OS / Apple Watch Companion**: Companion app for quick set logging and wrist rest countdowns.
 - [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities.

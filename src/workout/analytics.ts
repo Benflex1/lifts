@@ -1,4 +1,4 @@
-import { Workout } from '../types';
+import { Exercise, Workout } from '../types';
 import { calculate1RM } from '../utils/calculator';
 
 export interface WeeklyVolumePoint {
@@ -9,7 +9,14 @@ export interface WeeklyVolumePoint {
 
 export interface MuscleFrequencyPoint {
   muscle: string;
+  primaryCount: number;
+  secondaryCount: number;
   count: number;
+}
+
+export interface MuscleFrequencyOptions {
+  exerciseCatalog?: readonly Exercise[];
+  limit?: number;
 }
 
 function startOfWeek(date: Date): Date {
@@ -70,27 +77,57 @@ export function buildWeeklyVolume(
 
 export function buildMuscleFrequency(
   workouts: Workout[],
-  limit: number = 8
+  options?: MuscleFrequencyOptions,
+): MuscleFrequencyPoint[];
+export function buildMuscleFrequency(
+  workouts: Workout[],
+  limit?: number,
+): MuscleFrequencyPoint[];
+export function buildMuscleFrequency(
+  workouts: Workout[],
+  optionsOrLimit: MuscleFrequencyOptions | number = {},
 ): MuscleFrequencyPoint[] {
-  const counts = new Map<string, number>();
+  const options = typeof optionsOrLimit === 'number' ? {} : optionsOrLimit;
+  const limit = typeof optionsOrLimit === 'number' ? optionsOrLimit : options.limit ?? 8;
+  const catalogById = new Map(
+    (options.exerciseCatalog || []).map((exercise) => [exercise.id, exercise]),
+  );
+  const counts = new Map<string, { primaryCount: number; secondaryCount: number }>();
 
   for (const workout of workouts) {
-    const musclesInWorkout = new Set<string>();
+    const primaryMusclesInWorkout = new Set<string>();
+    const secondaryMusclesInWorkout = new Set<string>();
     for (const exercise of workout.exercises || []) {
-      if (!exercise.sets.some(set => set.isCompleted)) continue;
-      for (const muscle of exercise.exercise.primaryMuscles || []) {
+      if (!(exercise.sets || []).some(set => set.isCompleted)) continue;
+      const definition = catalogById.get(exercise.exerciseId) || exercise.exercise;
+      for (const muscle of definition.primaryMuscles || []) {
         const normalized = muscle.trim().toLowerCase();
-        if (normalized) musclesInWorkout.add(normalized);
+        if (normalized) primaryMusclesInWorkout.add(normalized);
+      }
+      for (const muscle of definition.secondaryMuscles || []) {
+        const normalized = muscle.trim().toLowerCase();
+        if (normalized) secondaryMusclesInWorkout.add(normalized);
       }
     }
 
-    for (const muscle of musclesInWorkout) {
-      counts.set(muscle, (counts.get(muscle) || 0) + 1);
+    for (const muscle of primaryMusclesInWorkout) {
+      const current = counts.get(muscle) || { primaryCount: 0, secondaryCount: 0 };
+      current.primaryCount += 1;
+      counts.set(muscle, current);
+    }
+    for (const muscle of secondaryMusclesInWorkout) {
+      const current = counts.get(muscle) || { primaryCount: 0, secondaryCount: 0 };
+      current.secondaryCount += 1;
+      counts.set(muscle, current);
     }
   }
 
   return Array.from(counts.entries())
-    .map(([muscle, count]) => ({ muscle, count }))
+    .map(([muscle, roleCounts]) => ({
+      muscle,
+      ...roleCounts,
+      count: roleCounts.primaryCount + roleCounts.secondaryCount,
+    }))
     .sort((a, b) => b.count - a.count || a.muscle.localeCompare(b.muscle))
     .slice(0, Math.max(0, Math.floor(limit)));
 }

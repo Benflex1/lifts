@@ -28,7 +28,9 @@ import {
 } from 'lucide-react-native';
 import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
+import { ExerciseVisual } from './ExerciseVisual';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
+import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { saveRoutine } from '../database/db';
 import { validateTargetReps } from '../workout/sets';
 import { SupersetModal } from './SupersetModal';
@@ -556,6 +558,11 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           <Text style={styles.compactMeta}>
                             {item.targetSets} sets × {item.targetReps} •
                           </Text>
+                          {item.exercise.secondaryMuscles && item.exercise.secondaryMuscles.length > 0 && (
+                            <Text style={styles.compactSecondaryMeta} numberOfLines={1}>
+                              +{item.exercise.secondaryMuscles.length} secondary
+                            </Text>
+                          )}
                           <TouchableOpacity
                             style={styles.compactRestBadge}
                             onPress={() => setRestWheelIndex(idx)}
@@ -644,6 +651,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
           {viewMode === 'detailed' &&
             draftExercises.map((item, idx) => {
               const ssMeta = supersetMetaMap.get(item.id);
+              const rowViewModel = getExerciseRowViewModel(item.exercise);
               return (
                 <React.Fragment key={item.id}>
                   {ssMeta?.isFirst && (
@@ -675,6 +683,14 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
                     ]}
                   >
+                    <View style={styles.routineVisualRow}>
+                      <ExerciseVisual
+                        exercise={item.exercise}
+                        size="compact"
+                        accessibilityLabel={rowViewModel.visualAccessibilityLabel}
+                      />
+                    </View>
+
                     {/* Exercise Card Header */}
                     <View style={styles.cardTopRow}>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -699,6 +715,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
                         <Text style={styles.cardExMeta}>
                           {item.exercise.primaryMuscles.join(', ')} • {item.exercise.equipment}
                         </Text>
+                        {item.exercise.secondaryMuscles && item.exercise.secondaryMuscles.length > 0 && (
+                          <Text style={styles.cardExSecondary} numberOfLines={1}>
+                            Secondary: {item.exercise.secondaryMuscles.slice(0, 2).join(', ')}
+                            {item.exercise.secondaryMuscles.length > 2 ? ` +${item.exercise.secondaryMuscles.length - 2}` : ''}
+                          </Text>
+                        )}
                       </TouchableOpacity>
 
                       {/* Action Buttons: Swap, Duplicate, Up, Down, Trash */}
@@ -1277,6 +1299,11 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 12,
   },
+  compactSecondaryMeta: {
+    color: '#6B7280',
+    fontSize: 11,
+    flexShrink: 1,
+  },
   compactActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1352,6 +1379,16 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 12,
     textTransform: 'capitalize',
+  },
+  cardExSecondary: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginTop: 2,
+    textTransform: 'capitalize',
+  },
+  routineVisualRow: {
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   reorderActions: {
     flexDirection: 'row',
@@ -1858,4 +1895,3 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 });
-

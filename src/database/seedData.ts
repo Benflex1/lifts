@@ -1,6 +1,17 @@
 import { Exercise, Routine } from '../types';
+import { getMuscleWikiGuideUrl } from './exercise-guides';
 
-export const DEFAULT_EXERCISES: Exercise[] = require('./defaultExercises.json');
+export const BUNDLED_EXERCISE_CATALOG_VERSION = 4;
+
+const SOURCE_EXERCISES: Exercise[] = require('./defaultExercises.json');
+
+export const DEFAULT_EXERCISES: Exercise[] = SOURCE_EXERCISES.map(exercise => {
+  const instructionUrl = getMuscleWikiGuideUrl(exercise.id);
+  return {
+    ...exercise,
+    ...(instructionUrl ? { instructionUrl, instructionUrlType: 'website' as const } : {}),
+  };
+});
 
 const exerciseMap = new Map<string, Exercise>();
 for (const ex of DEFAULT_EXERCISES) {

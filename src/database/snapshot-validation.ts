@@ -52,6 +52,30 @@ function requireOptionalTimestamp(value: unknown, label: string): void {
   if (value !== undefined && value !== null) requireTimestamp(value, label);
 }
 
+function parseInstructionUrl(value: unknown, label: string): URL | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !value.trim() || value.trim() !== value) {
+    throw new Error(`Invalid ${label}`);
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`Invalid ${label}`);
+  }
+
+  if (!parsed.hostname || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
+    throw new Error(`Invalid ${label}`);
+  }
+  return parsed;
+}
+
+function isYouTubeUrl(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+  return hostname === 'youtu.be' || hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
+}
+
 export function validateExerciseRecord(value: unknown, label: string): asserts value is Exercise {
   if (!isRecord(value)) throw new Error(`Invalid ${label}: expected object`);
   requireString(value.id, `${label}.id`);
@@ -68,6 +92,15 @@ export function validateExerciseRecord(value: unknown, label: string): asserts v
   if (value.instructions !== undefined && value.instructions !== null &&
       (!Array.isArray(value.instructions) || value.instructions.some((instruction: unknown) => typeof instruction !== 'string'))) {
     throw new Error(`Invalid ${label}.instructions`);
+  }
+  const instructionUrl = parseInstructionUrl(value.instructionUrl, `${label}.instructionUrl`);
+  if (value.instructionUrlType !== undefined) {
+    if (value.instructionUrlType !== 'website' && value.instructionUrlType !== 'youtube') {
+      throw new Error(`Invalid ${label}.instructionUrlType`);
+    }
+    if (!instructionUrl || (value.instructionUrlType === 'youtube') !== isYouTubeUrl(instructionUrl)) {
+      throw new Error(`Invalid ${label}.instructionUrlType`);
+    }
   }
   if (value.isCustom !== undefined && value.isCustom !== null && typeof value.isCustom !== 'boolean') {
     throw new Error(`Invalid ${label}.isCustom`);

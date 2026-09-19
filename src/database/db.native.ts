@@ -5,27 +5,85 @@ import { Store, WorkoutDraft, DataSnapshot } from './contract';
 
 let storeInstance: Store | null = null;
 let dbInstance: SQLite.SQLiteDatabase | null = null;
+let databaseOpenPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let storePromise: Promise<Store> | null = null;
+let initPromise: Promise<void> | null = null;
+
+function openDatabase(): Promise<SQLite.SQLiteDatabase> {
+  if (dbInstance) return Promise.resolve(dbInstance);
+
+  if (!databaseOpenPromise) {
+    databaseOpenPromise = SQLite.openDatabaseAsync('lifts.db')
+      .then((database) => {
+        dbInstance = database;
+        return database;
+      })
+      .catch((error) => {
+        databaseOpenPromise = null;
+        dbInstance = null;
+        throw error;
+      });
+  }
+
+  return databaseOpenPromise;
+}
 
 export async function getStore(): Promise<Store> {
-  if (!storeInstance) {
-    if (!dbInstance) {
-      dbInstance = await SQLite.openDatabaseAsync('lifts.db');
-    }
-    storeInstance = createNativeStore(dbInstance as unknown as SqliteDriver);
+  if (storeInstance) return storeInstance;
+
+  if (!storePromise) {
+    storePromise = (async () => {
+      try {
+        const database = await openDatabase();
+        const store = createNativeStore(database as unknown as SqliteDriver);
+        storeInstance = store;
+        return store;
+      } catch (error) {
+        storePromise = null;
+        databaseOpenPromise = null;
+        dbInstance = null;
+        throw error;
+      }
+    })();
   }
-  return storeInstance;
+
+  return storePromise;
 }
 
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase | null> {
-  if (!dbInstance) {
-    dbInstance = await SQLite.openDatabaseAsync('lifts.db');
+  return openDatabase();
+}
+
+async function resetFailedNativeDatabase(): Promise<void> {
+  const database = dbInstance;
+
+  storeInstance = null;
+  storePromise = null;
+  dbInstance = null;
+  databaseOpenPromise = null;
+
+  if (!database) return;
+
+  try {
+    await database.closeAsync();
+  } catch {
+    // Failed cleanup must not mask the original initialization error.
   }
-  return dbInstance;
 }
 
 export async function initDatabase(): Promise<void> {
-  const store = await getStore();
-  await store.init();
+  if (!initPromise) {
+    initPromise = getStore()
+      .then((store) => store.init())
+      .catch(async (error) => {
+        await resetFailedNativeDatabase();
+        throw error;
+      })
+      .finally(() => {
+        initPromise = null;
+      });
+  }
+  return initPromise;
 }
 
 export async function readSnapshot(): Promise<DataSnapshot> {
@@ -153,6 +211,8 @@ export async function updateCustomExercise(
     primaryMuscles?: string[];
     secondaryMuscles?: string[];
     instructions?: string[];
+    instructionUrl?: string;
+    instructionUrlType?: 'website' | 'youtube';
   }
 ): Promise<Exercise> {
   const store = await getStore();

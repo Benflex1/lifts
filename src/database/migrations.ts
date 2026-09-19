@@ -365,4 +365,29 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       );
     });
   }
+
+  // Migration 8: native exercise instruction links and catalog sync marker
+  if (!applied.has(8) && (options?.maxVersion === undefined || options.maxVersion >= 8)) {
+    await driver.withTransactionAsync(async () => {
+      const exerciseColumns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises);');
+      if (!exerciseColumns.some(column => column.name === 'instruction_url')) {
+        await driver.execAsync('ALTER TABLE exercises ADD COLUMN instruction_url TEXT;');
+      }
+      if (!exerciseColumns.some(column => column.name === 'instruction_url_type')) {
+        await driver.execAsync('ALTER TABLE exercises ADD COLUMN instruction_url_type TEXT;');
+      }
+
+      await driver.runAsync(
+        `INSERT OR IGNORE INTO app_meta (key, value) VALUES (?, ?)`,
+        'exercise_catalog_version',
+        '0',
+      );
+
+      if (options?.failAtVersion === 8) throw new Error('Injected migration failure at version 8');
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (8, ?)',
+        new Date().toISOString(),
+      );
+    });
+  }
 }
