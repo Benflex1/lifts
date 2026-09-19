@@ -65,6 +65,17 @@ describe('exercise visual resolver', () => {
     assert.equal(descriptor.kind, 'generated');
   });
 
+  it('returns generated media for a custom Plank instead of the reviewed local asset', () => {
+    const descriptor = getExerciseVisual(exercise({
+      id: 'Plank',
+      name: 'Plank',
+      isCustom: true,
+      primaryMuscles: ['abdominals'],
+    }));
+
+    assert.equal(descriptor.kind, 'generated');
+  });
+
   it('selects the movement template from representative exercise names and categories', () => {
     const cases: Array<[Exercise, string]> = [
       [exercise({ name: 'Bench Press' }), 'push'],

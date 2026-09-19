@@ -114,7 +114,9 @@ const selectTemplate = (exercise: Exercise): ExerciseVisualTemplate => {
 
 export function getExerciseVisual(exercise: Exercise): ExerciseVisualDescriptor {
   const alt = `${typeof exercise.name === 'string' && exercise.name.trim() ? exercise.name.trim() : 'Exercise'} exercise illustration`;
-  const assetKey = typeof exercise.id === 'string' ? REVIEWED_EXERCISE_ASSETS[exercise.id] : undefined;
+  const assetKey = exercise.isCustom !== true && typeof exercise.id === 'string'
+    ? REVIEWED_EXERCISE_ASSETS[exercise.id]
+    : undefined;
 
   if (exercise.isCustom !== true && typeof exercise.id === 'string' && bundledExerciseIds.has(exercise.id)) {
     const imageUrls = getFreeExerciseDbImageUrls(exercise.id);
