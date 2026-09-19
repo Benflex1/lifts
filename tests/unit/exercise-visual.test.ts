@@ -33,6 +33,10 @@ const SvgExports = {
 };
 
 async function loadBoundary(t: { mock: { module: (specifier: string, options: { exports: object }) => void } }) {
+  t.mock.module('react-native', {
+    exports: { Image, View, StyleSheet: { create: (styles: unknown) => styles } },
+  });
+  t.mock.module('react-native-svg', { exports: SvgExports });
   t.mock.module('lucide-react-native', { exports: { Dumbbell } });
   return import('../../src/components/ExerciseVisualErrorBoundary');
 }
