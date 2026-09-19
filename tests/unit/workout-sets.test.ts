@@ -9,6 +9,7 @@ import {
   validateTargetReps,
   sanitizeWeightInput,
   sanitizeRepsInput,
+  moveWorkoutSet,
 } from '../../src/workout/sets';
 import { WorkoutSet } from '../../src/types';
 import {
@@ -541,4 +542,47 @@ describe('createWorkoutSetsFromSuggestions', () => {
   });
 });
 
+describe('moveWorkoutSet', () => {
+  const dummySets: WorkoutSet[] = [
+    { id: 'set-1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+    { id: 'set-2', setNumber: 2, type: 'normal', weightKg: 105, reps: 5, isCompleted: true },
+    { id: 'set-3', setNumber: 3, type: 'normal', weightKg: 110, reps: 3, isCompleted: false },
+  ];
 
+  it('moves a set down and updates set numbers', () => {
+    const moved = moveWorkoutSet(dummySets, 'set-1', 1);
+    assert.equal(moved.length, 3);
+    assert.equal(moved[0].id, 'set-2');
+    assert.equal(moved[0].setNumber, 1);
+    assert.equal(moved[1].id, 'set-1');
+    assert.equal(moved[1].setNumber, 2);
+    assert.equal(moved[2].id, 'set-3');
+    assert.equal(moved[2].setNumber, 3);
+  });
+
+  it('moves a set up and updates set numbers', () => {
+    const moved = moveWorkoutSet(dummySets, 'set-3', -1);
+    assert.equal(moved.length, 3);
+    assert.equal(moved[0].id, 'set-1');
+    assert.equal(moved[0].setNumber, 1);
+    assert.equal(moved[1].id, 'set-3');
+    assert.equal(moved[1].setNumber, 2);
+    assert.equal(moved[2].id, 'set-2');
+    assert.equal(moved[2].setNumber, 3);
+  });
+
+  it('does not move past top boundary (direction -1 on first set)', () => {
+    const moved = moveWorkoutSet(dummySets, 'set-1', -1);
+    assert.equal(moved, dummySets);
+  });
+
+  it('does not move past bottom boundary (direction 1 on last set)', () => {
+    const moved = moveWorkoutSet(dummySets, 'set-3', 1);
+    assert.equal(moved, dummySets);
+  });
+
+  it('returns original array untouched if setId not found', () => {
+    const moved = moveWorkoutSet(dummySets, 'unknown-id', 1);
+    assert.equal(moved, dummySets);
+  });
+});

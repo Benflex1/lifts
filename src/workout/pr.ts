@@ -260,11 +260,36 @@ export function evaluateWorkoutPRs(
         if (val > bestVal) {
           bestVal = val;
           bestSet = set;
+        } else if (metric === 'weight' && val === bestVal && bestSet && set.reps > bestSet.reps) {
+          // If weights are equal in the same session, prefer the set with more reps
+          bestVal = val;
+          bestSet = set;
         }
       }
 
       if (bestVal > 0 && bestSet) {
-        const rankResult = evaluateRank(bestVal, targetLeaderboard[metric]);
+        let rankResult = evaluateRank(bestVal, targetLeaderboard[metric]);
+
+        // When weight matches the top historical record, check if reps beat prior reps at this weight
+        if (!rankResult && metric === 'weight' && targetLeaderboard.weight.length > 0 && bestVal === targetLeaderboard.weight[0]) {
+          let maxPriorRepsAtWeight = 0;
+          for (const pw of priorWorkouts) {
+            if (workout.startTime && pw.startTime >= workout.startTime) continue;
+            if (isGymSpecific && allowedGymIds !== null && !allowedGymIds.has(pw.gymId)) continue;
+            for (const ex of pw.exercises) {
+              if (ex.exerciseId !== exerciseId) continue;
+              for (const s of ex.sets) {
+                if (s.isCompleted && s.type !== 'warmup' && s.weightKg === bestVal && s.reps > maxPriorRepsAtWeight) {
+                  maxPriorRepsAtWeight = s.reps;
+                }
+              }
+            }
+          }
+          if (bestSet.reps > maxPriorRepsAtWeight) {
+            rankResult = { rank: 1, previousRecord: bestVal, isTie: false };
+          }
+        }
+
         if (rankResult) {
           const ach: PRAchievement = {
             rank: rankResult.rank,
@@ -463,7 +488,12 @@ export function extractExercisePodium(
       const val = getValue(c);
       if (val <= 0) continue;
       const existing = valueMap.get(val);
-      if (!existing || c.date < existing.date) {
+      if (
+        !existing ||
+        (metric === 'weight' && c.reps > existing.reps) ||
+        (metric === 'weight' && c.reps === existing.reps && c.date < existing.date) ||
+        (metric !== 'weight' && c.date < existing.date)
+      ) {
         valueMap.set(val, c);
       }
     }

@@ -171,6 +171,14 @@ export async function getExerciseStats(exerciseId: string, currentGymId?: string
   return store.getExerciseStats(exerciseId, currentGymId);
 }
 
+export async function reassignExerciseHistory(
+  sourceExerciseId: string,
+  targetExerciseId: string
+): Promise<{ updatedWorkouts: number; updatedSets: number }> {
+  const store = await getStore();
+  return store.reassignExerciseHistory(sourceExerciseId, targetExerciseId);
+}
+
 export async function getGyms() { return (await getStore()).getGyms(); }
 export async function getDefaultGym() { return (await getStore()).getDefaultGym(); }
 export async function createGym(name: string, color?: string) { return (await getStore()).createGym(name, color); }

@@ -9,6 +9,7 @@ interface Props {
   completed?: boolean;
   style?: StyleProp<TextStyle>;
   selectTextOnFocus?: boolean;
+  onFocus?: (e: any, inputRef?: React.RefObject<TextInput | null>) => void;
 }
 
 export const RepsInput: React.FC<Props> = ({
@@ -17,8 +18,10 @@ export const RepsInput: React.FC<Props> = ({
   placeholder,
   completed,
   style,
-  selectTextOnFocus = true,
+  selectTextOnFocus = false,
+  onFocus,
 }) => {
+  const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [localText, setLocalText] = useState<string>('');
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,9 +51,10 @@ export const RepsInput: React.FC<Props> = ({
     }
   };
 
-  const handleFocus = () => {
+  const handleFocus = (e: any) => {
     setIsFocused(true);
     setLocalText(displayValue);
+    onFocus?.(e, inputRef);
   };
 
   const handleTextChange = (text: string) => {
@@ -80,12 +84,16 @@ export const RepsInput: React.FC<Props> = ({
 
   return (
     <TextInput
+      ref={inputRef}
       style={style}
       keyboardType="number-pad"
       returnKeyType="done"
       value={shownText}
       placeholder={placeholder !== undefined ? placeholder : '-'}
       placeholderTextColor="#6B7280"
+      autoCapitalize="none"
+      autoCorrect={false}
+      spellCheck={false}
       selectTextOnFocus={selectTextOnFocus}
       onFocus={handleFocus}
       onChangeText={handleTextChange}

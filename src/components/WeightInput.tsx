@@ -11,6 +11,7 @@ interface Props {
   placeholder?: string;
   completed?: boolean;
   style?: StyleProp<TextStyle>;
+  onFocus?: (e: any, inputRef?: React.RefObject<TextInput | null>) => void;
 }
 
 export const WeightInput: React.FC<Props> = ({
@@ -20,8 +21,10 @@ export const WeightInput: React.FC<Props> = ({
   placeholder,
   completed,
   style,
+  onFocus,
 }) => {
   const { unit } = useSettings();
+  const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [localText, setLocalText] = useState<string>('');
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,9 +72,10 @@ export const WeightInput: React.FC<Props> = ({
     }
   };
 
-  const handleFocus = () => {
+  const handleFocus = (e: any) => {
     setIsFocused(true);
     setLocalText(displayValue);
+    onFocus?.(e, inputRef);
   };
 
   const handleTextChange = (text: string) => {
@@ -101,13 +105,16 @@ export const WeightInput: React.FC<Props> = ({
 
   return (
     <TextInput
+      ref={inputRef}
       style={style}
       keyboardType="decimal-pad"
       returnKeyType="done"
       value={shownText}
       placeholder={placeholder !== undefined ? placeholder : '-'}
       placeholderTextColor="#6B7280"
-      selectTextOnFocus
+      autoCapitalize="none"
+      autoCorrect={false}
+      spellCheck={false}
       onFocus={handleFocus}
       onChangeText={handleTextChange}
       onBlur={handleBlur}

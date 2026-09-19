@@ -1583,4 +1583,61 @@ describe('webStore persistence and lease handling', () => {
 
     await fixture.dispose();
   });
+
+  it('reassignExerciseHistory transfers workout history and routines from source to target exercise in web store', async () => {
+    const fixture = await createStoreFixture('web');
+    const store = fixture.store;
+
+    const exA = await store.createCustomExercise({
+      name: 'Web Wrong Ex A',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    });
+    const exB = await store.createCustomExercise({
+      name: 'Web Correct Ex B',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    });
+
+    const defaultGym = await store.getDefaultGym();
+
+    await store.finishWorkout({
+      id: 'w-web-reassign-1',
+      name: 'Web Reassign Workout',
+      gymId: defaultGym.id,
+      startTime: new Date().toISOString(),
+      durationSeconds: 1200,
+      totalVolumeKg: 500,
+      exercises: [
+        {
+          id: 'we-1',
+          exerciseId: exA.id,
+          exercise: exA,
+          restTimerSeconds: 60,
+          sets: [
+            { id: 's-1', setNumber: 1, type: 'normal', weightKg: 50, reps: 10, isCompleted: true },
+          ],
+        },
+      ],
+    });
+
+    const beforeA = await store.getCompletedWorkoutsForExercise(exA.id);
+    assert.equal(beforeA.length, 1);
+    const beforeB = await store.getCompletedWorkoutsForExercise(exB.id);
+    assert.equal(beforeB.length, 0);
+
+    const res = await store.reassignExerciseHistory(exA.id, exB.id);
+    assert.equal(res.updatedWorkouts, 1);
+    assert.equal(res.updatedSets, 1);
+
+    const afterA = await store.getCompletedWorkoutsForExercise(exA.id);
+    assert.equal(afterA.length, 0);
+    const afterB = await store.getCompletedWorkoutsForExercise(exB.id);
+    assert.equal(afterB.length, 1);
+    assert.equal(afterB[0].exercises[0].exerciseId, exB.id);
+
+    await fixture.dispose();
+  });
 });

@@ -481,4 +481,66 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     assert.equal(podium.weight[2].value, 100);
     assert.equal(podium.weight[2].date, '2026-08-01T10:00:00.000Z');
   });
+
+  it('95x10 dethrones 95x9 on the weight podium and in workout PR evaluation', () => {
+    const session1: Workout = {
+      id: 'w-prev',
+      name: 'Bench Session 95x9',
+      gymId: gymA.id,
+      startTime: '2026-08-01T10:00:00.000Z',
+      durationSeconds: 3000,
+      totalVolumeKg: 855,
+      exercises: [
+        {
+          id: 'ae-prev',
+          exerciseId: barbellBench.id,
+          exercise: barbellBench,
+          restTimerSeconds: 0,
+          sets: [
+            { id: 's-95x9', setNumber: 1, type: 'normal', weightKg: 95, reps: 9, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const session2: Workout = {
+      id: 'w-curr',
+      name: 'Bench Session 95x10',
+      gymId: gymA.id,
+      startTime: '2026-08-10T10:00:00.000Z',
+      durationSeconds: 3000,
+      totalVolumeKg: 950,
+      exercises: [
+        {
+          id: 'ae-curr',
+          exerciseId: barbellBench.id,
+          exercise: barbellBench,
+          restTimerSeconds: 0,
+          sets: [
+            { id: 's-95x10', setNumber: 1, type: 'normal', weightKg: 95, reps: 10, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    // 1. Check podium extraction: 95x10 should be the podium entry for 95 kg, NOT 95x9
+    const podium = extractExercisePodium([session1, session2], barbellBench.id, allGyms, null);
+    assert.equal(podium.weight.length, 1);
+    assert.equal(podium.weight[0].weightKg, 95);
+    assert.equal(podium.weight[0].reps, 10);
+    assert.equal(podium.weight[0].date, '2026-08-10T10:00:00.000Z');
+
+    // 2. Check workout PR evaluation: performing 95x10 after 95x9 should award Rank 1 Gold PR for weight
+    const summary = evaluateWorkoutPRs(
+      session2,
+      { [barbellBench.id]: [session1] },
+      allGyms,
+      false
+    );
+    const setPrResult = summary.setPRs.get('s-95x10');
+    assert.ok(setPrResult, '95x10 should earn PR result');
+    const weightAch = setPrResult.achievements.find((a) => a.metric === 'weight');
+    assert.ok(weightAch, 'Should earn weight PR achievement');
+    assert.equal(weightAch.rank, 1, 'Should earn Rank 1 Gold for weight PR by beating reps at max weight');
+  });
 });

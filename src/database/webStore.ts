@@ -1142,6 +1142,91 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
+  async function reassignExerciseHistory(
+    sourceExerciseId: string,
+    targetExerciseId: string
+  ): Promise<{ updatedWorkouts: number; updatedSets: number }> {
+    if (!sourceExerciseId || !targetExerciseId || sourceExerciseId === targetExerciseId) {
+      return { updatedWorkouts: 0, updatedSets: 0 };
+    }
+
+    const database = await openDb();
+    await verifyAndRenewLease(database);
+
+    const targetExercise = await getExerciseById(targetExerciseId);
+    if (!targetExercise) {
+      throw new Error(`Target exercise ${targetExerciseId} does not exist.`);
+    }
+
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction(['workouts', 'routines'], 'readwrite');
+      const workoutStore = tx.objectStore('workouts');
+      const routineStore = tx.objectStore('routines');
+
+      let updatedWorkouts = 0;
+      let updatedSets = 0;
+
+      const workoutReq = workoutStore.getAll();
+      workoutReq.onsuccess = () => {
+        const workouts = ((workoutReq.result as Workout[]) || []).map(normalizeWorkout);
+        for (const w of workouts) {
+          let hasMatch = false;
+          let workoutSetCount = 0;
+          const updatedExercises = (w.exercises || []).map(we => {
+            if (we.exerciseId === sourceExerciseId) {
+              hasMatch = true;
+              workoutSetCount += (we.sets || []).length;
+              return {
+                ...we,
+                exerciseId: targetExerciseId,
+                exercise: targetExercise,
+              };
+            }
+            return we;
+          });
+
+          if (hasMatch) {
+            updatedWorkouts++;
+            updatedSets += workoutSetCount;
+            workoutStore.put({
+              ...w,
+              exercises: updatedExercises,
+            });
+          }
+        }
+      };
+
+      const routineReq = routineStore.getAll();
+      routineReq.onsuccess = () => {
+        const routines = (routineReq.result as Routine[]) || [];
+        for (const r of routines) {
+          let hasMatch = false;
+          const updatedExercises = (r.exercises || []).map(re => {
+            if (re.exerciseId === sourceExerciseId) {
+              hasMatch = true;
+              return {
+                ...re,
+                exerciseId: targetExerciseId,
+                exercise: targetExercise,
+              };
+            }
+            return re;
+          });
+
+          if (hasMatch) {
+            routineStore.put({
+              ...r,
+              exercises: updatedExercises,
+            });
+          }
+        }
+      };
+
+      tx.oncomplete = () => resolve({ updatedWorkouts, updatedSets });
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
     draft = normalizeDraft(draft);
     const database = await openDb();
@@ -1426,6 +1511,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     getCompletedWorkoutsForExercise,
     getCompletedWorkoutsForExercises,
     getExerciseStats,
+    reassignExerciseHistory,
     getAllExercises,
     searchExercises,
     getExerciseById,

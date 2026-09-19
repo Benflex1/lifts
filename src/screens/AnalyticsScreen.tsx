@@ -113,60 +113,54 @@ export const AnalyticsScreen: React.FC = () => {
   const [isCsvImporting, setIsCsvImporting] = useState(false);
   const [allGyms, setAllGyms] = useState<Gym[]>([]);
 
-  useEffect(() => {
-    let mounted = true;
+  const loadAnalytics = React.useCallback(async () => {
+    try {
+      const store = await getStore();
+      const snapshot = await store.readSnapshot();
 
-    const loadAnalytics = async () => {
-      try {
-        const store = await getStore();
-        const snapshot = await store.readSnapshot();
-        if (!mounted) return;
+      const workouts: Workout[] = snapshot.workouts || [];
+      const gymsList: Gym[] = snapshot.gyms || [];
+      const allExercisesList = await getAllExercises();
 
-        const workouts: Workout[] = snapshot.workouts || [];
-        const gymsList: Gym[] = snapshot.gyms || [];
-        const allExercisesList = await getAllExercises();
+      setAllWorkouts(workouts);
+      setAllGyms(gymsList);
+      setAllExerciseList(allExercisesList);
 
-        setAllWorkouts(workouts);
-        setAllGyms(gymsList);
-        setAllExerciseList(allExercisesList);
+      const scopesMap: Record<string, ExerciseGymScope | undefined> = {};
+      (snapshot.exerciseGymScopes || []).forEach((s) => {
+        scopesMap[s.exerciseId] = s;
+      });
+      setExerciseScopes(scopesMap);
 
-        const scopesMap: Record<string, ExerciseGymScope | undefined> = {};
-        (snapshot.exerciseGymScopes || []).forEach((s) => {
-          scopesMap[s.exerciseId] = s;
-        });
-        setExerciseScopes(scopesMap);
+      setHasWorkoutData(workouts.length > 0);
+      setWeeklyVolume(buildWeeklyVolume(workouts));
+      setMuscleFrequency(buildMuscleFrequency(workouts, { exerciseCatalog: allExercisesList }));
 
-        setHasWorkoutData(workouts.length > 0);
-        setWeeklyVolume(buildWeeklyVolume(workouts));
-        setMuscleFrequency(buildMuscleFrequency(workouts, { exerciseCatalog: allExercisesList }));
-
-        if (workouts.length > 0) {
-          let foundExerciseId: string | null = null;
-          for (const w of workouts) {
-            for (const ex of w.exercises || []) {
-              if ((ex.sets || []).some((s) => s.isCompleted)) {
-                foundExerciseId = ex.exerciseId;
-                break;
-              }
+      if (workouts.length > 0) {
+        let foundExerciseId: string | null = null;
+        for (const w of workouts) {
+          for (const ex of w.exercises || []) {
+            if ((ex.sets || []).some((s) => s.isCompleted)) {
+              foundExerciseId = ex.exerciseId;
+              break;
             }
-            if (foundExerciseId) break;
           }
-          if (foundExerciseId) {
-            setSelectedProgressionExerciseId((prev) => prev || foundExerciseId);
-          }
+          if (foundExerciseId) break;
         }
-      } catch (error) {
-        console.error('Failed to load analytics:', error);
-      } finally {
-        if (mounted) setAnalyticsLoading(false);
+        if (foundExerciseId) {
+          setSelectedProgressionExerciseId((prev) => prev || foundExerciseId);
+        }
       }
-    };
-
-    loadAnalytics();
-    return () => {
-      mounted = false;
-    };
+    } catch (error) {
+      console.error('Failed to load analytics:', error);
+    } finally {
+      setAnalyticsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadAnalytics();
+  }, [loadAnalytics]);
 
   const progressionExercise = useMemo(() => {
     if (!selectedProgressionExerciseId) {
@@ -1493,6 +1487,7 @@ export const AnalyticsScreen: React.FC = () => {
         exercise={detailExercise}
         onClose={() => setDetailExercise(null)}
         currentGym={trophyGymId ? allGyms.find((g) => g.id === trophyGymId) : null}
+        onHistoryTransferred={loadAnalytics}
       />
     </View>
   );

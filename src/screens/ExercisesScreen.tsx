@@ -468,6 +468,7 @@ export const ExercisesScreen: React.FC = () => {
         }}
         onEditCustom={handleOpenEditCustom}
         onEditScope={handleOpenScope}
+        onHistoryTransferred={loadExercises}
         refreshKey={scopeRefreshKey}
       />
 

@@ -101,6 +101,14 @@ export async function getExerciseStats(exerciseId: string, currentGymId?: string
   return store.getExerciseStats(exerciseId, currentGymId);
 }
 
+export async function reassignExerciseHistory(
+  sourceExerciseId: string,
+  targetExerciseId: string
+): Promise<{ updatedWorkouts: number; updatedSets: number }> {
+  const store = await getStore();
+  return store.reassignExerciseHistory(sourceExerciseId, targetExerciseId);
+}
+
 export async function getAllExercises(): Promise<Exercise[]> {
   const store = await getStore();
   return store.getAllExercises();

@@ -11,6 +11,8 @@ import {
   Platform,
   Keyboard,
   KeyboardAvoidingView,
+  Dimensions,
+  LayoutAnimation,
 } from 'react-native';
 import {
   Clock,
@@ -30,11 +32,13 @@ import {
   CheckCircle2,
   ArrowUp,
   ArrowDown,
+  ArrowUpDown,
   Repeat,
   Trophy,
   Info,
   Flame,
   Layers,
+  GripVertical,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -47,7 +51,7 @@ import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
-import { DraggableExerciseCard } from '../components/DraggableExerciseCard';
+import { ExerciseReorderModal } from '../components/ExerciseReorderModal';
 import { GymPickerModal } from '../components/GymPickerModal';
 import { WeightInput } from '../components/WeightInput';
 import { RepsInput } from '../components/RepsInput';
@@ -56,8 +60,6 @@ import { Exercise, SetType, Workout, WorkoutSet, ActiveExercise, ExerciseGymScop
 import { useDialog } from '../context/DialogContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
-import { getExerciseDropIndex } from '../workout/active-exercises';
-import type { ExerciseLayout } from '../workout/active-exercises';
 import { formatPreviousMetric } from '../workout/gym-display';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
@@ -70,6 +72,8 @@ import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
+import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
+import { isExcessiveDuration } from '../workout/duration';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -91,13 +95,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     unlinkSuperset,
     setSupersetGroup,
     removeSet,
+    moveSet,
     updateSet,
     updateExerciseNotes,
     updateExerciseRestTimer,
+    updateWorkoutDuration,
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
     restTimer,
+    startRestTimer,
     expandedExercises,
     toggleExerciseExpanded,
     setExerciseExpanded,
@@ -122,16 +129,17 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   const [isFinishing, setIsFinishing] = useState(false);
   const [showWorkoutMenu, setShowWorkoutMenu] = useState(false);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [showDurationModal, setShowDurationModal] = useState(false);
+  const [durationModalSafetyMode, setDurationModalSafetyMode] = useState(false);
   const [menuActiveExercise, setMenuActiveExercise] = useState<ActiveExercise | null>(null);
   const [showRpeColumn, setShowRpeColumn] = useState(false);
   const [editingNoteExId, setEditingNoteExId] = useState<string | null>(null);
-  const [isDraggingExercise, setIsDraggingExercise] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [selectedDetailExercise, setSelectedDetailExercise] = useState<Exercise | null>(null);
   const [warmupModalExercise, setWarmupModalExercise] = useState<ActiveExercise | null>(null);
   const [supersetModalExerciseId, setSupersetModalExerciseId] = useState<string | null>(null);
   const [supersetNextUpCue, setSupersetNextUpCue] = useState<string | null>(null);
-  const exerciseLayoutsRef = useRef<Record<string, ExerciseLayout>>({});
 
   const supersetMetaMap = useMemo(() => {
     return getSupersetMetadata(activeWorkout?.exercises || []);
@@ -187,21 +195,20 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     }
   };
 
-  const handleExerciseLayout = (itemId: string, layout: ExerciseLayout) => {
-    exerciseLayoutsRef.current[itemId] = layout;
+  const handleMoveExercise = (activeExerciseId: string, direction: -1 | 1) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+    moveExercise(activeExerciseId, direction);
   };
 
-  const handleExerciseDrop = (itemId: string, deltaY: number) => {
-    if (!activeWorkout) return;
-    const targetIndex = getExerciseDropIndex(
-      activeWorkout.exercises.map((exercise) => exercise.id),
-      exerciseLayoutsRef.current,
-      itemId,
-      deltaY
-    );
-    if (targetIndex >= 0) {
-      moveExerciseToIndex(itemId, targetIndex);
+  const handleMoveExerciseToIndex = (activeExerciseId: string, targetIndex: number) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }
+    moveExerciseToIndex(activeExerciseId, targetIndex);
   };
 
   // Set Options / Fast 1-Tap RPE Modal
@@ -364,16 +371,60 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     }
   }, [gymTrackingEnabled]);
 
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+  const keyboardHeightRef = useRef(0);
+  const activeInputRef = useRef<any>(null);
+  const currentScrollY = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
 
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(e.endCoordinates ? e.endCoordinates.height : 0);
-    });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
+  const ensureInputVisible = () => {
+    const node = activeInputRef.current;
+    if (!node || !scrollRef.current) return;
+
+    if (typeof node.measureInWindow === 'function') {
+      node.measureInWindow((_x: number, y: number, _width: number, height: number) => {
+        if (typeof y !== 'number' || isNaN(y)) return;
+        const windowHeight = Dimensions.get('window').height;
+        const kbH = keyboardHeightRef.current > 0 ? keyboardHeightRef.current : 280;
+        // Visible bottom boundary of the view above the keyboard
+        const safeBottom = windowHeight - kbH - 24;
+        const inputBottom = y + height;
+
+        // ONLY scroll if the input is actually obscured by or colliding with the keyboard
+        if (inputBottom > safeBottom) {
+          const distanceNeeded = inputBottom - safeBottom + 36;
+          const nextY = Math.max(0, currentScrollY.current + distanceNeeded);
+          scrollRef.current?.scrollTo({ y: nextY, animated: true });
+        }
+      });
+    }
+  };
+
+  const handleInputFocus = (event: any, inputRef?: React.RefObject<any>) => {
+    activeInputRef.current = inputRef?.current || event?.target;
+    setTimeout(ensureInputVisible, 120);
+  };
+
+  useEffect(() => {
+    const onShow = (e: any) => {
+      const h = e.endCoordinates ? e.endCoordinates.height : 0;
+      setKeyboardHeight(h);
+      keyboardHeightRef.current = h;
+      ensureInputVisible();
+    };
+
+    const onHide = () => {
       setKeyboardHeight(0);
-    });
+      keyboardHeightRef.current = 0;
+    };
+
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      onShow
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      onHide
+    );
 
     return () => {
       showSub.remove();
@@ -438,9 +489,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       if (!shouldFinish) return;
     }
 
+    if (isExcessiveDuration(elapsedSeconds)) {
+      setDurationModalSafetyMode(true);
+      setShowDurationModal(true);
+      return;
+    }
+
+    await handleExecuteFinish();
+  };
+
+  const handleExecuteFinish = async (durationOverride?: number) => {
     setIsFinishing(true);
     try {
-      const summary = await finishWorkout();
+      const summary = await finishWorkout(durationOverride);
       if (summary) {
         onFinish(summary);
       } else {
@@ -579,13 +640,32 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         </TouchableOpacity>
 
         {/* Centered Timer */}
-        <View style={styles.timerWrap}>
+        <TouchableOpacity
+          style={styles.timerWrap}
+          onPress={() => {
+            setDurationModalSafetyMode(false);
+            setShowDurationModal(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Adjust workout duration"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <Clock size={16} color="#38BDF8" />
           <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Top Right Actions */}
         <View style={styles.topRightWrap}>
+          <TouchableOpacity
+            onPress={() => setShowReorderModal(true)}
+            style={styles.reorderHeaderBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+            accessibilityLabel="Reorder exercises"
+            accessibilityRole="button"
+          >
+            <ArrowUpDown size={18} color="#38BDF8" />
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={handleFinish}
             style={[styles.finishBtn, isFinishing && styles.btnDisabled]}
@@ -612,12 +692,20 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       {/* Top Metrics Card - Lyfta Screenshot 2 Style */}
       <View style={styles.metricsContainer}>
         <View style={styles.metricsCard}>
-          <View style={styles.metricColumn}>
+          <TouchableOpacity
+            style={styles.metricColumn}
+            onPress={() => {
+              setDurationModalSafetyMode(false);
+              setShowDurationModal(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Adjust workout duration"
+          >
             <Text style={styles.metricColLabel}>DURATION</Text>
             <Text style={[styles.metricColValue, { color: '#38BDF8' }]}>
               {formatTimer(elapsedSeconds)}
             </Text>
-          </View>
+          </TouchableOpacity>
           <View style={styles.metricDivider} />
           <View style={styles.metricColumn}>
             <Text style={styles.metricColLabel}>VOLUME</Text>
@@ -635,17 +723,24 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
       {/* Exercises Stream */}
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollArea}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(130, 130 + (Platform.OS === 'android' ? keyboardHeight : 0)) },
+          { paddingBottom: keyboardHeight > 0 ? keyboardHeight + 300 : 220 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        scrollEnabled={!isDraggingExercise}
+        onScroll={(e) => {
+          currentScrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        scrollEnabled={true}
       >
-        {activeWorkout.exercises.map((activeEx) => {
+        {activeWorkout.exercises.map((activeEx, exIndex) => {
+          const isFirst = exIndex === 0;
+          const isLast = exIndex === activeWorkout.exercises.length - 1;
           const isExpanded = expandedExercises[activeEx.id] ?? false;
           const completedCount = activeEx.sets.filter((s) => s.isCompleted).length;
           const totalCount = activeEx.sets.length;
@@ -655,107 +750,120 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
           const cardElement = !isExpanded ? (
             // Collapsed Accordion Row - Lyfta Screenshot 1
-            <DraggableExerciseCard
+            <TouchableOpacity
               key={activeEx.id}
-              itemId={activeEx.id}
-              exerciseName={activeEx.exercise?.name || 'Exercise'}
-              onLayout={handleExerciseLayout}
-              onDrop={handleExerciseDrop}
-              onDragActiveChange={setIsDraggingExercise}
+              style={[
+                styles.collapsedCard,
+                ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
+              ]}
+              onPress={() => toggleExerciseExpanded(activeEx.id)}
+              activeOpacity={0.7}
             >
               <TouchableOpacity
-                style={[
-                  styles.collapsedCard,
-                  ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
-                ]}
-                onPress={() => toggleExerciseExpanded(activeEx.id)}
-                activeOpacity={0.7}
+                style={styles.exerciseAvatar}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setSelectedDetailExercise(activeEx.exercise || null);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
               >
+                {activeEx.exercise ? (
+                  <ExerciseVisual
+                    exercise={activeEx.exercise}
+                    size="compact"
+                    accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
+                  />
+                ) : (
+                  <Dumbbell size={20} color="#38BDF8" />
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.collapsedContent}>
+                <Text style={styles.collapsedTitle} numberOfLines={1}>
+                  {activeEx.exercise?.name || 'Exercise'}
+                </Text>
+                <View style={styles.collapsedMetaRow}>
+                  {ssMeta && (
+                    <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color, marginRight: 6 }]}>
+                      <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
+                        {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
+                      </Text>
+                    </View>
+                  )}
+                  <Text
+                    style={[
+                      styles.collapsedSubtitle,
+                      isAllCompleted && styles.completedSubtitleText,
+                    ]}
+                  >
+                    {completedCount}/{totalCount} done
+                  </Text>
+                  {activeEx.exercise?.secondaryMuscles && activeEx.exercise.secondaryMuscles.length > 0 && (
+                    <Text style={styles.collapsedSecondary} numberOfLines={1}>
+                      +{activeEx.exercise.secondaryMuscles.length} secondary
+                    </Text>
+                  )}
+                  {isAllCompleted && (
+                    <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.collapsedActions}>
+                {!isFirst && (
+                  <TouchableOpacity
+                    style={styles.reorderBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleMoveExercise(activeEx.id, -1);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    accessibilityLabel="Move exercise up"
+                    accessibilityRole="button"
+                  >
+                    <ArrowUp size={15} color="#9CA3AF" />
+                  </TouchableOpacity>
+                )}
+                {!isLast && (
+                  <TouchableOpacity
+                    style={styles.reorderBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleMoveExercise(activeEx.id, 1);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    accessibilityLabel="Move exercise down"
+                    accessibilityRole="button"
+                  >
+                    <ArrowDown size={15} color="#9CA3AF" />
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  style={styles.exerciseAvatar}
+                  style={styles.iconBtn}
                   onPress={(e) => {
                     e.stopPropagation();
-                    setSelectedDetailExercise(activeEx.exercise || null);
+                    setMenuActiveExercise(activeEx);
                   }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  accessibilityLabel="Exercise menu"
                   accessibilityRole="button"
-                  accessibilityLabel={`View ${activeEx.exercise?.name || 'exercise'} details`}
                 >
-                  {activeEx.exercise ? (
-                    <ExerciseVisual
-                      exercise={activeEx.exercise}
-                      size="compact"
-                      accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
-                    />
-                  ) : (
-                    <Dumbbell size={20} color="#38BDF8" />
-                  )}
+                  <MoreVertical size={18} color="#9CA3AF" />
                 </TouchableOpacity>
-
-                <View style={styles.collapsedContent}>
-                  <Text style={styles.collapsedTitle} numberOfLines={1}>
-                    {activeEx.exercise?.name || 'Exercise'}
-                  </Text>
-                  <View style={styles.collapsedMetaRow}>
-                    {ssMeta && (
-                      <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color, marginRight: 6 }]}>
-                        <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
-                          {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
-                        </Text>
-                      </View>
-                    )}
-                    <Text
-                      style={[
-                        styles.collapsedSubtitle,
-                        isAllCompleted && styles.completedSubtitleText,
-                      ]}
-                    >
-                      {completedCount}/{totalCount} done
-                    </Text>
-                    {activeEx.exercise?.secondaryMuscles && activeEx.exercise.secondaryMuscles.length > 0 && (
-                      <Text style={styles.collapsedSecondary} numberOfLines={1}>
-                        +{activeEx.exercise.secondaryMuscles.length} secondary
-                      </Text>
-                    )}
-                    {isAllCompleted && (
-                      <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
-                    )}
-                  </View>
-                </View>
-
-                  <View style={styles.collapsedActions}>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        setMenuActiveExercise(activeEx);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                      accessibilityLabel="Exercise menu"
-                      accessibilityRole="button"
-                    >
-                      <MoreVertical size={18} color="#9CA3AF" />
-                    </TouchableOpacity>
-                    <ChevronDown size={18} color="#6B7280" />
-                  </View>
-                </TouchableOpacity>
-              </DraggableExerciseCard>
-            ) : (
-              // Expanded Full Exercise Card
-              <DraggableExerciseCard
+                <ChevronDown size={18} color="#6B7280" />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            // Expanded Full Exercise Card
+            <View
               key={activeEx.id}
-              itemId={activeEx.id}
-              exerciseName={activeEx.exercise?.name || 'Exercise'}
-              onLayout={handleExerciseLayout}
-              onDrop={handleExerciseDrop}
-              onDragActiveChange={setIsDraggingExercise}
+              style={[
+                styles.exerciseCard,
+                ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
+              ]}
             >
-              <View
-                style={[
-                  styles.exerciseCard,
-                  ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
-                ]}
-              >
               {/* Exercise Header */}
               <View style={styles.cardHeader}>
                 <TouchableOpacity
@@ -792,7 +900,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       ).join(', ')}
                     </Text>
                     {activeEx.exercise?.equipment ? (
-                      <Text style={styles.equipmentBadge}>{activeEx.exercise.equipment}</Text>
+                      <Text style={styles.equipmentBadge}>{activeEx.exercise?.equipment}</Text>
                     ) : null}
                     {activeEx.targetReps ? (
                       <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
@@ -813,22 +921,44 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 </TouchableOpacity>
 
                 <View style={styles.headerActions}>
+                  {!isFirst && (
+                    <TouchableOpacity
+                      style={styles.reorderBtn}
+                      onPress={() => handleMoveExercise(activeEx.id, -1)}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      accessibilityLabel="Move exercise up"
+                      accessibilityRole="button"
+                    >
+                      <ArrowUp size={15} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  )}
+                  {!isLast && (
+                    <TouchableOpacity
+                      style={styles.reorderBtn}
+                      onPress={() => handleMoveExercise(activeEx.id, 1)}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      accessibilityLabel="Move exercise down"
+                      accessibilityRole="button"
+                    >
+                      <ArrowDown size={15} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={styles.iconBtn}
                     onPress={() => setMenuActiveExercise(activeEx)}
                     hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
-                    <MoreVertical size={18} color="#9CA3AF" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.iconBtn}
-                    onPress={() => toggleExerciseExpanded(activeEx.id)}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                  >
-                    <ChevronUp size={18} color="#9CA3AF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
+                        <MoreVertical size={18} color="#9CA3AF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.iconBtn}
+                        onPress={() => toggleExerciseExpanded(activeEx.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                      >
+                        <ChevronUp size={18} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
               {/* Note Row - Lyfta Style */}
               {editingNoteExId === activeEx.id || (activeEx.notes && activeEx.notes.length > 0) ? (
@@ -840,6 +970,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     placeholderTextColor="#6B7280"
                     value={activeEx.notes || ''}
                     onChangeText={(txt) => updateExerciseNotes(activeEx.id, txt)}
+                    onFocus={handleInputFocus}
                     autoFocus={editingNoteExId === activeEx.id && (!activeEx.notes || activeEx.notes.length === 0)}
                   />
                 </View>
@@ -975,6 +1106,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                           }
                           completed={set.isCompleted}
                           style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+                          onFocus={handleInputFocus}
                         />
                       </View>
 
@@ -988,6 +1120,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                           }
                           completed={set.isCompleted}
                           style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+                          onFocus={handleInputFocus}
                         />
                         {/* Compact RPE badge if defined and inline column is hidden */}
                         {!showRpeColumn && set.rpe != null && (
@@ -1047,8 +1180,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 <Plus size={16} color="#FFFFFF" />
                 <Text style={styles.addSetBtnWideText}>Add Set</Text>
               </TouchableOpacity>
-              </View>
-            </DraggableExerciseCard>
+            </View>
           );
 
           return (
@@ -1105,11 +1237,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       </ScrollView>
 
       {/* Floating Rest Timer Overlay */}
-      <RestTimerOverlay nextUpText={supersetNextUpCue} />
+      <RestTimerOverlay
+        nextUpText={supersetNextUpCue}
+        bottomOffset={keyboardHeight > 0 ? keyboardHeight + 16 : 24}
+      />
 
       {/* Non-blocking Floating Superset Cue when timer is not active */}
       {!restTimer.isActive && supersetNextUpCue && (
-        <View style={styles.supersetFloatingCue}>
+        <View style={[styles.supersetFloatingCue, { bottom: keyboardHeight > 0 ? keyboardHeight + 16 : 24 }]}>
           <View style={styles.supersetCueBadge}>
             <Text style={styles.supersetCueBadgeText}>NEXT UP</Text>
           </View>
@@ -1413,7 +1548,68 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               </View>
             </View>
 
-            {/* Quick Action Shortcuts */}
+            {/* Quick Action Shortcuts: Reorder */}
+            {(() => {
+              const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal?.activeExerciseId);
+              const currentSetIndex = modalEx?.sets.findIndex((s) => s.id === setOptionsModal?.set.id) ?? -1;
+              const totalSets = modalEx?.sets.length ?? 0;
+              const isFirstSet = currentSetIndex <= 0;
+              const isLastSet = currentSetIndex >= totalSets - 1;
+
+              return (
+                <View style={styles.optionsSection}>
+                  <View style={styles.rpeSectionHeader}>
+                    <Text style={styles.sectionLabel}>REORDER SET</Text>
+                    <Text style={styles.rpeSublabel}>
+                      {currentSetIndex >= 0 ? `Set ${currentSetIndex + 1} of ${totalSets}` : ''}
+                    </Text>
+                  </View>
+                  <View style={styles.setOptionsActions}>
+                    <TouchableOpacity
+                      style={[styles.shortcutBtn, isFirstSet && styles.btnDisabled]}
+                      disabled={isFirstSet}
+                      onPress={() => {
+                        if (setOptionsModal && !isFirstSet) {
+                          if (Platform.OS !== 'web') {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          }
+                          moveSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, -1);
+                        }
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Move set up"
+                    >
+                      <ArrowUp size={16} color={isFirstSet ? '#4B5563' : '#A78BFA'} />
+                      <Text style={[styles.shortcutBtnText, { color: isFirstSet ? '#4B5563' : '#A78BFA' }]}>
+                        Move Up {currentSetIndex > 0 ? `(to #${currentSetIndex})` : ''}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.shortcutBtn, isLastSet && styles.btnDisabled]}
+                      disabled={isLastSet}
+                      onPress={() => {
+                        if (setOptionsModal && !isLastSet) {
+                          if (Platform.OS !== 'web') {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          }
+                          moveSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, 1);
+                        }
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Move set down"
+                    >
+                      <ArrowDown size={16} color={isLastSet ? '#4B5563' : '#A78BFA'} />
+                      <Text style={[styles.shortcutBtnText, { color: isLastSet ? '#4B5563' : '#A78BFA' }]}>
+                        Move Down {currentSetIndex >= 0 && currentSetIndex < totalSets - 1 ? `(to #${currentSetIndex + 2})` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* Quick Action Shortcuts: Tools */}
             <View style={styles.setOptionsActions}>
               <TouchableOpacity
                 style={styles.shortcutBtn}
@@ -1500,6 +1696,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               disabled={menuExerciseIndex <= 0}
               onPress={() => {
                 if (menuActiveExercise) {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  }
                   moveExercise(menuActiveExercise.id, -1);
                   setMenuActiveExercise(null);
                 }
@@ -1517,6 +1717,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               disabled={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1}
               onPress={() => {
                 if (menuActiveExercise) {
+                  if (Platform.OS !== 'web') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  }
                   moveExercise(menuActiveExercise.id, 1);
                   setMenuActiveExercise(null);
                 }
@@ -1527,6 +1731,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 color={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1 ? '#4B5563' : '#38BDF8'}
               />
               <Text style={styles.menuItemText}>Move Down</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setMenuActiveExercise(null);
+                setShowReorderModal(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Reorder all exercises"
+            >
+              <ArrowUpDown size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Reorder All Exercises</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1709,6 +1926,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Text style={styles.menuItemText}>Collapse All Exercises</Text>
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowWorkoutMenu(false);
+                setShowReorderModal(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Reorder exercises"
+            >
+              <ArrowUpDown size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Reorder Exercises</Text>
+            </TouchableOpacity>
+
             {gymTrackingEnabled && displayedActiveGym && (
               <TouchableOpacity
                 style={styles.menuItem}
@@ -1725,6 +1955,20 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 </Text>
               </TouchableOpacity>
             )}
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowWorkoutMenu(false);
+                setDurationModalSafetyMode(false);
+                setShowDurationModal(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Adjust workout duration"
+            >
+              <Clock size={18} color="#38BDF8" />
+              <Text style={styles.menuItemText}>Adjust Workout Time</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -1749,6 +1993,36 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Workout Duration Adjustment & 4hr+ Safety Modal */}
+      <WorkoutDurationModal
+        visible={showDurationModal}
+        initialDurationSeconds={elapsedSeconds}
+        workout={activeWorkout}
+        showSafetyPrompt={durationModalSafetyMode}
+        onSave={(newSeconds) => {
+          setShowDurationModal(false);
+          if (durationModalSafetyMode) {
+            setDurationModalSafetyMode(false);
+            void handleExecuteFinish(newSeconds);
+          } else {
+            updateWorkoutDuration(newSeconds);
+          }
+        }}
+        onClose={() => {
+          setShowDurationModal(false);
+          setDurationModalSafetyMode(false);
+        }}
+      />
+
+      {/* Dedicated Exercise Reorder Modal */}
+      <ExerciseReorderModal
+        visible={showReorderModal}
+        exercises={activeWorkout.exercises}
+        onMoveExercise={handleMoveExercise}
+        onMoveExerciseToIndex={handleMoveExerciseToIndex}
+        onClose={() => setShowReorderModal(false)}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -1799,6 +2073,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  reorderHeaderBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E232E',
   },
   finishBtn: {
     backgroundColor: '#2563EB',
@@ -1874,7 +2156,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#262A34',
     padding: 12,
-    paddingLeft: 44,
     marginBottom: 10,
   },
   exerciseAvatar: {
@@ -1920,7 +2201,26 @@ const styles = StyleSheet.create({
   collapsedActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+  },
+  reorderBtn: {
+    width: 26,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: '#1E232E',
+  },
+  inlineDragHandle: {
+    width: 26,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: '#1E232E',
+  },
+  inlineDragHandleActive: {
+    backgroundColor: '#2563EB',
   },
 
   // Expanded Exercise Card
@@ -1928,7 +2228,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#181A20',
     borderRadius: 16,
     padding: 14,
-    paddingLeft: 44,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#262A34',

@@ -8,18 +8,20 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Award, Check, Clock, Dumbbell, Flame, MapPin, Trophy } from 'lucide-react-native';
+import { Award, Check, Clock, Dumbbell, Flame, MapPin, Trophy, Edit2, AlertCircle, Sparkles } from 'lucide-react-native';
 import { ExerciseGymScope, Gym, Workout } from '../types';
 import { formatDuration } from '../utils/calculator';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { GymPickerModal } from './GymPickerModal';
 import { useDialog } from '../context/DialogContext';
-import { reassignWorkoutGym } from '../workout/workout-edit';
+import { applyWorkoutEdits, reassignWorkoutGym } from '../workout/workout-edit';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from './PRBadge';
 import { ConfettiCelebration } from './ConfettiCelebration';
+import { WorkoutDurationModal } from './WorkoutDurationModal';
+import { isExcessiveDuration, estimateWorkoutDuration } from '../workout/duration';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
@@ -39,7 +41,25 @@ export function WorkoutSummaryModal({
   const { unit, gymTrackingEnabled } = useSettings();
   const { notify } = useDialog();
   const [showGymPicker, setShowGymPicker] = useState(false);
+  const [showDurationModal, setShowDurationModal] = useState(false);
   const [prSummary, setPrSummary] = useState<WorkoutPRSummary | null>(null);
+
+  const handleDurationSave = async (newDurationSeconds: number) => {
+    if (!workout) return;
+    try {
+      const updated = applyWorkoutEdits(workout, {
+        durationSeconds: newDurationSeconds,
+        sets: [],
+      });
+      await onUpdate(updated);
+      setShowDurationModal(false);
+    } catch (e: any) {
+      await notify({
+        title: 'Duration Error',
+        message: e?.message || 'Failed to update duration.',
+      });
+    }
+  };
 
   useEffect(() => {
     if (!workout) {
@@ -131,15 +151,69 @@ export function WorkoutSummaryModal({
             <Text style={styles.workoutName}>{workout.name}</Text>
           </View>
 
+          {/* Excessive Duration Warning Card */}
+          {isExcessiveDuration(workout.durationSeconds) && (
+            <View style={styles.longDurationCard}>
+              <View style={styles.longDurationHeader}>
+                <View style={styles.warningIconBadge}>
+                  <AlertCircle size={20} color="#F59E0B" />
+                </View>
+                <View style={styles.longDurationTextWrap}>
+                  <Text style={styles.longDurationTitle}>
+                    Did this workout really take {formatDuration(workout.durationSeconds)}?
+                  </Text>
+                  <Text style={styles.longDurationSubtitle}>
+                    It looks like the timer was left running. You can auto-estimate or edit the duration.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.longDurationActionsRow}>
+                <TouchableOpacity
+                  style={styles.autoEstimateButton}
+                  onPress={() => {
+                    const est = estimateWorkoutDuration(workout);
+                    handleDurationSave(est);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Auto-estimate workout duration"
+                >
+                  <Sparkles size={16} color="#000000" />
+                  <Text style={styles.autoEstimateButtonText}>
+                    Auto-estimate (~{formatDuration(estimateWorkoutDuration(workout))})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.changeTimeButton}
+                  onPress={() => setShowDurationModal(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change workout duration manually"
+                >
+                  <Clock size={16} color="#38BDF8" />
+                  <Text style={styles.changeTimeButtonText}>Change Time</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           {/* Key Metrics Grid */}
           <View style={styles.metricsGrid}>
-            <View style={styles.metricCard}>
-              <Clock size={18} color="#3B82F6" />
+            <TouchableOpacity
+              style={styles.metricCard}
+              onPress={() => setShowDurationModal(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit duration, currently ${formatDuration(workout.durationSeconds)}`}
+            >
+              <View style={styles.metricCardHeader}>
+                <Clock size={18} color="#3B82F6" />
+                <Edit2 size={11} color="#60A5FA" />
+              </View>
               <Text style={styles.metricValue}>
                 {formatDuration(workout.durationSeconds)}
               </Text>
               <Text style={styles.metricLabel}>Duration</Text>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.metricCard}>
               <Dumbbell size={18} color="#F59E0B" />
@@ -270,6 +344,16 @@ export function WorkoutSummaryModal({
         onSelect={handleGymSelect}
         onClose={() => setShowGymPicker(false)}
       />
+
+      <WorkoutDurationModal
+        visible={showDurationModal}
+        initialDurationSeconds={workout.durationSeconds}
+        workout={workout}
+        title="Edit Workout Duration"
+        subtitle="Update how long this completed workout lasted."
+        onSave={handleDurationSave}
+        onClose={() => setShowDurationModal(false)}
+      />
     </>
   );
 }
@@ -329,6 +413,11 @@ const styles = StyleSheet.create({
     gap: 4,
     borderWidth: 1,
     borderColor: '#2D3442',
+  },
+  metricCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   metricValue: {
     fontSize: 14,
@@ -508,6 +597,81 @@ const styles = StyleSheet.create({
   doneButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '700',
+  },
+  longDurationCard: {
+    backgroundColor: '#261F17',
+    borderColor: '#B45309',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  longDurationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  warningIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  longDurationTextWrap: {
+    flex: 1,
+  },
+  longDurationTitle: {
+    color: '#F59E0B',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  longDurationSubtitle: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  longDurationActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  autoEstimateButton: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F59E0B',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 6,
+  },
+  autoEstimateButtonText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  changeTimeButton: {
+    flex: 0.8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E232E',
+    borderColor: '#374151',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 6,
+  },
+  changeTimeButtonText: {
+    color: '#38BDF8',
+    fontSize: 13,
     fontWeight: '700',
   },
 });

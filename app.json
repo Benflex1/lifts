@@ -19,14 +19,18 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.benflex1.lifts",
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
-        "android.permission.health.WRITE_EXERCISE"
+        "android.permission.health.WRITE_EXERCISE",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-notifications",
       "expo-sqlite",
       "expo-sharing",
       "expo-font",

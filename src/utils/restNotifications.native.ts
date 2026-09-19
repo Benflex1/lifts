@@ -96,10 +96,13 @@ export async function initRestNotifications(): Promise<void> {
     try {
       await Notifications.setNotificationChannelAsync('rest-timer', {
         name: 'Rest Timer',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 500, 250, 500],
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 800, 400, 800, 400, 800],
         sound: 'default',
         enableVibrate: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+        showBadge: false,
       });
       channelCreated = true;
     } catch (e) {
@@ -112,7 +115,13 @@ export async function initRestNotifications(): Promise<void> {
     try {
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       if (existingStatus !== 'granted') {
-        await Notifications.requestPermissionsAsync();
+        await Notifications.requestPermissionsAsync({
+          ios: {
+            allowAlert: true,
+            allowBadge: true,
+            allowSound: true,
+          },
+        });
       }
     } catch (e) {
       console.warn('Failed to request notification permissions:', e);
@@ -148,15 +157,16 @@ export async function scheduleRestNotification(
       content: {
         title,
         body,
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
-        vibrate: [0, 500, 250, 500],
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        vibrate: [0, 800, 400, 800, 400, 800],
         ...(Platform.OS === 'android' ? { channelId: 'rest-timer' } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(endsAtMs),
-      },
+        ...(Platform.OS === 'android' ? { channelId: 'rest-timer' } : {}),
+      } as any,
     });
 
     lastScheduledId = id;

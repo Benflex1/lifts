@@ -44,6 +44,21 @@ export function moveActiveExercise(
   return moveActiveExerciseToIndex(exercises, activeExerciseId, targetIndex);
 }
 
+export function computeExerciseLayouts(
+  exerciseIds: string[],
+  heights: Record<string, number>,
+  spacing = 12
+): Record<string, ExerciseLayout> {
+  const layouts: Record<string, ExerciseLayout> = {};
+  let currentY = 0;
+  for (const id of exerciseIds) {
+    const h = heights[id] || 80;
+    layouts[id] = { y: currentY, height: h };
+    currentY += h + spacing;
+  }
+  return layouts;
+}
+
 export function getExerciseDropIndex(
   exerciseIds: string[],
   layouts: Record<string, ExerciseLayout>,
@@ -57,20 +72,31 @@ export function getExerciseDropIndex(
     return currentIndex;
   }
 
-  const draggedCenter = currentLayout.y + currentLayout.height / 2 + deltaY;
+  const currentCenter = currentLayout.y + currentLayout.height / 2;
+  const draggedCenter = currentCenter + deltaY;
   let targetIndex = currentIndex;
 
   if (deltaY > 0) {
     for (let index = currentIndex + 1; index < exerciseIds.length; index++) {
       const layout = layouts[exerciseIds[index]];
-      if (layout && draggedCenter > layout.y + layout.height / 2) {
+      if (!layout) continue;
+      const threshold = Math.min(
+        layout.y + layout.height / 2,
+        currentCenter + (index - currentIndex) * 150
+      );
+      if (draggedCenter > threshold) {
         targetIndex = index;
       }
     }
   } else if (deltaY < 0) {
     for (let index = currentIndex - 1; index >= 0; index--) {
       const layout = layouts[exerciseIds[index]];
-      if (layout && draggedCenter < layout.y + layout.height / 2) {
+      if (!layout) continue;
+      const threshold = Math.max(
+        layout.y + layout.height / 2,
+        currentCenter - (currentIndex - index) * 150
+      );
+      if (draggedCenter < threshold) {
         targetIndex = index;
       }
     }

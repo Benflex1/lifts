@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { Platform, AppState, AppStateStatus } from 'react-native';
+import { Platform, AppState, AppStateStatus, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Gym, Routine, SetType, Workout, WorkoutSet } from '../types';
@@ -7,7 +7,7 @@ import { getStore } from '../database/db';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
-import { initialReps, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
+import { initialReps, moveWorkoutSet, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
 import {
   moveActiveExercise,
   moveActiveExerciseToIndex,
@@ -94,14 +94,16 @@ interface WorkoutContextType {
   unlinkSuperset: (exerciseId: string) => void;
   setSupersetGroup: (selectedExerciseIds: string[]) => void;
   removeSet: (activeExerciseId: string, setId: string) => void;
+  moveSet: (activeExerciseId: string, setId: string, direction: -1 | 1) => void;
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
   updateExerciseRestTimer: (activeExerciseId: string, seconds: number) => void;
+  updateWorkoutDuration: (seconds: number) => void;
   toggleSetComplete: (activeExerciseId: string, setId: string) => void;
   startRestTimer: (seconds: number, exerciseName?: string) => void;
   adjustRestTimer: (deltaSeconds: number) => void;
   stopRestTimer: () => void;
-  finishWorkout: () => Promise<Workout | null>;
+  finishWorkout: (durationSecondsOverride?: number) => Promise<Workout | null>;
   cancelWorkout: () => void;
   expandedExercises: Record<string, boolean>;
   toggleExerciseExpanded: (activeExerciseId: string) => void;
@@ -318,6 +320,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             lastBuzzedSecondRef.current = 0;
             if (Platform.OS !== 'web') {
               try {
+                Vibration.vibrate([0, 800, 400, 800, 400, 800]);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 setTimeout(() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -661,7 +664,28 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     discardDraft().catch(console.error);
   };
 
-  const finishWorkout = async (): Promise<Workout | null> => {
+  const updateWorkoutDuration = useCallback((seconds: number) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+    const validSeconds = Math.max(0, Math.floor(seconds));
+    const newStartTime = new Date(Date.now() - validSeconds * 1000).toISOString();
+    const updated: Workout = {
+      ...state.workout,
+      startTime: newStartTime,
+      durationSeconds: validSeconds,
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+    setElapsedSeconds(validSeconds);
+  }, [restTimer]);
+
+  const finishWorkout = async (durationSecondsOverride?: number): Promise<Workout | null> => {
     const ctrl = controllerRef.current;
     if (!ctrl) return null;
     const state = ctrl.getState();
@@ -670,7 +694,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      const finished = await ctrl.finish();
+      const finished = await ctrl.finish(durationSecondsOverride);
       const settings = healthSyncSettingsRef.current;
       if (settings.loading) {
         pendingHealthSyncsRef.current.push(finished);
@@ -1038,6 +1062,32 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
+  const moveSet = (activeExerciseId: string, setId: string, direction: -1 | 1) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const updatedExercises = state.workout.exercises.map((ex) => {
+      if (ex.id !== activeExerciseId) return ex;
+      return {
+        ...ex,
+        sets: moveWorkoutSet(ex.sets, setId, direction),
+      };
+    });
+
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+  };
+
   const updateSet = (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
@@ -1228,9 +1278,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         unlinkSuperset,
         setSupersetGroup,
         removeSet,
+        moveSet,
         updateSet,
         updateExerciseNotes,
         updateExerciseRestTimer,
+        updateWorkoutDuration,
         toggleSetComplete,
         startRestTimer,
         adjustRestTimer,
