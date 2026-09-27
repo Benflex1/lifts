@@ -485,14 +485,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                       <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
                     ) : detail && detail.exercises.length > 0 ? (
                       <>
-                        {prSummary && prSummary.totalCount > 0 && (
-                          <View style={styles.historyPRBanner}>
-                            <Trophy size={14} color={colors.warning} />
-                            <Text style={styles.historyPRBannerText}>
-                              {prSummary.totalCount} PR{prSummary.totalCount > 1 ? 's' : ''} achieved in this workout
-                            </Text>
-                          </View>
-                        )}
                         {detail.exercises.map((ex, exIdx) => {
                           const completedSets = ex.sets.filter(s => s.isCompleted);
                           if (completedSets.length === 0) return null;
@@ -561,9 +553,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                                     </View>
                                   )}
                                 </View>
-                                {ex.notes && (
+                                {ex.notes ? (
                                   <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
-                                )}
+                                ) : null}
                                 <View style={styles.detailSetsGrid}>
                                   {completedSets.map((s, sIdx) => {
                                     const setPR = prSummary?.setPRs.get(s.id);
@@ -878,23 +870,6 @@ const styles = StyleSheet.create({
     color: colors.gold,
     fontSize: 12,
     fontWeight: '800',
-  },
-  historyPRBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#78350F25',
-    borderColor: '#F59E0B50',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 4,
-  },
-  historyPRBannerText: {
-    color: colors.gold,
-    fontSize: 12,
-    fontWeight: '700',
   },
   detailExHeader: {
     flexDirection: 'row',

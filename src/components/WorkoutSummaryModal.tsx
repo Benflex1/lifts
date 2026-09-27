@@ -260,7 +260,7 @@ export function WorkoutSummaryModal({
               <View style={styles.prSectionHeader}>
                 <Trophy size={18} color={colors.warning} />
                 <Text style={styles.prSectionTitle}>
-                  {prSummary.totalCount} PERSONAL RECORD{prSummary.totalCount > 1 ? 'S' : ''} BROKEN!
+                  {prSummary.totalCount} New Personal Record{prSummary.totalCount > 1 ? 's' : ''}
                 </Text>
               </View>
               <ScrollView style={styles.prList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
@@ -314,12 +314,14 @@ export function WorkoutSummaryModal({
                     </View>
                     <Text style={styles.exerciseMetaText}>
                       {completedSets.length} {completedSets.length === 1 ? 'set' : 'sets'}
-                      {maxWeight > 0 ? ` • Top: ${formatWeight(maxWeight, unit)}` : ''}
+                      {maxWeight > 0 ? ` · Top: ${formatWeight(maxWeight, unit)}` : ''}
                     </Text>
                   </View>
-                  <View style={styles.checkIcon}>
-                    <Check size={16} color={colors.success} />
-                  </View>
+                  {completedSets.length > 0 && (
+                    <View style={styles.checkIcon}>
+                      <Check size={16} color={colors.success} />
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -503,9 +505,8 @@ const styles = StyleSheet.create({
   },
   prSectionTitle: {
     color: colors.gold,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
   prList: {
     maxHeight: 130,

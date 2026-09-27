@@ -27,6 +27,7 @@ import {
   FileText,
   Timer,
   MoreHorizontal,
+  Gauge,
   MapPin,
   Dumbbell,
   CheckCircle2,
@@ -1652,7 +1653,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Info size={18} color={colors.primary} />
+              <Info size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>View Exercise Details</Text>
             </TouchableOpacity>
 
@@ -1670,7 +1671,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <ArrowUp size={18} color={menuExerciseIndex <= 0 ? colors.textFaint : colors.primary} />
+              <ArrowUp size={18} color={menuExerciseIndex <= 0 ? colors.textFaint : colors.textSecondary} />
               <Text style={styles.menuItemText}>Move Up</Text>
             </TouchableOpacity>
 
@@ -1693,7 +1694,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             >
               <ArrowDown
                 size={18}
-                color={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1 ? colors.textFaint : colors.primary}
+                color={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1 ? colors.textFaint : colors.textSecondary}
               />
               <Text style={styles.menuItemText}>Move Down</Text>
             </TouchableOpacity>
@@ -1707,7 +1708,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               accessibilityRole="button"
               accessibilityLabel="Reorder all exercises"
             >
-              <ArrowUpDown size={18} color={colors.primary} />
+              <ArrowUpDown size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Reorder All Exercises</Text>
             </TouchableOpacity>
 
@@ -1721,7 +1722,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Repeat size={18} color={colors.primary} />
+              <Repeat size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Swap Exercise</Text>
             </TouchableOpacity>
 
@@ -1735,7 +1736,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Timer size={18} color={colors.primary} />
+              <Timer size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Set Rest Timer</Text>
             </TouchableOpacity>
 
@@ -1753,7 +1754,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Calculator size={18} color={colors.primary} />
+              <Calculator size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Plate Calculator</Text>
             </TouchableOpacity>
 
@@ -1795,7 +1796,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Layers size={18} color={colors.purple} />
+              <Layers size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>
                 {menuActiveExercise?.supersetId ? 'Edit Superset' : 'Create Superset'}
               </Text>
@@ -1826,7 +1827,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <FileText size={18} color={colors.primary} />
+              <FileText size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Add / Edit Note</Text>
             </TouchableOpacity>
 
@@ -1856,7 +1857,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         </TouchableOpacity>
       </Modal>
 
-      {/* Workout Options Menu Modal (Top Bar ⋮) */}
+      {/* Workout Options Menu Modal */}
       <Modal
         visible={showWorkoutMenu}
         transparent={true}
@@ -1882,12 +1883,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             </View>
 
             <TouchableOpacity style={styles.menuItem} onPress={expandAll}>
-              <ChevronDown size={18} color={colors.primary} />
+              <ChevronDown size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Expand All Exercises</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={collapseAll}>
-              <ChevronUp size={18} color={colors.primary} />
+              <ChevronUp size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Collapse All Exercises</Text>
             </TouchableOpacity>
 
@@ -1900,7 +1901,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               accessibilityRole="button"
               accessibilityLabel="Reorder exercises"
             >
-              <ArrowUpDown size={18} color={colors.primary} />
+              <ArrowUpDown size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Reorder Exercises</Text>
             </TouchableOpacity>
 
@@ -1914,7 +1915,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 accessibilityRole="button"
                 accessibilityLabel={`Change workout gym, currently ${displayedActiveGym.name}`}
               >
-                <MapPin size={18} color={colors.primary} />
+                <MapPin size={18} color={colors.textSecondary} />
                 <Text style={styles.menuItemText} numberOfLines={1}>
                   Change Gym · {displayedActiveGym.name}
                 </Text>
@@ -1931,7 +1932,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               accessibilityRole="button"
               accessibilityLabel="Adjust workout duration"
             >
-              <Clock size={18} color={colors.primary} />
+              <Clock size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>Adjust Workout Time</Text>
             </TouchableOpacity>
 
@@ -1942,7 +1943,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 setShowWorkoutMenu(false);
               }}
             >
-              <Clock size={18} color={colors.primary} />
+              <Gauge size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText}>
                 {showRpeColumn ? 'Hide RPE Column' : 'Show RPE Column'}
               </Text>
@@ -2473,6 +2474,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 18,
     fontWeight: '800',
+    letterSpacing: -0.2,
+    flexShrink: 1,
+    marginRight: 12,
   },
   modalHeaderSubtitle: {
     color: colors.textSecondary,
@@ -2632,10 +2636,10 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surfaceAlt,
+    gap: 14,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderStrong,
   },
   menuItemText: {
     color: colors.text,

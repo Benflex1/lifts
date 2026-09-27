@@ -478,7 +478,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                     <Text style={[styles.setsTableCol, { width: 64, textAlign: 'center' }]}>
                       REPS
                     </Text>
-                    <Text style={[styles.setsTableCol, { width: 30, textAlign: 'center' }]}>DONE</Text>
+                    <View style={{ width: 30 }} />
                     <Text style={[styles.setsTableCol, { width: 24 }]} />
                   </View>
 

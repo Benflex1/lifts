@@ -356,7 +356,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                         activeFrameIndex === 0 && styles.galleryPillTextActive,
                       ]}
                     >
-                      1. Setup
+                      Start
                     </Text>
                   </TouchableOpacity>
 
@@ -379,7 +379,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                         activeFrameIndex === 1 && styles.galleryPillTextActive,
                       ]}
                     >
-                      2. Contraction
+                      Peak
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -901,10 +901,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statsHeaderTitle: {
-    color: colors.warning,
-    fontSize: 11,
+    color: colors.textSecondary,
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   statsTierTitle: {
     color: colors.textSoft,
@@ -997,9 +997,9 @@ const styles = StyleSheet.create({
   },
   instructionsHeading: {
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   stepRow: {
     flexDirection: 'row',
@@ -1041,10 +1041,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   historyHeaderTitle: {
-    color: colors.primary,
-    fontSize: 11,
+    color: colors.textSecondary,
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   historyCard: {
     backgroundColor: colors.surface,
@@ -1172,10 +1172,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   progressionTitleText: {
-    color: colors.primary,
-    fontSize: 11,
+    color: colors.textSecondary,
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   metricTabsRow: {
     flexDirection: 'row',
@@ -1354,37 +1354,34 @@ const styles = StyleSheet.create({
   formGalleryBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: EXERCISE_VISUAL_SIZES.hero,
-    marginTop: 10,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    backgroundColor: colors.surfaceSunken,
-    borderRadius: 10,
+    alignSelf: 'center',
+    gap: 6,
+    marginTop: 12,
+    padding: 3,
+    backgroundColor: colors.surface,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
   },
   galleryPlayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: colors.surfaceAlt,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceHigh,
   },
   galleryPlayBtnActive: {
     backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.primary,
   },
   galleryPlayBtnText: {
     color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   galleryPlayBtnTextActive: {
-    color: colors.primary,
+    color: colors.primaryLight,
     fontWeight: '700',
   },
   galleryPillGroup: {
@@ -1393,24 +1390,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   galleryPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
   galleryPillActive: {
-    backgroundColor: '#0284C720',
-    borderColor: colors.primary,
+    backgroundColor: colors.surfaceHigh,
   },
   galleryPillText: {
-    color: colors.textSecondary,
-    fontSize: 11,
+    color: colors.textMuted,
+    fontSize: 12,
     fontWeight: '600',
   },
   galleryPillTextActive: {
-    color: colors.primary,
+    color: colors.text,
     fontWeight: '700',
   },
 });
