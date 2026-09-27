@@ -185,9 +185,60 @@ export function compareAchievements(a: PRAchievement, b: PRAchievement): number 
  * Evaluates all PRs achieved within a workout (active or completed) relative to
  * historical workouts, respecting multi-gym tracking isolation.
  */
+/**
+ * Where prior records come from when ranking a workout. The default reads raw workout lists; the
+ * history index answers the same questions incrementally when evaluating many workouts at once.
+ */
+export interface PriorRecordSource {
+  /** Distinct values per metric, descending, from sets strictly before `beforeStartTime`. */
+  leaderboard(exerciseId: string, gymFilter: Set<string> | null, beforeStartTime: string): ExerciseLeaderboard;
+  /** Most reps ever done at exactly `weightKg` strictly before `beforeStartTime`. */
+  maxRepsAtWeight(exerciseId: string, gymFilter: Set<string> | null, beforeStartTime: string, weightKg: number): number;
+}
+
+function sourceFromWorkouts(priorWorkoutsByExercise: Record<string, Workout[]>): PriorRecordSource {
+  return {
+    leaderboard: (exerciseId, gymFilter, beforeStartTime) =>
+      extractLeaderboard(priorWorkoutsByExercise[exerciseId] || [], exerciseId, gymFilter, beforeStartTime),
+    maxRepsAtWeight: (exerciseId, gymFilter, beforeStartTime, weightKg) => {
+      let maxReps = 0;
+      for (const pw of priorWorkoutsByExercise[exerciseId] || []) {
+        if (beforeStartTime && pw.startTime >= beforeStartTime) continue;
+        if (gymFilter !== null && !gymFilter.has(pw.gymId)) continue;
+        for (const ex of pw.exercises) {
+          if (ex.exerciseId !== exerciseId) continue;
+          for (const s of ex.sets) {
+            if (s.isCompleted && s.type !== 'warmup' && s.weightKg === weightKg && s.reps > maxReps) {
+              maxReps = s.reps;
+            }
+          }
+        }
+      }
+      return maxReps;
+    },
+  };
+}
+
 export function evaluateWorkoutPRs(
   workout: Workout,
   priorWorkoutsByExercise: Record<string, Workout[]>,
+  gyms: Gym[],
+  gymTrackingEnabled: boolean,
+  scopesByExercise?: Record<string, ExerciseGymScope | undefined>
+): WorkoutPRSummary {
+  return evaluateWorkoutPRsWithSource(
+    workout,
+    sourceFromWorkouts(priorWorkoutsByExercise),
+    gyms,
+    gymTrackingEnabled,
+    scopesByExercise,
+  );
+}
+
+/** Ranks one workout against any prior-record source, e.g. a prebuilt PRHistoryIndex. */
+export function evaluateWorkoutPRsWithSource(
+  workout: Workout,
+  source: PriorRecordSource,
   gyms: Gym[],
   gymTrackingEnabled: boolean,
   scopesByExercise?: Record<string, ExerciseGymScope | undefined>
@@ -213,28 +264,9 @@ export function evaluateWorkoutPRs(
         resolveExerciseScope(exercise, scope) === 'linked_group');
     const allowedGymIds = getAllowedGymIds(exercise, scope, workout.gymId);
 
-    const priorWorkouts = priorWorkoutsByExercise[exerciseId] || [];
-
-    // Build initial leaderboards strictly before this workout started
-    const globalLeaderboard = !isGymSpecific
-      ? extractLeaderboard(
-          priorWorkouts,
-          exerciseId,
-          null,
-          workout.startTime
-        )
-      : { weight: [], '1rm': [], volume: [], reps: [] };
-
-    const gymLeaderboard = isGymSpecific
-      ? extractLeaderboard(
-          priorWorkouts,
-          exerciseId,
-          allowedGymIds,
-          workout.startTime
-        )
-      : { weight: [], '1rm': [], volume: [], reps: [] };
-
-    const targetLeaderboard = isGymSpecific ? gymLeaderboard : globalLeaderboard;
+    // Leaderboard strictly before this workout started, scoped to the allowed gyms when gym-specific
+    const gymFilter = isGymSpecific ? allowedGymIds : null;
+    const targetLeaderboard = source.leaderboard(exerciseId, gymFilter, workout.startTime);
     const completedSets = activeEx.sets.filter((s) => s.isCompleted && s.type !== 'warmup');
     const metrics: PRMetric[] = ['weight', '1rm', 'volume', 'reps'];
 
@@ -272,19 +304,7 @@ export function evaluateWorkoutPRs(
 
         // When weight matches the top historical record, check if reps beat prior reps at this weight
         if (!rankResult && metric === 'weight' && targetLeaderboard.weight.length > 0 && bestVal === targetLeaderboard.weight[0]) {
-          let maxPriorRepsAtWeight = 0;
-          for (const pw of priorWorkouts) {
-            if (workout.startTime && pw.startTime >= workout.startTime) continue;
-            if (isGymSpecific && allowedGymIds !== null && !allowedGymIds.has(pw.gymId)) continue;
-            for (const ex of pw.exercises) {
-              if (ex.exerciseId !== exerciseId) continue;
-              for (const s of ex.sets) {
-                if (s.isCompleted && s.type !== 'warmup' && s.weightKg === bestVal && s.reps > maxPriorRepsAtWeight) {
-                  maxPriorRepsAtWeight = s.reps;
-                }
-              }
-            }
-          }
+          const maxPriorRepsAtWeight = source.maxRepsAtWeight(exerciseId, gymFilter, workout.startTime, bestVal);
           if (bestSet.reps > maxPriorRepsAtWeight) {
             rankResult = { rank: 1, previousRecord: bestVal, isTie: false };
           }
@@ -347,6 +367,128 @@ export function evaluateWorkoutPRs(
     bronzeCount,
     totalCount: goldCount + silverCount + bronzeCount,
   };
+}
+
+
+// ---------------------------------------------------------------------------
+// Whole-history evaluation
+// ---------------------------------------------------------------------------
+
+/** Ranking only ever looks at the best three distinct values, so that is all the index keeps. */
+const LEADERBOARD_DEPTH = 3;
+
+interface GymRecordBoard extends ExerciseLeaderboard {
+  repsAtWeight: Map<number, number>;
+}
+
+function insertTopDistinct(values: number[], value: number): void {
+  if (value <= 0 || values.includes(value)) return;
+  if (values.length >= LEADERBOARD_DEPTH && value <= values[values.length - 1]) return;
+  insertSortedDistinct(values, value);
+  if (values.length > LEADERBOARD_DEPTH) values.length = LEADERBOARD_DEPTH;
+}
+
+/**
+ * Running per-exercise, per-gym record index. Workouts are added in chronological order, so at
+ * any point it answers "what were the records before now" without rescanning history.
+ */
+export class PRHistoryIndex implements PriorRecordSource {
+  private readonly boards = new Map<string, Map<string, GymRecordBoard>>();
+
+  /** Adds a workout's completed sets; `onlyExerciseIds` restricts which exercises are indexed. */
+  add(workout: Workout, onlyExerciseIds?: ReadonlySet<string>): void {
+    for (const ex of workout.exercises || []) {
+      if (onlyExerciseIds && !onlyExerciseIds.has(ex.exerciseId)) continue;
+      for (const s of ex.sets || []) {
+        if (!s.isCompleted || s.type === 'warmup') continue;
+        const board = this.boardFor(ex.exerciseId, workout.gymId);
+        if (s.weightKg > 0) {
+          insertTopDistinct(board.weight, s.weightKg);
+          if (s.reps > (board.repsAtWeight.get(s.weightKg) ?? 0)) board.repsAtWeight.set(s.weightKg, s.reps);
+          if (s.reps > 0) {
+            insertTopDistinct(board['1rm'], calculate1RM(s.weightKg, s.reps).average);
+            insertTopDistinct(board.volume, s.weightKg * s.reps);
+          }
+        } else if (s.reps > 0) {
+          insertTopDistinct(board.reps, s.reps);
+        }
+      }
+    }
+  }
+
+  leaderboard(exerciseId: string, gymFilter: Set<string> | null): ExerciseLeaderboard {
+    const merged: ExerciseLeaderboard = { weight: [], '1rm': [], volume: [], reps: [] };
+    for (const [gymId, board] of this.boards.get(exerciseId) ?? []) {
+      if (gymFilter !== null && !gymFilter.has(gymId)) continue;
+      for (const metric of ['weight', '1rm', 'volume', 'reps'] as const) {
+        for (const value of board[metric]) insertTopDistinct(merged[metric], value);
+      }
+    }
+    return merged;
+  }
+
+  maxRepsAtWeight(exerciseId: string, gymFilter: Set<string> | null, _before: string, weightKg: number): number {
+    let maxReps = 0;
+    for (const [gymId, board] of this.boards.get(exerciseId) ?? []) {
+      if (gymFilter !== null && !gymFilter.has(gymId)) continue;
+      maxReps = Math.max(maxReps, board.repsAtWeight.get(weightKg) ?? 0);
+    }
+    return maxReps;
+  }
+
+  private boardFor(exerciseId: string, gymId: string): GymRecordBoard {
+    let byGym = this.boards.get(exerciseId);
+    if (!byGym) {
+      byGym = new Map();
+      this.boards.set(exerciseId, byGym);
+    }
+    let board = byGym.get(gymId);
+    if (!board) {
+      board = { weight: [], '1rm': [], volume: [], reps: [], repsAtWeight: new Map() };
+      byGym.set(gymId, board);
+    }
+    return board;
+  }
+}
+
+/**
+ * Evaluates PRs for every workout in one chronological pass. Equivalent to calling
+ * evaluateWorkoutPRs for each workout against the full history, but linear in history size
+ * instead of quadratic.
+ */
+export function evaluateAllWorkoutPRs(
+  workouts: Workout[],
+  gyms: Gym[],
+  gymTrackingEnabled: boolean,
+  scopesByExercise?: Record<string, ExerciseGymScope | undefined>
+): Record<string, WorkoutPRSummary> {
+  const ordered = workouts
+    .filter((w) => typeof w.startTime === 'string' && w.startTime.length > 0)
+    .sort((a, b) => (a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0));
+  const index = new PRHistoryIndex();
+  const results: Record<string, WorkoutPRSummary> = {};
+
+  let i = 0;
+  while (i < ordered.length) {
+    // Workouts sharing a start time never count against each other ("strictly before").
+    let j = i;
+    while (j < ordered.length && ordered[j].startTime === ordered[i].startTime) j++;
+    for (let k = i; k < j; k++) {
+      results[ordered[k].id] = evaluateWorkoutPRsWithSource(ordered[k], index, gyms, gymTrackingEnabled, scopesByExercise);
+    }
+    for (let k = i; k < j; k++) index.add(ordered[k]);
+    i = j;
+  }
+
+  // Workouts without a start time keep the original all-history behaviour.
+  const byExercise: Record<string, Workout[]> = {};
+  for (const w of workouts) {
+    for (const ex of w.exercises || []) (byExercise[ex.exerciseId] ||= []).push(w);
+  }
+  for (const w of workouts) {
+    if (!results[w.id]) results[w.id] = evaluateWorkoutPRs(w, byExercise, gyms, gymTrackingEnabled, scopesByExercise);
+  }
+  return results;
 }
 
 /**

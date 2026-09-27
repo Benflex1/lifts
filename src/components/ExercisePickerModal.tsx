@@ -10,14 +10,15 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Plus, Check, Edit2 } from 'lucide-react-native';
+import { Search, X, Plus, Check } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { searchExercises, createCustomExercise, updateCustomExercise } from '../database/db';
-import { ExerciseVisual } from './ExerciseVisual';
-import { getExerciseRowViewModel } from '../utils/exercise-ui';
+
 import { colors } from '../theme';
 import { ExerciseFilterBar } from './ExerciseFilterBar';
 import { IconButton } from './ui';
+import { EXERCISE_LIST_PERFORMANCE_PROPS, ExerciseListRow } from './ExerciseListRow';
+import { useStableCallback } from '../hooks/useStableCallback';
 
 interface Props {
   visible: boolean;
@@ -191,6 +192,9 @@ export const ExercisePickerModal: React.FC<Props> = ({
     setShowCustomModal(true);
   };
 
+  const onRowPress = useStableCallback((item: Exercise) => handleItemPress(item));
+  const onRowEdit = useStableCallback((item: Exercise) => handleOpenEditCustom(item));
+
   const handleOpenEditCustom = (exercise: Exercise) => {
     setEditingExercise(exercise);
     setCustomName(exercise.name);
@@ -316,65 +320,17 @@ export const ExercisePickerModal: React.FC<Props> = ({
             keyExtractor={item => item.id}
             contentContainerStyle={[styles.listContent, multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 }]}
             keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => {
-              const isSelected = selectedExercises.has(item.id);
-              const rowViewModel = getExerciseRowViewModel(item);
-              return (
-                <View style={[styles.exerciseItem, isSelected && styles.exerciseItemSelected]}>
-                  <TouchableOpacity
-                    style={styles.exerciseItemMain}
-                    onPress={() => handleItemPress(item)}
-                    activeOpacity={0.7}
-                  >
-                    <ExerciseVisual
-                      exercise={item}
-                      size="compact"
-                      accessibilityLabel={rowViewModel.visualAccessibilityLabel}
-                    />
-                    <View style={styles.itemInfo}>
-                      <View style={styles.itemNameRow}>
-                        <Text style={[styles.itemName, isSelected && styles.itemNameSelected]} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        {item.isCustom && (
-                          <View style={styles.listCustomBadge}>
-                            <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.tagRow}>
-                        <Text style={styles.tagMuscle}>{item.primaryMuscles.join(', ')}</Text>
-                        <Text style={styles.tagDot}>·</Text>
-                        <Text style={styles.tagEquipment}>{item.equipment}</Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                  {item.isCustom && (
-                    <TouchableOpacity
-                      style={styles.itemEditBtn}
-                      onPress={() => handleOpenEditCustom(item)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Edit ${item.name}`}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Edit2 size={16} color={colors.primary} />
-                    </TouchableOpacity>
-                  )}
-                  {multiSelect && (
-                    <TouchableOpacity
-                      style={[styles.checkCircle, isSelected && styles.checkCircleSelected]}
-                      onPress={() => handleItemPress(item)}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isSelected }}
-                      accessibilityLabel={`Select ${item.name}`}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      {isSelected && <Check size={16} color={colors.onPrimary} strokeWidth={3} />}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            }}
+            {...EXERCISE_LIST_PERFORMANCE_PROPS}
+            extraData={selectedExercises}
+            renderItem={({ item }) => (
+              <ExerciseListRow
+                exercise={item}
+                onPress={onRowPress}
+                onEdit={onRowEdit}
+                selectable={multiSelect}
+                selected={selectedExercises.has(item.id)}
+              />
+            )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No exercises found.</Text>
@@ -554,76 +510,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 40,
   },
-  exerciseItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 16,
-    marginBottom: 2,
-  },
-  exerciseItemMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  exerciseItemSelected: {
-    backgroundColor: colors.primarySoft,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  itemName: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  itemNameSelected: {
-    color: colors.white,
-  },
-  listCustomBadge: {
-    backgroundColor: '#3B82F620',
-    borderColor: '#3B82F640',
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  listCustomBadgeText: {
-    color: colors.primaryLight,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  itemEditBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: colors.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
-  },
-  checkCircleSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
   floatingBarWrap: {
     position: 'absolute',
     bottom: 24,
@@ -644,26 +530,6 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '800',
-  },
-  tagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-    gap: 5,
-  },
-  tagMuscle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textTransform: 'capitalize',
-  },
-  tagDot: {
-    color: colors.textFaint,
-    fontSize: 13,
-  },
-  tagEquipment: {
-    color: colors.textMuted,
-    fontSize: 13,
-    textTransform: 'capitalize',
   },
   centerContainer: {
     flex: 1,

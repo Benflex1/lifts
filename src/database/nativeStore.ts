@@ -908,30 +908,53 @@ export function createNativeStore(driver: SqliteDriver): Store {
     }));
   }
 
-  async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {
-    const w = await driver.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ? AND in_progress = 0', workoutId);
-    if (!w) return null;
+  // SQLite caps bound parameters per statement; stay well below the lowest common limit.
+  const MAX_SQL_PARAMS = 500;
 
-    const weRows = await driver.getAllAsync<any>(
-      `SELECT we.*, e.name as ex_name, e.category as ex_cat, e.equipment as ex_equip, 
+  async function selectInChunks<T>(sqlForPlaceholders: (placeholders: string) => string, ids: string[]): Promise<T[]> {
+    const rows: T[] = [];
+    for (let i = 0; i < ids.length; i += MAX_SQL_PARAMS) {
+      const chunk = ids.slice(i, i + MAX_SQL_PARAMS);
+      rows.push(...(await driver.getAllAsync<T>(sqlForPlaceholders(chunk.map(() => '?').join(', ')), ...chunk)));
+    }
+    return rows;
+  }
+
+  /**
+   * Loads exercises and sets for many workouts with two bulk queries (chunked), instead of one
+   * query per workout plus one per exercise. Output order matches the input workout rows.
+   */
+  async function loadWorkoutDetails(workoutRows: any[]): Promise<Workout[]> {
+    if (workoutRows.length === 0) return [];
+
+    const weRows = await selectInChunks<any>(
+      placeholders => `SELECT we.*, e.name as ex_name, e.category as ex_cat, e.equipment as ex_equip,
               e.primary_muscles as ex_pm, e.secondary_muscles as ex_sm, e.instructions as ex_inst,
               e.instruction_url as ex_instruction_url, e.instruction_url_type as ex_instruction_url_type,
               e.is_custom as ex_is_custom
        FROM workout_exercises we
        JOIN exercises e ON we.exercise_id = e.id
-       WHERE we.workout_id = ?
-       ORDER BY we.order_index ASC`,
-      workoutId
+       WHERE we.workout_id IN (${placeholders})
+       ORDER BY we.workout_id ASC, we.order_index ASC`,
+      workoutRows.map(w => w.id),
     );
 
-    const exercises: ActiveExercise[] = [];
-    for (const we of weRows) {
-      const sRows = await driver.getAllAsync<any>(
-        `SELECT * FROM exercise_sets WHERE workout_exercise_id = ? ORDER BY set_number ASC`,
-        we.id
-      );
+    const setRows = await selectInChunks<any>(
+      placeholders => `SELECT * FROM exercise_sets WHERE workout_exercise_id IN (${placeholders})
+       ORDER BY workout_exercise_id ASC, set_number ASC`,
+      weRows.map(we => we.id),
+    );
 
-      exercises.push({
+    const setsByExercise = new Map<string, WorkoutSet[]>();
+    for (const row of setRows) {
+      const list = setsByExercise.get(row.workout_exercise_id);
+      if (list) list.push(mapSetRow(row));
+      else setsByExercise.set(row.workout_exercise_id, [mapSetRow(row)]);
+    }
+
+    const exercisesByWorkout = new Map<string, ActiveExercise[]>();
+    for (const we of weRows) {
+      const exercise: ActiveExercise = {
         id: we.id,
         exerciseId: we.exercise_id,
         notes: we.notes,
@@ -939,11 +962,14 @@ export function createNativeStore(driver: SqliteDriver): Store {
         restTimerSeconds: we.rest_timer_seconds ?? 0,
         supersetId: we.superset_id || undefined,
         exercise: mapJoinedExerciseRow({ ...we, exercise_id: we.exercise_id, ex_category: we.ex_cat, ex_equipment: we.ex_equip }, { primary: 'ex_pm', secondary: 'ex_sm', instructions: 'ex_inst', url: 'ex_instruction_url', urlType: 'ex_instruction_url_type', custom: 'ex_is_custom' }),
-        sets: sRows.map(mapSetRow),
-      });
+        sets: setsByExercise.get(we.id) || [],
+      };
+      const list = exercisesByWorkout.get(we.workout_id);
+      if (list) list.push(exercise);
+      else exercisesByWorkout.set(we.workout_id, [exercise]);
     }
 
-    return {
+    return workoutRows.map(w => ({
       id: w.id,
       name: w.name,
       routineId: w.routine_id,
@@ -952,9 +978,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
       durationSeconds: w.duration_seconds || 0,
       totalVolumeKg: w.total_volume_kg || 0,
       gymId: w.gym_id || 'gym-default',
-      exercises,
+      exercises: exercisesByWorkout.get(w.id) || [],
       notes: w.notes,
-    };
+    }));
+  }
+
+  async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {
+    const w = await driver.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ? AND in_progress = 0', workoutId);
+    if (!w) return null;
+    const [workout] = await loadWorkoutDetails([w]);
+    return workout;
   }
 
   async function deleteWorkout(workoutId: string): Promise<void> {
@@ -1301,12 +1334,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function readSnapshot(): Promise<DataSnapshot> {
-    const history = await getWorkoutHistory();
-    const workouts: Workout[] = [];
-    for (const h of history) {
-      const detail = await getWorkoutDetail(h.id);
-      if (detail) workouts.push(detail);
-    }
+    // Same order as getWorkoutHistory (newest first), loaded in bulk.
+    const workoutRows = await driver.getAllAsync<any>(
+      'SELECT * FROM workouts WHERE in_progress = 0 ORDER BY start_time DESC, id DESC'
+    );
+    const workouts = await loadWorkoutDetails(workoutRows);
 
     const routines = await getRoutines();
     const exercises = await getAllExercises();

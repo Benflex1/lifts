@@ -47,7 +47,7 @@ import { updateWorkoutHistorySummary } from '../workout/history-summary';
 import { WorkoutEditModal } from '../components/WorkoutEditModal';
 import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { PRBadge } from '../components/PRBadge';
-import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
+import { evaluateAllWorkoutPRs, evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { getSupersetMetadata } from '../workout/supersets';
 import { colors, radii } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader } from '../components/ui';
@@ -166,32 +166,17 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
       const snapshot = await store.readSnapshot();
       if (requestId !== historyLoadRequestRef.current) return;
 
-      const workoutsByExercise: Record<string, Workout[]> = {};
-      for (const w of snapshot.workouts || []) {
-        for (const ex of w.exercises || []) {
-          if (!workoutsByExercise[ex.exerciseId]) {
-            workoutsByExercise[ex.exerciseId] = [];
-          }
-          workoutsByExercise[ex.exerciseId].push(w);
-        }
-      }
-
       const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
       (snapshot.exerciseGymScopes || []).forEach((s) => {
         scopesByEx[s.exerciseId] = s;
       });
 
-      const prMap: Record<string, WorkoutPRSummary> = {};
+      // One chronological pass over the whole history (linear), instead of re-scanning the
+      // history for every workout.
+      const prMap = evaluateAllWorkoutPRs(snapshot.workouts || [], gymList, gymTrackingEnabled, scopesByEx);
       const detailsMap: Record<string, Workout> = {};
       for (const w of snapshot.workouts || []) {
         detailsMap[w.id] = w;
-        prMap[w.id] = evaluateWorkoutPRs(
-          w,
-          workoutsByExercise,
-          gymList,
-          gymTrackingEnabled,
-          scopesByEx
-        );
       }
 
       setWorkoutDetails((prev) => ({ ...detailsMap, ...prev }));
@@ -431,6 +416,10 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
           keyboardShouldPersistTaps="handled"
           data={filteredHistory}
           keyExtractor={item => item.id}
+          // Cards are tall; render about a screen ahead rather than FlatList's default of ten.
+          initialNumToRender={5}
+          maxToRenderPerBatch={4}
+          windowSize={5}
           renderItem={({ item }) => {
             const isExpanded = expandedId === item.id;
             const detail = workoutDetails[item.id];

@@ -159,14 +159,13 @@ function MainAppContent() {
                 accessibilityLabel={tab.label}
                 accessibilityState={{ selected: active }}
               >
-                <View style={[styles.navIconWrap, active && styles.navIconWrapActive]}>
-                  <Icon
-                    size={21}
-                    color={active ? colors.primary : colors.textMuted}
-                    strokeWidth={active ? 2.4 : 2}
-                  />
-                </View>
+                <Icon
+                  size={23}
+                  color={active ? colors.primary : colors.textMuted}
+                  strokeWidth={active ? 2.4 : 1.9}
+                />
                 <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
+                <View style={[styles.navDot, active && styles.navDotActive]} />
               </TouchableOpacity>
             );
           })}
@@ -254,17 +253,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-  },
-  navIconWrap: {
-    width: 52,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navIconWrapActive: {
-    backgroundColor: colors.primarySoft,
+    gap: 3,
+    paddingTop: 4,
   },
   navLabel: {
     fontSize: 11,
@@ -272,8 +262,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   navLabelActive: {
-    color: colors.text,
+    color: colors.primary,
     fontWeight: '700',
+  },
+  navDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 1,
+    backgroundColor: 'transparent',
+  },
+  navDotActive: {
+    backgroundColor: colors.primary,
   },
   loadingContainer: {
     flex: 1,

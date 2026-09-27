@@ -125,7 +125,34 @@ const selectTemplate = (exercise: Exercise): ExerciseVisualTemplate => {
   return 'general';
 };
 
+// Deriving a descriptor scans the exercise name and muscles for keywords. Lists render the same
+// exercises over and over, so results are cached by the fields that feed the derivation.
+const MAX_CACHED_VISUALS = 4000;
+const visualCache = new Map<string, ExerciseVisualDescriptor>();
+
+function visualCacheKey(exercise: Exercise): string {
+  return [
+    exercise.id,
+    exercise.name,
+    exercise.isCustom === true ? 1 : 0,
+    exercise.category,
+    exercise.equipment,
+    Array.isArray(exercise.primaryMuscles) ? exercise.primaryMuscles.join(',') : '',
+    Array.isArray(exercise.secondaryMuscles) ? exercise.secondaryMuscles.join(',') : '',
+  ].join('|');
+}
+
 export function getExerciseVisual(exercise: Exercise): ExerciseVisualDescriptor {
+  const key = visualCacheKey(exercise);
+  const cached = visualCache.get(key);
+  if (cached) return cached;
+  const descriptor = computeExerciseVisual(exercise);
+  if (visualCache.size >= MAX_CACHED_VISUALS) visualCache.clear();
+  visualCache.set(key, descriptor);
+  return descriptor;
+}
+
+function computeExerciseVisual(exercise: Exercise): ExerciseVisualDescriptor {
   const alt = `${typeof exercise.name === 'string' && exercise.name.trim() ? exercise.name.trim() : 'Exercise'} exercise illustration`;
   const assetKey = exercise.isCustom !== true && typeof exercise.id === 'string'
     ? REVIEWED_EXERCISE_ASSETS[exercise.id]

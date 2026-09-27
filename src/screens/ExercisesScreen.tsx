@@ -10,7 +10,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Search, X, Plus, ChevronRight, Edit2 } from 'lucide-react-native';
+import { Search, X, Plus } from 'lucide-react-native';
 import { Exercise, ExerciseGymScope, Gym } from '../types';
 import {
   searchExercises,
@@ -23,12 +23,12 @@ import { useSettings } from '../context/SettingsContext';
 import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
-import { ExerciseVisual } from '../components/ExerciseVisual';
-import { getExerciseRowViewModel } from '../utils/exercise-ui';
+
 import { colors } from '../theme';
 import { ExerciseFilterBar } from '../components/ExerciseFilterBar';
 import { IconButton, ScreenHeader } from '../components/ui';
-
+import { EXERCISE_LIST_PERFORMANCE_PROPS, ExerciseListRow } from '../components/ExerciseListRow';
+import { useStableCallback } from '../hooks/useStableCallback';
 
 const MUSCLE_GROUPS = [
   'All',
@@ -169,7 +169,6 @@ const ExercisesScreenInner: React.FC = () => {
     if (!gymTrackingEnabled) setShowScopeModal(false);
   }, [gymTrackingEnabled]);
 
-
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
@@ -208,6 +207,9 @@ const ExercisesScreenInner: React.FC = () => {
     setCustomEquipment('Barbell');
     setShowCustomModal(true);
   };
+
+  const onRowPress = useStableCallback((item: Exercise) => setActiveDetail(item));
+  const onRowEdit = useStableCallback((item: Exercise) => handleOpenEditCustom(item));
 
   const handleOpenEditCustom = (exercise: Exercise) => {
     setEditingExercise(exercise);
@@ -318,58 +320,10 @@ const ExercisesScreenInner: React.FC = () => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => {
-            const rowViewModel = getExerciseRowViewModel(item);
-            return (
-              <View style={styles.exerciseCard}>
-                <TouchableOpacity
-                  style={styles.exerciseCardMain}
-                  onPress={() => setActiveDetail(item)}
-                  activeOpacity={0.7}
-                >
-                  <ExerciseVisual
-                    exercise={item}
-                    size="compact"
-                    accessibilityLabel={rowViewModel.visualAccessibilityLabel}
-                  />
-
-                  <View style={styles.itemInfo}>
-                    <View style={styles.itemNameRow}>
-                      <Text style={styles.itemName} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      {item.isCustom && (
-                        <View style={styles.listCustomBadge}>
-                          <Text style={styles.listCustomBadgeText}>CUSTOM</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.tagRow}>
-                      <Text style={styles.tagMuscle}>
-                        {item.primaryMuscles.join(', ') || 'General'}
-                      </Text>
-                      <Text style={styles.tagDot}>·</Text>
-                      <Text style={styles.tagEquipment}>{item.equipment}</Text>
-                    </View>
-                  </View>
-
-                  {!item.isCustom && <ChevronRight size={18} color={colors.textFaint} />}
-                </TouchableOpacity>
-
-                {item.isCustom && (
-                  <TouchableOpacity
-                    style={styles.itemEditBtn}
-                    onPress={() => handleOpenEditCustom(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Edit ${item.name}`}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Edit2 size={16} color={colors.primary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          }}
+          {...EXERCISE_LIST_PERFORMANCE_PROPS}
+          renderItem={({ item }) => (
+            <ExerciseListRow exercise={item} onPress={onRowPress} onEdit={onRowEdit} showChevron />
+          )}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No exercises found.</Text>
@@ -502,77 +456,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 120,
-  },
-  exerciseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderStrong,
-  },
-  exerciseCardMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  itemName: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  listCustomBadge: {
-    backgroundColor: '#3B82F620',
-    borderColor: '#3B82F640',
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  listCustomBadgeText: {
-    color: colors.primaryLight,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  itemEditBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceHigh,
-    marginLeft: 8,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-    gap: 5,
-  },
-  tagMuscle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textTransform: 'capitalize',
-  },
-  tagDot: {
-    color: colors.textFaint,
-    fontSize: 13,
-  },
-  tagEquipment: {
-    color: colors.textMuted,
-    fontSize: 13,
-    textTransform: 'capitalize',
   },
   centerBox: {
     flex: 1,
