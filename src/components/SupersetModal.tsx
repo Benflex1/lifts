@@ -11,6 +11,7 @@ import {
 import { X, Check, Layers, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { getSupersetMetadata, SUPERSET_PALETTE } from '../workout/supersets';
+import { colors } from '../theme';
 
 export interface SupersetModalExerciseItem {
   id: string;
@@ -134,7 +135,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
               >
                 <Layers
                   size={18}
-                  color={currentGroupMeta ? currentGroupMeta.color : '#A855F7'}
+                  color={currentGroupMeta ? currentGroupMeta.color : colors.purple}
                 />
               </View>
               <View>
@@ -155,7 +156,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
               accessibilityRole="button"
               accessibilityLabel="Close superset modal"
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -188,7 +189,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
                       isSelected && styles.checkboxSelected,
                     ]}
                   >
-                    {isSelected && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                    {isSelected && <Check size={13} color={colors.text} strokeWidth={3} />}
                   </View>
 
                   {/* Exercise Info */}
@@ -230,7 +231,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
                 ? 'Tap exercises to include them in the superset'
                 : selectedIds.size === 1
                 ? 'Select at least 1 more exercise to form a superset'
-                : `⚡ ${isGiant ? 'Giant Set' : 'Superset'} with ${selectedIds.size} exercises`}
+                : `${isGiant ? 'Giant Set' : 'Superset'} with ${selectedIds.size} exercises`}
             </Text>
           </View>
 
@@ -244,7 +245,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Ungroup superset"
               >
-                <Trash2 size={16} color="#EF4444" />
+                <Trash2 size={16} color={colors.danger} />
                 <Text style={styles.ungroupBtnText}>Ungroup</Text>
               </TouchableOpacity>
             )}
@@ -257,7 +258,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
               accessibilityRole="button"
               accessibilityLabel={isInExistingSuperset ? 'Save superset' : 'Create superset'}
             >
-              <Layers size={16} color={canSave ? '#FFFFFF' : '#6B7280'} />
+              <Layers size={16} color={canSave ? colors.text : colors.textMuted} />
               <Text style={[styles.saveBtnText, !canSave && styles.saveBtnTextDisabled]}>
                 {isInExistingSuperset
                   ? `Save (${selectedIds.size})`
@@ -283,10 +284,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 440,
     maxHeight: '85%',
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#262A36',
+    borderColor: colors.border,
     overflow: 'hidden',
     display: 'flex',
   },
@@ -298,7 +299,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A36',
+    borderBottomColor: colors.border,
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -316,11 +317,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#F9FAFB',
+    color: colors.text,
   },
   subtitle: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
@@ -340,27 +341,27 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: '#1E2330',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1.5,
-    borderColor: '#2D3345',
+    borderColor: colors.borderStrong,
     gap: 12,
   },
   exerciseRowSelected: {
-    backgroundColor: '#261C3D',
-    borderColor: '#8B5CF6',
+    backgroundColor: colors.purpleSoft,
+    borderColor: colors.purple,
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#4B5563',
+    borderColor: colors.textFaint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxSelected: {
-    backgroundColor: '#8B5CF6',
-    borderColor: '#8B5CF6',
+    backgroundColor: colors.purple,
+    borderColor: colors.purple,
   },
   exerciseInfo: {
     flex: 1,
@@ -368,10 +369,10 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#F3F4F6',
+    color: colors.text,
   },
   exerciseNameSelected: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
   exerciseMetaRow: {
     flexDirection: 'row',
@@ -380,11 +381,11 @@ const styles = StyleSheet.create({
   },
   exerciseMetaText: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   exerciseSetsText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textMuted,
     marginLeft: 2,
   },
   otherGroupBadge: {
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    backgroundColor: '#1E2330',
+    backgroundColor: colors.surfaceAlt,
   },
   otherGroupBadgeText: {
     fontSize: 10,
@@ -402,14 +403,14 @@ const styles = StyleSheet.create({
   summaryBar: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#12151D',
+    backgroundColor: colors.surfaceSunken,
     borderTopWidth: 1,
-    borderTopColor: '#262A36',
+    borderTopColor: colors.border,
   },
   summaryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#C4B5FD',
+    color: colors.purpleLight,
     textAlign: 'center',
   },
   footerActions: {
@@ -417,9 +418,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     gap: 10,
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderTopWidth: 1,
-    borderTopColor: '#262A36',
+    borderTopColor: colors.border,
   },
   ungroupBtn: {
     flexDirection: 'row',
@@ -430,13 +431,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#7F1D1D',
-    backgroundColor: '#261214',
+    borderColor: colors.dangerSoft,
+    backgroundColor: colors.dangerSoft,
   },
   ungroupBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#EF4444',
+    color: colors.danger,
   },
   saveBtn: {
     flex: 1,
@@ -447,17 +448,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: colors.purple,
   },
   saveBtnDisabled: {
-    backgroundColor: '#2A2D3A',
+    backgroundColor: colors.borderStrong,
   },
   saveBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   saveBtnTextDisabled: {
-    color: '#6B7280',
+    color: colors.textMuted,
   },
 });

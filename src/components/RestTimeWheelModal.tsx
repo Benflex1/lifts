@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { X, Check, Timer } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { colors } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -173,13 +174,13 @@ export const RestTimeWheelModal: React.FC<Props> = ({
               )}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X color="#9CA3AF" size={24} />
+              <X color={colors.textSecondary} size={24} />
             </TouchableOpacity>
           </View>
 
           {/* Big Digital Display Banner */}
           <View style={styles.displayBanner}>
-            <Timer size={24} color={totalCalculatedSeconds > 0 ? '#10B981' : '#6B7280'} />
+            <Timer size={24} color={totalCalculatedSeconds > 0 ? colors.success : colors.textMuted} />
             <Text
               style={[
                 styles.digitalTimeText,
@@ -313,7 +314,7 @@ export const RestTimeWheelModal: React.FC<Props> = ({
               activeOpacity={0.8}
             >
               <View style={[styles.checkbox, applyToAll && styles.checkboxActive]}>
-                {applyToAll && <Check size={14} color="#000000" strokeWidth={3} />}
+                {applyToAll && <Check size={14} color={colors.black} strokeWidth={3} />}
               </View>
               <Text style={styles.applyAllText}>
                 Apply this rest timer to all exercises in routine
@@ -323,7 +324,7 @@ export const RestTimeWheelModal: React.FC<Props> = ({
 
           {/* Save / Apply Button */}
           <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-            <Check size={20} color="#000000" strokeWidth={2.5} />
+            <Check size={20} color={colors.black} strokeWidth={2.5} />
             <Text style={styles.confirmButtonText}>
               {totalCalculatedSeconds === 0 ? 'Disable Rest Timer' : 'Set Rest Time'}
             </Text>
@@ -341,13 +342,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 34,
     borderTopWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   header: {
     flexDirection: 'row',
@@ -358,40 +359,40 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   exerciseSubtitle: {
     fontSize: 13,
-    color: '#3B82F6',
+    color: colors.primary,
     fontWeight: '600',
     marginTop: 2,
     maxWidth: 260,
   },
   displayBanner: {
-    backgroundColor: '#132822',
+    backgroundColor: colors.successSoft,
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#1C4A3F',
+    borderColor: colors.successSoft,
     marginBottom: 14,
     gap: 4,
   },
   digitalTimeText: {
     fontSize: 34,
     fontWeight: '900',
-    color: '#10B981',
+    color: colors.success,
     letterSpacing: 2,
     marginTop: 2,
   },
   digitalTimeTextOff: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   digitalSubtext: {
     fontSize: 13,
-    color: '#A7F3D0',
+    color: colors.successLight,
     fontWeight: '600',
   },
   presetsScroll: {
@@ -403,31 +404,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     minHeight: 38,
     justifyContent: 'center',
   },
   presetChipActive: {
-    backgroundColor: '#1D4ED8',
-    borderColor: '#3B82F6',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   presetText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   presetTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '800',
   },
   wheelWrapper: {
     height: WHEEL_HEIGHT,
-    backgroundColor: '#12141A',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     position: 'relative',
     overflow: 'hidden',
     marginBottom: 16,
@@ -438,10 +439,10 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     height: ITEM_HEIGHT,
-    backgroundColor: '#202634',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
     zIndex: 1,
   },
   columnLabelsRow: {
@@ -456,7 +457,7 @@ const styles = StyleSheet.create({
   columnLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#4B5563',
+    color: colors.textFaint,
     letterSpacing: 1,
   },
   wheelsRow: {
@@ -479,17 +480,17 @@ const styles = StyleSheet.create({
   wheelItemText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   wheelItemTextFocused: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   wheelItemUnit: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   wheelDivider: {
     width: 20,
@@ -500,7 +501,7 @@ const styles = StyleSheet.create({
   colonText: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#4B5563',
+    color: colors.textFaint,
   },
   applyAllRow: {
     flexDirection: 'row',
@@ -514,23 +515,23 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#4B5563',
-    backgroundColor: '#1E232E',
+    borderColor: colors.textFaint,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxActive: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    backgroundColor: colors.success,
+    borderColor: colors.success,
   },
   applyAllText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
   },
   confirmButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     minHeight: 52,
     borderRadius: 14,
     flexDirection: 'row',
@@ -539,7 +540,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   confirmButtonText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -548,7 +549,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   startNowButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     minHeight: 52,
     borderRadius: 14,
     flexDirection: 'row',
@@ -557,18 +558,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   startNowButtonText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 16,
     fontWeight: '800',
   },
   secondaryConfirmButton: {
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     minHeight: 46,
   },
   secondaryConfirmButtonText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 14,
     fontWeight: '700',
   },

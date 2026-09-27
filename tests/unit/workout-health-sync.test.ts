@@ -32,6 +32,7 @@ type HookRenderer = {
   useState: <T>(initial: T | (() => T)) => readonly [T, (next: T | ((previous: T) => T)) => void];
   useRef: <T>(initial: T) => { current: T };
   useCallback: <T extends (...args: any[]) => any>(callback: T, deps: unknown[]) => T;
+  useMemo: <T>(factory: () => T, deps: unknown[]) => T;
   useEffect: (effect: () => void | (() => void), deps?: unknown[]) => void;
 };
 
@@ -86,6 +87,16 @@ function createHookRenderer(): HookRenderer {
       }
       return previous.callback;
     },
+    useMemo<T>(factory: () => T, deps: unknown[]) {
+      const index = hookIndex++;
+      const previous = hookStates[index] as { value: T; deps: unknown[] } | undefined;
+      if (!previous || !sameDeps(previous.deps, deps)) {
+        const value = factory();
+        hookStates[index] = { value, deps };
+        return value;
+      }
+      return previous.value;
+    },
     useEffect(effect: () => void | (() => void), deps?: unknown[]) {
       const index = hookIndex++;
       const previous = effectStates[index];
@@ -125,6 +136,7 @@ function loadWorkoutContext() {
       useRef: <T,>(initial: T) => activeRenderer!.useRef(initial),
       useCallback: <T extends (...args: any[]) => any>(callback: T, deps: unknown[]) =>
         activeRenderer!.useCallback(callback, deps),
+      useMemo: <T,>(factory: () => T, deps: unknown[]) => activeRenderer!.useMemo(factory, deps),
       useEffect: (effect: () => void | (() => void), deps?: unknown[]) =>
         activeRenderer!.useEffect(effect, deps),
       createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => {

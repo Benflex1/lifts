@@ -162,7 +162,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       allGyms,
       true
     );
-    // 95 kg is 2nd best ever (Silver 🥈)
+    // 95 kg is 2nd best ever (Silver)
     assert.equal(summary2.setPRs.get('w2-s1')?.primary?.rank, 2);
     assert.equal(summary2.setPRs.get('w2-s1')?.primary?.previousRecord, 90);
 
@@ -194,7 +194,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       allGyms,
       true
     );
-    assert.equal(summary3.setPRs.get('w3-s1')?.primary?.rank, 1); // Gold 🥇
+    assert.equal(summary3.setPRs.get('w3-s1')?.primary?.rank, 1);
     assert.equal(summary3.setPRs.get('w3-s1')?.primary?.previousRecord, 100);
     // Back-off set 100 kg does not earn another medal
     assert.equal(summary3.setPRs.get('w3-s2'), undefined);
@@ -294,7 +294,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     assert.equal(prSet.primary.gymName, 'FitX');
 
     const label = formatPRBadgeLabel(prSet.primary, true);
-    assert.equal(label, '🥇 FitX PR');
+    assert.equal(label, 'FitX PR');
 
     // If gym tracking is disabled, 180 kg is compared against global 200 kg (no Gold)
     const summaryDisabled = evaluateWorkoutPRs(
@@ -352,7 +352,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       previousRecord: 100,
       isTie: true,
     };
-    assert.equal(formatPRBadgeLabel(tiedPR), '🥇 Tied PR');
+    assert.equal(formatPRBadgeLabel(tiedPR), 'Tied PR');
     const tiedDesc = formatPRDescription(tiedPR, 'kg');
     assert.ok(tiedDesc.includes('(ties 100 kg)'));
 

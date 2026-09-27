@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Trophy } from 'lucide-react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { ExercisePodium, PodiumEntry, PRMetric } from '../workout/pr';
 import { formatWeight, WeightUnit } from '../utils/units';
+import { colors, radii } from '../theme';
+import { PRMark, SegmentedControl } from './ui';
 
 interface ExercisePodiumViewProps {
   podium: ExercisePodium | null;
@@ -11,222 +12,95 @@ interface ExercisePodiumViewProps {
   gymTrackingEnabled?: boolean;
 }
 
+const METRIC_OPTIONS: { key: PRMetric; label: string }[] = [
+  { key: 'weight', label: 'Weight' },
+  { key: '1rm', label: 'e1RM' },
+  { key: 'volume', label: 'Volume' },
+  { key: 'reps', label: 'Reps' },
+];
+
+const RANK_LABELS = { 1: 'Best', 2: '2nd', 3: '3rd' } as const;
+
+/** Top three sets for one exercise, ranked by the selected metric. */
 export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
   podium,
   unit,
   isBodyweight = false,
   gymTrackingEnabled = false,
 }) => {
-  const [selectedMetric, setSelectedMetric] = useState<PRMetric>(
-    isBodyweight ? 'reps' : 'weight'
-  );
+  const [selectedMetric, setSelectedMetric] = useState<PRMetric>(isBodyweight ? 'reps' : 'weight');
 
   if (!podium) return null;
 
-  const hasWeight = podium.weight.length > 0;
-  const has1RM = podium['1rm'].length > 0;
-  const hasVolume = podium.volume.length > 0;
-  const hasReps = podium.reps.length > 0;
+  const options = METRIC_OPTIONS.filter(option => podium[option.key].length > 0);
+  if (options.length === 0) return null;
 
-  if (!hasWeight && !has1RM && !hasVolume && !hasReps) {
-    return null;
-  }
-
-  const entries = podium[selectedMetric] || [];
-  const first = entries.find((e) => e.rank === 1);
-  const second = entries.find((e) => e.rank === 2);
-  const third = entries.find((e) => e.rank === 3);
+  const metric = options.some(option => option.key === selectedMetric) ? selectedMetric : options[0].key;
+  const entries = [1, 2, 3]
+    .map(rank => podium[metric].find(entry => entry.rank === rank))
+    .filter((entry): entry is PodiumEntry => Boolean(entry));
 
   const formatValue = (entry: PodiumEntry): { primary: string; secondary: string } => {
-    const dateStr = entry.date
-      ? new Date(entry.date).toLocaleDateString(undefined, {
-          month: 'short',
-          day: 'numeric',
-          year: '2-digit',
-        })
-      : '';
-
     if (entry.metric === 'weight') {
       return {
         primary: formatWeight(entry.weightKg, unit),
-        secondary: `${entry.reps} ${entry.reps === 1 ? 'rep' : 'reps'} · ${dateStr}`,
+        secondary: `× ${entry.reps} ${entry.reps === 1 ? 'rep' : 'reps'}`,
       };
     }
     if (entry.metric === '1rm') {
       return {
         primary: formatWeight(entry.value, unit),
-        secondary: `Est. 1RM · ${dateStr}`,
+        secondary: `${formatWeight(entry.weightKg, unit)} × ${entry.reps}`,
       };
     }
     if (entry.metric === 'volume') {
       return {
         primary: formatWeight(entry.value, unit),
-        secondary: `${formatWeight(entry.weightKg, unit)} × ${entry.reps} · ${dateStr}`,
+        secondary: `${formatWeight(entry.weightKg, unit)} × ${entry.reps}`,
       };
     }
-    // reps
-    return {
-      primary: `${entry.value} reps`,
-      secondary: dateStr,
-    };
-  };
-
-  const renderSlot = (
-    rank: 1 | 2 | 3,
-    entry: PodiumEntry | undefined,
-    theme: {
-      bg: string;
-      border: string;
-      titleColor: string;
-      title: string;
-      emoji: string;
-      height: number;
-    }
-  ) => {
-    return (
-      <View
-        style={[
-          styles.podiumSlot,
-          {
-            backgroundColor: theme.bg,
-            borderColor: theme.border,
-            minHeight: theme.height,
-          },
-        ]}
-      >
-        <View style={styles.slotHeader}>
-          <Text style={styles.slotEmoji}>{theme.emoji}</Text>
-          <Text style={[styles.slotTitle, { color: theme.titleColor }]}>{theme.title}</Text>
-        </View>
-
-        {entry ? (
-          <View style={styles.slotBody}>
-            <Text style={styles.slotPrimaryText} numberOfLines={1}>
-              {formatValue(entry).primary}
-            </Text>
-            <Text style={styles.slotSecondaryText} numberOfLines={1}>
-              {formatValue(entry).secondary}
-            </Text>
-            {gymTrackingEnabled && entry.gymName && (
-              <View style={styles.slotGymBadge}>
-                <Text style={styles.slotGymText} numberOfLines={1}>
-                  📍 {entry.gymName}
-                </Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={styles.slotEmpty}>
-            <Text style={styles.slotEmptyText}>—</Text>
-          </View>
-        )}
-      </View>
-    );
+    return { primary: `${entry.value} reps`, secondary: '' };
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <View style={styles.titleRow}>
-          <Trophy size={16} color="#F59E0B" />
-          <Text style={styles.title}>ALL-TIME PODIUM</Text>
-        </View>
-
-        {/* Metric Selector Pills */}
-        <View style={styles.metricTabs}>
-          {hasWeight && (
-            <TouchableOpacity
-              style={[styles.metricTab, selectedMetric === 'weight' && styles.metricTabActive]}
-              onPress={() => setSelectedMetric('weight')}
-            >
-              <Text
-                style={[
-                  styles.metricTabText,
-                  selectedMetric === 'weight' && styles.metricTabTextActive,
-                ]}
-              >
-                Weight
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {has1RM && (
-            <TouchableOpacity
-              style={[styles.metricTab, selectedMetric === '1rm' && styles.metricTabActive]}
-              onPress={() => setSelectedMetric('1rm')}
-            >
-              <Text
-                style={[
-                  styles.metricTabText,
-                  selectedMetric === '1rm' && styles.metricTabTextActive,
-                ]}
-              >
-                1RM
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {hasVolume && (
-            <TouchableOpacity
-              style={[styles.metricTab, selectedMetric === 'volume' && styles.metricTabActive]}
-              onPress={() => setSelectedMetric('volume')}
-            >
-              <Text
-                style={[
-                  styles.metricTabText,
-                  selectedMetric === 'volume' && styles.metricTabTextActive,
-                ]}
-              >
-                Volume
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {hasReps && (
-            <TouchableOpacity
-              style={[styles.metricTab, selectedMetric === 'reps' && styles.metricTabActive]}
-              onPress={() => setSelectedMetric('reps')}
-            >
-              <Text
-                style={[
-                  styles.metricTabText,
-                  selectedMetric === 'reps' && styles.metricTabTextActive,
-                ]}
-              >
-                Reps
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <Text style={styles.title}>Top sets</Text>
       </View>
 
-      {/* Podium Columns (Silver - Gold - Bronze) */}
-      <View style={styles.podiumRow}>
-        {renderSlot(2, second, {
-          bg: '#1A202C',
-          border: '#94A3B850',
-          titleColor: '#CBD5E1',
-          title: '2ND',
-          emoji: '🥈',
-          height: 110,
-        })}
+      {options.length > 1 && (
+        <SegmentedControl
+          options={options}
+          value={metric}
+          onChange={setSelectedMetric}
+          style={styles.metricSwitcher}
+        />
+      )}
 
-        {renderSlot(1, first, {
-          bg: '#271E11',
-          border: '#F59E0B70',
-          titleColor: '#FBBF24',
-          title: '1ST',
-          emoji: '🥇',
-          height: 128,
-        })}
-
-        {renderSlot(3, third, {
-          bg: '#231812',
-          border: '#D9770650',
-          titleColor: '#FED7AA',
-          title: '3RD',
-          emoji: '🥉',
-          height: 98,
+      <View style={styles.list}>
+        {entries.map((entry, idx) => {
+          const value = formatValue(entry);
+          const dateStr = entry.date
+            ? new Date(entry.date).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '';
+          const meta = [dateStr, gymTrackingEnabled ? entry.gymName : undefined].filter(Boolean).join(' · ');
+          return (
+            <View key={`${entry.rank}-${idx}`} style={[styles.row, idx > 0 && styles.rowDivider]}>
+              <PRMark rank={entry.rank} size={32} />
+              <View style={styles.rowText}>
+                <View style={styles.valueRow}>
+                  <Text style={[styles.value, entry.rank === 1 && styles.valueBest]}>{value.primary}</Text>
+                  {value.secondary ? <Text style={styles.valueSecondary}>{value.secondary}</Text> : null}
+                </View>
+                {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+              </View>
+              <Text style={styles.rankLabel}>{RANK_LABELS[entry.rank]}</Text>
+            </View>
+          );
         })}
       </View>
     </View>
@@ -235,120 +109,71 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#111827',
-    borderColor: '#374151',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
+    borderRadius: radii.xl,
+    padding: 16,
+    marginBottom: 18,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
     marginBottom: 12,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   title: {
-    color: '#FBBF24',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  metricTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#1F2937',
-    borderRadius: 8,
-    padding: 2,
-    gap: 2,
-  },
-  metricTab: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  metricTabActive: {
-    backgroundColor: '#374151',
-  },
-  metricTabText: {
-    color: '#9CA3AF',
-    fontSize: 11,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
+    letterSpacing: -0.2,
   },
-  metricTabTextActive: {
-    color: '#F9FAFB',
-  },
-  podiumRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  podiumSlot: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 8,
-    justifyContent: 'flex-start',
-  },
-  slotHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+  metricSwitcher: {
     marginBottom: 6,
   },
-  slotEmoji: {
-    fontSize: 14,
-  },
-  slotTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  slotBody: {
-    alignItems: 'center',
-  },
-  slotPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  slotSecondaryText: {
-    color: '#9CA3AF',
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  slotGymBadge: {
+  list: {
     marginTop: 4,
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
   },
-  slotGymText: {
-    color: '#38BDF8',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  slotEmpty: {
-    flex: 1,
+  row: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
+    gap: 12,
+    paddingVertical: 10,
   },
-  slotEmptyText: {
-    color: '#4B5563',
-    fontSize: 16,
+  rowDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderStrong,
+  },
+  rowText: {
+    flex: 1,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  value: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  valueBest: {
+    fontSize: 19,
+  },
+  valueSecondary: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  meta: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  rankLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
     fontWeight: '700',
   },
 });

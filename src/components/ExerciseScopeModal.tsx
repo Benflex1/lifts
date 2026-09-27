@@ -13,6 +13,7 @@ import { deleteExerciseGymScope, saveExerciseGymScope } from '../database/db';
 import { Exercise, ExerciseGymScope, ExerciseScopeType, Gym } from '../types';
 import { canDismissExerciseScopeModal } from '../utils/gym-picker';
 import { defaultScopeForEquipment, validateExerciseGymScope } from '../workout/gym-scope';
+import { colors } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -116,7 +117,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
               accessibilityLabel="Close exercise scope"
               accessibilityState={{ disabled: saving }}
             >
-              <X size={22} color="#9CA3AF" />
+              <X size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -137,7 +138,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                     <Text style={[styles.scopeLabel, selected && styles.scopeLabelSelected]}>{option.label}</Text>
                     <Text style={styles.scopeDescription}>{option.description}</Text>
                   </View>
-                  {selected && <Check size={20} color="#3B82F6" />}
+                  {selected && <Check size={20} color={colors.primary} />}
                 </TouchableOpacity>
               );
             })}
@@ -159,7 +160,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                     >
                       <View style={[styles.swatch, { backgroundColor: gym.color }]} />
                       <Text style={[styles.gymName, selected && styles.gymNameSelected]}>{gym.name}</Text>
-                      {selected && <Check size={18} color="#3B82F6" />}
+                      {selected && <Check size={18} color={colors.primary} />}
                     </TouchableOpacity>
                   );
                 })}
@@ -183,7 +184,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
-              {saving && <ActivityIndicator size="small" color="#000000" />}
+              {saving && <ActivityIndicator size="small" color={colors.black} />}
               <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Scope'}</Text>
             </TouchableOpacity>
           </View>
@@ -202,10 +203,10 @@ const styles = StyleSheet.create({
   },
   container: {
     maxHeight: '88%',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2F3442',
+    borderColor: colors.borderStrong,
   },
   header: {
     flexDirection: 'row',
@@ -213,11 +214,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   closeButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  title: { color: '#FFFFFF', fontSize: 19, fontWeight: '800' },
-  subtitle: { color: '#9CA3AF', fontSize: 13, marginTop: 3, maxWidth: 260 },
+  title: { color: colors.text, fontSize: 19, fontWeight: '800' },
+  subtitle: { color: colors.textSecondary, fontSize: 13, marginTop: 3, maxWidth: 260 },
   content: { padding: 20, paddingBottom: 12 },
   scopeOption: {
     flexDirection: 'row',
@@ -227,16 +228,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#262A34',
+    borderColor: colors.control,
+    backgroundColor: colors.border,
   },
-  scopeOptionSelected: { borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.12)' },
+  scopeOptionSelected: { borderColor: colors.primary, backgroundColor: 'rgba(59, 130, 246, 0.12)' },
   scopeOptionText: { flex: 1 },
-  scopeLabel: { color: '#F3F4F6', fontSize: 15, fontWeight: '700' },
-  scopeLabelSelected: { color: '#FFFFFF' },
-  scopeDescription: { color: '#9CA3AF', fontSize: 12, marginTop: 3 },
+  scopeLabel: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  scopeLabelSelected: { color: colors.text },
+  scopeDescription: { color: colors.textSecondary, fontSize: 12, marginTop: 3 },
   linkedSection: { marginTop: 8, marginBottom: 4 },
-  sectionLabel: { color: '#6B7280', fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 7 },
+  sectionLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 7 },
   gymOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -245,25 +246,25 @@ const styles = StyleSheet.create({
     marginBottom: 7,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#20242E',
+    borderColor: colors.control,
+    backgroundColor: colors.surfaceAlt,
   },
-  gymOptionSelected: { borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.12)' },
+  gymOptionSelected: { borderColor: colors.primary, backgroundColor: 'rgba(59, 130, 246, 0.12)' },
   swatch: { width: 12, height: 12, borderRadius: 6, marginRight: 9 },
-  gymName: { flex: 1, color: '#D1D5DB', fontSize: 14, fontWeight: '600' },
-  gymNameSelected: { color: '#FFFFFF' },
-  error: { color: '#FCA5A5', fontSize: 13, marginTop: 5, marginBottom: 8 },
+  gymName: { flex: 1, color: colors.textSoft, fontSize: 14, fontWeight: '600' },
+  gymNameSelected: { color: colors.text },
+  error: { color: colors.dangerLight, fontSize: 13, marginTop: 5, marginBottom: 8 },
   defaultButton: { alignItems: 'center', paddingVertical: 12, marginTop: 8 },
-  defaultButtonText: { color: '#93C5FD', fontSize: 13, fontWeight: '700' },
+  defaultButtonText: { color: colors.primaryLight, fontSize: 13, fontWeight: '700' },
   footer: {
     flexDirection: 'row',
     gap: 10,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#262A34',
+    borderTopColor: colors.border,
   },
-  cancelButton: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#374151', paddingVertical: 12 },
-  cancelText: { color: '#D1D5DB', fontSize: 14, fontWeight: '700' },
-  saveButton: { flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, backgroundColor: '#10B981', paddingVertical: 12 },
-  saveText: { color: '#000000', fontSize: 14, fontWeight: '800' },
+  cancelButton: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.control, paddingVertical: 12 },
+  cancelText: { color: colors.textSoft, fontSize: 14, fontWeight: '700' },
+  saveButton: { flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, backgroundColor: colors.success, paddingVertical: 12 },
+  saveText: { color: colors.black, fontSize: 14, fontWeight: '800' },
 });

@@ -5,6 +5,7 @@ import { Exercise } from '../types';
 import { ExerciseVisualDescriptor, ExerciseVisualTemplate, getExerciseVisual } from '../utils/exercise-media';
 import { WORKOUT_GUIDE_PLANK_FRAME_1 } from './exercise-assets';
 import { ExerciseVisualErrorBoundary } from './ExerciseVisualErrorBoundary';
+import { colors } from '../theme';
 
 export { ExerciseVisualErrorBoundary } from './ExerciseVisualErrorBoundary';
 
@@ -31,13 +32,13 @@ const ASSET_XML: Readonly<Record<string, string>> = Object.freeze({
 });
 
 const COLORS = {
-  background: '#181A20',
-  border: '#262A34',
-  silhouette: '#CBD5E1',
-  silhouetteMuted: '#64748B',
-  accent: '#38BDF8',
-  secondary: '#10B981',
-  equipment: '#F59E0B',
+  background: colors.surface,
+  border: colors.border,
+  silhouette: colors.textSoft,
+  silhouetteMuted: colors.textMuted,
+  accent: colors.primary,
+  secondary: colors.success,
+  equipment: colors.warning,
 } as const;
 
 const normalize = (value: unknown): string =>

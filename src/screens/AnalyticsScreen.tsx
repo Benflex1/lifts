@@ -13,27 +13,24 @@ import {
   Calculator,
   Award,
   Dumbbell,
-  ShieldCheck,
   Download,
   Upload,
   Share2,
   FileSpreadsheet,
   Trophy,
-  BarChart3,
-  Search,
   ChevronRight,
-  X,
   Flame,
+  Zap,
   TrendingUp,
   Layers,
   PieChart,
-  Calendar,
 } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { getStore, getAllExercises } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
-import { useWorkout } from '../context/WorkoutContext';
+import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { useIsWorkingOut } from '../context/WorkoutContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
 import { exportBackup } from '../utils/export';
 import { saveBackupToFiles } from '../utils/saveBackup';
@@ -66,14 +63,25 @@ import { buildTrophyRoomSummary, ExerciseRecordSummary, TrophyRoomSummary } from
 import { ExercisePodium, extractExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from '../components/ExercisePodiumView';
 import { getAllowedGymIds } from '../workout/gym-scope';
+import { colors } from '../theme';
+import { ScreenHeader, SegmentedControl } from '../components/ui';
+import { RecordsView } from '../components/RecordsView';
 
-export const AnalyticsScreen: React.FC = () => {
+type ProgressSection = 'overview' | 'records' | 'tools';
+
+const PROGRESS_SECTIONS: { key: ProgressSection; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'records', label: 'Records' },
+  { key: 'tools', label: 'Tools' },
+];
+
+const AnalyticsScreenInner: React.FC = () => {
   const { unit, gymTrackingEnabled } = useSettings();
-  const { isWorkingOut } = useWorkout();
+  const isWorkingOut = useIsWorkingOut();
   const { confirm, notify } = useDialog();
 
   // Navigation section: Analytics charts vs Trophy Room
-  const [activeSection, setActiveSection] = useState<'analytics' | 'trophy'>('analytics');
+  const [activeSection, setActiveSection] = useState<ProgressSection>('overview');
 
   // Trophy room states
   const [allWorkouts, setAllWorkouts] = useState<Workout[]>([]);
@@ -113,7 +121,9 @@ export const AnalyticsScreen: React.FC = () => {
   const [isCsvImporting, setIsCsvImporting] = useState(false);
   const [allGyms, setAllGyms] = useState<Gym[]>([]);
 
-  const loadAnalytics = React.useCallback(async () => {
+  const analyticsSignatureRef = React.useRef<string | null>(null);
+
+  const loadAnalytics = React.useCallback(async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
     try {
       const store = await getStore();
       const snapshot = await store.readSnapshot();
@@ -121,6 +131,16 @@ export const AnalyticsScreen: React.FC = () => {
       const workouts: Workout[] = snapshot.workouts || [];
       const gymsList: Gym[] = snapshot.gyms || [];
       const allExercisesList = await getAllExercises();
+
+      // Rebuilding every chart is costly; a background refresh skips it when the inputs are unchanged.
+      const signature = JSON.stringify([
+        workouts.map(w => [w.id, w.startTime, w.endTime, w.gymId, w.totalVolumeKg, w.exercises?.length, w.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0)]),
+        gymsList.map(g => [g.id, g.name, g.color]),
+        (snapshot.exerciseGymScopes || []).length,
+        allExercisesList.length,
+      ]);
+      if (skipIfUnchanged && signature === analyticsSignatureRef.current) return;
+      analyticsSignatureRef.current = signature;
 
       setAllWorkouts(workouts);
       setAllGyms(gymsList);
@@ -161,6 +181,8 @@ export const AnalyticsScreen: React.FC = () => {
   useEffect(() => {
     void loadAnalytics();
   }, [loadAnalytics]);
+
+  useReloadOnActivate(() => void loadAnalytics({ skipIfUnchanged: true }));
 
   const progressionExercise = useMemo(() => {
     if (!selectedProgressionExerciseId) {
@@ -215,6 +237,7 @@ export const AnalyticsScreen: React.FC = () => {
         selectedGymId: trophyGymId,
         categoryFilter: trophyCategory,
         searchQuery: trophySearch,
+        includeMedalCounts: false,
       }
     );
   }, [
@@ -227,6 +250,15 @@ export const AnalyticsScreen: React.FC = () => {
     trophyCategory,
     trophySearch,
   ]);
+
+  // Unfiltered by category and search: feeds the Big Three card and the Recent PRs strip.
+  const recordsOverview = useMemo(() => {
+    if (allWorkouts.length === 0) return null;
+    return buildTrophyRoomSummary(allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, {
+      selectedGymId: trophyGymId,
+      includeMedalCounts: false,
+    });
+  }, [allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, trophyGymId]);
 
   const handleOpenRecordDetail = (record: ExerciseRecordSummary) => {
     const ex = allExerciseList.find((e) => e.id === record.exerciseId);
@@ -482,296 +514,46 @@ export const AnalyticsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tools & Analytics</Text>
-      </View>
+      <ScreenHeader title="Progress">
+        <SegmentedControl
+          options={PROGRESS_SECTIONS}
+          value={activeSection}
+          onChange={setActiveSection}
+          style={styles.sectionSwitcher}
+        />
+      </ScreenHeader>
 
-      {/* Section Switcher Tabs */}
-      <View style={styles.sectionTabs}>
-        <TouchableOpacity
-          style={[styles.sectionTab, activeSection === 'analytics' && styles.sectionTabActive]}
-          onPress={() => setActiveSection('analytics')}
-        >
-          <BarChart3 size={15} color={activeSection === 'analytics' ? '#F9FAFB' : '#9CA3AF'} />
-          <Text style={[styles.sectionTabText, activeSection === 'analytics' && styles.sectionTabTextActive]}>
-            Analytics & Tools
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.sectionTab, activeSection === 'trophy' && styles.sectionTabActive]}
-          onPress={() => setActiveSection('trophy')}
-        >
-          <Trophy size={15} color={activeSection === 'trophy' ? '#FBBF24' : '#9CA3AF'} />
-          <Text style={[styles.sectionTabText, activeSection === 'trophy' && styles.sectionTabTextActive]}>
-            Trophy Room
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {activeSection === 'trophy' ? (
+      {activeSection === 'records' ? (
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Trophy Room Hero Banner */}
-          <View style={styles.trophyHeroCard}>
-            <View style={styles.trophyHeroHeader}>
-              <Trophy size={18} color="#F59E0B" />
-              <Text style={styles.trophyHeroTitle}>ALL-TIME PERSONAL RECORDS</Text>
-            </View>
-            <View style={styles.medalTallyRow}>
-              <View style={[styles.medalTallyBox, { borderColor: '#F59E0B60', backgroundColor: '#78350F25' }]}>
-                <Text style={styles.medalTallyEmoji}>🥇</Text>
-                <Text style={[styles.medalTallyCount, { color: '#FBBF24' }]}>{trophySummary?.totalGold ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>GOLD</Text>
-              </View>
-              <View style={[styles.medalTallyBox, { borderColor: '#94A3B850', backgroundColor: '#33415525' }]}>
-                <Text style={styles.medalTallyEmoji}>🥈</Text>
-                <Text style={[styles.medalTallyCount, { color: '#F1F5F9' }]}>{trophySummary?.totalSilver ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>SILVER</Text>
-              </View>
-              <View style={[styles.medalTallyBox, { borderColor: '#D9770650', backgroundColor: '#451A0325' }]}>
-                <Text style={styles.medalTallyEmoji}>🥉</Text>
-                <Text style={[styles.medalTallyCount, { color: '#FED7AA' }]}>{trophySummary?.totalBronze ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>BRONZE</Text>
-              </View>
-              <View style={[styles.medalTallyBox, { borderColor: '#38BDF850', backgroundColor: '#0C4A6E25' }]}>
-                <Text style={styles.medalTallyEmoji}>🏆</Text>
-                <Text style={[styles.medalTallyCount, { color: '#38BDF8' }]}>{trophySummary?.totalRecords ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>TOTAL</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* SBD / Compound Highlights Card */}
-          {trophySummary && trophySummary.sbdTotalKg > 0 && (
-            <View style={styles.sbdCard}>
-              <View style={styles.sbdHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sbdTitle}>POWERLIFTING TOTAL</Text>
-                  <Text style={styles.sbdSubtitle}>Best estimated 1RM across Big 3</Text>
-                </View>
-                <View style={styles.sbdBadge}>
-                  <Text style={styles.sbdTotalText}>{formatWeight(trophySummary.sbdTotalKg, unit)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.sbdGrid}>
-                {trophySummary.sbdBreakdown.squat && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>SQUAT</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.squat.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.squat.weightKg, unit)} × {trophySummary.sbdBreakdown.squat.reps}
-                    </Text>
-                  </View>
-                )}
-                {trophySummary.sbdBreakdown.bench && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>BENCH</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.bench.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.bench.weightKg, unit)} × {trophySummary.sbdBreakdown.bench.reps}
-                    </Text>
-                  </View>
-                )}
-                {trophySummary.sbdBreakdown.deadlift && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>DEADLIFT</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.deadlift.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.deadlift.weightKg, unit)} × {trophySummary.sbdBreakdown.deadlift.reps}
-                    </Text>
-                  </View>
-                )}
-                {trophySummary.sbdBreakdown.overheadPress && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>OHP</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.overheadPress.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.overheadPress.weightKg, unit)} × {trophySummary.sbdBreakdown.overheadPress.reps}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Filters & Search */}
-          <View style={styles.trophyFiltersSection}>
-            {/* Search Input */}
-            <View style={styles.trophySearchRow}>
-              <Search size={16} color="#6B7280" />
-              <TextInput
-                style={styles.trophySearchInput}
-                placeholder="Search records by exercise name..."
-                placeholderTextColor="#6B7280"
-                value={trophySearch}
-                onChangeText={setTrophySearch}
-              />
-              {trophySearch.length > 0 && (
-                <TouchableOpacity onPress={() => setTrophySearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <X size={16} color="#9CA3AF" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Gym filter pills */}
-            {gymTrackingEnabled && allGyms.length > 1 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
-                <TouchableOpacity
-                  style={[styles.filterPill, trophyGymId === null && styles.filterPillActive]}
-                  onPress={() => setTrophyGymId(null)}
-                >
-                  <Text style={[styles.filterPillText, trophyGymId === null && styles.filterPillTextActive]}>
-                    All Gyms
-                  </Text>
-                </TouchableOpacity>
-                {allGyms.map((g) => (
-                  <TouchableOpacity
-                    key={g.id}
-                    style={[styles.filterPill, trophyGymId === g.id && styles.filterPillActive]}
-                    onPress={() => setTrophyGymId(g.id)}
-                  >
-                    <Text style={[styles.filterPillText, trophyGymId === g.id && styles.filterPillTextActive]}>
-                      {g.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Category filter pills */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
-              {['all', 'chest', 'back', 'legs', 'shoulders', 'arms', 'core'].map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.filterPill, trophyCategory === cat && styles.filterPillActive]}
-                  onPress={() => setTrophyCategory(cat)}
-                >
-                  <Text style={[styles.filterPillText, trophyCategory === cat && styles.filterPillTextActive]}>
-                    {cat.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Records List */}
-          {trophySummary && trophySummary.records.length > 0 ? (
-            trophySummary.records.map((record) => {
-              const dateStr = record.bestWeight?.date || record.bestReps?.date;
-              const formattedDate = dateStr
-                ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })
-                : '';
-
-              return (
-                <TouchableOpacity
-                  key={record.exerciseId}
-                  style={styles.recordCard}
-                  onPress={() => handleOpenRecordDetail(record)}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${record.exerciseName} record details`}
-                >
-                  <View style={styles.recordCardMain}>
-                    <View style={styles.recordCardHeader}>
-                      <Text style={styles.recordExerciseName}>{record.exerciseName}</Text>
-                      <View style={styles.recordBadgeRow}>
-                        <View style={styles.recordPill}>
-                          <Text style={styles.recordPillText}>
-                            {(record.primaryMuscles && record.primaryMuscles.length > 0
-                              ? record.primaryMuscles[0]
-                              : record.category
-                            ).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View style={styles.recordPill}>
-                          <Text style={styles.recordPillText}>{record.equipment}</Text>
-                        </View>
-                        {gymTrackingEnabled && record.bestWeight?.gymName && (
-                          <View style={styles.recordGymBadge}>
-                            <Text style={styles.recordGymText}>📍 {record.bestWeight.gymName}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.recordMetricsGrid}>
-                      {record.bestWeight && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>HEAVIEST SET</Text>
-                          <Text style={styles.recordMetricVal}>
-                            {formatWeight(record.bestWeight.value, unit)} × {record.bestWeight.reps}
-                          </Text>
-                        </View>
-                      )}
-
-                      {record.best1RM && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>EST. 1RM</Text>
-                          <Text style={styles.recordMetricVal}>{formatWeight(record.best1RM.value, unit)}</Text>
-                        </View>
-                      )}
-
-                      {record.bestVolume && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>SET VOLUME</Text>
-                          <Text style={styles.recordMetricVal}>{formatWeight(record.bestVolume.value, unit)}</Text>
-                        </View>
-                      )}
-
-                      {record.bestReps && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>MAX REPS</Text>
-                          <Text style={styles.recordMetricVal}>{record.bestReps.value} reps</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {formattedDate.length > 0 && (
-                      <Text style={styles.recordDateText}>Record set on {formattedDate}</Text>
-                    )}
-                  </View>
-
-                  <ChevronRight size={18} color="#6B7280" />
-                </TouchableOpacity>
-              );
-            })
-          ) : (
-            <View style={styles.emptyTrophyCard}>
-              <Trophy size={32} color="#4B5563" />
-              <Text style={styles.emptyTrophyTitle}>No records found</Text>
-              <Text style={styles.emptyTrophySubtitle}>
-                {trophySearch || trophyCategory !== 'all'
-                  ? 'Try clearing search or category filters.'
-                  : 'Log completed workouts to start building your personal record trophy room!'}
-              </Text>
-            </View>
-          )}
+          <RecordsView
+            overview={recordsOverview}
+            filtered={trophySummary}
+            unit={unit}
+            gyms={allGyms}
+            gymTrackingEnabled={gymTrackingEnabled}
+            selectedGymId={trophyGymId}
+            onSelectGym={setTrophyGymId}
+            category={trophyCategory}
+            onSelectCategory={setTrophyCategory}
+            search={trophySearch}
+            onChangeSearch={setTrophySearch}
+            onOpenRecord={handleOpenRecordDetail}
+          />
         </ScrollView>
-      ) : (
+      ) : activeSection === 'overview' ? (
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-        {/* Open-Source Promise Card */}
-        <View style={styles.promiseCard}>
-          <ShieldCheck size={24} color="#10B981" />
-          <View style={styles.promiseInfo}>
-            <Text style={styles.promiseTitle}>Zero Paywalls. Forever.</Text>
-            <Text style={styles.promiseText}>
-              Unlimited routines, all-time history, and advanced calculators are completely unlocked.
-            </Text>
-          </View>
-        </View>
-
         {/* Progress Charts */}
         {analyticsLoading ? (
           <View style={styles.chartLoading}>
-            <ActivityIndicator size="small" color="#3B82F6" />
+            <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.chartLoadingText}>Loading progress...</Text>
           </View>
         ) : hasWorkoutData ? (
@@ -780,7 +562,7 @@ export const AnalyticsScreen: React.FC = () => {
             {lifetimeStats && (
               <View style={styles.lifetimeHeroCard}>
                 <View style={styles.lifetimeHeroHeader}>
-                  <TrendingUp size={18} color="#38BDF8" />
+                  <TrendingUp size={18} color={colors.primary} />
                   <Text style={styles.lifetimeHeroTitle}>LIFETIME TRAINING SUMMARY</Text>
                 </View>
                 <View style={styles.lifetimeGrid}>
@@ -826,7 +608,7 @@ export const AnalyticsScreen: React.FC = () => {
 
             <View style={styles.toolCard}>
               <View style={styles.toolHeader}>
-                <Dumbbell size={20} color="#38BDF8" />
+                <Dumbbell size={18} color={colors.primary} />
                 <Text style={styles.toolTitle}>Weekly Volume</Text>
               </View>
               <Text style={styles.toolSubtitle}>Total completed-set volume over the last eight weeks.</Text>
@@ -839,7 +621,13 @@ export const AnalyticsScreen: React.FC = () => {
                   return (
                     <View key={point.key} style={styles.volumeColumn}>
                       <View style={styles.volumeBarTrack}>
-                        <View style={[styles.volumeBar, { height: barHeight }]} />
+                        <View
+                          style={[
+                            styles.volumeBar,
+                            { height: barHeight },
+                            point.volumeKg <= 0 && styles.volumeBarEmpty,
+                          ]}
+                        />
                       </View>
                       <Text style={styles.volumeLabel}>{point.label}</Text>
                     </View>
@@ -851,7 +639,7 @@ export const AnalyticsScreen: React.FC = () => {
             {muscleFrequency.length > 0 && (
               <View style={styles.toolCard}>
                 <View style={styles.toolHeader}>
-                  <Award size={20} color="#F59E0B" />
+                  <Award size={18} color={colors.primary} />
                   <Text style={styles.toolTitle}>Muscle Frequency</Text>
                 </View>
                 <Text style={styles.toolSubtitle}>Workouts that trained each muscle by primary or secondary role.</Text>
@@ -905,31 +693,37 @@ export const AnalyticsScreen: React.FC = () => {
             {consistencySummary && (
               <View style={styles.toolCard}>
                 <View style={styles.toolHeader}>
-                  <Flame size={20} color="#EF4444" />
+                  <Flame size={18} color={colors.primary} />
                   <Text style={styles.toolTitle}>Consistency & Streaks</Text>
                 </View>
                 <Text style={styles.toolSubtitle}>Your training rhythm over the last 12 weeks.</Text>
 
                 <View style={styles.streakBadgesRow}>
                   <View style={styles.streakBadge}>
-                    <Text style={styles.streakEmoji}>🔥</Text>
+                    <View style={[styles.streakIcon, { backgroundColor: colors.dangerSoft }]}>
+                      <Flame size={16} color={colors.danger} />
+                    </View>
                     <View>
-                      <Text style={styles.streakValue}>{consistencySummary.currentStreakWeeks} Wks</Text>
-                      <Text style={styles.streakLabel}>CURRENT</Text>
+                      <Text style={styles.streakValue}>{consistencySummary.currentStreakWeeks} wk</Text>
+                      <Text style={styles.streakLabel}>Current streak</Text>
                     </View>
                   </View>
                   <View style={styles.streakBadge}>
-                    <Text style={styles.streakEmoji}>🏆</Text>
+                    <View style={[styles.streakIcon, { backgroundColor: colors.warningSoft }]}>
+                      <Trophy size={16} color={colors.gold} />
+                    </View>
                     <View>
-                      <Text style={styles.streakValue}>{consistencySummary.bestStreakWeeks} Wks</Text>
-                      <Text style={styles.streakLabel}>BEST STREAK</Text>
+                      <Text style={styles.streakValue}>{consistencySummary.bestStreakWeeks} wk</Text>
+                      <Text style={styles.streakLabel}>Best streak</Text>
                     </View>
                   </View>
                   <View style={styles.streakBadge}>
-                    <Text style={styles.streakEmoji}>⚡</Text>
+                    <View style={[styles.streakIcon, { backgroundColor: colors.primarySoft }]}>
+                      <Zap size={16} color={colors.primaryLight} />
+                    </View>
                     <View>
                       <Text style={styles.streakValue}>{consistencySummary.averageWorkoutsPerWeek}/wk</Text>
-                      <Text style={styles.streakLabel}>12-WK AVG</Text>
+                      <Text style={styles.streakLabel}>12-week avg</Text>
                     </View>
                   </View>
                 </View>
@@ -957,7 +751,7 @@ export const AnalyticsScreen: React.FC = () => {
             {/* Exercise Progression Curve */}
             <View style={styles.toolCard}>
               <View style={styles.toolHeader}>
-                <TrendingUp size={20} color="#38BDF8" />
+                <TrendingUp size={18} color={colors.primary} />
                 <Text style={styles.toolTitle}>Exercise Progression</Text>
               </View>
               <Text style={styles.toolSubtitle}>
@@ -972,7 +766,7 @@ export const AnalyticsScreen: React.FC = () => {
                 accessibilityLabel="Choose exercise for progression curve"
               >
                 <View style={styles.exerciseSelectorLeft}>
-                  <Dumbbell size={18} color="#38BDF8" />
+                  <Dumbbell size={18} color={colors.primary} />
                   <Text style={styles.exerciseSelectorName}>
                     {progressionExercise?.name || 'Select Exercise'}
                   </Text>
@@ -1113,7 +907,7 @@ export const AnalyticsScreen: React.FC = () => {
             {/* Training Breakdown Section Header & Timeframe Filter */}
             <View style={styles.breakdownHeaderRow}>
               <View style={styles.breakdownTitleWrap}>
-                <Layers size={18} color="#38BDF8" />
+                <Layers size={18} color={colors.primary} />
                 <Text style={styles.breakdownTitleText}>TRAINING BREAKDOWN</Text>
               </View>
               <View style={styles.breakdownTimeframeRow}>
@@ -1151,7 +945,7 @@ export const AnalyticsScreen: React.FC = () => {
             {repRangeDistribution && repRangeDistribution.totalSets > 0 && (
               <View style={styles.toolCard}>
                 <View style={styles.toolHeader}>
-                  <Layers size={20} color="#10B981" />
+                  <Layers size={18} color={colors.primary} />
                   <Text style={styles.toolTitle}>Rep Range Training Zones</Text>
                 </View>
                 <Text style={styles.toolSubtitle}>
@@ -1165,7 +959,7 @@ export const AnalyticsScreen: React.FC = () => {
                         styles.zoneBarSegment,
                         {
                           flex: repRangeDistribution.strength,
-                          backgroundColor: '#EF4444',
+                          backgroundColor: colors.danger,
                         },
                       ]}
                     />
@@ -1176,7 +970,7 @@ export const AnalyticsScreen: React.FC = () => {
                         styles.zoneBarSegment,
                         {
                           flex: repRangeDistribution.hypertrophy,
-                          backgroundColor: '#38BDF8',
+                          backgroundColor: colors.primary,
                         },
                       ]}
                     />
@@ -1187,7 +981,7 @@ export const AnalyticsScreen: React.FC = () => {
                         styles.zoneBarSegment,
                         {
                           flex: repRangeDistribution.endurance,
-                          backgroundColor: '#10B981',
+                          backgroundColor: colors.success,
                         },
                       ]}
                     />
@@ -1196,19 +990,19 @@ export const AnalyticsScreen: React.FC = () => {
 
                 <View style={styles.zoneLegendRow}>
                   <View style={styles.zoneLegendItem}>
-                    <View style={[styles.zoneDot, { backgroundColor: '#EF4444' }]} />
+                    <View style={[styles.zoneDot, { backgroundColor: colors.danger }]} />
                     <Text style={styles.zoneLabel}>
                       Strength (1-5): {repRangeDistribution.percentages.strength}% ({repRangeDistribution.strength} sets)
                     </Text>
                   </View>
                   <View style={styles.zoneLegendItem}>
-                    <View style={[styles.zoneDot, { backgroundColor: '#38BDF8' }]} />
+                    <View style={[styles.zoneDot, { backgroundColor: colors.primary }]} />
                     <Text style={styles.zoneLabel}>
                       Hypertrophy (6-12): {repRangeDistribution.percentages.hypertrophy}% ({repRangeDistribution.hypertrophy} sets)
                     </Text>
                   </View>
                   <View style={styles.zoneLegendItem}>
-                    <View style={[styles.zoneDot, { backgroundColor: '#10B981' }]} />
+                    <View style={[styles.zoneDot, { backgroundColor: colors.success }]} />
                     <Text style={styles.zoneLabel}>
                       Endurance (13+): {repRangeDistribution.percentages.endurance}% ({repRangeDistribution.endurance} sets)
                     </Text>
@@ -1222,7 +1016,7 @@ export const AnalyticsScreen: React.FC = () => {
               <View style={styles.toolCard}>
                 <View style={styles.toolHeaderBetween}>
                   <View style={styles.toolHeaderLeft}>
-                    <PieChart size={20} color="#F59E0B" />
+                    <PieChart size={18} color={colors.primary} />
                     <Text style={styles.toolTitle}>Muscle Distribution</Text>
                   </View>
                   <View style={styles.distToggleWrap}>
@@ -1295,10 +1089,17 @@ export const AnalyticsScreen: React.FC = () => {
           </View>
         )}
 
+      </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.scrollArea}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* 1RM Calculator Section */}
         <View style={styles.toolCard}>
           <View style={styles.toolHeader}>
-            <Calculator size={20} color="#3B82F6" />
+            <Calculator size={18} color={colors.primary} />
             <Text style={styles.toolTitle}>One-Rep Max (1RM) Calculator</Text>
           </View>
           <Text style={styles.toolSubtitle}>
@@ -1354,7 +1155,7 @@ export const AnalyticsScreen: React.FC = () => {
         {/* Standalone Barbell Plate Calculator Button */}
         <View style={styles.toolCard}>
           <View style={styles.toolHeader}>
-            <Dumbbell size={20} color="#10B981" />
+            <Dumbbell size={18} color={colors.primary} />
             <Text style={styles.toolTitle}>Barbell Plate Calculator</Text>
           </View>
           <Text style={styles.toolSubtitle}>
@@ -1365,7 +1166,7 @@ export const AnalyticsScreen: React.FC = () => {
             style={styles.actionBtn}
             onPress={() => setShowPlateCalc(true)}
           >
-            <Calculator size={18} color="#000000" />
+            <Calculator size={18} color={colors.black} />
             <Text style={styles.actionBtnText}>Open Plate Calculator</Text>
           </TouchableOpacity>
         </View>
@@ -1373,7 +1174,7 @@ export const AnalyticsScreen: React.FC = () => {
         {/* Strength Standards Guide */}
         <View style={styles.toolCard}>
           <View style={styles.toolHeader}>
-            <Award size={20} color="#F59E0B" />
+            <Award size={18} color={colors.primary} />
             <Text style={styles.toolTitle}>Strength Level Standards</Text>
           </View>
           <Text style={styles.toolSubtitle}>
@@ -1407,45 +1208,76 @@ export const AnalyticsScreen: React.FC = () => {
         </View>
 
         {/* Data Ownership */}
-        <TouchableOpacity
-          style={styles.exportCard}
-          onPress={handleSaveData}
-          accessibilityRole="button"
-          accessibilityLabel="Save Backup to Files"
-        >
-          <Download size={20} color="#9CA3AF" />
-          <Text style={styles.exportCardText}>Save Backup to Files (v3)</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.exportCard, { marginTop: 10 }]}
-          onPress={handleExportData}
-          accessibilityRole="button"
-          accessibilityLabel="Share Backup Workout Data"
-        >
-          <Share2 size={20} color="#9CA3AF" />
-          <Text style={styles.exportCardText}>Share Backup</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.exportCard, { marginTop: 10 }]}
-          onPress={handleImportData}
-          accessibilityRole="button"
-          accessibilityLabel="Restore & Import Backup Data"
-        >
-          <Upload size={20} color="#3B82F6" />
-          <Text style={[styles.exportCardText, { color: '#3B82F6' }]}>Restore & Import Backup</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.exportCard, { marginTop: 10 }]}
-          onPress={handleImportCsv}
-          accessibilityRole="button"
-          accessibilityLabel="Import Workouts from CSV"
-        >
-          <FileSpreadsheet size={20} color="#10B981" />
-          <Text style={[styles.exportCardText, { color: '#10B981' }]}>Import Workouts (Hevy, Strong, Lyfta...)</Text>
-        </TouchableOpacity>
+        <Text style={styles.groupHeading}>Your Data</Text>
+        <View style={styles.listCard}>
+          <TouchableOpacity
+            style={[styles.listRow]}
+            onPress={handleSaveData}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Save Backup to Files"
+          >
+            <View style={styles.listRowIcon}>
+              <Download size={18} color={colors.textSoft} />
+            </View>
+            <View style={styles.listRowText}>
+              <Text style={styles.listRowTitle}>Save Backup to Files</Text>
+              <Text style={styles.listRowSub}>Export a full v3 backup file</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.listRow, styles.listRowDivider]}
+            onPress={handleExportData}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Share Backup Workout Data"
+          >
+            <View style={styles.listRowIcon}>
+              <Share2 size={18} color={colors.textSoft} />
+            </View>
+            <View style={styles.listRowText}>
+              <Text style={styles.listRowTitle}>Share Backup</Text>
+              <Text style={styles.listRowSub}>Send a backup to another app</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.listRow, styles.listRowDivider]}
+            onPress={handleImportData}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Restore & Import Backup Data"
+          >
+            <View style={styles.listRowIcon}>
+              <Upload size={18} color={colors.textSoft} />
+            </View>
+            <View style={styles.listRowText}>
+              <Text style={styles.listRowTitle}>Restore Backup</Text>
+              <Text style={styles.listRowSub}>Replace data from a backup file</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.listRow, styles.listRowDivider]}
+            onPress={handleImportCsv}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Import Workouts from CSV"
+          >
+            <View style={styles.listRowIcon}>
+              <FileSpreadsheet size={18} color={colors.textSoft} />
+            </View>
+            <View style={styles.listRowText}>
+              <Text style={styles.listRowTitle}>Import from Other Apps</Text>
+              <Text style={styles.listRowSub}>Hevy, Strong, Lyfta and more (CSV)</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textFaint} />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.dataFootnote}>
+          Lifts is local-first: everything stays on this device unless you export it.
+        </Text>
       </ScrollView>
       )}
 
@@ -1487,7 +1319,7 @@ export const AnalyticsScreen: React.FC = () => {
         exercise={detailExercise}
         onClose={() => setDetailExercise(null)}
         currentGym={trophyGymId ? allGyms.find((g) => g.id === trophyGymId) : null}
-        onHistoryTransferred={loadAnalytics}
+        onHistoryTransferred={() => void loadAnalytics()}
       />
     </View>
   );
@@ -1496,72 +1328,35 @@ export const AnalyticsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0E12',
-  },
-  header: {
-    paddingTop: 54,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#181A20',
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    backgroundColor: colors.bg,
   },
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  promiseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#132E27',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#1C4A3F',
-    gap: 14,
-    marginBottom: 16,
-  },
-  promiseInfo: {
-    flex: 1,
-  },
-  promiseTitle: {
-    color: '#10B981',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  promiseText: {
-    color: '#A7F3D0',
-    fontSize: 12,
-    lineHeight: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 120,
   },
   lifetimeHeroCard: {
-    backgroundColor: '#181A20',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
-    marginBottom: 16,
+    borderColor: colors.border,
+    marginBottom: 12,
   },
   lifetimeHeroHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   lifetimeHeroTitle: {
-    color: '#38BDF8',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   lifetimeGrid: {
     flexDirection: 'row',
@@ -1571,27 +1366,27 @@ const styles = StyleSheet.create({
   lifetimeTile: {
     flexGrow: 1,
     flexBasis: '47%',
-    backgroundColor: '#13151B',
-    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#20242E',
   },
   lifetimeTileVal: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    color: colors.text,
+    fontSize: 22,
     fontWeight: '800',
+    letterSpacing: -0.4,
     marginBottom: 2,
+    fontVariant: ['tabular-nums'],
   },
   lifetimeTileLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   lifetimeTileSub: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -1603,27 +1398,29 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
   },
   chartLoadingText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
   },
   chartEmpty: {
-    backgroundColor: '#181A20',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#262A34',
-    padding: 18,
-    marginBottom: 16,
+    borderColor: colors.border,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 12,
   },
   chartEmptyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 4,
   },
   chartEmptyText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
+    textAlign: 'center',
   },
   volumeChart: {
     flexDirection: 'row',
@@ -1643,17 +1440,16 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    backgroundColor: '#20242E',
-    borderRadius: 5,
+    borderRadius: 6,
     overflow: 'hidden',
   },
   volumeBar: {
-    width: '70%',
-    backgroundColor: '#38BDF8',
-    borderRadius: 5,
+    width: '72%',
+    backgroundColor: colors.primary,
+    borderRadius: 6,
   },
   volumeLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 9,
   },
   muscleChart: {
@@ -1676,7 +1472,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   muscleLegendText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
   },
   muscleRow: {
@@ -1687,19 +1483,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   muscleName: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 12,
     textTransform: 'capitalize',
   },
   muscleCount: {
-    color: '#F59E0B',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   muscleBarTrack: {
     height: 8,
     flexDirection: 'row',
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -1707,34 +1504,36 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   musclePrimaryBar: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.primary,
   },
   muscleSecondaryBar: {
-    backgroundColor: '#38BDF8',
+    backgroundColor: colors.primary + '59',
   },
   toolCard: {
-    backgroundColor: '#181A20',
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
-    marginBottom: 16,
+    borderColor: colors.border,
+    marginBottom: 12,
   },
   toolHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   toolTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
+    letterSpacing: -0.2,
   },
   toolSubtitle: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 13,
-    marginBottom: 16,
+    lineHeight: 18,
+    marginBottom: 14,
   },
   inputsRow: {
     flexDirection: 'row',
@@ -1745,464 +1544,109 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   textInput: {
-    backgroundColor: '#262A34',
-    borderRadius: 10,
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
+    backgroundColor: colors.surfaceHigh,
+    borderRadius: 12,
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
     textAlign: 'center',
   },
   resultBox: {
-    backgroundColor: '#20242E',
-    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     marginBottom: 18,
   },
   resultLabel: {
-    color: '#3B82F6',
+    color: colors.primaryLight,
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: 4,
   },
   resultValue: {
-    color: '#FFFFFF',
-    fontSize: 32,
+    color: colors.text,
+    fontSize: 34,
     fontWeight: '900',
+    letterSpacing: -0.8,
   },
   resultFormula: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     marginTop: 4,
   },
   tableHeading: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
     marginBottom: 8,
   },
   percentagesGrid: {
-    backgroundColor: '#20242E',
-    borderRadius: 12,
-    padding: 10,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   pctRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderStrong,
   },
   pctLabel: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
     width: 45,
   },
   pctReps: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     flex: 1,
   },
   pctValue: {
-    color: '#10B981',
+    color: colors.text,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: colors.surfaceHigh,
+    paddingVertical: 13,
+    borderRadius: 14,
     gap: 8,
   },
   actionBtnText: {
-    color: '#000000',
-    fontSize: 14,
+    color: colors.text,
+    fontSize: 15,
     fontWeight: '700',
   },
   standardRow: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderStrong,
   },
   standardLift: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
     fontSize: 14,
     marginBottom: 2,
   },
   standardValues: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
-  },
-  exportCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#181A20',
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#262A34',
-    marginBottom: 20,
-  },
-  exportCardText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  sectionTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#181A20',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
-  },
-  sectionTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#1E232E',
-  },
-  sectionTabActive: {
-    backgroundColor: '#2A3342',
-    borderWidth: 1,
-    borderColor: '#3B82F650',
-  },
-  sectionTabText: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  sectionTabTextActive: {
-    color: '#FFFFFF',
-  },
-  trophyHeroCard: {
-    backgroundColor: '#1C160E',
-    borderColor: '#F59E0B40',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  trophyHeroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  trophyHeroTitle: {
-    color: '#FBBF24',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  medalTallyRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  medalTallyBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-  },
-  medalTallyEmoji: {
-    fontSize: 18,
-    marginBottom: 2,
-  },
-  medalTallyCount: {
-    fontSize: 18,
-    fontWeight: '900',
-    marginBottom: 2,
-  },
-  medalTallyLabel: {
-    color: '#9CA3AF',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  sbdCard: {
-    backgroundColor: '#181A20',
-    borderColor: '#262A34',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  sbdHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  sbdTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  sbdSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  sbdBadge: {
-    backgroundColor: '#1E293B',
-    borderColor: '#38BDF860',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  sbdTotalText: {
-    color: '#38BDF8',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  sbdGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  sbdCol: {
-    flex: 1,
-    backgroundColor: '#20242E',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-  },
-  sbdLiftName: {
-    color: '#9CA3AF',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  sbdLiftVal: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  sbdLiftSub: {
-    color: '#9CA3AF',
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  trophyFiltersSection: {
-    marginBottom: 16,
-    gap: 10,
-  },
-  trophySearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#181A20',
-    borderWidth: 1,
-    borderColor: '#262A34',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  trophySearchInput: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 13,
-  },
-  pillsScroll: {
-    flexDirection: 'row',
-  },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#181A20',
-    borderWidth: 1,
-    borderColor: '#262A34',
-    marginRight: 6,
-  },
-  filterPillActive: {
-    backgroundColor: '#374151',
-    borderColor: '#4B5563',
-  },
-  filterPillText: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
-  },
-  recordCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#181A20',
-    borderColor: '#262A34',
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
-  },
-  recordCardMain: {
-    flex: 1,
-  },
-  recordCardHeader: {
-    marginBottom: 8,
-  },
-  recordExerciseName: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  recordBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  recordPill: {
-    backgroundColor: '#20242E',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  recordPillText: {
-    color: '#9CA3AF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  recordGymBadge: {
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  recordGymText: {
-    color: '#38BDF8',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  recordMetricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 6,
-  },
-  recordMetricBox: {
-    backgroundColor: '#20242E',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  recordMetricLabel: {
-    color: '#9CA3AF',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    marginBottom: 1,
-  },
-  recordMetricVal: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  recordDateText: {
-    color: '#6B7280',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  emptyTrophyCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 36,
-    paddingHorizontal: 20,
-    backgroundColor: '#181A20',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#262A34',
-    marginTop: 8,
-  },
-  emptyTrophyTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  emptyTrophySubtitle: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  modalDetailContainer: {
-    flex: 1,
-    backgroundColor: '#0D0E12',
-    paddingTop: 54,
-  },
-  modalDetailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
-  },
-  modalDetailTitle: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '800',
-    flex: 1,
-    textAlign: 'center',
-  },
-  modalDetailScroll: {
-    flex: 1,
-  },
-  modalDetailContent: {
-    padding: 16,
-  },
-  modalDetailBadges: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  modalDetailBadge: {
-    backgroundColor: '#181A20',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#262A34',
-  },
-  modalDetailBadgeText: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    fontWeight: '600',
   },
   streakBadgesRow: {
     flexDirection: 'row',
@@ -2211,54 +1655,49 @@ const styles = StyleSheet.create({
   },
   streakBadge: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
-    backgroundColor: '#181A20',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#262A34',
-    padding: 10,
-  },
-  streakEmoji: {
-    fontSize: 18,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
+    padding: 12,
   },
   streakValue: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '800',
+    letterSpacing: -0.3,
   },
   streakLabel: {
-    color: '#6B7280',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
   },
   consistencyHeatmap: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#262A34',
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderStrong,
   },
   consistencyCol: {
     alignItems: 'center',
     gap: 6,
   },
   consistencyDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#262A34',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.surfaceHigh,
   },
   consistencyDotActive: {
-    backgroundColor: '#EF444490',
+    backgroundColor: colors.primary + '99',
   },
   consistencyDotHigh: {
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.primary,
   },
   consistencyLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 9,
     fontWeight: '600',
   },
@@ -2266,10 +1705,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 12,
@@ -2281,7 +1720,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   exerciseSelectorName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
     flex: 1,
@@ -2295,7 +1734,7 @@ const styles = StyleSheet.create({
     borderColor: '#38BDF840',
   },
   changeBadgeText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -2309,11 +1748,11 @@ const styles = StyleSheet.create({
   },
   filterGroup: {
     flexDirection: 'row',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 2,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   filterChip: {
     paddingHorizontal: 8,
@@ -2324,12 +1763,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#38BDF820',
   },
   filterChipText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
   filterChipTextActive: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontWeight: '700',
   },
   gymFilterRow: {
@@ -2339,37 +1778,37 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   gymChip: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   gymChipActive: {
     backgroundColor: '#38BDF820',
     borderColor: '#38BDF850',
   },
   gymChipText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
   gymChipTextActive: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontWeight: '700',
   },
   emptyChartBox: {
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#14171F',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   emptyChartText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 13,
     fontStyle: 'italic',
   },
@@ -2377,7 +1816,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 16,
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     overflow: 'hidden',
     marginBottom: 12,
   },
@@ -2398,7 +1837,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   zoneLabel: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -2414,25 +1853,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   distMuscleName: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'capitalize',
   },
   distPercentage: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   distBarTrack: {
     height: 6,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 3,
     overflow: 'hidden',
   },
   distBarFill: {
     height: '100%',
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warning,
     borderRadius: 3,
   },
   breakdownHeaderRow: {
@@ -2450,7 +1889,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   breakdownTitleText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -2463,21 +1902,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   breakdownChipActive: {
     backgroundColor: '#38BDF820',
-    borderColor: '#38BDF8',
+    borderColor: colors.primary,
   },
   breakdownChipText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
   breakdownChipTextActive: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontWeight: '700',
   },
   toolHeaderBetween: {
@@ -2493,11 +1932,11 @@ const styles = StyleSheet.create({
   },
   distToggleWrap: {
     flexDirection: 'row',
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 8,
     padding: 2,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   distToggleBtn: {
     paddingHorizontal: 8,
@@ -2508,12 +1947,85 @@ const styles = StyleSheet.create({
     backgroundColor: '#F59E0B25',
   },
   distToggleText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
   distToggleTextActive: {
-    color: '#F59E0B',
+    color: colors.warning,
     fontWeight: '700',
   },
+  sectionSwitcher: {
+    marginTop: 14,
+  },
+  streakIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupHeading: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginTop: 12,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  listCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+  },
+  listRowDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderStrong,
+  },
+  listRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: colors.surfaceHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listRowText: {
+    flex: 1,
+  },
+  listRowTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  listRowSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  dataFootnote: {
+    color: colors.textFaint,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 14,
+    paddingHorizontal: 24,
+    lineHeight: 17,
+  },
+  volumeBarEmpty: {
+    backgroundColor: colors.surfaceHigh,
+  },
 });
+
+/** Memoized so hidden (kept-alive) tabs skip re-rendering when the app shell updates. */
+export const AnalyticsScreen = React.memo(AnalyticsScreenInner);

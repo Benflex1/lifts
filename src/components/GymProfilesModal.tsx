@@ -20,6 +20,7 @@ import {
 } from '../workout/gym-profile';
 import { useDialog } from '../context/DialogContext';
 import { GymPickerModal } from './GymPickerModal';
+import { colors } from '../theme';
 
 export interface GymProfilesModalProps {
   visible: boolean;
@@ -173,7 +174,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                 accessibilityLabel="Close gym management"
                 hitSlop={8}
               >
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -185,7 +186,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                   value={name}
                   onChangeText={setName}
                   placeholder="Gym name"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                   maxLength={80}
                   accessibilityLabel="Gym name"
                   returnKeyType="done"
@@ -205,7 +206,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                         accessibilityState={{ selected }}
                         disabled={saving}
                       >
-                        {selected && <Check size={18} color="#FFFFFF" />}
+                        {selected && <Check size={18} color={colors.text} />}
                       </TouchableOpacity>
                     );
                   })}
@@ -229,7 +230,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                     accessibilityRole="button"
                     accessibilityLabel={editingGymId ? 'Save gym changes' : 'Add gym'}
                   >
-                    {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Plus size={18} color="#FFFFFF" />}
+                    {saving ? <ActivityIndicator size="small" color={colors.text} /> : <Plus size={18} color={colors.text} />}
                     <Text style={styles.primaryButtonText}>{editingGymId ? 'Save Changes' : 'Add Gym'}</Text>
                   </TouchableOpacity>
                 </View>
@@ -237,7 +238,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
 
               <Text style={styles.listTitle}>Your Gyms</Text>
               {loading ? (
-                <ActivityIndicator style={styles.loader} size="small" color="#3B82F6" />
+                <ActivityIndicator style={styles.loader} size="small" color={colors.primary} />
               ) : gyms.length === 0 ? (
                 <Text style={styles.emptyText}>No gyms available.</Text>
               ) : (
@@ -260,7 +261,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                           accessibilityRole="button"
                           accessibilityLabel={`Set ${gym.name} as default gym`}
                         >
-                          <Check size={18} color="#10B981" />
+                          <Check size={18} color={colors.success} />
                         </TouchableOpacity>
                       )}
                       <TouchableOpacity
@@ -270,7 +271,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                         accessibilityRole="button"
                         accessibilityLabel={`Edit ${gym.name}`}
                       >
-                        <Edit2 size={18} color="#9CA3AF" />
+                        <Edit2 size={18} color={colors.textSecondary} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.actionButton}
@@ -290,8 +291,8 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                           size={18}
                           color={
                             gyms.length < 2 || isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)
-                              ? '#4B5563'
-                              : '#EF4444'
+                              ? colors.textFaint
+                              : colors.danger
                           }
                         />
                       </TouchableOpacity>
@@ -333,8 +334,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
-    backgroundColor: '#181A20',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -343,7 +344,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '700',
   },
@@ -353,17 +354,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   form: {
     padding: 14,
     marginBottom: 20,
     borderRadius: 12,
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
   },
   formTitle: {
     marginBottom: 10,
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -371,16 +372,16 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     borderRadius: 8,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   paletteLabel: {
     marginTop: 14,
     marginBottom: 8,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
   },
   palette: {
@@ -398,7 +399,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
   },
   colorButtonSelected: {
-    borderColor: '#FFFFFF',
+    borderColor: colors.text,
   },
   formActions: {
     flexDirection: 'row',
@@ -414,10 +415,10 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     borderRadius: 9,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -426,16 +427,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     borderRadius: 9,
-    backgroundColor: '#374151',
+    backgroundColor: colors.control,
   },
   secondaryButtonText: {
-    color: '#E5E7EB',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
   listTitle: {
     marginBottom: 10,
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -444,7 +445,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     paddingVertical: 24,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -455,9 +456,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     borderRadius: 10,
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
   },
   swatch: {
     width: 18,
@@ -469,18 +470,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   gymName: {
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '600',
   },
   defaultText: {
     marginTop: 2,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   activeWorkoutText: {
     marginTop: 2,
-    color: '#F59E0B',
+    color: colors.warning,
     fontSize: 12,
   },
   rowActions: {
@@ -493,6 +494,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
 });

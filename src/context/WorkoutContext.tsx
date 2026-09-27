@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Platform, AppState, AppStateStatus, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
@@ -57,8 +57,6 @@ interface WorkoutContextType {
   activeWorkout: Workout | null;
   isWorkingOut: boolean;
   isMinimized: boolean;
-  elapsedSeconds: number;
-  restTimer: RestTimerState;
   draftAvailable: Workout | null;
   availableDrafts: WorkoutDraft[];
   isDraftModalOpen: boolean;
@@ -127,6 +125,32 @@ export async function finishWorkoutWithHealthSync(
 }
 
 const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
+
+// The workout clock and rest countdown tick several times per second. They live in their own
+// contexts so that only the components displaying them re-render on each tick, instead of every
+// consumer of the (large) workout context.
+const WorkoutClockContext = createContext<number>(0);
+const IDLE_REST_TIMER: RestTimerState = { isActive: false, remainingSeconds: 0, totalSeconds: 0, endsAt: null };
+const RestTimerContext = createContext<RestTimerState>(IDLE_REST_TIMER);
+const RestTimerActiveContext = createContext<boolean>(false);
+
+// Narrow slices for screens that only need a small part of the workout state. Subscribing to
+// these instead of the full context keeps hidden tabs from re-rendering on every set change.
+type WorkoutActions = Omit<
+  WorkoutContextType,
+  | 'activeWorkout'
+  | 'isWorkingOut'
+  | 'isMinimized'
+  | 'draftAvailable'
+  | 'availableDrafts'
+  | 'gyms'
+  | 'activeGym'
+  | 'isDraftModalOpen'
+  | 'expandedExercises'
+>;
+const WorkoutActionsContext = createContext<WorkoutActions | undefined>(undefined);
+const WorkoutGymsContext = createContext<{ gyms: Gym[]; activeGym: Gym | null }>({ gyms: [], activeGym: null });
+const IsWorkingOutContext = createContext<boolean>(false);
 
 export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const controllerRef = useRef<SessionController | null>(null);
@@ -1244,59 +1268,105 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, 0);
   };
 
+  const actions = {
+    refreshGyms,
+    openDraftModal: () => setIsDraftModalOpen(true),
+    closeDraftModal: () => setIsDraftModalOpen(false),
+    resumeDraft,
+    discardDraft,
+    startWorkout,
+    setActiveGym,
+    minimizeWorkout,
+    maximizeWorkout,
+    addExerciseToWorkout,
+    addExercisesToWorkout,
+    removeExerciseFromWorkout,
+    moveExercise,
+    moveExerciseToIndex,
+    swapExercise,
+    addSet,
+    insertWarmupSets,
+    linkSuperset,
+    unlinkSuperset,
+    setSupersetGroup,
+    removeSet,
+    moveSet,
+    updateSet,
+    updateExerciseNotes,
+    updateExerciseRestTimer,
+    updateWorkoutDuration,
+    toggleSetComplete,
+    startRestTimer,
+    adjustRestTimer,
+    stopRestTimer,
+    finishWorkout,
+    cancelWorkout,
+    toggleExerciseExpanded,
+    setExerciseExpanded,
+    expandAllExercises,
+    collapseAllExercises,
+  };
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+
+  // Stable proxies: consumers get function identities that never change, while each call still
+  // reaches the latest implementation (and therefore the latest state it closes over).
+  const stableActions = useMemo(() => {
+    const proxies = {} as typeof actions;
+    (Object.keys(actionsRef.current) as (keyof typeof actions)[]).forEach((key) => {
+      (proxies as Record<string, unknown>)[key] = (...args: unknown[]) =>
+        (actionsRef.current[key] as (...a: unknown[]) => unknown)(...args);
+    });
+    return proxies;
+  }, []);
+
+  const isWorkingOut = sessionState.phase === 'active' && sessionState.workout !== null;
+  const draftAvailable = availableDrafts.length > 0 ? availableDrafts[0].workout : null;
+
+  const gymsValue = useMemo(() => ({ gyms, activeGym }), [gyms, activeGym]);
+
+  const contextValue = useMemo<WorkoutContextType>(
+    () => ({
+      activeWorkout: sessionState.workout,
+      isWorkingOut,
+      isMinimized,
+      draftAvailable,
+      availableDrafts,
+      gyms,
+      activeGym,
+      isDraftModalOpen,
+      expandedExercises,
+      ...stableActions,
+    }),
+    [
+      sessionState.workout,
+      isWorkingOut,
+      isMinimized,
+      draftAvailable,
+      availableDrafts,
+      gyms,
+      activeGym,
+      isDraftModalOpen,
+      expandedExercises,
+      stableActions,
+    ],
+  );
+
   return (
-    <WorkoutContext.Provider
-      value={{
-        activeWorkout: sessionState.workout,
-        isWorkingOut: sessionState.phase === 'active' && sessionState.workout !== null,
-        isMinimized,
-        elapsedSeconds,
-        restTimer,
-        draftAvailable: availableDrafts.length > 0 ? availableDrafts[0].workout : null,
-        availableDrafts,
-        gyms,
-        activeGym,
-        refreshGyms,
-        isDraftModalOpen,
-        openDraftModal: () => setIsDraftModalOpen(true),
-        closeDraftModal: () => setIsDraftModalOpen(false),
-        resumeDraft,
-        discardDraft,
-        startWorkout,
-        setActiveGym,
-        minimizeWorkout,
-        maximizeWorkout,
-        addExerciseToWorkout,
-        addExercisesToWorkout,
-        removeExerciseFromWorkout,
-        moveExercise,
-        moveExerciseToIndex,
-        swapExercise,
-        addSet,
-        insertWarmupSets,
-        linkSuperset,
-        unlinkSuperset,
-        setSupersetGroup,
-        removeSet,
-        moveSet,
-        updateSet,
-        updateExerciseNotes,
-        updateExerciseRestTimer,
-        updateWorkoutDuration,
-        toggleSetComplete,
-        startRestTimer,
-        adjustRestTimer,
-        stopRestTimer,
-        finishWorkout,
-        cancelWorkout,
-        expandedExercises,
-        toggleExerciseExpanded,
-        setExerciseExpanded,
-        expandAllExercises,
-        collapseAllExercises,
-      }}
-    >
-      {children}
+    <WorkoutContext.Provider value={contextValue}>
+      <WorkoutActionsContext.Provider value={stableActions}>
+        <WorkoutGymsContext.Provider value={gymsValue}>
+          <IsWorkingOutContext.Provider value={isWorkingOut}>
+            <WorkoutClockContext.Provider value={elapsedSeconds}>
+              <RestTimerContext.Provider value={restTimer}>
+                <RestTimerActiveContext.Provider value={restTimer.isActive}>
+                  {children}
+                </RestTimerActiveContext.Provider>
+              </RestTimerContext.Provider>
+            </WorkoutClockContext.Provider>
+          </IsWorkingOutContext.Provider>
+        </WorkoutGymsContext.Provider>
+      </WorkoutActionsContext.Provider>
     </WorkoutContext.Provider>
   );
 };
@@ -1308,3 +1378,27 @@ export const useWorkout = () => {
   }
   return context;
 };
+
+/** Seconds elapsed in the active workout. Re-renders the caller once per second. */
+export const useWorkoutClock = () => useContext(WorkoutClockContext);
+
+/** Current rest countdown state. Re-renders the caller on every countdown tick. */
+export const useRestTimer = () => useContext(RestTimerContext);
+
+/** Whether a rest countdown is running. Only re-renders the caller when the timer starts or stops. */
+export const useIsRestTimerActive = () => useContext(RestTimerActiveContext);
+
+/** Workout actions only. The returned object never changes, so callers never re-render from it. */
+export const useWorkoutActions = () => {
+  const context = useContext(WorkoutActionsContext);
+  if (!context) {
+    throw new Error('useWorkoutActions must be used within a WorkoutProvider');
+  }
+  return context;
+};
+
+/** Configured gyms and the active one. Re-renders only when the gym list or selection changes. */
+export const useWorkoutGyms = () => useContext(WorkoutGymsContext);
+
+/** Whether a workout is in progress. Re-renders only when a workout starts or ends. */
+export const useIsWorkingOut = () => useContext(IsWorkingOutContext);

@@ -128,6 +128,8 @@ export interface TrophyRoomOptions {
   selectedGymId?: string | null;
   categoryFilter?: string | null;
   searchQuery?: string;
+  /** Rank every record's podium to count gold/silver/bronze. Costly; skip when not displayed. */
+  includeMedalCounts?: boolean;
 }
 
 /**
@@ -307,7 +309,7 @@ export function buildTrophyRoomSummary(
   let totalSilver = 0;
   let totalBronze = 0;
 
-  for (const record of filteredRecords) {
+  for (const record of options?.includeMedalCounts === false ? [] : filteredRecords) {
     const exerciseDef = exerciseMap.get(record.exerciseId);
     const scope = scopesByExercise?.[record.exerciseId];
     const currentGymId = options?.selectedGymId || gyms[0]?.id || 'default-gym';

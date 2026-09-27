@@ -11,6 +11,7 @@ import {
 import { Check, MapPin, X } from 'lucide-react-native';
 import { Gym } from '../types';
 import { resolveInitialStartGymId } from '../workout/gym-session';
+import { colors } from '../theme';
 
 export interface WorkoutStartModalProps {
   visible: boolean;
@@ -82,13 +83,13 @@ export function WorkoutStartModal({
               disabled={isStarting}
               hitSlop={8}
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.sectionHeader}>
             <View style={styles.sectionIcon}>
-              <MapPin size={16} color="#38BDF8" />
+              <MapPin size={16} color={colors.primary} />
             </View>
             <View style={styles.sectionCopy}>
               <Text style={styles.sectionTitle}>Where are you training?</Text>
@@ -117,7 +118,7 @@ export function WorkoutStartModal({
                     <Text style={styles.gymName}>{gym.name}</Text>
                     {gym.isDefault && <Text style={styles.defaultText}>Default gym</Text>}
                   </View>
-                  {selected && <Check size={20} color="#38BDF8" />}
+                  {selected && <Check size={20} color={colors.primary} />}
                 </TouchableOpacity>
               );
             })}
@@ -135,7 +136,7 @@ export function WorkoutStartModal({
             accessibilityState={{ disabled: !selectedGym || isStarting, busy: isStarting }}
           >
             {isStarting ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.text} />
             ) : (
               <Text style={styles.startButtonText}>Start Workout</Text>
             )}
@@ -170,8 +171,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2D3748',
-    backgroundColor: '#181A20',
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -184,13 +185,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   title: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 22,
     fontWeight: '800',
   },
   workoutName: {
     marginTop: 4,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -214,19 +215,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
     borderRadius: 9,
-    backgroundColor: '#0C4A6E',
+    backgroundColor: colors.primarySoft,
   },
   sectionCopy: {
     flex: 1,
   },
   sectionTitle: {
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
   },
   sectionDescription: {
     marginTop: 3,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -239,12 +240,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     borderRadius: 12,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   gymRowSelected: {
-    borderColor: '#38BDF8',
+    borderColor: colors.primary,
     backgroundColor: 'rgba(56, 189, 248, 0.12)',
   },
   swatch: {
@@ -257,18 +258,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   gymName: {
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '600',
   },
   defaultText: {
     marginTop: 2,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   emptyText: {
     paddingVertical: 18,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -278,10 +279,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 20,
     borderRadius: 12,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   startButtonText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '800',
   },
@@ -295,7 +296,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cancelButtonText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },

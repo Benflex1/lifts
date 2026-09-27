@@ -7,6 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors } from '../theme';
 
 export interface ConfirmOptions {
   title: string;
@@ -185,21 +186,21 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     padding: 24,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 8,
   },
   message: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: 24,
   },
@@ -212,10 +213,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   cancelText: {
-    color: '#E5E7EB',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -229,18 +230,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   primaryBtn: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
   },
   primaryText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },
   destructiveBtn: {
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.danger,
   },
   destructiveText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
   },

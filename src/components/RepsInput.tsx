@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TextInput, StyleProp, TextStyle } from 'react-native';
 import { sanitizeRepsInput } from '../workout/sets';
+import { colors } from '../theme';
 
 interface Props {
   value: number;
@@ -90,7 +91,7 @@ export const RepsInput: React.FC<Props> = ({
       returnKeyType="done"
       value={shownText}
       placeholder={placeholder !== undefined ? placeholder : '-'}
-      placeholderTextColor="#6B7280"
+      placeholderTextColor={colors.textMuted}
       autoCapitalize="none"
       autoCorrect={false}
       spellCheck={false}

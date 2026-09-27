@@ -28,6 +28,7 @@ import {
 import { Exercise, Gym } from '../types';
 import { CsvImportPreview, ExerciseAssignmentItem } from '../utils/importer/types';
 import { ExercisePickerModal } from './ExercisePickerModal';
+import { colors } from '../theme';
 
 interface CsvImportModalProps {
   visible: boolean;
@@ -96,7 +97,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
-              <FileSpreadsheet size={22} color="#3B82F6" />
+              <FileSpreadsheet size={22} color={colors.primary} />
               <Text style={styles.headerTitle}>Import Workouts</Text>
             </View>
             <TouchableOpacity
@@ -106,7 +107,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               accessibilityRole="button"
               accessibilityLabel="Close import modal"
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -128,7 +129,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             {/* Metrics Overview */}
             <View style={styles.metricsGrid}>
               <View style={styles.metricBox}>
-                <Calendar size={18} color="#38BDF8" />
+                <Calendar size={18} color={colors.primary} />
                 <Text style={styles.metricVal}>
                   {skipDuplicates ? preview.newWorkoutsCount : preview.totalWorkouts}
                 </Text>
@@ -136,13 +137,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               </View>
 
               <View style={styles.metricBox}>
-                <Layers size={18} color="#10B981" />
+                <Layers size={18} color={colors.success} />
                 <Text style={styles.metricVal}>{preview.totalSets}</Text>
                 <Text style={styles.metricLabel}>Total Sets</Text>
               </View>
 
               <View style={styles.metricBox}>
-                <Dumbbell size={18} color="#F59E0B" />
+                <Dumbbell size={18} color={colors.warning} />
                 <Text style={styles.metricVal}>{assignments.length}</Text>
                 <Text style={styles.metricLabel}>Exercises</Text>
               </View>
@@ -151,7 +152,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             {/* Date Span */}
             {preview.dateRange && (
               <View style={styles.dateSpanCard}>
-                <Calendar size={16} color="#9CA3AF" />
+                <Calendar size={16} color={colors.textSecondary} />
                 <Text style={styles.dateSpanText}>
                   Date span: {preview.dateRange.start} → {preview.dateRange.end}
                 </Text>
@@ -161,7 +162,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             {/* Exercise Review & Assignment Card */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeaderRow}>
-                <Dumbbell size={18} color="#3B82F6" />
+                <Dumbbell size={18} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Exercise Library Assignment</Text>
               </View>
               <Text style={styles.sectionSubtitle}>
@@ -170,9 +171,9 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
 
               {/* Status Pills */}
               <View style={styles.mappingPillRow}>
-                <View style={[styles.statusPill, { backgroundColor: '#132A1F', borderColor: '#1B4732' }]}>
-                  <CheckCircle2 size={14} color="#10B981" />
-                  <Text style={[styles.statusPillText, { color: '#10B981' }]}>
+                <View style={[styles.statusPill, { backgroundColor: colors.successSoft, borderColor: colors.successSoft }]}>
+                  <CheckCircle2 size={14} color={colors.success} />
+                  <Text style={[styles.statusPillText, { color: colors.success }]}>
                     {preview.matchedExercisesCount} Matched
                   </Text>
                 </View>
@@ -181,15 +182,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                   style={[
                     styles.statusPill,
                     unassignedCustomCount > 0
-                      ? { backgroundColor: '#2B2014', borderColor: '#5C3E1B' }
-                      : { backgroundColor: '#1E293B', borderColor: '#334155' },
+                      ? { backgroundColor: colors.warningSoft, borderColor: colors.warningSoft }
+                      : { backgroundColor: colors.surfaceAlt, borderColor: colors.borderStrong },
                   ]}
                 >
-                  <Plus size={14} color={unassignedCustomCount > 0 ? '#F59E0B' : '#94A3B8'} />
+                  <Plus size={14} color={unassignedCustomCount > 0 ? colors.warning : colors.textSecondary} />
                   <Text
                     style={[
                       styles.statusPillText,
-                      { color: unassignedCustomCount > 0 ? '#F59E0B' : '#94A3B8' },
+                      { color: unassignedCustomCount > 0 ? colors.warning : colors.textSecondary },
                     ]}
                   >
                     {preview.newCustomExercisesCount} Custom
@@ -207,13 +208,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                     ]}
                     onPress={() => setAssignmentFilter('needs_review')}
                   >
-                    <AlertTriangle size={13} color={assignmentFilter === 'needs_review' ? '#FFFFFF' : '#F59E0B'} />
+                    <AlertTriangle size={13} color={assignmentFilter === 'needs_review' ? colors.text : colors.warning} />
                     <Text
                       style={[
                         styles.filterChipText,
                         assignmentFilter === 'needs_review'
                           ? styles.filterChipTextActive
-                          : { color: '#F59E0B' },
+                          : { color: colors.warning },
                       ]}
                     >
                       Needs Review ({unassignedCustomCount})
@@ -291,14 +292,14 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                         <View style={styles.assignmentTargetRow}>
                           {isCustom ? (
                             <View style={styles.customTargetBadge}>
-                              <Plus size={13} color="#F59E0B" />
+                              <Plus size={13} color={colors.warning} />
                               <Text style={styles.customTargetText}>
                                 Will create as Custom Exercise ({item.assignedExercise.equipment || 'other'})
                               </Text>
                             </View>
                           ) : (
                             <View style={styles.matchedTargetBadge}>
-                              <CheckCircle2 size={13} color="#10B981" />
+                              <CheckCircle2 size={13} color={colors.success} />
                               <Text style={styles.matchedTargetText} numberOfLines={1}>
                                 {item.assignedExercise.name}
                               </Text>
@@ -321,12 +322,12 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                                 accessibilityRole="button"
                                 accessibilityLabel={`Assign ${item.rawName} to existing library exercise`}
                               >
-                                <Search size={14} color="#FFFFFF" />
+                                <Search size={14} color={colors.text} />
                                 <Text style={styles.actionBtnPrimaryText}>Select Library Exercise</Text>
                               </TouchableOpacity>
 
                               <View style={styles.actionBtnStatic}>
-                                <CheckCircle2 size={13} color="#9CA3AF" />
+                                <CheckCircle2 size={13} color={colors.textSecondary} />
                                 <Text style={styles.actionBtnStaticText}>Create Custom</Text>
                               </View>
                             </>
@@ -338,7 +339,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                                 accessibilityRole="button"
                                 accessibilityLabel={`Change assignment for ${item.rawName}`}
                               >
-                                <Edit3 size={13} color="#93C5FD" />
+                                <Edit3 size={13} color={colors.primaryLight} />
                                 <Text style={styles.actionBtnSecondaryText}>Change Exercise</Text>
                               </TouchableOpacity>
 
@@ -349,7 +350,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                                   accessibilityRole="button"
                                   accessibilityLabel={`Create ${item.rawName} as custom exercise instead`}
                                 >
-                                  <Plus size={13} color="#9CA3AF" />
+                                  <Plus size={13} color={colors.textSecondary} />
                                   <Text style={styles.actionBtnSubtleText}>Make Custom</Text>
                                 </TouchableOpacity>
                               )}
@@ -367,7 +368,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             {gyms.length > 0 && (
               <View style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
-                  <MapPin size={18} color="#3B82F6" />
+                  <MapPin size={18} color={colors.primary} />
                   <Text style={styles.sectionTitle}>Assign To Gym Profile</Text>
                 </View>
                 <Text style={styles.sectionSubtitle}>
@@ -386,7 +387,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                         onPress={() => onSelectGymId(gym.id)}
                         disabled={isImporting}
                       >
-                        <View style={[styles.gymColorDot, { backgroundColor: gym.color || '#3B82F6' }]} />
+                        <View style={[styles.gymColorDot, { backgroundColor: gym.color || colors.primary }]} />
                         <Text
                           style={[
                             styles.gymOptionText,
@@ -395,7 +396,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                         >
                           {gym.name} {gym.isDefault ? '(Default)' : ''}
                         </Text>
-                        {isSelected && <CheckCircle2 size={16} color="#3B82F6" />}
+                        {isSelected && <CheckCircle2 size={16} color={colors.primary} />}
                       </TouchableOpacity>
                     );
                   })}
@@ -407,7 +408,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
             {preview.duplicateWorkoutsCount > 0 && (
               <View style={styles.duplicateCard}>
                 <View style={styles.duplicateHeader}>
-                  <AlertTriangle size={18} color="#F59E0B" />
+                  <AlertTriangle size={18} color={colors.warning} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.duplicateTitle}>
                       {preview.duplicateWorkoutsCount} Existing Workouts Found
@@ -420,8 +421,8 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                     value={skipDuplicates}
                     onValueChange={onToggleSkipDuplicates}
                     disabled={isImporting}
-                    trackColor={{ false: '#374151', true: '#2563EB' }}
-                    thumbColor={skipDuplicates ? '#FFFFFF' : '#9CA3AF'}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={skipDuplicates ? colors.text : colors.textSecondary}
                   />
                 </View>
                 <Text style={styles.duplicateHint}>
@@ -470,13 +471,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               disabled={isImporting || (skipDuplicates && preview.newWorkoutsCount === 0)}
             >
               {isImporting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={colors.text} />
               ) : (
                 <>
                   <Text style={styles.confirmBtnText}>
                     Import {skipDuplicates ? preview.newWorkoutsCount : preview.totalWorkouts} Workouts
                   </Text>
-                  <ArrowRight size={18} color="#FFFFFF" />
+                  <ArrowRight size={18} color={colors.text} />
                 </>
               )}
             </TouchableOpacity>
@@ -510,7 +511,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '92%',
@@ -523,7 +524,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -533,12 +534,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   closeBtn: {
     padding: 6,
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   body: {
     flexShrink: 1,
@@ -548,11 +549,11 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   sourceCard: {
-    backgroundColor: '#1F222A',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#2D323E',
+    borderColor: colors.borderStrong,
   },
   sourceInfo: {
     flexDirection: 'row',
@@ -560,20 +561,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   fileNameText: {
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
     flex: 1,
     marginRight: 10,
   },
   sourceBadge: {
-    backgroundColor: '#1E3A8A',
+    backgroundColor: colors.primarySoft,
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 8,
   },
   sourceBadgeText: {
-    color: '#93C5FD',
+    color: colors.primaryLight,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -583,21 +584,21 @@ const styles = StyleSheet.create({
   },
   metricBox: {
     flex: 1,
-    backgroundColor: '#1F222A',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2D323E',
+    borderColor: colors.borderStrong,
     gap: 4,
   },
   metricVal: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '800',
   },
   metricLabel: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -605,20 +606,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     padding: 10,
     borderRadius: 8,
   },
   dateSpanText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   sectionCard: {
-    backgroundColor: '#1F222A',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#2D323E',
+    borderColor: colors.borderStrong,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -627,13 +628,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 4,
   },
   sectionSubtitle: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     marginBottom: 10,
     lineHeight: 18,
@@ -669,25 +670,25 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#2D323E',
+    borderColor: colors.borderStrong,
   },
   filterChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterChipActiveWarning: {
-    backgroundColor: '#D97706',
-    borderColor: '#F59E0B',
+    backgroundColor: colors.warning,
+    borderColor: colors.warning,
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   filterChipTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
   },
   assignmentList: {
@@ -697,25 +698,25 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 8,
   },
   emptyFilterText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     textAlign: 'center',
   },
   assignmentCard: {
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 10,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     gap: 8,
   },
   assignmentCardWarning: {
-    borderColor: '#78350F',
-    backgroundColor: '#1C160F',
+    borderColor: colors.warningSoft,
+    backgroundColor: colors.warningSoft,
   },
   assignmentTopRow: {
     flexDirection: 'row',
@@ -723,17 +724,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   assignmentRawName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
     flex: 1,
     marginRight: 10,
   },
   assignmentStatsBadge: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: 4,
@@ -749,19 +750,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   matchedTargetText: {
-    color: '#10B981',
+    color: colors.success,
     fontSize: 13,
     fontWeight: '600',
     flexShrink: 1,
   },
   equipmentTag: {
-    backgroundColor: '#064E3B',
+    backgroundColor: colors.successSoft,
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: 4,
   },
   equipmentTagText: {
-    color: '#6EE7B7',
+    color: colors.successLight,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -773,7 +774,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customTargetText: {
-    color: '#F59E0B',
+    color: colors.warning,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -788,14 +789,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
     minHeight: 38,
   },
   actionBtnPrimaryText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -805,16 +806,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
     minHeight: 38,
   },
   actionBtnSecondaryText: {
-    color: '#93C5FD',
+    color: colors.primaryLight,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -823,14 +824,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
     minHeight: 38,
   },
   actionBtnSubtleText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -843,7 +844,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   actionBtnStaticText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -855,14 +856,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 10,
     borderRadius: 8,
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     gap: 10,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   gymOptionSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#1E293B',
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceAlt,
   },
   gymColorDot: {
     width: 10,
@@ -870,21 +871,21 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   gymOptionText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 13,
     fontWeight: '500',
     flex: 1,
   },
   gymOptionTextSelected: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
   },
   duplicateCard: {
-    backgroundColor: '#261F17',
+    backgroundColor: colors.warningSoft,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#4A3B22',
+    borderColor: colors.warningSoft,
   },
   duplicateHeader: {
     flexDirection: 'row',
@@ -892,17 +893,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   duplicateTitle: {
-    color: '#F59E0B',
+    color: colors.warning,
     fontSize: 13,
     fontWeight: '700',
   },
   duplicateSub: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 11,
     marginTop: 2,
   },
   duplicateHint: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     marginTop: 8,
   },
@@ -912,20 +913,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#2D323E',
+    borderBottomColor: colors.borderStrong,
   },
   sampleName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '600',
   },
   sampleMeta: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
   sampleVol: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -933,19 +934,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 18,
     borderTopWidth: 1,
-    borderTopColor: '#262A34',
+    borderTopColor: colors.border,
     gap: 12,
   },
   cancelBtn: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 10,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelBtnText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontWeight: '600',
     fontSize: 14,
   },
@@ -954,17 +955,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 14,
     borderRadius: 10,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   confirmBtnDisabled: {
-    backgroundColor: '#374151',
+    backgroundColor: colors.control,
     opacity: 0.6,
   },
   confirmBtnText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
     fontSize: 14,
   },

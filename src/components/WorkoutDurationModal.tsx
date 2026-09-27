@@ -15,6 +15,7 @@ import {
   parseDurationInput,
   estimateWorkoutDuration,
 } from '../workout/duration';
+import { colors } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -78,9 +79,9 @@ export const WorkoutDurationModal: React.FC<Props> = ({
           <View style={styles.header}>
             <View style={styles.headerIconCircle}>
               {showSafetyPrompt ? (
-                <AlertCircle size={22} color="#F59E0B" />
+                <AlertCircle size={22} color={colors.warning} />
               ) : (
-                <Clock size={22} color="#38BDF8" />
+                <Clock size={22} color={colors.primary} />
               )}
             </View>
             <View style={styles.headerText}>
@@ -95,7 +96,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -108,7 +109,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Auto-estimate workout duration"
               >
-                <Sparkles size={18} color="#000000" />
+                <Sparkles size={18} color={colors.black} />
                 <View style={styles.buttonTextGroup}>
                   <Text style={styles.estimatePrimaryText}>Auto-estimate Duration</Text>
                   <Text style={styles.estimateSubText}>
@@ -123,7 +124,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Change workout duration manually"
               >
-                <Clock size={18} color="#38BDF8" />
+                <Clock size={18} color={colors.primary} />
                 <Text style={styles.optionButtonText}>Enter Custom Time</Text>
               </TouchableOpacity>
 
@@ -133,7 +134,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Keep recorded duration"
               >
-                <Check size={18} color="#9CA3AF" />
+                <Check size={18} color={colors.textSecondary} />
                 <Text style={styles.optionButtonSecondaryText}>
                   Keep {formatDuration(initialDurationSeconds)}
                 </Text>
@@ -151,7 +152,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                     value={hours}
                     onChangeText={(text) => setHours(text.replace(/[^0-9]/g, ''))}
                     placeholder="0"
-                    placeholderTextColor="#6B7280"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
                     maxLength={3}
                   />
@@ -166,7 +167,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                     value={minutes}
                     onChangeText={(text) => setMinutes(text.replace(/[^0-9]/g, ''))}
                     placeholder="0"
-                    placeholderTextColor="#6B7280"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
                     maxLength={2}
                   />
@@ -185,7 +186,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                   accessibilityRole="button"
                   accessibilityLabel="Auto-calculate duration suggestion"
                 >
-                  <Sparkles size={14} color="#F59E0B" />
+                  <Sparkles size={14} color={colors.warning} />
                   <Text style={styles.estimateChipText}>
                     Estimate from sets: {formatDuration(estimatedDuration)}
                   </Text>
@@ -197,7 +198,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCustom}>
-                  <Check size={18} color="#000000" />
+                  <Check size={18} color={colors.black} />
                   <Text style={styles.saveBtnText}>Save Time</Text>
                 </TouchableOpacity>
               </View>
@@ -220,10 +221,10 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     padding: 20,
   },
   header: {
@@ -236,7 +237,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -246,12 +247,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   safetyOptions: {
@@ -262,7 +263,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warning,
     borderRadius: 12,
     padding: 14,
   },
@@ -270,12 +271,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   estimatePrimaryText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 15,
     fontWeight: '800',
   },
   estimateSubText: {
-    color: '#3F2204',
+    color: colors.warningSoft,
     fontSize: 12,
     fontWeight: '600',
     marginTop: 1,
@@ -284,14 +285,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     borderRadius: 12,
     padding: 14,
   },
   optionButtonText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -299,12 +300,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     padding: 12,
   },
   optionButtonSecondaryText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -325,23 +326,23 @@ const styles = StyleSheet.create({
   timeInput: {
     width: 80,
     height: 56,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151',
-    color: '#FFFFFF',
+    borderColor: colors.control,
+    color: colors.text,
     fontSize: 26,
     fontWeight: '800',
     textAlign: 'center',
   },
   inputLabel: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   timeSeparator: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 28,
     fontWeight: '800',
     paddingBottom: 18,
@@ -361,7 +362,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   estimateChipText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -377,10 +378,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
   },
   cancelBtnText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -390,12 +391,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     paddingVertical: 12,
     borderRadius: 12,
   },
   saveBtnText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 14,
     fontWeight: '800',
   },

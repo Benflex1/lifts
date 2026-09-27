@@ -26,12 +26,14 @@ import { ExercisePodiumView } from './ExercisePodiumView';
 import { ProgressionCurveView } from './ProgressionCurveView';
 import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
 import { calculate1RM } from '../utils/calculator';
-import { ExerciseVisual, EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
+import { EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
+import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { openExerciseInstructionLink } from '../utils/exercise-links';
 import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
 import { getExerciseVisual } from '../utils/exercise-media';
 import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
+import { colors } from '../theme';
 
 export interface ExerciseDetailModalProps {
   visible: boolean;
@@ -213,32 +215,21 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     });
   };
 
-  const renderStatsCard = (label: string, stats: DualExerciseStats['global']) => (
+  const renderStatsCard = (label: string | null, stats: DualExerciseStats['global']) => (
     <View style={styles.statsCard}>
-      <Text style={styles.statsTierTitle}>{label}</Text>
+      {label ? <Text style={styles.statsTierTitle}>{label}</Text> : null}
       <View style={styles.statsGrid}>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>HEAVIEST LIFT</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.maxWeightKg > 0 ? formatWeight(stats.maxWeightKg, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>MAX SET VOLUME</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>ESTIMATED 1RM</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.estimated1RM > 0 ? formatWeight(stats.estimated1RM, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>SESSIONS</Text>
-          <Text style={styles.statBoxValue}>{stats.sessionCount}</Text>
-        </View>
+        {[
+          ['Heaviest lift', stats.maxWeightKg > 0 ? formatWeight(stats.maxWeightKg, unit) : '—'],
+          ['Estimated 1RM', stats.estimated1RM > 0 ? formatWeight(stats.estimated1RM, unit) : '—'],
+          ['Best set volume', stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—'],
+          ['Sessions', String(stats.sessionCount)],
+        ].map(([statLabel, value]) => (
+          <View key={statLabel} style={styles.statBox}>
+            <Text style={styles.statBoxValue}>{value}</Text>
+            <Text style={styles.statBoxLabel}>{statLabel}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -257,7 +248,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             accessibilityRole="button"
             accessibilityLabel="Close exercise details"
           >
-            <X size={24} color="#9CA3AF" />
+            <X size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           <Text style={styles.detailHeaderTitle}>Exercise Details</Text>
           {exercise.isCustom && onEditCustom ? (
@@ -271,7 +262,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               accessibilityLabel="Edit custom exercise"
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Edit2 size={16} color="#38BDF8" />
+              <Edit2 size={16} color={colors.primary} />
               <Text style={styles.headerEditBtnText}>Edit</Text>
             </TouchableOpacity>
           ) : (
@@ -321,9 +312,9 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   {isPlayingAnimation ? (
-                    <Pause size={13} color="#38BDF8" />
+                    <Pause size={13} color={colors.primary} />
                   ) : (
-                    <Play size={13} color="#94A3B8" />
+                    <Play size={13} color={colors.textSecondary} />
                   )}
                   <Text
                     style={[
@@ -355,7 +346,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                         activeFrameIndex === 0 && styles.galleryPillTextActive,
                       ]}
                     >
-                      1. Setup
+                      Start
                     </Text>
                   </TouchableOpacity>
 
@@ -378,7 +369,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                         activeFrameIndex === 1 && styles.galleryPillTextActive,
                       ]}
                     >
-                      2. Contraction
+                      Peak
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -411,6 +402,21 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             </Text>
           )}
 
+          {/* Personal Bests */}
+          {exerciseStats && resolvedGym && (
+            <>
+              <Text style={styles.statsHeaderTitle}>Personal bests</Text>
+              {JSON.stringify(exerciseStats.global) === JSON.stringify(exerciseStats.gym) ? (
+                renderStatsCard(null, exerciseStats.global)
+              ) : (
+                <>
+                  {renderStatsCard('All gyms', exerciseStats.global)}
+                  {renderStatsCard(resolvedGym.name, exerciseStats.gym)}
+                </>
+              )}
+            </>
+          )}
+
           {/* All-Time Podium Showcase */}
           {exercisePodium && (
             <ExercisePodiumView
@@ -421,26 +427,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             />
           )}
 
-          {/* Personal Bests & Stats */}
-
-          {exerciseStats && resolvedGym && (
-            <>
-              <View style={styles.statsHeader}>
-                <Trophy size={16} color="#F59E0B" />
-                <Text style={styles.statsHeaderTitle}>PERSONAL BESTS & STATS</Text>
-              </View>
-              {renderStatsCard('Global', exerciseStats.global)}
-              {renderStatsCard(resolvedGym.name, exerciseStats.gym)}
-            </>
-          )}
-
           {/* Progression Curve */}
           {progressionSeries && progressionSeries.points.length > 0 && (
             <View style={styles.progressionSection}>
               <View style={styles.progressionHeaderRow}>
                 <View style={styles.progressionTitleWrap}>
-                  <TrendingUp size={16} color="#38BDF8" />
-                  <Text style={styles.progressionTitleText}>STRENGTH PROGRESSION</Text>
+                  <Text style={styles.progressionTitleText}>Progress</Text>
                 </View>
                 <View style={styles.metricTabsRow}>
                   {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => {
@@ -524,9 +516,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           {/* Chronological Workout History */}
           <View style={styles.historySection}>
             <View style={styles.historyHeader}>
-              <CalendarIcon size={16} color="#38BDF8" />
               <Text style={styles.historyHeaderTitle}>
-                {showAllHistory ? `ALL SESSIONS (${filteredHistoryWorkouts.length})` : 'RECENT SESSIONS'}
+                {showAllHistory ? `All sessions (${filteredHistoryWorkouts.length})` : 'Recent sessions'}
               </Text>
             </View>
 
@@ -662,9 +653,9 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                         : `View All ${filteredHistoryWorkouts.length} Recorded Sessions`}
                     </Text>
                     {showAllHistory ? (
-                      <ChevronUp size={16} color="#38BDF8" />
+                      <ChevronUp size={16} color={colors.primary} />
                     ) : (
-                      <ChevronDown size={16} color="#38BDF8" />
+                      <ChevronDown size={16} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 )}
@@ -708,8 +699,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           {/* Instructions */}
           <View style={styles.instructionsBox}>
             <View style={styles.instructionHeadRow}>
-              <Info size={16} color="#38BDF8" />
-              <Text style={styles.instructionsHeading}>HOW TO PERFORM</Text>
+              <Text style={styles.instructionsHeading}>How to perform</Text>
             </View>
 
             {exercise.instructions && exercise.instructions.length > 0 ? (
@@ -735,7 +725,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               accessibilityHint="Opens an external form reference"
               activeOpacity={0.75}
             >
-              <ExternalLink size={16} color="#FFFFFF" />
+              <ExternalLink size={16} color={colors.text} />
               <Text style={styles.instructionLinkButtonText}>{instructionLinkViewModel.label}</Text>
             </TouchableOpacity>
           </View>
@@ -744,7 +734,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           <View style={styles.dataToolCard}>
             <View style={styles.dataToolHeader}>
               <View style={styles.dataToolIconCircle}>
-                <ArrowRightLeft size={18} color="#F59E0B" />
+                <ArrowRightLeft size={18} color={colors.warning} />
               </View>
               <View style={styles.dataToolText}>
                 <Text style={styles.dataToolTitle}>Transfer History & Analytics</Text>
@@ -761,7 +751,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               accessibilityLabel="Transfer exercise history to another exercise"
               activeOpacity={0.75}
             >
-              <ArrowRightLeft size={15} color="#FBBF24" />
+              <ArrowRightLeft size={15} color={colors.gold} />
               <Text style={styles.dataToolButtonText}>
                 {isTransferring ? 'Transferring...' : 'Transfer History to Another Exercise'}
               </Text>
@@ -783,7 +773,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 const styles = StyleSheet.create({
   detailContainer: {
     flex: 1,
-    backgroundColor: '#0D0E12',
+    backgroundColor: colors.bg,
   },
   detailHeader: {
     flexDirection: 'row',
@@ -792,10 +782,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   detailHeaderTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -805,7 +795,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   headerEditBtnText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -823,7 +813,7 @@ const styles = StyleSheet.create({
     borderColor: '#38BDF840',
   },
   detailCustomBadgeText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -831,7 +821,7 @@ const styles = StyleSheet.create({
   detailName: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 14,
   },
   instructionLinkButton: {
@@ -839,14 +829,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     minHeight: 44,
     paddingHorizontal: 14,
     marginTop: 8,
   },
   instructionLinkButtonText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -857,99 +847,92 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   badgePrimary: {
-    backgroundColor: '#1E2638',
+    backgroundColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   badgePrimaryText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontWeight: '600',
     fontSize: 13,
     textTransform: 'capitalize',
   },
   badgeSecondary: {
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   badgeSecondaryText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     textTransform: 'capitalize',
   },
   secondaryMusclesText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 12,
     marginBottom: 20,
     textTransform: 'capitalize',
   },
   statsCard: {
-    backgroundColor: '#181A20',
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
-    marginBottom: 14,
-  },
-  statsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    borderColor: colors.border,
     marginBottom: 12,
   },
   statsHeaderTitle: {
-    color: '#F59E0B',
-    fontSize: 11,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: -0.2,
+    marginBottom: 10,
+    marginTop: 6,
   },
   statsTierTitle: {
-    color: '#D1D5DB',
-    fontSize: 12,
-    fontWeight: '800',
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 10,
+    marginLeft: 4,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
     gap: 8,
   },
   statBox: {
     flexGrow: 1,
-    flexBasis: '22%',
-    minWidth: 70,
-    backgroundColor: '#13151B',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#20242E',
+    flexBasis: '45%',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   statBoxLabel: {
-    color: '#6B7280',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    textAlign: 'center',
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   statBoxValue: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: colors.text,
+    fontSize: 20,
     fontWeight: '800',
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
   scopeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     marginBottom: 14,
   },
   scopeText: {
@@ -957,14 +940,14 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   scopeLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   scopeValue: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -972,19 +955,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 9,
-    backgroundColor: '#0284C7',
+    backgroundColor: colors.primary,
   },
   scopeButtonText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '700',
   },
   instructionsBox: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     marginTop: 6,
     marginBottom: 20,
   },
@@ -995,10 +978,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   instructionsHeading: {
-    color: '#9CA3AF',
-    fontSize: 11,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: -0.2,
   },
   stepRow: {
     flexDirection: 'row',
@@ -1010,23 +993,23 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepNumText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
   },
   stepText: {
     flex: 1,
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 14,
     lineHeight: 20,
   },
   noInstructionsText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -1040,17 +1023,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   historyHeaderTitle: {
-    color: '#38BDF8',
-    fontSize: 11,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: -0.2,
   },
   historyCard: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     marginBottom: 10,
   },
   historyCardHeader: {
@@ -1064,25 +1047,25 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   historyDate: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '700',
   },
   historyWorkoutName: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     marginTop: 2,
   },
   historyGymBadge: {
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#2B313E',
+    borderColor: colors.borderStrong,
   },
   historyGymBadgeText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1094,44 +1077,44 @@ const styles = StyleSheet.create({
   historySetPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: '#222734',
+    borderColor: colors.border,
     gap: 5,
   },
   historySetNum: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
   historySetMetric: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 12,
     fontWeight: '600',
   },
   historySetRpe: {
-    color: '#F59E0B',
+    color: colors.warning,
     fontSize: 10,
     fontWeight: '700',
   },
   historyEmpty: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     alignItems: 'center',
   },
   historyEmptyText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 13,
     fontStyle: 'italic',
   },
   historyNotesText: {
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontSize: 12,
     fontStyle: 'italic',
     marginBottom: 8,
@@ -1143,14 +1126,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 12,
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     marginTop: 4,
   },
   expandHistoryBtnText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1171,18 +1154,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   progressionTitleText: {
-    color: '#38BDF8',
-    fontSize: 11,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: -0.2,
   },
   metricTabsRow: {
     flexDirection: 'row',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 2,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   metricTab: {
     paddingHorizontal: 8,
@@ -1193,12 +1176,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#38BDF820',
   },
   metricTabText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
   metricTabTextActive: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontWeight: '700',
   },
   timeframeTabsRow: {
@@ -1210,21 +1193,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   timeframeChipActive: {
     backgroundColor: '#38BDF820',
-    borderColor: '#38BDF8',
+    borderColor: colors.primary,
   },
   timeframeChipText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
   timeframeChipTextActive: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontWeight: '700',
   },
   historyGymFilterScroll: {
@@ -1234,26 +1217,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     marginRight: 6,
   },
   historyGymFilterPillActive: {
     backgroundColor: '#38BDF820',
-    borderColor: '#38BDF8',
+    borderColor: colors.primary,
   },
   historyGymFilterPillText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
   historyGymFilterPillTextActive: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontWeight: '700',
   },
   historyCardHighlighted: {
-    borderColor: '#38BDF8',
+    borderColor: colors.primary,
     borderWidth: 1.5,
   },
   historyMetaStats: {
@@ -1263,7 +1246,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   historySessionMetaText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1286,13 +1269,13 @@ const styles = StyleSheet.create({
   historySetTypeTagText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#CBD5E1',
+    color: colors.textSoft,
   },
   dataToolCard: {
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     padding: 16,
     marginTop: 10,
     marginBottom: 36,
@@ -1315,13 +1298,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dataToolTitle: {
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 4,
   },
   dataToolSubtitle: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -1332,13 +1315,13 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: colors.warning,
     borderRadius: 10,
     paddingVertical: 11,
     paddingHorizontal: 16,
   },
   dataToolButtonText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1353,37 +1336,34 @@ const styles = StyleSheet.create({
   formGalleryBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: EXERCISE_VISUAL_SIZES.hero,
-    marginTop: 10,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    backgroundColor: '#14161D',
-    borderRadius: 10,
+    alignSelf: 'center',
+    gap: 6,
+    marginTop: 12,
+    padding: 3,
+    backgroundColor: colors.surface,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   galleryPlayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#1E2330',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceHigh,
   },
   galleryPlayBtnActive: {
-    backgroundColor: '#0F263B',
-    borderWidth: 1,
-    borderColor: '#0284C7',
+    backgroundColor: colors.primarySoft,
   },
   galleryPlayBtnText: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '600',
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   galleryPlayBtnTextActive: {
-    color: '#38BDF8',
+    color: colors.primaryLight,
     fontWeight: '700',
   },
   galleryPillGroup: {
@@ -1392,24 +1372,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   galleryPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#181A20',
-    borderWidth: 1,
-    borderColor: 'transparent',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
   galleryPillActive: {
-    backgroundColor: '#0284C720',
-    borderColor: '#38BDF8',
+    backgroundColor: colors.surfaceHigh,
   },
   galleryPillText: {
-    color: '#94A3B8',
-    fontSize: 11,
+    color: colors.textMuted,
+    fontSize: 12,
     fontWeight: '600',
   },
   galleryPillTextActive: {
-    color: '#38BDF8',
+    color: colors.text,
     fontWeight: '700',
   },
 });

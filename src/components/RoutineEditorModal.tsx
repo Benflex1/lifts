@@ -25,10 +25,11 @@ import {
   Copy,
   Timer,
   Check,
+  MoreHorizontal,
 } from 'lucide-react-native';
 import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
-import { ExerciseVisual } from './ExerciseVisual';
+import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
 import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { saveRoutine } from '../database/db';
@@ -40,6 +41,8 @@ import {
   unlinkExerciseFromGroup,
   setSupersetGroupInList,
 } from '../workout/supersets';
+import { colors } from '../theme';
+import { ActionSheet, IconButton } from './ui';
 
 interface Props {
   visible: boolean;
@@ -101,6 +104,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
   const [viewMode, setViewMode] = useState<'detailed' | 'compact'>('detailed');
   const [restWheelIndex, setRestWheelIndex] = useState<number | null>(null);
   const [repDropdownIndex, setRepDropdownIndex] = useState<number | null>(null);
+  const [menuIndex, setMenuIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (routineToEdit) {
@@ -364,7 +368,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <X size={24} color="#9CA3AF" />
+            <X size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
             {routineToEdit ? 'Edit Routine' : 'Create Routine'}
@@ -385,7 +389,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
             <TextInput
               style={styles.textInput}
               placeholder="e.g. Chest & Triceps Blast"
-              placeholderTextColor="#6B7280"
+              placeholderTextColor={colors.textMuted}
               value={name}
               onChangeText={setName}
             />
@@ -394,7 +398,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
             <TextInput
               style={styles.textInput}
               placeholder="Select preset below or type custom folder..."
-              placeholderTextColor="#6B7280"
+              placeholderTextColor={colors.textMuted}
               value={folderName}
               onChangeText={setFolderName}
             />
@@ -417,7 +421,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   >
                     <Folder
                       size={11}
-                      color={isSelected ? '#FFFFFF' : '#9CA3AF'}
+                      color={isSelected ? colors.text : colors.textSecondary}
                       style={{ marginRight: 4 }}
                     />
                     <Text
@@ -434,7 +438,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
             <TextInput
               style={[styles.textInput, { height: 64, textAlignVertical: 'top' }]}
               placeholder="e.g. Warm up rotator cuffs. Focus on mind-muscle connection."
-              placeholderTextColor="#6B7280"
+              placeholderTextColor={colors.textMuted}
               value={notes}
               onChangeText={setNotes}
               multiline
@@ -445,17 +449,17 @@ export const RoutineEditorModal: React.FC<Props> = ({
           {draftExercises.length > 0 && (
             <View style={styles.summaryBar}>
               <View style={styles.summaryBadge}>
-                <Layers size={14} color="#3B82F6" />
+                <Layers size={14} color={colors.textMuted} />
                 <Text style={styles.summaryBadgeText}>{draftExercises.length} Exercises</Text>
               </View>
-              <Text style={styles.summaryDot}>•</Text>
+              <Text style={styles.summaryDot}>·</Text>
               <View style={styles.summaryBadge}>
-                <Dumbbell size={14} color="#10B981" />
+                <Dumbbell size={14} color={colors.textMuted} />
                 <Text style={styles.summaryBadgeText}>{totalSets} Total Sets</Text>
               </View>
-              <Text style={styles.summaryDot}>•</Text>
+              <Text style={styles.summaryDot}>·</Text>
               <View style={styles.summaryBadge}>
-                <Clock size={14} color="#F59E0B" />
+                <Clock size={14} color={colors.textMuted} />
                 <Text style={styles.summaryBadgeText}>~{estimatedMins} min</Text>
               </View>
             </View>
@@ -493,7 +497,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                 setShowPicker(true);
               }}
             >
-              <Plus size={16} color="#3B82F6" />
+              <Plus size={16} color={colors.primary} />
               <Text style={styles.addExBtnText}>Add</Text>
             </TouchableOpacity>
           </View>
@@ -568,7 +572,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                             onPress={() => setRestWheelIndex(idx)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
-                            <Timer size={11} color="#10B981" />
+                            <Timer size={11} color={colors.success} />
                             <Text style={styles.compactRestText}>
                               {item.restTimerSeconds > 0
                                 ? `${Math.floor(item.restTimerSeconds / 60)}m ${item.restTimerSeconds % 60}s`
@@ -584,21 +588,21 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                           accessibilityLabel={ssMeta ? `Edit ${ssMeta.label}` : 'Create superset'}
                         >
-                          <Layers size={14} color={ssMeta ? ssMeta.color : '#8B5CF6'} />
+                          <Layers size={14} color={ssMeta ? ssMeta.color : colors.purple} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.compactActionBtn}
                           onPress={() => handleStartReplace(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                         >
-                          <ArrowRightLeft size={14} color="#3B82F6" />
+                          <ArrowRightLeft size={14} color={colors.primary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.compactActionBtn}
                           onPress={() => handleDuplicateExercise(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                         >
-                          <Copy size={14} color="#9CA3AF" />
+                          <Copy size={14} color={colors.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.compactActionBtn, idx === 0 && styles.iconActionDisabled]}
@@ -606,7 +610,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           onPress={() => handleMoveUp(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                         >
-                          <ChevronUp size={16} color={idx === 0 ? '#374151' : '#9CA3AF'} />
+                          <ChevronUp size={16} color={idx === 0 ? colors.control : colors.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[
@@ -619,7 +623,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                         >
                           <ChevronDown
                             size={16}
-                            color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
+                            color={idx === draftExercises.length - 1 ? colors.control : colors.textSecondary}
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -627,7 +631,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           onPress={() => handleRemoveExercise(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                         >
-                          <Trash2 size={14} color="#EF4444" />
+                          <Trash2 size={14} color={colors.danger} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -636,7 +640,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       <View style={styles.supersetConnectorWrap}>
                         <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
                         <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
-                          ⇩ NEXT IN {ssMeta.label}
+                          NEXT IN {ssMeta.label}
                         </Text>
                         <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
                       </View>
@@ -683,152 +687,101 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       ssMeta && { borderLeftColor: ssMeta.color, borderLeftWidth: 3.5 },
                     ]}
                   >
-                    <View style={styles.routineVisualRow}>
-                      <ExerciseVisual
-                        exercise={item.exercise}
-                        size="compact"
-                        accessibilityLabel={rowViewModel.visualAccessibilityLabel}
-                      />
-                    </View>
-
                     {/* Exercise Card Header */}
                     <View style={styles.cardTopRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={styles.orderBadge}>
-                          <Text style={styles.orderBadgeText}>#{idx + 1}</Text>
-                        </View>
-                        {ssMeta && (
-                          <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color, marginLeft: 6 }]}>
-                            <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
-                              {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-
                       <TouchableOpacity
                         style={styles.cardHeaderInfo}
                         onPress={() => handleStartReplace(idx)}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Swap ${item.exercise.name}`}
                       >
-                        <Text style={styles.cardExName}>{item.exercise.name}</Text>
-                        <Text style={styles.cardExMeta}>
-                          {item.exercise.primaryMuscles.join(', ')} • {item.exercise.equipment}
-                        </Text>
-                        {item.exercise.secondaryMuscles && item.exercise.secondaryMuscles.length > 0 && (
-                          <Text style={styles.cardExSecondary} numberOfLines={1}>
-                            Secondary: {item.exercise.secondaryMuscles.slice(0, 2).join(', ')}
-                            {item.exercise.secondaryMuscles.length > 2 ? ` +${item.exercise.secondaryMuscles.length - 2}` : ''}
+                        <ExerciseVisual
+                          exercise={item.exercise}
+                          size="compact"
+                          accessibilityLabel={rowViewModel.visualAccessibilityLabel}
+                        />
+                        <View style={styles.cardHeaderText}>
+                          <Text style={styles.cardExName} numberOfLines={2}>
+                            {item.exercise.name}
                           </Text>
-                        )}
+                          <View style={styles.cardMetaRow}>
+                            <Text style={styles.orderBadgeText}>#{idx + 1}</Text>
+                            {ssMeta && (
+                              <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color }]}>
+                                <Text style={[styles.ssPositionText, { color: ssMeta.color }]}>
+                                  {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
+                                </Text>
+                              </View>
+                            )}
+                            <Text style={styles.cardExMeta} numberOfLines={1}>
+                              {[item.exercise.primaryMuscles.join(', '), item.exercise.equipment]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Text>
+                          </View>
+                        </View>
                       </TouchableOpacity>
 
-                      {/* Action Buttons: Swap, Duplicate, Up, Down, Trash */}
-                      <View style={styles.reorderActions}>
-                        <TouchableOpacity
-                          style={styles.actionPillBtn}
-                          onPress={() => handleStartReplace(idx)}
-                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        >
-                          <ArrowRightLeft size={13} color="#3B82F6" />
-                          <Text style={styles.actionPillText}>Swap</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.iconActionBtn}
-                          onPress={() => handleDuplicateExercise(idx)}
-                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        >
-                          <Copy size={15} color="#9CA3AF" />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.iconActionBtn, idx === 0 && styles.iconActionDisabled]}
-                          disabled={idx === 0}
-                          onPress={() => handleMoveUp(idx)}
-                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        >
-                          <ChevronUp size={18} color={idx === 0 ? '#374151' : '#9CA3AF'} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.iconActionBtn,
-                            idx === draftExercises.length - 1 && styles.iconActionDisabled,
-                          ]}
-                          disabled={idx === draftExercises.length - 1}
-                          onPress={() => handleMoveDown(idx)}
-                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        >
-                          <ChevronDown
-                            size={18}
-                            color={idx === draftExercises.length - 1 ? '#374151' : '#9CA3AF'}
-                          />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.deleteActionBtn}
-                          onPress={() => handleRemoveExercise(idx)}
-                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                        >
-                          <Trash2 size={16} color="#EF4444" />
-                        </TouchableOpacity>
-                      </View>
+                      <IconButton
+                        icon={MoreHorizontal}
+                        tone="ghost"
+                        size={34}
+                        onPress={() => setMenuIndex(idx)}
+                        accessibilityLabel={`${item.exercise.name} options`}
+                      />
                     </View>
 
-                    {/* Target Sets Row: Clean Stepper without Presets */}
-                    <View style={styles.configRow}>
-                      <Text style={styles.configLabel}>TARGET SETS</Text>
-                      <View style={styles.stepperRowContainer}>
-                        <View style={styles.cleanStepperContainer}>
-                          <TouchableOpacity
-                            style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
-                            onPress={() => handleUpdateSets(idx, -1)}
-                            disabled={item.targetSets <= 1}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Minus size={15} color={item.targetSets > 1 ? '#FFFFFF' : '#4B5563'} />
-                          </TouchableOpacity>
-
-                          <View style={styles.cleanStepValueWrap}>
-                            <TextInput
-                              style={styles.cleanStepInput}
-                              keyboardType="number-pad"
-                              value={String(item.targetSets)}
-                              onChangeText={text => {
-                                const num = parseInt(text.replace(/[^0-9]/g, ''), 10);
-                                if (!isNaN(num) && num > 0 && num <= 50) {
-                                  handleSetTargetSets(idx, num);
-                                } else if (text === '') {
-                                  handleSetTargetSets(idx, 1);
-                                }
-                              }}
-                              selectTextOnFocus={true}
-                              maxLength={2}
-                            />
-                            <Text style={styles.cleanStepUnit}>sets</Text>
-                          </View>
-
-                          <TouchableOpacity
-                            style={styles.cleanStepBtn}
-                            onPress={() => handleUpdateSets(idx, 1)}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Plus size={15} color="#FFFFFF" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Target Reps Row: Custom Main Input with Presets Dropdown */}
+                    {/* Sets + Reps */}
                     {(() => {
                       const repVal = validateTargetReps(item.targetReps);
                       const isRepInvalid = !repVal.isValid && item.targetReps.trim().length > 0;
                       return (
                         <>
-                          <View style={styles.configRow}>
-                            <Text style={styles.configLabel}>TARGET REPS</Text>
-                            <View style={styles.repsRowContainer}>
+                          <View style={styles.configGrid}>
+                            <View style={styles.configCell}>
+                              <Text style={styles.configLabel}>Sets</Text>
+                              <View style={styles.cleanStepperContainer}>
+                                <TouchableOpacity
+                                  style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
+                                  onPress={() => handleUpdateSets(idx, -1)}
+                                  disabled={item.targetSets <= 1}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Remove a set"
+                                >
+                                  <Minus size={15} color={item.targetSets > 1 ? colors.text : colors.textFaint} />
+                                </TouchableOpacity>
+                                <TextInput
+                                  style={styles.cleanStepInput}
+                                  keyboardType="number-pad"
+                                  value={String(item.targetSets)}
+                                  onChangeText={text => {
+                                    const num = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                                    if (!isNaN(num) && num > 0 && num <= 50) {
+                                      handleSetTargetSets(idx, num);
+                                    } else if (text === '') {
+                                      handleSetTargetSets(idx, 1);
+                                    }
+                                  }}
+                                  selectTextOnFocus={true}
+                                  maxLength={2}
+                                  accessibilityLabel="Target sets"
+                                />
+                                <TouchableOpacity
+                                  style={styles.cleanStepBtn}
+                                  onPress={() => handleUpdateSets(idx, 1)}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Add a set"
+                                >
+                                  <Plus size={15} color={colors.text} />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+
+                            <View style={styles.configCell}>
+                              <Text style={styles.configLabel}>Reps</Text>
                               <View
                                 style={[
                                   styles.customRepInputWrapper,
@@ -837,27 +790,26 @@ export const RoutineEditorModal: React.FC<Props> = ({
                               >
                                 <TextInput
                                   style={styles.primaryRepInput}
-                                  placeholder="e.g. 8-12"
-                                  placeholderTextColor="#6B7280"
+                                  placeholder="8-12"
+                                  placeholderTextColor={colors.textMuted}
                                   value={item.targetReps}
                                   onChangeText={txt => handleUpdateReps(idx, txt)}
                                   selectTextOnFocus={true}
                                   autoCapitalize="none"
                                   autoCorrect={false}
+                                  accessibilityLabel="Target reps"
                                 />
-                                <Text style={styles.repInputSuffix}>reps</Text>
+                                <TouchableOpacity
+                                  style={styles.presetDropdownBtn}
+                                  onPress={() => setRepDropdownIndex(idx)}
+                                  activeOpacity={0.7}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  accessibilityRole="button"
+                                  accessibilityLabel="Rep presets"
+                                >
+                                  <Sparkles size={15} color={colors.primaryLight} />
+                                </TouchableOpacity>
                               </View>
-
-                              <TouchableOpacity
-                                style={styles.presetDropdownBtn}
-                                onPress={() => setRepDropdownIndex(idx)}
-                                activeOpacity={0.7}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <Sparkles size={13} color="#60A5FA" />
-                                <Text style={styles.presetDropdownBtnText}>Presets</Text>
-                                <ChevronDown size={13} color="#9CA3AF" />
-                              </TouchableOpacity>
                             </View>
                           </View>
                           {isRepInvalid ? (
@@ -867,65 +819,55 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       );
                     })()}
 
-                    {/* Rest Timer Row with Precision Wheel Trigger */}
-                    <View style={styles.configRow}>
-                      <Text style={styles.configLabel}>REST TIMER</Text>
+                    {/* Rest timer + superset pills */}
+                    <View style={styles.pillRow}>
                       <TouchableOpacity
                         style={styles.restWheelTriggerBtn}
                         onPress={() => setRestWheelIndex(idx)}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel="Change rest timer"
                       >
-                        <View style={styles.restWheelTriggerLeft}>
-                          <Timer size={14} color="#10B981" />
-                          <Text style={styles.restWheelTriggerText}>
-                            {item.restTimerSeconds > 0
-                              ? `${Math.floor(item.restTimerSeconds / 60)}m ${String(item.restTimerSeconds % 60).padStart(2, '0')}s`
-                              : 'Timer Off'}
-                          </Text>
-                        </View>
-                        <View style={styles.restWheelTriggerRight}>
-                          <Text style={styles.restWheelTriggerHint}>Change</Text>
-                          <ChevronDown size={13} color="#10B981" />
-                        </View>
+                        <Timer size={13} color={colors.primaryLight} />
+                        <Text style={styles.restWheelTriggerText}>
+                          {item.restTimerSeconds > 0
+                            ? `Rest ${Math.floor(item.restTimerSeconds / 60)}:${String(item.restTimerSeconds % 60).padStart(2, '0')}`
+                            : 'Rest off'}
+                        </Text>
                       </TouchableOpacity>
-                    </View>
 
-                    {/* Superset Link / Status Row */}
-                    <View style={styles.configRow}>
-                      <Text style={styles.configLabel}>SUPERSET</Text>
                       {ssMeta ? (
-                        <View style={styles.ssActiveControlRow}>
+                        <>
                           <TouchableOpacity
-                            style={[
-                              styles.ssActiveBadge,
-                              { borderColor: ssMeta.color, backgroundColor: ssMeta.color + '1A' },
-                            ]}
+                            style={[styles.ssActiveBadge, { backgroundColor: ssMeta.color + '1A' }]}
                             onPress={() => setSupersetModalExerciseId(item.id)}
                             activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Edit ${ssMeta.label}`}
                           >
                             <Layers size={13} color={ssMeta.color} />
                             <Text style={[styles.ssActiveBadgeText, { color: ssMeta.color }]}>
-                              {ssMeta.label} ({ssMeta.positionInGroup}/{ssMeta.totalInGroup}) · Edit
+                              {ssMeta.label}
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.ssUnlinkBtn}
                             onPress={() => handleUnlinkSuperset(idx)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
                           >
                             <Text style={styles.ssUnlinkBtnText}>Ungroup</Text>
                           </TouchableOpacity>
-                        </View>
+                        </>
                       ) : (
                         <TouchableOpacity
                           style={styles.ssLinkBtn}
                           onPress={() => setSupersetModalExerciseId(item.id)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          accessibilityRole="button"
                         >
-                          <Layers size={13} color="#A855F7" />
-                          <Text style={styles.ssLinkBtnText}>
-                            + Create / Add to Superset...
-                          </Text>
+                          <Layers size={13} color={colors.textSecondary} />
+                          <Text style={styles.ssLinkBtnText}>Superset</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -935,7 +877,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                     <View style={styles.supersetConnectorWrap}>
                       <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
                       <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
-                        ⇩ NEXT IN {ssMeta.label}
+                        NEXT IN {ssMeta.label}
                       </Text>
                       <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
                     </View>
@@ -947,7 +889,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
           {draftExercises.length === 0 && (
             <View style={styles.emptyCard}>
               <View style={styles.emptyIconCircle}>
-                <Dumbbell size={28} color="#3B82F6" />
+                <Dumbbell size={28} color={colors.primary} />
               </View>
               <Text style={styles.emptyTitle}>No exercises in routine</Text>
               <Text style={styles.emptySubtitle}>
@@ -960,7 +902,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   setShowPicker(true);
                 }}
               >
-                <Plus size={18} color="#FFFFFF" />
+                <Plus size={18} color={colors.text} />
                 <Text style={styles.emptyAddBtnText}>Add Exercises</Text>
               </TouchableOpacity>
             </View>
@@ -974,7 +916,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                 setShowPicker(true);
               }}
             >
-              <Plus size={18} color="#3B82F6" />
+              <Plus size={18} color={colors.primary} />
               <Text style={styles.bottomAddBtnText}>Add Exercises</Text>
             </TouchableOpacity>
           )}
@@ -994,6 +936,33 @@ export const RoutineEditorModal: React.FC<Props> = ({
           }}
           onSelectExercise={handleExerciseSelected}
           onSelectMultiple={handleAddMultipleExercises}
+        />
+
+        <ActionSheet
+          visible={menuIndex !== null && draftExercises[menuIndex] !== undefined}
+          title={menuIndex !== null ? draftExercises[menuIndex]?.exercise.name : undefined}
+          onClose={() => setMenuIndex(null)}
+          actions={
+            menuIndex === null
+              ? []
+              : [
+                  { key: 'swap', label: 'Swap Exercise', icon: ArrowRightLeft, onPress: () => handleStartReplace(menuIndex) },
+                  { key: 'duplicate', label: 'Duplicate', icon: Copy, onPress: () => handleDuplicateExercise(menuIndex) },
+                  ...(menuIndex > 0
+                    ? [{ key: 'up', label: 'Move Up', icon: ChevronUp, onPress: () => handleMoveUp(menuIndex) }]
+                    : []),
+                  ...(menuIndex < draftExercises.length - 1
+                    ? [{ key: 'down', label: 'Move Down', icon: ChevronDown, onPress: () => handleMoveDown(menuIndex) }]
+                    : []),
+                  {
+                    key: 'remove',
+                    label: 'Remove from Routine',
+                    icon: Trash2,
+                    destructive: true,
+                    onPress: () => handleRemoveExercise(menuIndex),
+                  },
+                ]
+          }
         />
 
         {/* Rest Time Wheel Modal */}
@@ -1041,7 +1010,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   onPress={() => setRepDropdownIndex(null)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <X size={18} color="#9CA3AF" />
+                  <X size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
@@ -1071,7 +1040,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                         {preset.description}
                       </Text>
                       {isSelected ? (
-                        <Check size={18} color="#10B981" />
+                        <Check size={18} color={colors.success} />
                       ) : (
                         <View style={{ width: 18 }} />
                       )}
@@ -1082,7 +1051,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
               <View style={styles.dropdownFooter}>
                 <Text style={styles.dropdownFooterText}>
-                  💡 Tip: You can also type any custom target (e.g. "12, 10, 8" or "To failure") directly into the exercise card.
+                  Tip: You can also type any custom target (e.g. "12, 10, 8" or "To failure") directly into the exercise card.
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1106,7 +1075,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0E12',
+    backgroundColor: colors.bg,
     paddingTop: 50,
   },
   header: {
@@ -1116,21 +1085,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   saveHeaderBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     paddingVertical: 7,
     paddingHorizontal: 18,
     borderRadius: 14,
   },
   saveHeaderBtnText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1142,24 +1111,24 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   inputCard: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     marginBottom: 14,
   },
   fieldLabel: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '700',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   textInput: {
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 10,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -1171,37 +1140,35 @@ const styles = StyleSheet.create({
   folderPresetChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
   },
   folderPresetChipActive: {
-    backgroundColor: '#1D4ED8',
-    borderColor: '#3B82F6',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   folderPresetText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
   folderPresetTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
   },
   summaryBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#161922',
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 14,
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#262E3E',
     gap: 10,
   },
   summaryBadge: {
@@ -1210,12 +1177,12 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   summaryBadgeText: {
-    color: '#E5E7EB',
+    color: colors.text,
     fontSize: 12,
     fontWeight: '600',
   },
   summaryDot: {
-    color: '#4B5563',
+    color: colors.textFaint,
     fontSize: 10,
   },
   sectionHeader: {
@@ -1230,16 +1197,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   viewToggleGroup: {
     flexDirection: 'row',
-    backgroundColor: '#14161D',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     padding: 2,
   },
   viewToggleBtn: {
@@ -1248,15 +1216,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   viewToggleBtnActive: {
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   viewToggleText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
   viewToggleTextActive: {
-    color: '#3B82F6',
+    color: colors.primary,
     fontWeight: '700',
   },
   compactList: {
@@ -1266,23 +1234,23 @@ const styles = StyleSheet.create({
   compactRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     gap: 10,
   },
   compactOrderBadge: {
     width: 26,
     height: 26,
     borderRadius: 6,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   compactOrderText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1290,17 +1258,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   compactName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 2,
   },
   compactMeta: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   compactSecondaryMeta: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     flexShrink: 1,
   },
@@ -1313,7 +1281,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1321,7 +1289,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 6,
-    backgroundColor: '#2B191D',
+    backgroundColor: colors.dangerSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1329,195 +1297,109 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.primarySoft,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: 999,
   },
   addExBtnText: {
-    color: '#3B82F6',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '700',
   },
   exerciseCard: {
-    backgroundColor: '#181A20',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
-    gap: 10,
-  },
-  orderBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#262A34',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
   orderBadgeText: {
-    color: '#9CA3AF',
+    color: colors.textFaint,
     fontSize: 12,
     fontWeight: '700',
   },
   cardHeaderInfo: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   cardExName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '700',
-    marginBottom: 2,
+    letterSpacing: -0.2,
   },
   cardExMeta: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 12,
     textTransform: 'capitalize',
-  },
-  cardExSecondary: {
-    color: '#6B7280',
-    fontSize: 11,
-    marginTop: 2,
-    textTransform: 'capitalize',
-  },
-  routineVisualRow: {
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  reorderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  actionPillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#1E293B',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-  },
-  actionPillText: {
-    color: '#3B82F6',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  iconActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#262A34',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexShrink: 1,
   },
   iconActionDisabled: {
     opacity: 0.3,
   },
-  deleteActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#2B191D',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 2,
-  },
-  configRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#222631',
-    gap: 8,
-  },
   configLabel: {
-    color: '#9CA3AF',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    width: 85,
-  },
-  stepperRowContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 2,
   },
   cleanStepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A34',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#374151',
-    padding: 2,
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceHigh,
+    borderRadius: 12,
+    padding: 3,
+    height: 42,
   },
   cleanStepBtn: {
     width: 36,
-    height: 34,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#323745',
-    borderRadius: 6,
+    backgroundColor: colors.control,
+    borderRadius: 10,
   },
   cleanStepBtnDisabled: {
     opacity: 0.35,
-    backgroundColor: '#222631',
-  },
-  cleanStepValueWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-    minWidth: 68,
   },
   cleanStepInput: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    flex: 1,
+    minWidth: 0,
+    width: 0,
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
     textAlign: 'center',
-    minWidth: 24,
     padding: 0,
   },
-  cleanStepUnit: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 3,
-  },
-  repsRowContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   customRepInputWrapper: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A34',
-    borderRadius: 8,
+    backgroundColor: colors.surfaceHigh,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151',
-    paddingHorizontal: 10,
-    height: 38,
+    borderColor: 'transparent',
+    paddingLeft: 12,
+    paddingRight: 3,
+    height: 42,
   },
   customRepInputWrapperError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#2D1B22',
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerSoft,
   },
   repErrorText: {
-    color: '#EF4444',
+    color: colors.danger,
     fontSize: 11,
     fontWeight: '500',
     marginTop: -4,
@@ -1526,65 +1408,35 @@ const styles = StyleSheet.create({
   },
   primaryRepInput: {
     flex: 1,
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
+    minWidth: 0,
+    width: 0,
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
     paddingVertical: 0,
   },
-  repInputSuffix: {
-    color: '#6B7280',
-    fontSize: 11,
-    fontWeight: '500',
-    marginLeft: 3,
-  },
   presetDropdownBtn: {
-    flexDirection: 'row',
+    width: 36,
+    height: 36,
     alignItems: 'center',
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 9,
-    height: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#3B82F655',
-    gap: 5,
-  },
-  presetDropdownBtnText: {
-    color: '#60A5FA',
-    fontSize: 12,
-    fontWeight: '700',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+    borderRadius: 10,
   },
   restWheelTriggerBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#132822',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1C4A3F',
-    height: 38,
-  },
-  restWheelTriggerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  restWheelTriggerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
+    backgroundColor: colors.primarySoft,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
   },
   restWheelTriggerText: {
-    color: '#10B981',
+    color: colors.primaryLight,
     fontSize: 13,
     fontWeight: '700',
-  },
-  restWheelTriggerHint: {
-    color: '#10B981CC',
-    fontSize: 11,
-    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   compactMetaRow: {
     flexDirection: 'row',
@@ -1595,16 +1447,16 @@ const styles = StyleSheet.create({
   compactRestBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#132822',
+    backgroundColor: colors.successSoft,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1C4A3F',
+    borderColor: colors.successSoft,
     gap: 4,
   },
   compactRestText: {
-    color: '#10B981',
+    color: colors.success,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1619,10 +1471,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
     maxHeight: '80%',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#2D3442',
+    borderColor: colors.borderStrong,
     overflow: 'hidden',
   },
   dropdownHeader: {
@@ -1632,23 +1484,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   dropdownTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   dropdownSubtitle: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   dropdownCloseBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1667,59 +1519,59 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   dropdownOptionRowActive: {
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceAlt,
   },
   dropdownPill: {
     minWidth: 56,
     paddingVertical: 5,
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   dropdownPillActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
   dropdownPillText: {
-    color: '#CBD5E1',
+    color: colors.textSoft,
     fontSize: 13,
     fontWeight: '700',
   },
   dropdownPillTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
   dropdownDesc: {
     flex: 1,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
   dropdownDescActive: {
-    color: '#F3F4F6',
+    color: colors.text,
     fontWeight: '600',
   },
   dropdownFooter: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#13151B',
+    backgroundColor: colors.surfaceSunken,
     borderTopWidth: 1,
-    borderTopColor: '#262A34',
+    borderTopColor: colors.border,
   },
   dropdownFooterText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     lineHeight: 16,
     textAlign: 'center',
   },
   emptyCard: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 28,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     marginTop: 10,
   },
@@ -1727,19 +1579,19 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: '#1E2638',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   emptyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 6,
   },
   emptySubtitle: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
@@ -1749,14 +1601,14 @@ const styles = StyleSheet.create({
   emptyAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 11,
     paddingHorizontal: 20,
     borderRadius: 12,
     gap: 8,
   },
   emptyAddBtnText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1764,16 +1616,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#262E3E',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
     paddingVertical: 12,
     gap: 8,
     marginTop: 8,
   },
   bottomAddBtnText: {
-    color: '#3B82F6',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1783,7 +1635,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -1807,7 +1659,7 @@ const styles = StyleSheet.create({
   },
   supersetCountText: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   supersetConnectorWrap: {
@@ -1838,60 +1690,64 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  ssActiveControlRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
   ssActiveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
   ssActiveBadgeText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   ssUnlinkBtn: {
-    backgroundColor: '#2A1D24',
-    borderWidth: 1,
-    borderColor: '#701A40',
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
   ssUnlinkBtnText: {
-    color: '#F43F5E',
-    fontSize: 12,
-    fontWeight: '700',
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
   },
   ssLinkBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#1E1B2E',
-    borderWidth: 1,
-    borderColor: '#4C1D95',
-    paddingVertical: 8,
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 999,
   },
   ssLinkBtnText: {
-    color: '#C084FC',
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: 13,
     fontWeight: '700',
   },
-  ssNoneText: {
-    color: '#6B7280',
-    fontSize: 12,
-    fontStyle: 'italic',
+  cardHeaderText: {
+    flex: 1,
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  configGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  configCell: {
+    flex: 1,
+    gap: 6,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
   },
 });

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { AlertCircle } from 'lucide-react-native';
 import { useStorage } from '../context/StorageContext';
+import { colors } from '../theme';
 
 export function ReadOnlyBanner() {
   const { isReadOnly, takeOverLease } = useStorage();
@@ -23,7 +24,7 @@ export function ReadOnlyBanner() {
   return (
     <View style={styles.banner}>
       <View style={styles.content}>
-        <AlertCircle size={18} color="#F59E0B" style={styles.icon} />
+        <AlertCircle size={18} color={colors.warning} style={styles.icon} />
         <View style={styles.textContainer}>
           <Text style={styles.title}>Read-Only Mode</Text>
           <Text style={styles.description}>
@@ -38,7 +39,7 @@ export function ReadOnlyBanner() {
         activeOpacity={0.8}
       >
         {loading ? (
-          <ActivityIndicator size="small" color="#000000" />
+          <ActivityIndicator size="small" color={colors.black} />
         ) : (
           <Text style={styles.actionText}>Take Over</Text>
         )}
@@ -49,9 +50,9 @@ export function ReadOnlyBanner() {
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: '#78350F',
+    backgroundColor: colors.warningSoft,
     borderBottomWidth: 1,
-    borderBottomColor: '#B45309',
+    borderBottomColor: colors.warning,
     paddingHorizontal: 16,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -73,25 +74,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: '#FDE68A',
+    color: colors.goldLight,
     fontSize: 13,
     fontWeight: '700',
   },
   description: {
-    color: '#FEF3C7',
+    color: colors.goldLight,
     fontSize: 12,
     marginTop: 2,
     lineHeight: 16,
   },
   actionButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warning,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
     alignSelf: 'center',
   },
   actionText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 12,
     fontWeight: '700',
   },

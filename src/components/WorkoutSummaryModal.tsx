@@ -22,6 +22,8 @@ import { PRBadge } from './PRBadge';
 import { ConfettiCelebration } from './ConfettiCelebration';
 import { WorkoutDurationModal } from './WorkoutDurationModal';
 import { isExcessiveDuration, estimateWorkoutDuration } from '../workout/duration';
+import { colors } from '../theme';
+import { PRMark } from './ui';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
@@ -145,7 +147,7 @@ export function WorkoutSummaryModal({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconCircle}>
-              <Award size={36} color="#10B981" />
+              <Award size={36} color={colors.success} />
             </View>
             <Text style={styles.title}>Workout Complete!</Text>
             <Text style={styles.workoutName}>{workout.name}</Text>
@@ -156,7 +158,7 @@ export function WorkoutSummaryModal({
             <View style={styles.longDurationCard}>
               <View style={styles.longDurationHeader}>
                 <View style={styles.warningIconBadge}>
-                  <AlertCircle size={20} color="#F59E0B" />
+                  <AlertCircle size={20} color={colors.warning} />
                 </View>
                 <View style={styles.longDurationTextWrap}>
                   <Text style={styles.longDurationTitle}>
@@ -178,7 +180,7 @@ export function WorkoutSummaryModal({
                   accessibilityRole="button"
                   accessibilityLabel="Auto-estimate workout duration"
                 >
-                  <Sparkles size={16} color="#000000" />
+                  <Sparkles size={16} color={colors.black} />
                   <Text style={styles.autoEstimateButtonText}>
                     Auto-estimate (~{formatDuration(estimateWorkoutDuration(workout))})
                   </Text>
@@ -190,7 +192,7 @@ export function WorkoutSummaryModal({
                   accessibilityRole="button"
                   accessibilityLabel="Change workout duration manually"
                 >
-                  <Clock size={16} color="#38BDF8" />
+                  <Clock size={16} color={colors.primary} />
                   <Text style={styles.changeTimeButtonText}>Change Time</Text>
                 </TouchableOpacity>
               </View>
@@ -206,8 +208,8 @@ export function WorkoutSummaryModal({
               accessibilityLabel={`Edit duration, currently ${formatDuration(workout.durationSeconds)}`}
             >
               <View style={styles.metricCardHeader}>
-                <Clock size={18} color="#3B82F6" />
-                <Edit2 size={11} color="#60A5FA" />
+                <Clock size={18} color={colors.primary} />
+                <Edit2 size={11} color={colors.primaryLight} />
               </View>
               <Text style={styles.metricValue}>
                 {formatDuration(workout.durationSeconds)}
@@ -216,7 +218,7 @@ export function WorkoutSummaryModal({
             </TouchableOpacity>
 
             <View style={styles.metricCard}>
-              <Dumbbell size={18} color="#F59E0B" />
+              <Dumbbell size={18} color={colors.warning} />
               <Text style={styles.metricValue}>
                 {formatWeight(workout.totalVolumeKg, unit)}
               </Text>
@@ -224,7 +226,7 @@ export function WorkoutSummaryModal({
             </View>
 
             <View style={styles.metricCard}>
-              <Flame size={18} color="#EF4444" />
+              <Flame size={18} color={colors.danger} />
               <Text style={styles.metricValue}>{totalCompletedSets}</Text>
               <Text style={styles.metricLabel}>Sets ({totalCompletedReps} reps)</Text>
             </View>
@@ -256,17 +258,15 @@ export function WorkoutSummaryModal({
           {prSummary && prSummary.totalCount > 0 && (
             <View style={styles.prSection}>
               <View style={styles.prSectionHeader}>
-                <Trophy size={18} color="#F59E0B" />
+                <Trophy size={18} color={colors.warning} />
                 <Text style={styles.prSectionTitle}>
-                  {prSummary.totalCount} PERSONAL RECORD{prSummary.totalCount > 1 ? 'S' : ''} BROKEN!
+                  {prSummary.totalCount} New Personal Record{prSummary.totalCount > 1 ? 's' : ''}
                 </Text>
               </View>
               <ScrollView style={styles.prList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                 {prSummary.achievements.map((item, idx) => (
                   <View key={idx} style={styles.prCard}>
-                    <Text style={styles.prCardEmoji}>
-                      {item.achievement.rank === 1 ? '🥇' : item.achievement.rank === 2 ? '🥈' : '🥉'}
-                    </Text>
+                    <PRMark rank={item.achievement.rank} size={34} />
                     <View style={styles.prCardContent}>
                       <Text style={styles.prCardExercise}>{item.exerciseName}</Text>
                       <Text style={styles.prCardMetric}>
@@ -285,6 +285,7 @@ export function WorkoutSummaryModal({
           <ScrollView style={styles.exerciseList} showsVerticalScrollIndicator={false}>
             {workout.exercises.map((ex, idx) => {
               const completedSets = ex.sets.filter((s) => s.isCompleted);
+              if (completedSets.length === 0) return null;
               const maxWeight = completedSets.reduce(
                 (max, s) => (s.weightKg > max ? s.weightKg : max),
                 0
@@ -297,25 +298,25 @@ export function WorkoutSummaryModal({
                     <View style={styles.exerciseNameRow}>
                       <Text style={styles.exerciseNameText}>{ex.exercise.name}</Text>
                       {exercisePRs && exercisePRs.length > 0 && (
-                        <View style={styles.exercisePRBadge}>
-                          <Text style={styles.exercisePRBadgeText}>
-                            {exercisePRs.some((a) => a.achievement.rank === 1)
-                              ? '🥇 PR'
-                              : exercisePRs.some((a) => a.achievement.rank === 2)
-                              ? '🥈 2nd'
-                              : '🥉 3rd'}
-                          </Text>
-                        </View>
+                        <PRBadge
+                          compact
+                          achievement={
+                            exercisePRs.reduce((best, a) => (a.achievement.rank < best.achievement.rank ? a : best))
+                              .achievement
+                          }
+                        />
                       )}
                     </View>
                     <Text style={styles.exerciseMetaText}>
                       {completedSets.length} {completedSets.length === 1 ? 'set' : 'sets'}
-                      {maxWeight > 0 ? ` • Top: ${formatWeight(maxWeight, unit)}` : ''}
+                      {maxWeight > 0 ? ` · Top: ${formatWeight(maxWeight, unit)}` : ''}
                     </Text>
                   </View>
-                  <View style={styles.checkIcon}>
-                    <Check size={16} color="#10B981" />
-                  </View>
+                  {completedSets.length > 0 && (
+                    <View style={styles.checkIcon}>
+                      <Check size={16} color={colors.success} />
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 32,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   header: {
     alignItems: 'center',
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: '#064E3B',
+    backgroundColor: colors.successSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -391,12 +392,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#F9FAFB',
+    color: colors.text,
     marginBottom: 4,
   },
   workoutName: {
     fontSize: 15,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   metricsGrid: {
@@ -406,13 +407,13 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
-    borderColor: '#2D3442',
+    borderColor: colors.borderStrong,
   },
   metricCardHeader: {
     flexDirection: 'row',
@@ -422,12 +423,12 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
     marginTop: 4,
   },
   metricLabel: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   gymRow: {
     flexDirection: 'row',
@@ -436,9 +437,9 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#2D3442',
+    borderColor: colors.borderStrong,
     borderRadius: 12,
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
   },
   gymRowInfo: {
     flex: 1,
@@ -458,7 +459,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   gymLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
@@ -466,7 +467,7 @@ const styles = StyleSheet.create({
   },
   gymName: {
     marginTop: 3,
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -475,15 +476,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 12,
     borderRadius: 9,
-    backgroundColor: '#263B67',
+    backgroundColor: colors.primarySoft,
   },
   changeGymText: {
-    color: '#7DD3FC',
+    color: colors.primaryLight,
     fontSize: 13,
     fontWeight: '700',
   },
   prSection: {
-    backgroundColor: '#1E1912',
+    backgroundColor: colors.warningSoft,
     borderColor: '#F59E0B50',
     borderWidth: 1,
     borderRadius: 14,
@@ -498,10 +499,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   prSectionTitle: {
-    color: '#FBBF24',
-    fontSize: 13,
+    color: colors.gold,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
   prList: {
     maxHeight: 130,
@@ -512,21 +512,18 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#2B2317',
-  },
-  prCardEmoji: {
-    fontSize: 18,
+    borderBottomColor: colors.warningSoft,
   },
   prCardContent: {
     flex: 1,
   },
   prCardExercise: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
   prCardMetric: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
@@ -536,23 +533,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  exercisePRBadge: {
-    backgroundColor: '#78350F30',
-    borderColor: '#F59E0B50',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  exercisePRBadgeText: {
-    color: '#FBBF24',
-    fontSize: 10,
-    fontWeight: '800',
-  },
   breakdownTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#D1D5DB',
+    color: colors.textSoft,
     marginBottom: 10,
   },
   exerciseList: {
@@ -565,7 +549,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   exerciseInfo: {
     flex: 1,
@@ -573,35 +557,35 @@ const styles = StyleSheet.create({
   exerciseNameText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F3F4F6',
+    color: colors.text,
   },
   exerciseMetaText: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   checkIcon: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#064E3B',
+    backgroundColor: colors.successSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   doneButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
   doneButtonText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '700',
   },
   longDurationCard: {
-    backgroundColor: '#261F17',
-    borderColor: '#B45309',
+    backgroundColor: colors.warningSoft,
+    borderColor: colors.warning,
     borderWidth: 1,
     borderRadius: 14,
     padding: 14,
@@ -626,13 +610,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   longDurationTitle: {
-    color: '#F59E0B',
+    color: colors.warning,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 2,
   },
   longDurationSubtitle: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -645,14 +629,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F59E0B',
+    backgroundColor: colors.warning,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 8,
     gap: 6,
   },
   autoEstimateButtonText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -661,8 +645,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E232E',
-    borderColor: '#374151',
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.control,
     borderWidth: 1,
     borderRadius: 10,
     paddingVertical: 10,
@@ -670,7 +654,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   changeTimeButtonText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '700',
   },

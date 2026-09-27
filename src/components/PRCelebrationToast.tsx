@@ -12,6 +12,9 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PRAchievement, formatPRDescription } from '../workout/pr';
 import { WeightUnit } from '../utils/units';
+import { colors } from '../theme';
+import { PRMark, PR_RANK_COLORS } from './ui';
+import { formatWeight } from '../utils/units';
 
 export interface PRCelebrationEvent {
   exerciseName: string;
@@ -91,11 +94,16 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
   if (!event) return null;
 
   const { achievement, exerciseName, weightKg, reps, secondaryCount = 0 } = event;
-  const isGold = achievement.rank === 1;
-  const isSilver = achievement.rank === 2;
-
-  const medalEmoji = isGold ? '🥇' : isSilver ? '🥈' : '🥉';
-  const rankTitle = isGold ? 'NEW GOLD PR!' : isSilver ? 'NEW 2ND BEST!' : 'NEW 3RD BEST!';
+  const accent = PR_RANK_COLORS[achievement.rank];
+  const rankTitle =
+    achievement.rank === 1
+      ? achievement.isTie
+        ? 'Record tied'
+        : 'New personal record'
+      : achievement.rank === 2
+        ? 'Your 2nd best'
+        : 'Your 3rd best';
+  const setText = weightKg > 0 ? `${formatWeight(weightKg, unit)} × ${reps}` : `${reps} reps`;
   const desc = formatPRDescription(achievement, unit);
 
   return (
@@ -110,45 +118,21 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
       ]}
     >
       <TouchableOpacity
-        style={[
-          styles.card,
-          isGold
-            ? styles.cardGold
-            : isSilver
-            ? styles.cardSilver
-            : styles.cardBronze,
-        ]}
+        style={[styles.card, { borderColor: accent + '55' }]}
         activeOpacity={0.9}
         onPress={handleDismiss}
         accessibilityRole="alert"
-        accessibilityLabel={`${rankTitle} ${exerciseName}`}
+        accessibilityLabel={`${rankTitle}: ${exerciseName}, ${setText}. ${desc}`}
       >
-        <View style={styles.medalCircle}>
-          <Text style={styles.medalEmoji}>{medalEmoji}</Text>
-        </View>
+        <PRMark rank={achievement.rank} size={40} />
 
         <View style={styles.content}>
           <View style={styles.headerRow}>
-            <Text
-              style={[
-                styles.title,
-                isGold
-                  ? styles.titleGold
-                  : isSilver
-                  ? styles.titleSilver
-                  : styles.titleBronze,
-              ]}
-            >
-              {rankTitle}
-            </Text>
-            {secondaryCount > 0 && (
-              <View style={styles.secondaryPill}>
-                <Text style={styles.secondaryPillText}>+{secondaryCount} more</Text>
-              </View>
-            )}
+            <Text style={[styles.title, { color: accent }]}>{rankTitle}</Text>
+            {secondaryCount > 0 && <Text style={styles.moreText}>+{secondaryCount} more</Text>}
           </View>
           <Text style={styles.exerciseName} numberOfLines={1}>
-            {exerciseName}
+            {exerciseName} <Text style={styles.setText}>{setText}</Text>
           </Text>
           <Text style={styles.metrics} numberOfLines={1}>
             {desc}
@@ -162,7 +146,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
           accessibilityRole="button"
           accessibilityLabel="Dismiss PR notification"
         >
-          <X size={16} color="#9CA3AF" />
+          <X size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </TouchableOpacity>
     </Animated.View>
@@ -173,47 +157,25 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 54 : 38,
-    left: 16,
-    right: 16,
+    left: 12,
+    right: 12,
     zIndex: 9999,
     elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    backgroundColor: '#1E232F',
-  },
-  cardGold: {
-    borderColor: '#F59E0B',
-    backgroundColor: '#1C1917',
-  },
-  cardSilver: {
-    borderColor: '#94A3B8',
-    backgroundColor: '#0F172A',
-  },
-  cardBronze: {
-    borderColor: '#D97706',
-    backgroundColor: '#1C1917',
-  },
-  medalCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#292524',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  medalEmoji: {
-    fontSize: 20,
+    gap: 12,
+    paddingVertical: 12,
+    paddingLeft: 12,
+    paddingRight: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: colors.surfaceAlt,
   },
   content: {
     flex: 1,
@@ -221,46 +183,33 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   title: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
-  titleGold: {
-    color: '#FBBF24',
-  },
-  titleSilver: {
-    color: '#E2E8F0',
-  },
-  titleBronze: {
-    color: '#FDBA74',
-  },
-  secondaryPill: {
-    backgroundColor: '#374151',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 6,
-  },
-  secondaryPillText: {
-    fontSize: 10,
+  moreText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#D1D5DB',
+    color: colors.textMuted,
   },
   exerciseName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#F9FAFB',
-    marginTop: 1,
+    color: colors.text,
+    marginTop: 2,
+  },
+  setText: {
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   metrics: {
     fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 1,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   closeBtn: {
     padding: 6,
-    marginLeft: 6,
   },
 });
