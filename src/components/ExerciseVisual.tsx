@@ -281,7 +281,7 @@ const ExerciseVisualContent: React.FC<{
   return <GeneratedExerciseSvg exercise={exercise} template={descriptor.template} dimension={dimension} />;
 };
 
-const ExerciseVisualInner: React.FC<ExerciseVisualProps> = ({
+export const ExerciseVisual: React.FC<ExerciseVisualProps> = ({
   exercise,
   size = 'standard',
   accessibilityLabel,
@@ -313,33 +313,6 @@ const ExerciseVisualInner: React.FC<ExerciseVisualProps> = ({
     </View>
   );
 };
-
-// Only the fields that influence the drawing; list rows often receive fresh-but-equal objects.
-function sameVisualExercise(a: Exercise, b: Exercise): boolean {
-  return (
-    a === b ||
-    (a.id === b.id &&
-      a.name === b.name &&
-      a.category === b.category &&
-      a.equipment === b.equipment &&
-      a.primaryMuscles.join('|') === b.primaryMuscles.join('|') &&
-      (a.secondaryMuscles || []).join('|') === (b.secondaryMuscles || []).join('|'))
-  );
-}
-
-/**
- * Memoized: the SVG figure is the most expensive part of an exercise row, and it only changes
- * when the exercise or display options do, not when a set in the same card is edited.
- */
-export const ExerciseVisual = React.memo(ExerciseVisualInner, (prev, next) =>
-  sameVisualExercise(prev.exercise, next.exercise) &&
-  prev.size === next.size &&
-  prev.accessibilityLabel === next.accessibilityLabel &&
-  prev.animated === next.animated &&
-  prev.frameIndex === next.frameIndex &&
-  prev.onFrameChange === next.onFrameChange &&
-  prev.intervalMs === next.intervalMs,
-);
 
 const styles = StyleSheet.create({
   container: {

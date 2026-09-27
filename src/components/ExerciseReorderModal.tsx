@@ -22,7 +22,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveExercise } from '../types';
-import { ExerciseVisual } from './ExerciseVisual';
+import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { colors } from '../theme';
 
 interface ExerciseReorderModalProps {

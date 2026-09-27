@@ -4,7 +4,7 @@ import { Check, ChevronRight, Edit2 } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { colors } from '../theme';
-import { ExerciseVisual } from './ExerciseVisual';
+import { ExerciseVisual } from './MemoizedExerciseVisual';
 
 interface ExerciseListRowProps {
   exercise: Exercise;

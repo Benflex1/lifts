@@ -29,7 +29,7 @@ import {
 } from 'lucide-react-native';
 import { Exercise, Routine } from '../types';
 import { ExercisePickerModal } from './ExercisePickerModal';
-import { ExerciseVisual } from './ExerciseVisual';
+import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { RestTimeWheelModal } from './RestTimeWheelModal';
 import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { saveRoutine } from '../database/db';

@@ -69,7 +69,7 @@ import { PRBadge } from '../components/PRBadge';
 import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { WarmupModal } from '../components/WarmupModal';
 import { SupersetModal } from '../components/SupersetModal';
-import { ExerciseVisual } from '../components/ExerciseVisual';
+import { ExerciseVisual } from '../components/MemoizedExerciseVisual';
 import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
