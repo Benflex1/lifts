@@ -113,6 +113,10 @@ Health export is disabled by default and hidden/no-op on Web. When enabled in a 
 
 ---
 
+## Installing
+
+Signed Android APKs are published on the [GitHub Releases](https://github.com/Benflex1/lifts/releases) page. Updates install over the previous release and keep your data. APKs from the preview workflow and local debug builds use a different signing key, so they cannot be installed over a release build (or the other way round) without uninstalling first. Export a backup before switching.
+
 ## Building an Android Debug APK
 
 To build a standalone debug APK locally without relying on cloud services:
@@ -152,6 +156,8 @@ To build a standalone debug APK locally without relying on cloud services:
 ## Documentation & Provenance
 
 - [Product Roadmap](ROADMAP.md)
+- [Changelog](CHANGELOG.md)
+- [Release & Verification Checklist](docs/release-checklist.md) (including signing and publishing)
 - [Multi-Gym Tracking & Machine Isolation Design Spec](docs/superpowers/specs/2026-09-10-multi-gym-tracking-design.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)
