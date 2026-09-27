@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
   View,
   Text,
@@ -10,6 +12,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Trophy } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { colors, radii, spacing, type, HEADER_TOP_FALLBACK } from '../theme';
 
@@ -246,7 +249,8 @@ export interface SheetAction {
   destructive?: boolean;
 }
 
-const IOS_MODAL_HANDOFF_MS = 350;
+// Safety net in case iOS never reports the dismissal of the sheet's modal.
+const IOS_DISMISS_FALLBACK_MS = 600;
 
 interface ActionSheetProps {
   visible: boolean;
@@ -258,13 +262,69 @@ interface ActionSheetProps {
 
 export function ActionSheet({ visible, title, subtitle, actions, onClose }: ActionSheetProps) {
   const insets = useSafeAreaInsets();
+  const progress = useRef(new Animated.Value(0)).current;
+  // iOS cannot present another modal until this one has fully dismissed, so the chosen action
+  // runs from onDismiss there. Other platforms run it immediately.
+  const pendingActionRef = useRef<(() => void) | null>(null);
+
+  const runPendingAction = () => {
+    const action = pendingActionRef.current;
+    pendingActionRef.current = null;
+    action?.();
+  };
+
+  useEffect(() => {
+    if (visible) {
+      progress.setValue(0);
+      Animated.timing(progress, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: Platform.OS !== 'web',
+      }).start();
+      return;
+    }
+    if (Platform.OS === 'ios' && pendingActionRef.current) {
+      const fallback = setTimeout(runPendingAction, IOS_DISMISS_FALLBACK_MS);
+      return () => clearTimeout(fallback);
+    }
+  }, [visible, progress]);
+
+  const handleSelect = (action: SheetAction) => {
+    if (Platform.OS === 'ios') {
+      pendingActionRef.current = action.onPress;
+      onClose();
+    } else {
+      onClose();
+      action.onPress();
+    }
+  };
+
+  const sheetTranslate = progress.interpolate({ inputRange: [0, 1], outputRange: [360, 0] });
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity
-          activeOpacity={1}
-          style={[styles.sheet, { paddingBottom: Math.max(spacing.xl, insets.bottom + spacing.md) }]}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+      onDismiss={runPendingAction}
+    >
+      <View style={styles.sheetRoot}>
+        <Animated.View style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={onClose}
+            accessibilityLabel="Close menu"
+          />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.sheet,
+            { paddingBottom: Math.max(spacing.xl, insets.bottom + spacing.md) },
+            { transform: [{ translateY: sheetTranslate }] },
+          ]}
         >
           <View style={styles.sheetHandle} />
           {title ? (
@@ -286,12 +346,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
                 <TouchableOpacity
                   key={action.key}
                   style={[styles.sheetItem, idx > 0 && styles.sheetItemDivider]}
-                  onPress={() => {
-                    onClose();
-                    // iOS cannot present a new modal while this one is still dismissing.
-                    if (Platform.OS === 'ios') setTimeout(action.onPress, IOS_MODAL_HANDOFF_MS);
-                    else action.onPress();
-                  }}
+                  onPress={() => handleSelect(action)}
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={action.label}
@@ -322,49 +377,52 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
           >
             <Text style={styles.sheetCancelText}>Cancel</Text>
           </TouchableOpacity>
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Medal
+// PR mark
 // ---------------------------------------------------------------------------
 
-export const MEDAL_COLORS = {
-  1: { fill: '#F5B83D', ring: '#FCD877', text: '#3D2A00' },
-  2: { fill: '#B9C2CF', ring: '#E2E8F0', text: '#1F2733' },
-  3: { fill: '#D08A4E', ring: '#EDB282', text: '#3A1C05' },
-} as const;
+export type PRRankLevel = 1 | 2 | 3;
 
-interface MedalProps {
-  rank: 1 | 2 | 3;
+/** Accent per record rank: gold for a new best, quieter metals for 2nd and 3rd best. */
+export const PR_RANK_COLORS: Record<PRRankLevel, string> = {
+  1: '#F5B83D',
+  2: '#AEB7C4',
+  3: '#D4925B',
+};
+
+export const PR_RANK_LABELS: Record<PRRankLevel, string> = {
+  1: 'PR',
+  2: '2nd best',
+  3: '3rd best',
+};
+
+interface PRMarkProps {
+  rank: PRRankLevel;
   size?: number;
-  /** Show the rank number inside the medal. */
-  numbered?: boolean;
 }
 
-/** A small, platform-consistent medal disc used wherever a PR rank is shown. */
-export function Medal({ rank, size = 14, numbered = false }: MedalProps) {
-  const palette = MEDAL_COLORS[rank];
+/** A tinted trophy disc; the one visual used for personal records across the app. */
+export function PRMark({ rank, size = 28 }: PRMarkProps) {
+  const color = PR_RANK_COLORS[rank];
   return (
     <View
-      accessibilityLabel={rank === 1 ? 'Gold' : rank === 2 ? 'Silver' : 'Bronze'}
+      accessibilityLabel={rank === 1 ? 'Personal record' : PR_RANK_LABELS[rank]}
       style={{
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: palette.fill,
-        borderWidth: Math.max(1, Math.round(size / 9)),
-        borderColor: palette.ring,
+        backgroundColor: color + '24',
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      {numbered ? (
-        <Text style={{ color: palette.text, fontSize: size * 0.5, fontWeight: '900' }}>{rank}</Text>
-      ) : null}
+      <Trophy size={Math.round(size * 0.52)} color={color} strokeWidth={2.2} />
     </View>
   );
 }
@@ -520,10 +578,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary,
   },
-  sheetBackdrop: {
+  sheetRoot: {
     flex: 1,
-    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    backgroundColor: colors.overlay,
   },
   sheet: {
     backgroundColor: colors.surface,

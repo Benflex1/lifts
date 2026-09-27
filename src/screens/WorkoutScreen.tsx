@@ -18,10 +18,14 @@ import {
   Layers,
   MoreHorizontal,
   ChevronRight,
+  Check,
+  Flame,
 } from 'lucide-react-native';
-import { useWorkout } from '../context/WorkoutContext';
+import { useWorkoutActions, useWorkoutGyms } from '../context/WorkoutContext';
 import { Routine } from '../types';
-import { getRoutines, deleteRoutine, duplicateRoutine } from '../database/db';
+import { getRoutines, deleteRoutine, duplicateRoutine, getGyms, getWorkoutHistory } from '../database/db';
+import { buildWeekSnapshot, WeekSnapshot } from '../workout/week-summary';
+import { formatWeight } from '../utils/units';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
 import { SettingsModal } from '../components/SettingsModal';
@@ -29,13 +33,15 @@ import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { resolveInitialStartGymId } from '../workout/gym-session';
 import { useSettings } from '../context/SettingsContext';
 import { useDialog } from '../context/DialogContext';
+import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
 import { getSupersetMetadata } from '../workout/supersets';
 import { colors, radii } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader, SectionHeader } from '../components/ui';
 
-export const WorkoutScreen: React.FC = () => {
-  const { startWorkout, gyms, refreshGyms } = useWorkout();
-  const { gymTrackingEnabled } = useSettings();
+const WorkoutScreenInner: React.FC = () => {
+  const { startWorkout, refreshGyms } = useWorkoutActions();
+  const { gyms } = useWorkoutGyms();
+  const { gymTrackingEnabled, unit } = useSettings();
   const { confirm, notify } = useDialog();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('All');
@@ -44,6 +50,7 @@ export const WorkoutScreen: React.FC = () => {
   const [routineToEdit, setRoutineToEdit] = useState<Routine | null>(null);
   const [showFolderManage, setShowFolderManage] = useState(false);
   const [menuRoutine, setMenuRoutine] = useState<Routine | null>(null);
+  const [week, setWeek] = useState<WeekSnapshot | null>(null);
   const [pendingStart, setPendingStart] = useState<{
     routine?: Routine;
     customName: string;
@@ -53,9 +60,12 @@ export const WorkoutScreen: React.FC = () => {
     loadRoutines();
   }, []);
 
+  useReloadOnActivate(() => void loadRoutines());
+
   const loadRoutines = async () => {
-    const list = await getRoutines();
+    const [list, history] = await Promise.all([getRoutines(), getWorkoutHistory()]);
     setRoutines(list);
+    setWeek(buildWeekSnapshot(history));
   };
 
   const openStartModal = async (routine?: Routine, customName = 'Empty Workout') => {
@@ -72,7 +82,12 @@ export const WorkoutScreen: React.FC = () => {
     }
 
     try {
-      await refreshGyms();
+      const [gymList] = await Promise.all([getGyms(), refreshGyms()]);
+      // With a single gym there is nothing to choose, so start straight away.
+      if (gymList.length <= 1) {
+        await startWorkout(routine, customName, undefined, { gymId: resolveInitialStartGymId(gymList) });
+        return;
+      }
       setPendingStart({ routine, customName });
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to start workout.' });
@@ -185,6 +200,57 @@ export const WorkoutScreen: React.FC = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* This week */}
+        {week && (
+          <View style={styles.weekCard}>
+            <View style={styles.weekHeader}>
+              <Text style={styles.weekTitle}>This week</Text>
+              {week.streakWeeks > 1 && (
+                <View style={styles.streakPill}>
+                  <Flame size={13} color={colors.warning} />
+                  <Text style={styles.streakText}>{week.streakWeeks} week streak</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.weekDays}>
+              {week.days.map(day => (
+                <View key={day.dateKey} style={styles.weekDay}>
+                  <View
+                    style={[
+                      styles.weekDot,
+                      day.trained && styles.weekDotTrained,
+                      day.isToday && !day.trained && styles.weekDotToday,
+                    ]}
+                  >
+                    {day.trained && <Check size={14} color={colors.onPrimary} strokeWidth={3} />}
+                  </View>
+                  <Text style={[styles.weekDayLabel, day.isToday && styles.weekDayLabelToday]}>
+                    {day.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.weekStats}>
+              <View style={styles.weekStat}>
+                <Text style={styles.weekStatValue}>{week.workouts}</Text>
+                <Text style={styles.weekStatLabel}>{week.workouts === 1 ? 'workout' : 'workouts'}</Text>
+              </View>
+              <View style={styles.weekStat}>
+                <Text style={styles.weekStatValue}>{formatWeight(week.volumeKg, unit)}</Text>
+                <Text style={styles.weekStatLabel}>volume</Text>
+              </View>
+              <View style={styles.weekStat}>
+                <Text style={styles.weekStatValue}>
+                  {week.durationSeconds >= 3600
+                    ? `${(week.durationSeconds / 3600).toFixed(1)}h`
+                    : `${Math.round(week.durationSeconds / 60)}m`}
+                </Text>
+                <Text style={styles.weekStatLabel}>trained</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* Quick Start */}
         <TouchableOpacity
           style={styles.quickStartCard}
@@ -558,4 +624,94 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  weekCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 12,
+  },
+  weekHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  weekTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.warningSoft,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  streakText: {
+    color: colors.warning,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  weekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  weekDay: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  weekDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.surfaceHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekDotTrained: {
+    backgroundColor: colors.primary,
+  },
+  weekDotToday: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: 'transparent',
+  },
+  weekDayLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  weekDayLabelToday: {
+    color: colors.text,
+  },
+  weekStats: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderStrong,
+    paddingTop: 12,
+  },
+  weekStat: {
+    flex: 1,
+  },
+  weekStatValue: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  weekStatLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 1,
+  },
 });
+
+/** Memoized so hidden (kept-alive) tabs skip re-rendering when the app shell updates. */
+export const WorkoutScreen = React.memo(WorkoutScreenInner);

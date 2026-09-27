@@ -1,14 +1,16 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronUp, Play, Clock, Dumbbell, Timer } from 'lucide-react-native';
-import { useWorkout } from '../context/WorkoutContext';
+import { useRestTimer, useWorkout, useWorkoutClock } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { formatTimer } from '../utils/calculator';
 import { colors } from '../theme';
 
 export const ActiveWorkoutMiniBar: React.FC = () => {
-  const { isWorkingOut, isMinimized, activeWorkout, elapsedSeconds, restTimer, maximizeWorkout } = useWorkout();
+  const { isWorkingOut, isMinimized, activeWorkout, maximizeWorkout } = useWorkout();
+  const elapsedSeconds = useWorkoutClock();
+  const restTimer = useRestTimer();
   const { unit } = useSettings();
 
   if (!isWorkingOut || !isMinimized || !activeWorkout) {

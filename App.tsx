@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,11 @@ import { WorkoutSummaryModal } from './src/components/WorkoutSummaryModal';
 import { Workout } from './src/types';
 import { saveCompletedWorkout } from './src/database/db';
 import { colors } from './src/theme';
+import {
+  ActivationEmitter,
+  TabActivationContext,
+  createActivationEmitter,
+} from './src/hooks/useReloadOnActivate';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
@@ -40,19 +45,53 @@ function MainAppContent() {
   const { isWorkingOut, isMinimized, gyms } = useWorkout();
   const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
+  // Tabs are mounted on first visit and then kept alive (hidden) so switching back is instant.
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<Tab>>(() => new Set<Tab>(['workout']));
+
+  const selectTab = (tab: Tab) => {
+    setCurrentTab(tab);
+    setVisitedTabs(prev => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+  };
   const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
   const [historyWorkoutUpdate, setHistoryWorkoutUpdate] = useState<Workout | null>(null);
+
+  const showLogger = isWorkingOut && !isMinimized;
+
+  // One stable emitter per tab; firing it asks that tab to refresh its data in the background.
+  const tabEmitters = useMemo(
+    () =>
+      Object.fromEntries(TABS.map(tab => [tab.key, createActivationEmitter()])) as Record<
+        Tab,
+        ActivationEmitter
+      >,
+    [],
+  );
+  const visibleTab: Tab | null = showLogger ? null : currentTab;
+  const previousVisibleTabRef = useRef<Tab | null>(visibleTab);
+  const shownTabsRef = useRef<Set<Tab>>(new Set(visibleTab ? [visibleTab] : []));
+
+  useEffect(() => {
+    const previous = previousVisibleTabRef.current;
+    previousVisibleTabRef.current = visibleTab;
+    if (!visibleTab || visibleTab === previous) return;
+    // A tab's first appearance mounts it and it loads on its own; only returning visits refresh.
+    if (shownTabsRef.current.has(visibleTab)) {
+      tabEmitters[visibleTab].emit();
+    } else {
+      shownTabsRef.current.add(visibleTab);
+    }
+  }, [visibleTab, tabEmitters]);
 
   const handleWorkoutCompleted = (workout: Workout) => {
     setCompletedWorkout(workout);
     setHistoryWorkoutUpdate(null);
-    setCurrentTab('history');
+    selectTab('history');
   };
 
   const handleSummaryDismissed = () => {
     setCompletedWorkout(null);
     setHistoryWorkoutUpdate(null);
-    setCurrentTab('history');
+    selectTab('history');
   };
 
   const handleSummaryWorkoutUpdate = async (updated: Workout) => {
@@ -74,57 +113,65 @@ function MainAppContent() {
         onDismiss={handleSummaryDismissed}
       />
 
-      {isWorkingOut && !isMinimized ? (
+      {showLogger && (
         <View style={styles.appWrapper}>
           <ReadOnlyBanner />
           <ActiveWorkoutScreen onFinish={handleWorkoutCompleted} />
         </View>
-      ) : (
-        <>
-          {/* Screen Views */}
-          <View style={styles.screenContent}>
-            <ReadOnlyBanner />
-            {currentTab === 'workout' && <WorkoutScreen />}
-            {currentTab === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
-            {currentTab === 'exercises' && <ExercisesScreen />}
-            {currentTab === 'analytics' && <AnalyticsScreen />}
-          </View>
-
-          {/* Paused Workout Card — placed in bottom thumb zone */}
-          <DraftResumeBanner />
-
-          {/* Persistent Mini Bar when workout is active in background */}
-          <ActiveWorkoutMiniBar />
-
-          {/* Bottom Navigation Bar */}
-          <View style={[styles.bottomNav, { paddingBottom: Math.max(10, insets.bottom) }]}>
-            {TABS.map(tab => {
-              const active = currentTab === tab.key;
-              const Icon = tab.icon;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={styles.navTab}
-                  onPress={() => setCurrentTab(tab.key)}
-                  activeOpacity={0.7}
-                  accessibilityRole="tab"
-                  accessibilityLabel={tab.label}
-                  accessibilityState={{ selected: active }}
-                >
-                  <View style={[styles.navIconWrap, active && styles.navIconWrapActive]}>
-                    <Icon
-                      size={21}
-                      color={active ? colors.primary : colors.textMuted}
-                      strokeWidth={active ? 2.4 : 2}
-                    />
-                  </View>
-                  <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </>
       )}
+
+      <View style={[styles.appWrapper, showLogger && styles.hidden]}>
+        {/* Screen Views */}
+        <View style={styles.screenContent}>
+          <ReadOnlyBanner />
+          {TABS.map(tab =>
+            visitedTabs.has(tab.key) ? (
+              <View key={tab.key} style={[styles.tabPane, currentTab !== tab.key && styles.hidden]}>
+                <TabActivationContext.Provider value={tabEmitters[tab.key]}>
+                  {tab.key === 'workout' && <WorkoutScreen />}
+                  {tab.key === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
+                  {tab.key === 'exercises' && <ExercisesScreen />}
+                  {tab.key === 'analytics' && <AnalyticsScreen />}
+                </TabActivationContext.Provider>
+              </View>
+            ) : null,
+          )}
+        </View>
+
+        {/* Paused Workout Card — placed in bottom thumb zone */}
+        <DraftResumeBanner />
+
+        {/* Persistent Mini Bar when workout is active in background */}
+        <ActiveWorkoutMiniBar />
+
+        {/* Bottom Navigation Bar */}
+        <View style={[styles.bottomNav, { paddingBottom: Math.max(10, insets.bottom) }]}>
+          {TABS.map(tab => {
+            const active = currentTab === tab.key;
+            const Icon = tab.icon;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={styles.navTab}
+                onPress={() => selectTab(tab.key)}
+                activeOpacity={0.7}
+                accessibilityRole="tab"
+                accessibilityLabel={tab.label}
+                accessibilityState={{ selected: active }}
+              >
+                <View style={[styles.navIconWrap, active && styles.navIconWrapActive]}>
+                  <Icon
+                    size={21}
+                    color={active ? colors.primary : colors.textMuted}
+                    strokeWidth={active ? 2.4 : 2}
+                  />
+                </View>
+                <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
     </View>
   );
 }
@@ -189,6 +236,12 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     flex: 1,
+  },
+  tabPane: {
+    flex: 1,
+  },
+  hidden: {
+    display: 'none',
   },
   bottomNav: {
     flexDirection: 'row',

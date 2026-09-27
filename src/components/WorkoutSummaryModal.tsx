@@ -23,7 +23,7 @@ import { ConfettiCelebration } from './ConfettiCelebration';
 import { WorkoutDurationModal } from './WorkoutDurationModal';
 import { isExcessiveDuration, estimateWorkoutDuration } from '../workout/duration';
 import { colors } from '../theme';
-import { Medal } from './ui';
+import { PRMark } from './ui';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
@@ -266,7 +266,7 @@ export function WorkoutSummaryModal({
               <ScrollView style={styles.prList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                 {prSummary.achievements.map((item, idx) => (
                   <View key={idx} style={styles.prCard}>
-                    <Medal rank={item.achievement.rank} size={26} numbered />
+                    <PRMark rank={item.achievement.rank} size={34} />
                     <View style={styles.prCardContent}>
                       <Text style={styles.prCardExercise}>{item.exerciseName}</Text>
                       <Text style={styles.prCardMetric}>
@@ -285,6 +285,7 @@ export function WorkoutSummaryModal({
           <ScrollView style={styles.exerciseList} showsVerticalScrollIndicator={false}>
             {workout.exercises.map((ex, idx) => {
               const completedSets = ex.sets.filter((s) => s.isCompleted);
+              if (completedSets.length === 0) return null;
               const maxWeight = completedSets.reduce(
                 (max, s) => (s.weightKg > max ? s.weightKg : max),
                 0
@@ -297,19 +298,13 @@ export function WorkoutSummaryModal({
                     <View style={styles.exerciseNameRow}>
                       <Text style={styles.exerciseNameText}>{ex.exercise.name}</Text>
                       {exercisePRs && exercisePRs.length > 0 && (
-                        <View style={styles.exercisePRBadge}>
-                          <Medal
-                            rank={Math.min(...exercisePRs.map((a) => a.achievement.rank)) as 1 | 2 | 3}
-                            size={11}
-                          />
-                          <Text style={styles.exercisePRBadgeText}>
-                            {exercisePRs.some((a) => a.achievement.rank === 1)
-                              ? 'PR'
-                              : exercisePRs.some((a) => a.achievement.rank === 2)
-                              ? '2nd'
-                              : '3rd'}
-                          </Text>
-                        </View>
+                        <PRBadge
+                          compact
+                          achievement={
+                            exercisePRs.reduce((best, a) => (a.achievement.rank < best.achievement.rank ? a : best))
+                              .achievement
+                          }
+                        />
                       )}
                     </View>
                     <Text style={styles.exerciseMetaText}>
@@ -519,9 +514,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.warningSoft,
   },
-  prCardEmoji: {
-    fontSize: 18,
-  },
   prCardContent: {
     flex: 1,
   },
@@ -540,22 +532,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  exercisePRBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#78350F30',
-    borderColor: '#F59E0B50',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  exercisePRBadgeText: {
-    color: colors.gold,
-    fontSize: 10,
-    fontWeight: '800',
   },
   breakdownTitle: {
     fontSize: 14,

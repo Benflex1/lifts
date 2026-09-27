@@ -214,32 +214,21 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     });
   };
 
-  const renderStatsCard = (label: string, stats: DualExerciseStats['global']) => (
+  const renderStatsCard = (label: string | null, stats: DualExerciseStats['global']) => (
     <View style={styles.statsCard}>
-      <Text style={styles.statsTierTitle}>{label}</Text>
+      {label ? <Text style={styles.statsTierTitle}>{label}</Text> : null}
       <View style={styles.statsGrid}>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>HEAVIEST LIFT</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.maxWeightKg > 0 ? formatWeight(stats.maxWeightKg, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>MAX SET VOLUME</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>ESTIMATED 1RM</Text>
-          <Text style={styles.statBoxValue}>
-            {stats.estimated1RM > 0 ? formatWeight(stats.estimated1RM, unit) : '—'}
-          </Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statBoxLabel}>SESSIONS</Text>
-          <Text style={styles.statBoxValue}>{stats.sessionCount}</Text>
-        </View>
+        {[
+          ['Heaviest lift', stats.maxWeightKg > 0 ? formatWeight(stats.maxWeightKg, unit) : '—'],
+          ['Estimated 1RM', stats.estimated1RM > 0 ? formatWeight(stats.estimated1RM, unit) : '—'],
+          ['Best set volume', stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—'],
+          ['Sessions', String(stats.sessionCount)],
+        ].map(([statLabel, value]) => (
+          <View key={statLabel} style={styles.statBox}>
+            <Text style={styles.statBoxValue}>{value}</Text>
+            <Text style={styles.statBoxLabel}>{statLabel}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -412,6 +401,21 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             </Text>
           )}
 
+          {/* Personal Bests */}
+          {exerciseStats && resolvedGym && (
+            <>
+              <Text style={styles.statsHeaderTitle}>Personal bests</Text>
+              {JSON.stringify(exerciseStats.global) === JSON.stringify(exerciseStats.gym) ? (
+                renderStatsCard(null, exerciseStats.global)
+              ) : (
+                <>
+                  {renderStatsCard('All gyms', exerciseStats.global)}
+                  {renderStatsCard(resolvedGym.name, exerciseStats.gym)}
+                </>
+              )}
+            </>
+          )}
+
           {/* All-Time Podium Showcase */}
           {exercisePodium && (
             <ExercisePodiumView
@@ -422,26 +426,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             />
           )}
 
-          {/* Personal Bests & Stats */}
-
-          {exerciseStats && resolvedGym && (
-            <>
-              <View style={styles.statsHeader}>
-                <Trophy size={16} color={colors.warning} />
-                <Text style={styles.statsHeaderTitle}>PERSONAL BESTS & STATS</Text>
-              </View>
-              {renderStatsCard('Global', exerciseStats.global)}
-              {renderStatsCard(resolvedGym.name, exerciseStats.gym)}
-            </>
-          )}
-
           {/* Progression Curve */}
           {progressionSeries && progressionSeries.points.length > 0 && (
             <View style={styles.progressionSection}>
               <View style={styles.progressionHeaderRow}>
                 <View style={styles.progressionTitleWrap}>
-                  <TrendingUp size={16} color={colors.primary} />
-                  <Text style={styles.progressionTitleText}>STRENGTH PROGRESSION</Text>
+                  <Text style={styles.progressionTitleText}>Progress</Text>
                 </View>
                 <View style={styles.metricTabsRow}>
                   {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => {
@@ -525,9 +515,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           {/* Chronological Workout History */}
           <View style={styles.historySection}>
             <View style={styles.historyHeader}>
-              <CalendarIcon size={16} color={colors.primary} />
               <Text style={styles.historyHeaderTitle}>
-                {showAllHistory ? `ALL SESSIONS (${filteredHistoryWorkouts.length})` : 'RECENT SESSIONS'}
+                {showAllHistory ? `All sessions (${filteredHistoryWorkouts.length})` : 'Recent sessions'}
               </Text>
             </View>
 
@@ -709,8 +698,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           {/* Instructions */}
           <View style={styles.instructionsBox}>
             <View style={styles.instructionHeadRow}>
-              <Info size={16} color={colors.primary} />
-              <Text style={styles.instructionsHeading}>HOW TO PERFORM</Text>
+              <Text style={styles.instructionsHeading}>How to perform</Text>
             </View>
 
             {exercise.instructions && exercise.instructions.length > 0 ? (
@@ -888,59 +876,52 @@ const styles = StyleSheet.create({
   },
   statsCard: {
     backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 20,
+    padding: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 14,
-  },
-  statsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     marginBottom: 12,
   },
   statsHeaderTitle: {
-    color: colors.textSecondary,
-    fontSize: 12,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
+    marginBottom: 10,
+    marginTop: 6,
   },
   statsTierTitle: {
-    color: colors.textSoft,
-    fontSize: 12,
-    fontWeight: '800',
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 10,
+    marginLeft: 4,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
     gap: 8,
   },
   statBox: {
     flexGrow: 1,
-    flexBasis: '22%',
-    minWidth: 70,
-    backgroundColor: colors.surfaceSunken,
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.surfaceAlt,
+    flexBasis: '45%',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   statBoxLabel: {
     color: colors.textMuted,
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
   },
   statBoxValue: {
     color: colors.text,
-    fontSize: 15,
+    fontSize: 20,
     fontWeight: '800',
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
   scopeCard: {
     flexDirection: 'row',
@@ -996,10 +977,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   instructionsHeading: {
-    color: colors.textSecondary,
-    fontSize: 12,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
   },
   stepRow: {
     flexDirection: 'row',
@@ -1041,10 +1022,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   historyHeaderTitle: {
-    color: colors.textSecondary,
-    fontSize: 12,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
   },
   historyCard: {
     backgroundColor: colors.surface,
@@ -1172,10 +1153,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   progressionTitleText: {
-    color: colors.textSecondary,
-    fontSize: 12,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.8,
+    letterSpacing: -0.2,
   },
   metricTabsRow: {
     flexDirection: 'row',

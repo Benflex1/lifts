@@ -20,6 +20,7 @@ import {
   getGyms,
 } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
+import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { ExerciseVisual } from '../components/ExerciseVisual';
@@ -119,7 +120,7 @@ const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
   band: 'Cable',
 };
 
-export const ExercisesScreen: React.FC = () => {
+const ExercisesScreenInner: React.FC = () => {
   const { gymTrackingEnabled } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -180,10 +181,19 @@ export const ExercisesScreen: React.FC = () => {
     loadExercises();
   }, [debouncedQuery, selectedMuscle, selectedEquipment]);
 
+  // Custom exercises can be created from the workout picker, so refresh when returning here.
+  useReloadOnActivate(() => void loadExercises());
+
   const loadExercises = async () => {
     try {
       const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
-      setExercises(results);
+      // Keep the current array when nothing changed so the long list does not re-render.
+      setExercises(previous =>
+        previous.length === results.length &&
+        previous.every((ex, idx) => ex === results[idx] || (ex.id === results[idx].id && ex.name === results[idx].name && ex.equipment === results[idx].equipment && ex.primaryMuscles.join() === results[idx].primaryMuscles.join()))
+          ? previous
+          : results,
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -654,3 +664,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
+
+/** Memoized so hidden (kept-alive) tabs skip re-rendering when the app shell updates. */
+export const ExercisesScreen = React.memo(ExercisesScreenInner);

@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Trophy } from 'lucide-react-native';
 import { PRAchievement, formatPRBadgeLabel } from '../workout/pr';
+import { PR_RANK_COLORS } from './ui';
 import { colors } from '../theme';
-import { Medal } from './ui';
 
 interface PRBadgeProps {
   achievement: PRAchievement;
@@ -12,6 +13,17 @@ interface PRBadgeProps {
   onPress?: () => void;
 }
 
+const METRIC_LABELS: Record<PRAchievement['metric'], string> = {
+  weight: 'Weight',
+  '1rm': 'e1RM',
+  volume: 'Volume',
+  reps: 'Reps',
+};
+
+/**
+ * Inline record marker: a tinted pill with a trophy. Gold marks a new best; 2nd and 3rd best use
+ * quieter tones so real PRs stand out.
+ */
 export const PRBadge: React.FC<PRBadgeProps> = ({
   achievement,
   compact = false,
@@ -20,51 +32,26 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
   onPress,
 }) => {
   const { rank, metric } = achievement;
-
-  const isGold = rank === 1;
-  const isSilver = rank === 2;
-
-  const theme = isGold
-    ? {
-        bg: '#78350F35',
-        border: '#F59E0B70',
-        text: colors.gold,
-      }
-    : isSilver
-    ? {
-        bg: '#33415545',
-        border: '#94A3B870',
-        text: colors.text,
-      }
-    : {
-        bg: '#451A0345',
-        border: '#D9770660',
-        text: '#FED7AA',
-      };
-
+  const accent = PR_RANK_COLORS[rank];
+  const textColor = rank === 1 ? accent : rank === 2 ? '#D5DBE3' : '#E7B58A';
   const badgeText = formatPRBadgeLabel(achievement, showGym);
-  const metricLabel =
-    metric === 'weight'
-      ? 'Weight'
-      : metric === '1rm'
-      ? '1RM'
-      : metric === 'volume'
-      ? 'Volume'
-      : 'Reps';
+  const metricLabel = METRIC_LABELS[metric];
 
-  const suffix = additionalCount > 0 ? ` (+${additionalCount})` : '';
-
-  const content = compact ? (
-    <View style={[styles.compactContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
-      <Medal rank={rank} size={11} />
-      <Text style={[styles.compactText, { color: theme.text }]}>{badgeText}{suffix}</Text>
-    </View>
-  ) : (
-    <View style={[styles.fullContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
-      <Medal rank={rank} size={13} />
-      <Text style={[styles.fullText, { color: theme.text }]}>
-        {badgeText} · {metricLabel}{suffix}
+  const content = (
+    <View
+      style={[
+        styles.pill,
+        compact ? styles.pillCompact : styles.pillFull,
+        { backgroundColor: accent + (rank === 1 ? '26' : '1A') },
+      ]}
+    >
+      <Trophy size={compact ? 11 : 12} color={accent} strokeWidth={2.4} />
+      <Text style={[styles.text, compact && styles.textCompact, { color: textColor }]} numberOfLines={1}>
+        {compact ? badgeText : `${badgeText} · ${metricLabel}`}
       </Text>
+      {additionalCount > 0 && (
+        <Text style={[styles.more, compact && styles.textCompact]}>+{additionalCount}</Text>
+      )}
     </View>
   );
 
@@ -73,8 +60,9 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
       <TouchableOpacity
         onPress={onPress}
         activeOpacity={0.7}
+        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
         accessibilityRole="button"
-        accessibilityLabel={`${badgeText} ${metricLabel}`}
+        accessibilityLabel={`${badgeText}, ${metricLabel}${additionalCount > 0 ? `, plus ${additionalCount} more` : ''}`}
       >
         {content}
       </TouchableOpacity>
@@ -85,32 +73,31 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
 };
 
 const styles = StyleSheet.create({
-  compactContainer: {
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
+    borderRadius: 999,
+  },
+  pillCompact: {
     paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
   },
-  compactText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  fullContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
+  pillFull: {
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
   },
-  fullText: {
+  text: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  textCompact: {
     fontSize: 11,
+  },
+  more: {
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    color: colors.textSecondary,
   },
 });

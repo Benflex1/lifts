@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Timer, Plus, Minus, X } from 'lucide-react-native';
-import { useWorkout } from '../context/WorkoutContext';
+import { useRestTimer, useWorkout } from '../context/WorkoutContext';
 import { formatTimer } from '../utils/calculator';
 import { colors } from '../theme';
 
@@ -11,7 +11,8 @@ export interface RestTimerOverlayProps {
 }
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, bottomOffset }) => {
-  const { restTimer, adjustRestTimer, stopRestTimer } = useWorkout();
+  const { adjustRestTimer, stopRestTimer } = useWorkout();
+  const restTimer = useRestTimer();
 
   if (!restTimer.isActive || restTimer.remainingSeconds <= 0) {
     return null;

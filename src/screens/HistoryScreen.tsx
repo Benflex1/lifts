@@ -36,10 +36,11 @@ import {
   getExerciseGymScope,
 } from '../database/db';
 import { formatDuration } from '../utils/calculator';
-import { useWorkout } from '../context/WorkoutContext';
+import { useWorkoutActions } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { useDialog } from '../context/DialogContext';
+import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
 import { resolveHistoricalTargetReps } from '../workout/sets';
 import { resolveInitialStartGymId, resolveRepeatSourceGym } from '../workout/gym-session';
 import { updateWorkoutHistorySummary } from '../workout/history-summary';
@@ -49,7 +50,7 @@ import { PRBadge } from '../components/PRBadge';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { getSupersetMetadata } from '../workout/supersets';
 import { colors, radii } from '../theme';
-import { ActionSheet, Chip, IconButton, Medal, ScreenHeader } from '../components/ui';
+import { ActionSheet, Chip, IconButton, ScreenHeader } from '../components/ui';
 
 interface HistoryScreenProps {
   workoutUpdate?: Workout | null;
@@ -61,8 +62,8 @@ interface PendingRepeatWorkout {
   initialExercises: ActiveExercise[];
 }
 
-export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = null }) => {
-  const { startWorkout } = useWorkout();
+const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null }) => {
+  const { startWorkout } = useWorkoutActions();
   const { unit, gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
@@ -77,10 +78,14 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [pendingRepeat, setPendingRepeat] = useState<PendingRepeatWorkout | null>(null);
   const historyLoadRequestRef = useRef(0);
+  const hasLoadedHistoryRef = useRef(false);
+  const historySignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadHistory();
   }, []);
+
+  useReloadOnActivate(() => void loadHistory({ skipIfUnchanged: true }));
 
   useEffect(() => {
     if (!gymTrackingEnabled) {
@@ -124,12 +129,35 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
     }
   };
 
-  const loadHistory = async () => {
+  const loadHistory = async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
     const requestId = ++historyLoadRequestRef.current;
-    setLoading(true);
+    // Only show the spinner on the first load; later refreshes keep the current list on screen.
+    if (!hasLoadedHistoryRef.current) setLoading(true);
     try {
       const [list, gymList] = await Promise.all([getWorkoutHistory(), getGyms()]);
       if (requestId !== historyLoadRequestRef.current) return;
+
+      // Evaluating PRs across every logged workout is the expensive part, so a background refresh
+      // skips it when nothing that feeds it has changed since the last load.
+      const signature = JSON.stringify([
+        gymTrackingEnabled,
+        gymList.map(gym => [gym.id, gym.name, gym.color]),
+        list.map(item => [
+          item.id,
+          item.name,
+          item.startTime,
+          item.endTime,
+          item.gymId,
+          item.totalSets,
+          item.totalVolumeKg,
+          item.durationSeconds,
+          item.exerciseNames,
+        ]),
+      ]);
+      if (skipIfUnchanged && signature === historySignatureRef.current) return;
+      historySignatureRef.current = signature;
+
+      hasLoadedHistoryRef.current = true;
       setHistory(list);
       setGyms(gymList);
 
@@ -289,11 +317,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
         return;
       }
 
-      setPendingRepeat({
-        routine,
-        name: item.name,
-        initialExercises,
-      });
+      const repeat = { routine, name: item.name, initialExercises };
+      // With a single gym there is nothing to choose, so start straight away.
+      if (loadedGyms.length <= 1) {
+        await startWorkout(repeat.routine, repeat.name, repeat.initialExercises, {
+          gymId: resolveInitialStartGymId(loadedGyms),
+        });
+        return;
+      }
+      setPendingRepeat(repeat);
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to start workout.' });
     }
@@ -488,7 +520,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                         {detail.exercises.map((ex, exIdx) => {
                           const completedSets = ex.sets.filter(s => s.isCompleted);
                           if (completedSets.length === 0) return null;
-                          const exercisePRs = prSummary?.achievements.filter(a => a.exerciseId === ex.exerciseId);
                           const ssMeta = supersetMetaMap.get(ex.id);
 
                           return (
@@ -537,21 +568,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                                       </View>
                                     )}
                                   </View>
-                                  {exercisePRs && exercisePRs.length > 0 && (
-                                    <View style={styles.detailExPRBadge}>
-                                      <Medal
-                                        rank={Math.min(...exercisePRs.map(a => a.achievement.rank)) as 1 | 2 | 3}
-                                        size={11}
-                                      />
-                                      <Text style={styles.detailExPRBadgeText}>
-                                        {exercisePRs.some(a => a.achievement.rank === 1)
-                                          ? 'Gold PR'
-                                          : exercisePRs.some(a => a.achievement.rank === 2)
-                                          ? 'Silver'
-                                          : 'Bronze'}
-                                      </Text>
-                                    </View>
-                                  )}
                                 </View>
                                 {ex.notes ? (
                                   <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
@@ -877,22 +893,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  detailExPRBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#78350F30',
-    borderColor: '#F59E0B50',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  detailExPRBadgeText: {
-    color: colors.gold,
-    fontSize: 10,
-    fontWeight: '800',
-  },
   exerciseNamesBox: {
     marginTop: 12,
   },
@@ -1035,3 +1035,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
 });
+
+/** Memoized so hidden (kept-alive) tabs skip re-rendering when the app shell updates. */
+export const HistoryScreen = React.memo(HistoryScreenInner);

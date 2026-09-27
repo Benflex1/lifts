@@ -43,7 +43,8 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
-import { useWorkout } from '../context/WorkoutContext';
+import { useIsRestTimerActive, useWorkout, useWorkoutClock } from '../context/WorkoutContext';
+import { computeElapsedSeconds } from '../utils/timer';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight, kgToDisplay, displayToKg } from '../utils/units';
 import { formatTimer, formatDuration } from '../utils/calculator';
@@ -77,13 +78,18 @@ import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
 import { isExcessiveDuration } from '../workout/duration';
 import { colors } from '../theme';
 
+/** Renders the ticking workout duration without re-rendering the whole logger every second. */
+const LiveWorkoutClock: React.FC = () => {
+  const elapsedSeconds = useWorkoutClock();
+  return <>{formatTimer(elapsedSeconds)}</>;
+};
+
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
   const insets = useSafeAreaInsets();
 
   const {
     activeWorkout,
-    elapsedSeconds,
     minimizeWorkout,
     addExerciseToWorkout,
     addExercisesToWorkout,
@@ -105,7 +111,6 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     toggleSetComplete,
     finishWorkout,
     cancelWorkout,
-    restTimer,
     startRestTimer,
     expandedExercises,
     toggleExerciseExpanded,
@@ -116,6 +121,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     activeGym,
     setActiveGym,
   } = useWorkout();
+  const isRestTimerActive = useIsRestTimerActive();
   const { unit, gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
 
@@ -491,7 +497,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       if (!shouldFinish) return;
     }
 
-    if (isExcessiveDuration(elapsedSeconds)) {
+    if (isExcessiveDuration(computeElapsedSeconds(activeWorkout.startTime, Date.now()))) {
       setDurationModalSafetyMode(true);
       setShowDurationModal(true);
       return;
@@ -688,7 +694,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           accessibilityLabel="Adjust workout duration"
         >
           <Text style={[styles.metricColValue, { color: colors.primary }]}>
-            {formatTimer(elapsedSeconds)}
+            <LiveWorkoutClock />
           </Text>
           <Text style={styles.metricColLabel}>Duration</Text>
         </TouchableOpacity>
@@ -1100,6 +1106,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                         accessibilityRole="checkbox"
                         accessibilityLabel={`Complete set ${set.setNumber}`}
                         accessibilityState={{ checked: set.isCompleted }}
+                        aria-checked={set.isCompleted}
                       >
                         <Check
                           size={20}
@@ -1209,7 +1216,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       />
 
       {/* Non-blocking Floating Superset Cue when timer is not active */}
-      {!restTimer.isActive && supersetNextUpCue && (
+      {!isRestTimerActive && supersetNextUpCue && (
         <View style={[styles.supersetFloatingCue, { bottom: keyboardHeight > 0 ? keyboardHeight + 16 : 24 }]}>
           <View style={styles.supersetCueBadge}>
             <Text style={styles.supersetCueBadgeText}>NEXT UP</Text>
@@ -1963,7 +1970,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       {/* Workout Duration Adjustment & 4hr+ Safety Modal */}
       <WorkoutDurationModal
         visible={showDurationModal}
-        initialDurationSeconds={elapsedSeconds}
+        initialDurationSeconds={
+          showDurationModal ? computeElapsedSeconds(activeWorkout.startTime, Date.now()) : 0
+        }
         workout={activeWorkout}
         showSafetyPrompt={durationModalSafetyMode}
         onSave={(newSeconds) => {

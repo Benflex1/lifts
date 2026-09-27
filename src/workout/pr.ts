@@ -368,24 +368,32 @@ export function formatPRBadgeLabel(achievement: PRAchievement, showGymName = fal
 /**
  * Formats detailed human-readable achievement description
  */
-export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit = 'kg'): string {
-  const medal = achievement.rank === 1 ? 'Gold' : achievement.rank === 2 ? 'Silver' : 'Bronze';
-  const rankStr = achievement.rank === 1 ? (achievement.isTie ? 'Tied Best' : 'Best') : achievement.rank === 2 ? '2nd Best' : '3rd Best';
-  const metricStr =
-    achievement.metric === 'weight'
-      ? 'Weight Record'
-      : achievement.metric === '1rm'
-      ? 'Estimated 1RM'
-      : achievement.metric === 'volume'
-      ? 'Set Volume'
-      : 'Max Reps';
+const PR_METRIC_WORDING: Record<PRMetric, { best: string; ranked: string }> = {
+  weight: { best: 'Heaviest weight', ranked: 'heaviest weight' },
+  '1rm': { best: 'Best estimated 1RM', ranked: 'best estimated 1RM' },
+  volume: { best: 'Most volume in one set', ranked: 'highest set volume' },
+  reps: { best: 'Most reps', ranked: 'most reps' },
+};
 
+/**
+ * Formats a plain-language achievement description, e.g. "Heaviest weight ever (beats 100 kg)",
+ * "2nd most reps at FitX" or "Ties your best estimated 1RM ever (ties 120 kg)".
+ */
+export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit = 'kg'): string {
+  const wording = PR_METRIC_WORDING[achievement.metric];
   const scopeStr =
     achievement.scope === 'gym'
       ? achievement.gymName
-        ? `at ${achievement.gymName}`
-        : 'Gym Record'
-      : 'All-Time';
+        ? ` at ${achievement.gymName}`
+        : ' at this gym'
+      : ' ever';
+
+  let headline: string;
+  if (achievement.rank === 1) {
+    headline = achievement.isTie ? `Ties your ${wording.ranked}` : wording.best;
+  } else {
+    headline = `${achievement.rank === 2 ? '2nd' : '3rd'} ${wording.ranked}`;
+  }
 
   let prevStr = '';
   if (achievement.previousRecord !== undefined && achievement.previousRecord > 0) {
@@ -397,7 +405,7 @@ export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit
     }
   }
 
-  return `${medal} (${rankStr}) · ${scopeStr} ${metricStr}${prevStr}`;
+  return `${headline}${scopeStr}${prevStr}`;
 }
 
 export interface PodiumEntry {

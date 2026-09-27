@@ -18,21 +18,19 @@ import {
   Share2,
   FileSpreadsheet,
   Trophy,
-  Search,
   ChevronRight,
-  X,
   Flame,
   Zap,
   TrendingUp,
   Layers,
   PieChart,
-  Calendar,
 } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { getStore, getAllExercises } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
-import { useWorkout } from '../context/WorkoutContext';
+import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { useIsWorkingOut } from '../context/WorkoutContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
 import { exportBackup } from '../utils/export';
 import { saveBackupToFiles } from '../utils/saveBackup';
@@ -66,7 +64,8 @@ import { ExercisePodium, extractExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from '../components/ExercisePodiumView';
 import { getAllowedGymIds } from '../workout/gym-scope';
 import { colors } from '../theme';
-import { Chip, Medal, ScreenHeader, SegmentedControl } from '../components/ui';
+import { ScreenHeader, SegmentedControl } from '../components/ui';
+import { RecordsView } from '../components/RecordsView';
 
 type ProgressSection = 'overview' | 'records' | 'tools';
 
@@ -76,9 +75,9 @@ const PROGRESS_SECTIONS: { key: ProgressSection; label: string }[] = [
   { key: 'tools', label: 'Tools' },
 ];
 
-export const AnalyticsScreen: React.FC = () => {
+const AnalyticsScreenInner: React.FC = () => {
   const { unit, gymTrackingEnabled } = useSettings();
-  const { isWorkingOut } = useWorkout();
+  const isWorkingOut = useIsWorkingOut();
   const { confirm, notify } = useDialog();
 
   // Navigation section: Analytics charts vs Trophy Room
@@ -122,7 +121,9 @@ export const AnalyticsScreen: React.FC = () => {
   const [isCsvImporting, setIsCsvImporting] = useState(false);
   const [allGyms, setAllGyms] = useState<Gym[]>([]);
 
-  const loadAnalytics = React.useCallback(async () => {
+  const analyticsSignatureRef = React.useRef<string | null>(null);
+
+  const loadAnalytics = React.useCallback(async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
     try {
       const store = await getStore();
       const snapshot = await store.readSnapshot();
@@ -130,6 +131,16 @@ export const AnalyticsScreen: React.FC = () => {
       const workouts: Workout[] = snapshot.workouts || [];
       const gymsList: Gym[] = snapshot.gyms || [];
       const allExercisesList = await getAllExercises();
+
+      // Rebuilding every chart is costly; a background refresh skips it when the inputs are unchanged.
+      const signature = JSON.stringify([
+        workouts.map(w => [w.id, w.startTime, w.endTime, w.gymId, w.totalVolumeKg, w.exercises?.length, w.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0)]),
+        gymsList.map(g => [g.id, g.name, g.color]),
+        (snapshot.exerciseGymScopes || []).length,
+        allExercisesList.length,
+      ]);
+      if (skipIfUnchanged && signature === analyticsSignatureRef.current) return;
+      analyticsSignatureRef.current = signature;
 
       setAllWorkouts(workouts);
       setAllGyms(gymsList);
@@ -170,6 +181,8 @@ export const AnalyticsScreen: React.FC = () => {
   useEffect(() => {
     void loadAnalytics();
   }, [loadAnalytics]);
+
+  useReloadOnActivate(() => void loadAnalytics({ skipIfUnchanged: true }));
 
   const progressionExercise = useMemo(() => {
     if (!selectedProgressionExerciseId) {
@@ -224,6 +237,7 @@ export const AnalyticsScreen: React.FC = () => {
         selectedGymId: trophyGymId,
         categoryFilter: trophyCategory,
         searchQuery: trophySearch,
+        includeMedalCounts: false,
       }
     );
   }, [
@@ -236,6 +250,15 @@ export const AnalyticsScreen: React.FC = () => {
     trophyCategory,
     trophySearch,
   ]);
+
+  // Unfiltered by category and search: feeds the Big Three card and the Recent PRs strip.
+  const recordsOverview = useMemo(() => {
+    if (allWorkouts.length === 0) return null;
+    return buildTrophyRoomSummary(allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, {
+      selectedGymId: trophyGymId,
+      includeMedalCounts: false,
+    });
+  }, [allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, trophyGymId]);
 
   const handleOpenRecordDetail = (record: ExerciseRecordSummary) => {
     const ex = allExerciseList.find((e) => e.id === record.exerciseId);
@@ -506,246 +529,20 @@ export const AnalyticsScreen: React.FC = () => {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Trophy Room Hero Banner */}
-          <View style={styles.trophyHeroCard}>
-            <View style={styles.trophyHeroHeader}>
-              <Trophy size={18} color={colors.warning} />
-              <Text style={styles.trophyHeroTitle}>ALL-TIME RECORDS</Text>
-            </View>
-            <View style={styles.medalTallyRow}>
-              <View style={styles.medalTallyBox}>
-                <Medal rank={1} size={22} />
-                <Text style={[styles.medalTallyCount, { color: colors.gold }]}>{trophySummary?.totalGold ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>GOLD</Text>
-              </View>
-              <View style={styles.medalTallyBox}>
-                <Medal rank={2} size={22} />
-                <Text style={[styles.medalTallyCount, { color: colors.text }]}>{trophySummary?.totalSilver ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>SILVER</Text>
-              </View>
-              <View style={styles.medalTallyBox}>
-                <Medal rank={3} size={22} />
-                <Text style={[styles.medalTallyCount, { color: '#FED7AA' }]}>{trophySummary?.totalBronze ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>BRONZE</Text>
-              </View>
-              <View style={styles.medalTallyBox}>
-                <Trophy size={20} color={colors.primaryLight} />
-                <Text style={[styles.medalTallyCount, { color: colors.primary }]}>{trophySummary?.totalRecords ?? 0}</Text>
-                <Text style={styles.medalTallyLabel}>TOTAL</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* SBD / Compound Highlights Card */}
-          {trophySummary && trophySummary.sbdTotalKg > 0 && (
-            <View style={styles.sbdCard}>
-              <View style={styles.sbdHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sbdTitle}>POWERLIFTING TOTAL</Text>
-                  <Text style={styles.sbdSubtitle}>Best estimated 1RM across Big 3</Text>
-                </View>
-                <View style={styles.sbdBadge}>
-                  <Text style={styles.sbdTotalText}>{formatWeight(trophySummary.sbdTotalKg, unit)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.sbdGrid}>
-                {trophySummary.sbdBreakdown.squat && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>SQUAT</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.squat.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.squat.weightKg, unit)} × {trophySummary.sbdBreakdown.squat.reps}
-                    </Text>
-                  </View>
-                )}
-                {trophySummary.sbdBreakdown.bench && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>BENCH</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.bench.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.bench.weightKg, unit)} × {trophySummary.sbdBreakdown.bench.reps}
-                    </Text>
-                  </View>
-                )}
-                {trophySummary.sbdBreakdown.deadlift && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>DEADLIFT</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.deadlift.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.deadlift.weightKg, unit)} × {trophySummary.sbdBreakdown.deadlift.reps}
-                    </Text>
-                  </View>
-                )}
-                {trophySummary.sbdBreakdown.overheadPress && (
-                  <View style={styles.sbdCol}>
-                    <Text style={styles.sbdLiftName}>OHP</Text>
-                    <Text style={styles.sbdLiftVal}>{formatWeight(trophySummary.sbdBreakdown.overheadPress.oneRMKg, unit)}</Text>
-                    <Text style={styles.sbdLiftSub}>
-                      {formatWeight(trophySummary.sbdBreakdown.overheadPress.weightKg, unit)} × {trophySummary.sbdBreakdown.overheadPress.reps}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Filters & Search */}
-          <View style={styles.trophyFiltersSection}>
-            {/* Search Input */}
-            <View style={styles.trophySearchRow}>
-              <Search size={16} color={colors.textMuted} />
-              <TextInput
-                style={styles.trophySearchInput}
-                placeholder="Search records"
-                placeholderTextColor={colors.textMuted}
-                value={trophySearch}
-                onChangeText={setTrophySearch}
-              />
-              {trophySearch.length > 0 && (
-                <TouchableOpacity onPress={() => setTrophySearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <X size={16} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Gym filter pills */}
-            {gymTrackingEnabled && allGyms.length > 1 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.pillsScroll}
-                contentContainerStyle={styles.pillsContent}
-              >
-                <Chip
-                  size="sm"
-                  label="All Gyms"
-                  selected={trophyGymId === null}
-                  onPress={() => setTrophyGymId(null)}
-                />
-                {allGyms.map((g) => (
-                  <Chip
-                    key={g.id}
-                    size="sm"
-                    label={g.name}
-                    selected={trophyGymId === g.id}
-                    onPress={() => setTrophyGymId(g.id)}
-                  />
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Category filter pills */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.pillsScroll}
-                contentContainerStyle={styles.pillsContent}
-              >
-              {['all', 'chest', 'back', 'legs', 'shoulders', 'arms', 'core'].map((cat) => (
-                <Chip
-                  key={cat}
-                  size="sm"
-                  label={cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
-                  selected={trophyCategory === cat}
-                  onPress={() => setTrophyCategory(cat)}
-                />
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Records List */}
-          {trophySummary && trophySummary.records.length > 0 ? (
-            trophySummary.records.map((record) => {
-              const dateStr = record.bestWeight?.date || record.bestReps?.date;
-              const formattedDate = dateStr
-                ? new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })
-                : '';
-
-              return (
-                <TouchableOpacity
-                  key={record.exerciseId}
-                  style={styles.recordCard}
-                  onPress={() => handleOpenRecordDetail(record)}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${record.exerciseName} record details`}
-                >
-                  <View style={styles.recordCardMain}>
-                    <View style={styles.recordCardHeader}>
-                      <Text style={styles.recordExerciseName}>{record.exerciseName}</Text>
-                      <View style={styles.recordBadgeRow}>
-                        <View style={styles.recordPill}>
-                          <Text style={styles.recordPillText}>
-                            {(record.primaryMuscles && record.primaryMuscles.length > 0
-                              ? record.primaryMuscles[0]
-                              : record.category
-                            )}
-                          </Text>
-                        </View>
-                        <View style={styles.recordPill}>
-                          <Text style={styles.recordPillText}>{record.equipment}</Text>
-                        </View>
-                        {gymTrackingEnabled && record.bestWeight?.gymName && (
-                          <View style={styles.recordGymBadge}>
-                            <Text style={styles.recordGymText}>{record.bestWeight.gymName}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    <View style={styles.recordMetricsGrid}>
-                      {record.bestWeight && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>Heaviest set</Text>
-                          <Text style={styles.recordMetricVal}>
-                            {formatWeight(record.bestWeight.value, unit)} × {record.bestWeight.reps}
-                          </Text>
-                        </View>
-                      )}
-
-                      {record.best1RM && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>Est. 1RM</Text>
-                          <Text style={styles.recordMetricVal}>{formatWeight(record.best1RM.value, unit)}</Text>
-                        </View>
-                      )}
-
-                      {record.bestVolume && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>Best volume</Text>
-                          <Text style={styles.recordMetricVal}>{formatWeight(record.bestVolume.value, unit)}</Text>
-                        </View>
-                      )}
-
-                      {record.bestReps && (
-                        <View style={styles.recordMetricBox}>
-                          <Text style={styles.recordMetricLabel}>Max reps</Text>
-                          <Text style={styles.recordMetricVal}>{record.bestReps.value} reps</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {formattedDate.length > 0 && (
-                      <Text style={styles.recordDateText}>Set on {formattedDate}</Text>
-                    )}
-                  </View>
-
-                  <ChevronRight size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-              );
-            })
-          ) : (
-            <View style={styles.emptyTrophyCard}>
-              <Trophy size={32} color={colors.textFaint} />
-              <Text style={styles.emptyTrophyTitle}>No records found</Text>
-              <Text style={styles.emptyTrophySubtitle}>
-                {trophySearch || trophyCategory !== 'all'
-                  ? 'Try clearing search or category filters.'
-                  : 'Log completed workouts to start building your personal record trophy room!'}
-              </Text>
-            </View>
-          )}
+          <RecordsView
+            overview={recordsOverview}
+            filtered={trophySummary}
+            unit={unit}
+            gyms={allGyms}
+            gymTrackingEnabled={gymTrackingEnabled}
+            selectedGymId={trophyGymId}
+            onSelectGym={setTrophyGymId}
+            category={trophyCategory}
+            onSelectCategory={setTrophyCategory}
+            search={trophySearch}
+            onChangeSearch={setTrophySearch}
+            onOpenRecord={handleOpenRecordDetail}
+          />
         </ScrollView>
       ) : activeSection === 'overview' ? (
         <ScrollView
@@ -1522,7 +1319,7 @@ export const AnalyticsScreen: React.FC = () => {
         exercise={detailExercise}
         onClose={() => setDetailExercise(null)}
         currentGym={trophyGymId ? allGyms.find((g) => g.id === trophyGymId) : null}
-        onHistoryTransferred={loadAnalytics}
+        onHistoryTransferred={() => void loadAnalytics()}
       />
     </View>
   );
@@ -1850,246 +1647,6 @@ const styles = StyleSheet.create({
   standardValues: {
     color: colors.textSecondary,
     fontSize: 12,
-  },
-  trophyHeroCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-  },
-  trophyHeroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  trophyHeroTitle: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  medalTallyRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  medalTallyBox: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.surfaceAlt,
-  },
-  medalTallyCount: {
-    fontSize: 20,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
-  },
-  medalTallyLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  sbdCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-  },
-  sbdHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  sbdTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  sbdSubtitle: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  sbdBadge: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  sbdTotalText: {
-    color: colors.primaryLight,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  sbdGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  sbdCol: {
-    flex: 1,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 12,
-    padding: 10,
-    alignItems: 'center',
-  },
-  sbdLiftName: {
-    color: colors.textSecondary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  sbdLiftVal: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  sbdLiftSub: {
-    color: colors.textSecondary,
-    fontSize: 10,
-    fontWeight: '500',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  trophyFiltersSection: {
-    marginBottom: 14,
-    gap: 10,
-  },
-  trophySearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 44,
-  },
-  trophySearchInput: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 15,
-    paddingVertical: 0,
-  },
-  pillsScroll: {
-    flexDirection: 'row',
-    flexGrow: 0,
-  },
-  recordCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
-  },
-  recordCardMain: {
-    flex: 1,
-  },
-  recordCardHeader: {
-    marginBottom: 8,
-  },
-  recordExerciseName: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-    marginBottom: 4,
-  },
-  recordBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  recordPill: {
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  recordPillText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  recordGymBadge: {
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  recordGymText: {
-    color: colors.primaryLight,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  recordMetricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 6,
-  },
-  recordMetricBox: {
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  recordMetricLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
-    marginBottom: 1,
-  },
-  recordMetricVal: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
-  recordDateText: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  emptyTrophyCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 36,
-    paddingHorizontal: 20,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 8,
-  },
-  emptyTrophyTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  emptyTrophySubtitle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
   },
   streakBadgesRow: {
     flexDirection: 'row',
@@ -2468,7 +2025,7 @@ const styles = StyleSheet.create({
   volumeBarEmpty: {
     backgroundColor: colors.surfaceHigh,
   },
-  pillsContent: {
-    gap: 8,
-  },
 });
+
+/** Memoized so hidden (kept-alive) tabs skip re-rendering when the app shell updates. */
+export const AnalyticsScreen = React.memo(AnalyticsScreenInner);
