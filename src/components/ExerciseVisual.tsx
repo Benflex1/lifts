@@ -14,9 +14,13 @@ export interface ExerciseVisualProps {
   exercise: Exercise;
   size?: ExerciseVisualSize;
   accessibilityLabel?: string;
+  animated?: boolean;
+  frameIndex?: 0 | 1;
+  onFrameChange?: (index: 0 | 1) => void;
+  intervalMs?: number;
 }
 
-const SIZE = {
+export const EXERCISE_VISUAL_SIZES = {
   compact: 56,
   standard: 112,
   hero: 220,
@@ -103,11 +107,112 @@ const renderAsset = (descriptor: Extract<ExerciseVisualDescriptor, { kind: 'open
   return <SvgXml xml={xml} width={dimension} height={dimension} accessibilityRole="image" />;
 };
 
+const AnimatedRemoteExerciseImage: React.FC<{
+  descriptor: Extract<ExerciseVisualDescriptor, { kind: 'remote-image' }>;
+  dimension: number;
+  animated?: boolean;
+  frameIndex?: 0 | 1;
+  onFrameChange?: (index: 0 | 1) => void;
+  intervalMs?: number;
+  onImageError: () => void;
+}> = ({
+  descriptor,
+  dimension,
+  animated = false,
+  frameIndex,
+  onFrameChange,
+  intervalMs = 1200,
+  onImageError,
+}) => {
+  const [internalFrame, setInternalFrame] = React.useState<0 | 1>(frameIndex ?? 0);
+  const [secondFrameFailed, setSecondFrameFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    if (frameIndex !== undefined) {
+      setInternalFrame(frameIndex);
+    }
+  }, [frameIndex]);
+
+  React.useEffect(() => {
+    if (!animated || secondFrameFailed) return;
+    let currentFrame = internalFrame;
+    const timer = setInterval(() => {
+      const next: 0 | 1 = currentFrame === 0 ? 1 : 0;
+      currentFrame = next;
+      setInternalFrame(next);
+      onFrameChange?.(next);
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [animated, internalFrame, intervalMs, onFrameChange, secondFrameFailed]);
+
+  React.useEffect(() => {
+    setSecondFrameFailed(false);
+  }, [descriptor.imageUrl]);
+
+  React.useEffect(() => {
+    if (secondFrameFailed && frameIndex === 1) {
+      onFrameChange?.(0);
+    }
+  }, [frameIndex, onFrameChange, secondFrameFailed]);
+
+  const activeFrame = secondFrameFailed
+    ? 0
+    : frameIndex !== undefined
+      ? frameIndex
+      : internalFrame;
+  const frame0Url = descriptor.imageUrls[descriptor.reverseFrameOrder ? 1 : 0];
+  const frame1Url = descriptor.imageUrls[descriptor.reverseFrameOrder ? 0 : 1];
+
+  return (
+    <View style={[styles.multiFrameContainer, { width: dimension, height: dimension }]}>
+      <Image
+        source={{ uri: frame0Url }}
+        style={[
+          styles.fillImage,
+          { width: dimension, height: dimension },
+          activeFrame === 0 ? styles.imageVisible : styles.imageHidden,
+        ]}
+        resizeMode="contain"
+        accessibilityRole="image"
+        accessibilityLabel={`${descriptor.alt} - Frame 1: Starting Position`}
+        onError={onImageError}
+      />
+      <Image
+        source={{ uri: frame1Url }}
+        style={[
+          styles.fillImage,
+          { width: dimension, height: dimension },
+          activeFrame === 1 ? styles.imageVisible : styles.imageHidden,
+        ]}
+        resizeMode="contain"
+        accessibilityRole="image"
+        accessibilityLabel={`${descriptor.alt} - Frame 2: Peak Contraction`}
+        onError={() => {
+          setSecondFrameFailed(true);
+          onFrameChange?.(0);
+        }}
+      />
+    </View>
+  );
+};
+
 const RemoteExerciseImage: React.FC<{
   descriptor: Extract<ExerciseVisualDescriptor, { kind: 'remote-image' }>;
   exercise: Exercise;
   dimension: number;
-}> = ({ descriptor, exercise, dimension }) => {
+  animated?: boolean;
+  frameIndex?: 0 | 1;
+  onFrameChange?: (index: 0 | 1) => void;
+  intervalMs?: number;
+}> = ({
+  descriptor,
+  exercise,
+  dimension,
+  animated = false,
+  frameIndex,
+  onFrameChange,
+  intervalMs = 1200,
+}) => {
   const [hasError, setHasError] = React.useState(false);
 
   React.useEffect(() => {
@@ -118,14 +223,31 @@ const RemoteExerciseImage: React.FC<{
     return <GeneratedExerciseSvg exercise={exercise} template={descriptor.fallbackTemplate} dimension={dimension} />;
   }
 
+  const hasTwoImages = Array.isArray(descriptor.imageUrls) && descriptor.imageUrls.length >= 2;
+  const isMultiFrame = hasTwoImages && (animated || frameIndex !== undefined);
+
+  if (!isMultiFrame) {
+    return (
+      <Image
+        source={{ uri: descriptor.imageUrl }}
+        style={{ width: dimension, height: dimension }}
+        resizeMode="contain"
+        accessibilityRole="image"
+        accessibilityLabel={descriptor.alt}
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
   return (
-    <Image
-      source={{ uri: descriptor.imageUrl }}
-      style={{ width: dimension, height: dimension }}
-      resizeMode="contain"
-      accessibilityRole="image"
-      accessibilityLabel={descriptor.alt}
-      onError={() => setHasError(true)}
+    <AnimatedRemoteExerciseImage
+      descriptor={descriptor}
+      dimension={dimension}
+      animated={animated}
+      frameIndex={frameIndex}
+      onFrameChange={onFrameChange}
+      intervalMs={intervalMs}
+      onImageError={() => setHasError(true)}
     />
   );
 };
@@ -133,13 +255,27 @@ const RemoteExerciseImage: React.FC<{
 const ExerciseVisualContent: React.FC<{
   exercise: Exercise;
   dimension: number;
-}> = ({ exercise, dimension }) => {
+  animated?: boolean;
+  frameIndex?: 0 | 1;
+  onFrameChange?: (index: 0 | 1) => void;
+  intervalMs?: number;
+}> = ({ exercise, dimension, animated, frameIndex, onFrameChange, intervalMs }) => {
   const descriptor = getExerciseVisual(exercise);
   if (descriptor.kind === 'open-asset') {
     return renderAsset(descriptor, dimension) || <GeneratedExerciseSvg exercise={exercise} template="general" dimension={dimension} />;
   }
   if (descriptor.kind === 'remote-image') {
-    return <RemoteExerciseImage descriptor={descriptor} exercise={exercise} dimension={dimension} />;
+    return (
+      <RemoteExerciseImage
+        descriptor={descriptor}
+        exercise={exercise}
+        dimension={dimension}
+        animated={animated}
+        frameIndex={frameIndex}
+        onFrameChange={onFrameChange}
+        intervalMs={intervalMs}
+      />
+    );
   }
   return <GeneratedExerciseSvg exercise={exercise} template={descriptor.template} dimension={dimension} />;
 };
@@ -148,8 +284,12 @@ export const ExerciseVisual: React.FC<ExerciseVisualProps> = ({
   exercise,
   size = 'standard',
   accessibilityLabel,
+  animated,
+  frameIndex,
+  onFrameChange,
+  intervalMs,
 }) => {
-  const dimension = SIZE[size];
+  const dimension = EXERCISE_VISUAL_SIZES[size];
   const label = accessibilityLabel || defaultAccessibilityLabel(exercise);
 
   return (
@@ -160,7 +300,14 @@ export const ExerciseVisual: React.FC<ExerciseVisualProps> = ({
       style={[styles.container, { width: dimension, height: dimension, borderRadius: dimension / 7 }]}
     >
       <ExerciseVisualErrorBoundary dimension={dimension} accessibilityLabel={label}>
-        <ExerciseVisualContent exercise={exercise} dimension={dimension} />
+        <ExerciseVisualContent
+          exercise={exercise}
+          dimension={dimension}
+          animated={animated}
+          frameIndex={frameIndex}
+          onFrameChange={onFrameChange}
+          intervalMs={intervalMs}
+        />
       </ExerciseVisualErrorBoundary>
     </View>
   );
@@ -172,5 +319,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.background,
+  },
+  multiFrameContainer: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  fillImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  imageVisible: {
+    opacity: 1,
+  },
+  imageHidden: {
+    opacity: 0,
   },
 });
