@@ -12,6 +12,7 @@ import { X, Check } from 'lucide-react-native';
 import { calculatePlates, KG_PLATES, LB_PLATES } from '../utils/calculator';
 import { useSettings } from '../context/SettingsContext';
 import { kgToDisplay, displayToKg, WeightUnit } from '../utils/units';
+import { colors } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -66,36 +67,36 @@ export const PlateCalculatorModal: React.FC<Props> = ({
     if (modalUnit === 'lb') {
       switch (weight) {
         case 45:
-          return '#DC2626'; // Red
+          return colors.danger; // Red
         case 35:
-          return '#EAB308'; // Yellow
+          return colors.gold; // Yellow
         case 25:
-          return '#2563EB'; // Blue
+          return colors.primary; // Blue
         case 10:
-          return '#16A34A'; // Green
+          return colors.success; // Green
         case 5:
-          return '#FFFFFF'; // White
+          return colors.text; // White
         case 2.5:
-          return '#4B5563'; // Gray
+          return colors.textFaint; // Gray
         default:
-          return '#9333EA'; // Purple
+          return colors.purple; // Purple
       }
     }
     switch (weight) {
       case 25:
-        return '#DC2626'; // Red
+        return colors.danger; // Red
       case 20:
-        return '#2563EB'; // Blue
+        return colors.primary; // Blue
       case 15:
-        return '#EAB308'; // Yellow
+        return colors.gold; // Yellow
       case 10:
-        return '#16A34A'; // Green
+        return colors.success; // Green
       case 5:
-        return '#FFFFFF'; // White
+        return colors.text; // White
       case 2.5:
-        return '#4B5563'; // Gray
+        return colors.textFaint; // Gray
       default:
-        return '#9333EA'; // Purple
+        return colors.purple; // Purple
     }
   };
 
@@ -107,7 +108,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
           <View style={styles.header}>
             <Text style={styles.title}>Plate Calculator</Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X color="#9CA3AF" size={24} />
+              <X color={colors.textSecondary} size={24} />
             </TouchableOpacity>
           </View>
 
@@ -159,7 +160,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                   onChangeText={setTargetWeight}
                   selectTextOnFocus={true}
                   placeholder="e.g. 100"
-                  placeholderTextColor="#6B7280"
+                  placeholderTextColor={colors.textMuted}
                 />
                 <Text style={styles.unitText}>{modalUnit.toUpperCase()}</Text>
               </View>
@@ -233,7 +234,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                 onClose();
               }}
             >
-              <Check color="#000" size={20} />
+              <Check color={colors.black} size={20} />
               <Text style={styles.applyButtonText}>Set as Workout Weight</Text>
             </TouchableOpacity>
           )}
@@ -250,7 +251,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -265,7 +266,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   inputGroup: {
     marginBottom: 16,
@@ -278,11 +279,11 @@ const styles = StyleSheet.create({
   },
   unitToggleGroup: {
     flexDirection: 'row',
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 8,
     padding: 2,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
   },
   unitToggleBtn: {
     paddingHorizontal: 10,
@@ -290,25 +291,25 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   unitToggleBtnActive: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
   },
   unitToggleText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
   unitToggleTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
   label: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     height: 54,
@@ -316,12 +317,12 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: 54,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 22,
     fontWeight: '700',
   },
   unitText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -338,39 +339,39 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 22,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   pillActive: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
   },
   pillText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
   pillTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '700',
   },
   resultBox: {
-    backgroundColor: '#20232B',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 16,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#2F3442',
+    borderColor: colors.borderStrong,
   },
   resultSummary: {
     fontSize: 16,
-    color: '#D1D5DB',
+    color: colors.textSoft,
     marginBottom: 12,
   },
   highlightText: {
-    color: '#10B981',
+    color: colors.success,
     fontWeight: '700',
   },
   emptyText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -379,7 +380,7 @@ const styles = StyleSheet.create({
   },
   platesSubhead: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
   plateChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderRadius: 10,
     paddingVertical: 8,
@@ -406,17 +407,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   plateText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
   },
   remainderText: {
     marginTop: 12,
     fontSize: 13,
-    color: '#F59E0B',
+    color: colors.warning,
   },
   applyButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -427,7 +428,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   applyButtonText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 16,
     fontWeight: '700',
   },

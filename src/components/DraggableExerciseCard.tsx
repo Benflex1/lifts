@@ -3,6 +3,7 @@ import { Animated, PanResponder, Platform, StyleSheet, View } from 'react-native
 import { GripVertical } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import type { ExerciseLayout } from '../workout/active-exercises';
+import { colors } from '../theme';
 
 interface DraggableExerciseCardProps {
   itemId: string;
@@ -136,7 +137,7 @@ export function DraggableExerciseCard({
             accessibilityLabel={`Drag ${exerciseName} to reorder`}
             accessibilityHint="Drag up or down to reorder"
           >
-            <GripVertical size={18} color={isDragging ? '#FFFFFF' : '#9CA3AF'} />
+            <GripVertical size={18} color={isDragging ? colors.text : colors.textSecondary} />
           </View>
         </>
       )}
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
   draggingCard: {
     zIndex: 999,
     elevation: 12,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.45,
     shadowRadius: 10,
@@ -170,6 +171,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dragHandleActive: {
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceAlt,
   },
 });

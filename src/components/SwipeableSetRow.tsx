@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { colors } from '../theme';
 
 interface Props {
   children: React.ReactNode;
@@ -110,6 +111,13 @@ export const SwipeableSetRow: React.FC<Props> = ({
     })
   ).current;
 
+  // Keep the red layer hidden at rest so it never bleeds through rounded corners
+  const backgroundOpacity = translateX.interpolate({
+    inputRange: [-12, -2, 0],
+    outputRange: [1, 0, 0],
+    extrapolate: 'clamp',
+  });
+
   // Icon opacity and slight scale-in as user swipes
   const iconOpacity = translateX.interpolate({
     inputRange: [-70, -25, 0],
@@ -126,7 +134,7 @@ export const SwipeableSetRow: React.FC<Props> = ({
   return (
     <View style={styles.container}>
       {/* Red Delete Background Layer (Revealed on Swipe Left) */}
-      <View style={styles.deleteBackground}>
+      <Animated.View style={[styles.deleteBackground, { opacity: backgroundOpacity }]}>
         <Animated.View
           style={[
             styles.deleteContent,
@@ -137,9 +145,9 @@ export const SwipeableSetRow: React.FC<Props> = ({
           ]}
         >
           <Text style={styles.deleteText}>Delete</Text>
-          <Trash2 size={18} color="#FFFFFF" />
+          <Trash2 size={18} color={colors.text} />
         </Animated.View>
-      </View>
+      </Animated.View>
 
       {/* Foreground Set Row Content */}
       <Animated.View
@@ -148,7 +156,7 @@ export const SwipeableSetRow: React.FC<Props> = ({
           styles.frontRow,
           {
             transform: [{ translateX }],
-            backgroundColor: isCompleted ? '#12241E' : '#181A20',
+            backgroundColor: isCompleted ? colors.successSoft : colors.surface,
           },
         ]}
       >
@@ -162,7 +170,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     marginVertical: 2,
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
   },
   deleteBackground: {
@@ -171,8 +179,8 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     right: 0,
-    backgroundColor: '#DC2626',
-    borderRadius: 8,
+    backgroundColor: colors.danger,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'flex-end',
     paddingRight: 16,
@@ -183,11 +191,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   deleteText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '700',
   },
   frontRow: {
-    borderRadius: 8,
+    borderRadius: 10,
   },
 });

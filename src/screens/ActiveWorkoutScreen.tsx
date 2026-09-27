@@ -26,7 +26,7 @@ import {
   ChevronLeft,
   FileText,
   Timer,
-  MoreVertical,
+  MoreHorizontal,
   MapPin,
   Dumbbell,
   CheckCircle2,
@@ -74,6 +74,7 @@ import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/super
 import { applyPreviousSetStats } from '../workout/gym-session';
 import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
 import { isExcessiveDuration } from '../workout/duration';
+import { colors } from '../theme';
 
 export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
   useKeepAwake();
@@ -550,13 +551,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   const getSetBadgeStyle = (type: SetType) => {
     switch (type) {
       case 'warmup':
-        return { bg: '#372B10', border: '#78350F', text: '#F59E0B', label: 'W' };
+        return { bg: colors.warningSoft, border: 'transparent', text: colors.warning, label: 'W' };
       case 'drop':
-        return { bg: '#291845', border: '#581C87', text: '#C084FC', label: 'D' };
+        return { bg: colors.purpleSoft, border: 'transparent', text: colors.purpleLight, label: 'D' };
       case 'failure':
-        return { bg: '#3B1219', border: '#7F1D1D', text: '#EF4444', label: 'F' };
+        return { bg: colors.dangerSoft, border: 'transparent', text: colors.danger, label: 'F' };
       default:
-        return { bg: '#20242E', border: '#2D3342', text: '#38BDF8', label: '' };
+        return { bg: 'transparent', border: 'transparent', text: colors.textSoft, label: '' };
     }
   };
 
@@ -627,7 +628,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       style={styles.screenContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Top App Bar - Lyfta Inspired */}
+      {/* Top App Bar */}
       <View style={[styles.topBar, { paddingTop: Math.max(50, insets.top + 8) }]}>
         <TouchableOpacity
           onPress={minimizeWorkout}
@@ -636,34 +637,29 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           accessibilityLabel="Minimize workout"
           accessibilityRole="button"
         >
-          <ChevronLeft size={24} color="#38BDF8" />
+          <ChevronDown size={22} color={colors.textSoft} />
         </TouchableOpacity>
 
-        {/* Centered Timer */}
-        <TouchableOpacity
-          style={styles.timerWrap}
-          onPress={() => {
-            setDurationModalSafetyMode(false);
-            setShowDurationModal(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Adjust workout duration"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Clock size={16} color="#38BDF8" />
-          <Text style={styles.timerText}>{formatTimer(elapsedSeconds)}</Text>
-        </TouchableOpacity>
+        <View style={styles.topBarTitleWrap}>
+          <Text style={styles.topBarTitle} numberOfLines={1}>
+            {activeWorkout.name}
+          </Text>
+          {gymTrackingEnabled && displayedActiveGym ? (
+            <Text style={styles.topBarSubtitle} numberOfLines={1}>
+              {displayedActiveGym.name}
+            </Text>
+          ) : null}
+        </View>
 
-        {/* Top Right Actions */}
         <View style={styles.topRightWrap}>
           <TouchableOpacity
-            onPress={() => setShowReorderModal(true)}
-            style={styles.reorderHeaderBtn}
+            onPress={() => setShowWorkoutMenu(true)}
+            style={styles.moreBtn}
             hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-            accessibilityLabel="Reorder exercises"
+            accessibilityLabel="Workout menu"
             accessibilityRole="button"
           >
-            <ArrowUpDown size={18} color="#38BDF8" />
+            <MoreHorizontal size={20} color={colors.textSoft} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -676,49 +672,44 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           >
             <Text style={styles.finishBtnText}>{isFinishing ? 'Saving...' : 'Finish'}</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setShowWorkoutMenu(true)}
-            style={styles.moreBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
-            accessibilityLabel="Workout menu"
-            accessibilityRole="button"
-          >
-            <MoreVertical size={20} color="#9CA3AF" />
-          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Top Metrics Card - Lyfta Screenshot 2 Style */}
+      {/* Live Metrics Strip */}
       <View style={styles.metricsContainer}>
-        <View style={styles.metricsCard}>
-          <TouchableOpacity
-            style={styles.metricColumn}
-            onPress={() => {
-              setDurationModalSafetyMode(false);
-              setShowDurationModal(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Adjust workout duration"
-          >
-            <Text style={styles.metricColLabel}>DURATION</Text>
-            <Text style={[styles.metricColValue, { color: '#38BDF8' }]}>
-              {formatTimer(elapsedSeconds)}
-            </Text>
-          </TouchableOpacity>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricColumn}>
-            <Text style={styles.metricColLabel}>VOLUME</Text>
-            <Text style={styles.metricColValue}>{formatWeight(liveVolume, unit)}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricColumn}>
-            <Text style={styles.metricColLabel}>SETS</Text>
-            <Text style={styles.metricColValue}>
-              {completedSetsCount} / {totalSetsCount}
-            </Text>
-          </View>
+        <TouchableOpacity
+          style={styles.metricColumn}
+          onPress={() => {
+            setDurationModalSafetyMode(false);
+            setShowDurationModal(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Adjust workout duration"
+        >
+          <Text style={[styles.metricColValue, { color: colors.primary }]}>
+            {formatTimer(elapsedSeconds)}
+          </Text>
+          <Text style={styles.metricColLabel}>Duration</Text>
+        </TouchableOpacity>
+        <View style={styles.metricColumn}>
+          <Text style={styles.metricColValue}>{formatWeight(liveVolume, unit)}</Text>
+          <Text style={styles.metricColLabel}>Volume</Text>
         </View>
+        <View style={styles.metricColumn}>
+          <Text style={styles.metricColValue}>
+            {completedSetsCount}
+            <Text style={styles.metricColValueMuted}> / {totalSetsCount}</Text>
+          </Text>
+          <Text style={styles.metricColLabel}>Sets</Text>
+        </View>
+      </View>
+      <View style={styles.progressTrack}>
+        <View
+          style={[
+            styles.progressFill,
+            { width: `${totalSetsCount > 0 ? Math.round((completedSetsCount / totalSetsCount) * 100) : 0}%` },
+          ]}
+        />
       </View>
 
       {/* Exercises Stream */}
@@ -739,14 +730,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         scrollEnabled={true}
       >
         {activeWorkout.exercises.map((activeEx, exIndex) => {
-          const isFirst = exIndex === 0;
-          const isLast = exIndex === activeWorkout.exercises.length - 1;
           const isExpanded = expandedExercises[activeEx.id] ?? false;
           const completedCount = activeEx.sets.filter((s) => s.isCompleted).length;
           const totalCount = activeEx.sets.length;
           const isAllCompleted = totalCount > 0 && completedCount === totalCount;
           const ssMeta = supersetMetaMap.get(activeEx.id);
           const rowViewModel = activeEx.exercise ? getExerciseRowViewModel(activeEx.exercise) : null;
+
+          const showNoteInput = editingNoteExId === activeEx.id || Boolean(activeEx.notes && activeEx.notes.length > 0);
 
           const cardElement = !isExpanded ? (
             // Collapsed Accordion Row - Lyfta Screenshot 1
@@ -776,7 +767,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
                   />
                 ) : (
-                  <Dumbbell size={20} color="#38BDF8" />
+                  <Dumbbell size={20} color={colors.primary} />
                 )}
               </TouchableOpacity>
 
@@ -800,46 +791,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   >
                     {completedCount}/{totalCount} done
                   </Text>
-                  {activeEx.exercise?.secondaryMuscles && activeEx.exercise.secondaryMuscles.length > 0 && (
-                    <Text style={styles.collapsedSecondary} numberOfLines={1}>
-                      +{activeEx.exercise.secondaryMuscles.length} secondary
-                    </Text>
-                  )}
                   {isAllCompleted && (
-                    <CheckCircle2 size={13} color="#10B981" style={{ marginLeft: 4 }} />
+                    <CheckCircle2 size={13} color={colors.success} style={{ marginLeft: 4 }} />
                   )}
                 </View>
               </View>
 
               <View style={styles.collapsedActions}>
-                {!isFirst && (
-                  <TouchableOpacity
-                    style={styles.reorderBtn}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleMoveExercise(activeEx.id, -1);
-                    }}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    accessibilityLabel="Move exercise up"
-                    accessibilityRole="button"
-                  >
-                    <ArrowUp size={15} color="#9CA3AF" />
-                  </TouchableOpacity>
-                )}
-                {!isLast && (
-                  <TouchableOpacity
-                    style={styles.reorderBtn}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleMoveExercise(activeEx.id, 1);
-                    }}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    accessibilityLabel="Move exercise down"
-                    accessibilityRole="button"
-                  >
-                    <ArrowDown size={15} color="#9CA3AF" />
-                  </TouchableOpacity>
-                )}
                 <TouchableOpacity
                   style={styles.iconBtn}
                   onPress={(e) => {
@@ -850,9 +808,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   accessibilityLabel="Exercise menu"
                   accessibilityRole="button"
                 >
-                  <MoreVertical size={18} color="#9CA3AF" />
+                  <MoreHorizontal size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
-                <ChevronDown size={18} color="#6B7280" />
+                <ChevronDown size={18} color={colors.textMuted} />
               </View>
             </TouchableOpacity>
           ) : (
@@ -880,7 +838,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       accessibilityLabel={rowViewModel?.visualAccessibilityLabel || 'Exercise illustration'}
                     />
                   ) : (
-                    <Dumbbell size={20} color="#38BDF8" />
+                    <Dumbbell size={20} color={colors.primary} />
                   )}
                 </TouchableOpacity>
 
@@ -893,22 +851,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 >
                   <Text style={styles.exerciseName}>{activeEx.exercise?.name || 'Exercise'}</Text>
                   <View style={styles.badgeRow}>
-                    <Text style={styles.muscleBadge}>
-                      {(Array.isArray(activeEx.exercise?.primaryMuscles)
-                        ? activeEx.exercise.primaryMuscles
-                        : []
-                      ).join(', ')}
+                    <Text style={styles.muscleBadge} numberOfLines={1}>
+                      {[
+                        (Array.isArray(activeEx.exercise?.primaryMuscles)
+                          ? activeEx.exercise.primaryMuscles
+                          : []
+                        ).join(', '),
+                        activeEx.exercise?.equipment,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Text>
-                    {activeEx.exercise?.equipment ? (
-                      <Text style={styles.equipmentBadge}>{activeEx.exercise?.equipment}</Text>
-                    ) : null}
                     {activeEx.targetReps ? (
-                      <Text style={styles.targetBadge}>Target: {activeEx.targetReps}</Text>
-                    ) : null}
-                    {activeEx.exercise?.secondaryMuscles && activeEx.exercise.secondaryMuscles.length > 0 ? (
-                      <Text style={styles.secondaryMuscleBadge} numberOfLines={1}>
-                        +{activeEx.exercise.secondaryMuscles.length} secondary
-                      </Text>
+                      <Text style={styles.targetBadge}>{activeEx.targetReps} reps</Text>
                     ) : null}
                     {ssMeta && (
                       <View style={[styles.ssPositionBadge, { borderColor: ssMeta.color }]}>
@@ -921,80 +876,63 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 </TouchableOpacity>
 
                 <View style={styles.headerActions}>
-                  {!isFirst && (
-                    <TouchableOpacity
-                      style={styles.reorderBtn}
-                      onPress={() => handleMoveExercise(activeEx.id, -1)}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      accessibilityLabel="Move exercise up"
-                      accessibilityRole="button"
-                    >
-                      <ArrowUp size={15} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  )}
-                  {!isLast && (
-                    <TouchableOpacity
-                      style={styles.reorderBtn}
-                      onPress={() => handleMoveExercise(activeEx.id, 1)}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      accessibilityLabel="Move exercise down"
-                      accessibilityRole="button"
-                    >
-                      <ArrowDown size={15} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  )}
                   <TouchableOpacity
                     style={styles.iconBtn}
                     onPress={() => setMenuActiveExercise(activeEx)}
                     hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
-                        <MoreVertical size={18} color="#9CA3AF" />
+                        <MoreHorizontal size={18} color={colors.textSecondary} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.iconBtn}
                         onPress={() => toggleExerciseExpanded(activeEx.id)}
                         hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                       >
-                        <ChevronUp size={18} color="#9CA3AF" />
+                        <ChevronUp size={18} color={colors.textSecondary} />
                       </TouchableOpacity>
                     </View>
                   </View>
 
-              {/* Note Row - Lyfta Style */}
-              {editingNoteExId === activeEx.id || (activeEx.notes && activeEx.notes.length > 0) ? (
+              {/* Rest timer + note pills */}
+              <View style={styles.exerciseMetaRow}>
+                <TouchableOpacity
+                  style={styles.restTimerRow}
+                  onPress={() => setRestWheelActiveExercise(activeEx)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Set rest timer"
+                >
+                  <Timer size={13} color={colors.primaryLight} />
+                  <Text style={styles.restTimerRowText}>
+                    Rest {activeEx.restTimerSeconds ? formatDuration(activeEx.restTimerSeconds) : 'Off'}
+                  </Text>
+                </TouchableOpacity>
+                {!showNoteInput && (
+                  <TouchableOpacity
+                    style={styles.addNotePrompt}
+                    onPress={() => setEditingNoteExId(activeEx.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add note"
+                  >
+                    <FileText size={13} color={colors.textSecondary} />
+                    <Text style={styles.addNotePromptText}>Note</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {showNoteInput && (
                 <View style={styles.exerciseNoteRow}>
-                  <FileText size={13} color="#9CA3AF" />
+                  <FileText size={13} color={colors.textSecondary} />
                   <TextInput
                     style={styles.exerciseNoteInput}
                     placeholder="Add note (e.g. seat pin 4, slow tempo)..."
-                    placeholderTextColor="#6B7280"
+                    placeholderTextColor={colors.textMuted}
                     value={activeEx.notes || ''}
                     onChangeText={(txt) => updateExerciseNotes(activeEx.id, txt)}
                     onFocus={handleInputFocus}
                     autoFocus={editingNoteExId === activeEx.id && (!activeEx.notes || activeEx.notes.length === 0)}
                   />
                 </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.addNotePrompt}
-                  onPress={() => setEditingNoteExId(activeEx.id)}
-                >
-                  <FileText size={13} color="#6B7280" />
-                  <Text style={styles.addNotePromptText}>Add note...</Text>
-                </TouchableOpacity>
               )}
-
-              {/* Rest Timer Row - Lyfta Style */}
-              <TouchableOpacity
-                style={styles.restTimerRow}
-                onPress={() => setRestWheelActiveExercise(activeEx)}
-              >
-                <Timer size={14} color="#38BDF8" />
-                <Text style={styles.restTimerRowText}>
-                  Rest Timer:{' '}
-                  {activeEx.restTimerSeconds ? formatDuration(activeEx.restTimerSeconds) : 'Off'}
-                </Text>
-              </TouchableOpacity>
 
               {/* Table Column Labels */}
               <View style={styles.tableHeader}>
@@ -1007,7 +945,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 {showRpeColumn && (
                   <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>RPE</Text>
                 )}
-                <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>✓</Text>
+                <View style={{ width: 46 }} />
               </View>
 
               {/* Set Rows */}
@@ -1158,10 +1096,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                         ]}
                         onPress={() => handleToggleSetWithHaptics(activeEx.id, set.id)}
                         hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                        accessibilityRole="checkbox"
+                        accessibilityLabel={`Complete set ${set.setNumber}`}
+                        accessibilityState={{ checked: set.isCompleted }}
                       >
                         <Check
                           size={20}
-                          color={set.isCompleted ? '#000000' : '#4B5563'}
+                          color={set.isCompleted ? colors.black : colors.textFaint}
                           strokeWidth={2.8}
                         />
                       </TouchableOpacity>
@@ -1177,7 +1118,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 accessibilityRole="button"
                 accessibilityLabel="Add set"
               >
-                <Plus size={16} color="#FFFFFF" />
+                <Plus size={16} color={colors.text} />
                 <Text style={styles.addSetBtnWideText}>Add Set</Text>
               </TouchableOpacity>
             </View>
@@ -1214,7 +1155,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 <View style={styles.supersetConnectorWrap}>
                   <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
                   <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
-                    ⇩ NEXT IN {ssMeta.label}
+                    NEXT IN {ssMeta.label}
                   </Text>
                   <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
                 </View>
@@ -1223,16 +1164,40 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           );
         })}
 
+        {activeWorkout.exercises.length === 0 && (
+          <View style={styles.emptyWorkout}>
+            <View style={styles.emptyWorkoutIcon}>
+              <Dumbbell size={26} color={colors.primary} />
+            </View>
+            <Text style={styles.emptyWorkoutTitle}>Let's get moving</Text>
+            <Text style={styles.emptyWorkoutText}>Add your first exercise to start logging sets.</Text>
+          </View>
+        )}
+
         {/* Add Exercise Big Button */}
         <TouchableOpacity
-          style={styles.addExerciseMainBtn}
+          style={[
+            styles.addExerciseMainBtn,
+            activeWorkout.exercises.length === 0 && styles.addExerciseMainBtnSolid,
+          ]}
           onPress={() => {
             setSwapExerciseId(null);
             setShowExercisePicker(true);
           }}
+          accessibilityRole="button"
         >
-          <Plus size={20} color="#FFFFFF" />
-          <Text style={styles.addExerciseMainBtnText}>Add Exercise</Text>
+          <Plus
+            size={20}
+            color={activeWorkout.exercises.length === 0 ? colors.onPrimary : colors.primaryLight}
+          />
+          <Text
+            style={[
+              styles.addExerciseMainBtnText,
+              activeWorkout.exercises.length === 0 && { color: colors.onPrimary },
+            ]}
+          >
+            Add Exercise
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -1257,7 +1222,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             accessibilityRole="button"
             accessibilityLabel="Dismiss next up cue"
           >
-            <X size={16} color="#9CA3AF" />
+            <X size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       )}
@@ -1396,7 +1361,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 style={styles.modalCloseBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -1404,7 +1369,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             {setOptionsModal && prSummary?.setPRs.get(setOptionsModal.set.id) && (
               <View style={styles.prOptionsBanner}>
                 <View style={styles.prOptionsBannerHeader}>
-                  <Trophy size={16} color="#F59E0B" />
+                  <Trophy size={16} color={colors.warning} />
                   <Text style={styles.prOptionsBannerTitle}>
                     {prSummary.setPRs.get(setOptionsModal.set.id)!.primary?.rank === 1
                       ? 'PERSONAL RECORD (1ST BEST)'
@@ -1579,8 +1544,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       accessibilityRole="button"
                       accessibilityLabel="Move set up"
                     >
-                      <ArrowUp size={16} color={isFirstSet ? '#4B5563' : '#A78BFA'} />
-                      <Text style={[styles.shortcutBtnText, { color: isFirstSet ? '#4B5563' : '#A78BFA' }]}>
+                      <ArrowUp size={16} color={isFirstSet ? colors.textFaint : colors.purpleLight} />
+                      <Text style={[styles.shortcutBtnText, { color: isFirstSet ? colors.textFaint : colors.purpleLight }]}>
                         Move Up {currentSetIndex > 0 ? `(to #${currentSetIndex})` : ''}
                       </Text>
                     </TouchableOpacity>
@@ -1599,8 +1564,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       accessibilityRole="button"
                       accessibilityLabel="Move set down"
                     >
-                      <ArrowDown size={16} color={isLastSet ? '#4B5563' : '#A78BFA'} />
-                      <Text style={[styles.shortcutBtnText, { color: isLastSet ? '#4B5563' : '#A78BFA' }]}>
+                      <ArrowDown size={16} color={isLastSet ? colors.textFaint : colors.purpleLight} />
+                      <Text style={[styles.shortcutBtnText, { color: isLastSet ? colors.textFaint : colors.purpleLight }]}>
                         Move Down {currentSetIndex >= 0 && currentSetIndex < totalSets - 1 ? `(to #${currentSetIndex + 2})` : ''}
                       </Text>
                     </TouchableOpacity>
@@ -1624,7 +1589,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   }
                 }}
               >
-                <Calculator size={16} color="#38BDF8" />
+                <Calculator size={16} color={colors.primary} />
                 <Text style={styles.shortcutBtnText}>Plate Calculator</Text>
               </TouchableOpacity>
 
@@ -1637,7 +1602,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   }
                 }}
               >
-                <Trash2 size={16} color="#EF4444" />
+                <Trash2 size={16} color={colors.danger} />
                 <Text style={styles.shortcutDeleteText}>Delete Set</Text>
               </TouchableOpacity>
             </View>
@@ -1673,7 +1638,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 onPress={() => setMenuActiveExercise(null)}
                 style={styles.modalCloseBtn}
               >
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -1687,7 +1652,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Info size={18} color="#38BDF8" />
+              <Info size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>View Exercise Details</Text>
             </TouchableOpacity>
 
@@ -1705,7 +1670,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <ArrowUp size={18} color={menuExerciseIndex <= 0 ? '#4B5563' : '#38BDF8'} />
+              <ArrowUp size={18} color={menuExerciseIndex <= 0 ? colors.textFaint : colors.primary} />
               <Text style={styles.menuItemText}>Move Up</Text>
             </TouchableOpacity>
 
@@ -1728,7 +1693,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             >
               <ArrowDown
                 size={18}
-                color={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1 ? '#4B5563' : '#38BDF8'}
+                color={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1 ? colors.textFaint : colors.primary}
               />
               <Text style={styles.menuItemText}>Move Down</Text>
             </TouchableOpacity>
@@ -1742,7 +1707,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               accessibilityRole="button"
               accessibilityLabel="Reorder all exercises"
             >
-              <ArrowUpDown size={18} color="#38BDF8" />
+              <ArrowUpDown size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Reorder All Exercises</Text>
             </TouchableOpacity>
 
@@ -1756,7 +1721,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Repeat size={18} color="#38BDF8" />
+              <Repeat size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Swap Exercise</Text>
             </TouchableOpacity>
 
@@ -1770,7 +1735,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Timer size={18} color="#38BDF8" />
+              <Timer size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Set Rest Timer</Text>
             </TouchableOpacity>
 
@@ -1788,7 +1753,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Calculator size={18} color="#38BDF8" />
+              <Calculator size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Plate Calculator</Text>
             </TouchableOpacity>
 
@@ -1830,7 +1795,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Layers size={18} color="#A855F7" />
+              <Layers size={18} color={colors.purple} />
               <Text style={styles.menuItemText}>
                 {menuActiveExercise?.supersetId ? 'Edit Superset' : 'Create Superset'}
               </Text>
@@ -1846,8 +1811,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                   }
                 }}
               >
-                <Layers size={18} color="#EF4444" />
-                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Ungroup Superset</Text>
+                <Layers size={18} color={colors.danger} />
+                <Text style={[styles.menuItemText, { color: colors.danger }]}>Ungroup Superset</Text>
               </TouchableOpacity>
             )}
 
@@ -1861,7 +1826,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <FileText size={18} color="#38BDF8" />
+              <FileText size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Add / Edit Note</Text>
             </TouchableOpacity>
 
@@ -1884,7 +1849,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <Trash2 size={18} color="#EF4444" />
+              <Trash2 size={18} color={colors.danger} />
               <Text style={styles.menuItemTextDestructive}>Remove Exercise</Text>
             </TouchableOpacity>
           </View>
@@ -1912,17 +1877,17 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 onPress={() => setShowWorkoutMenu(false)}
                 style={styles.modalCloseBtn}
               >
-                <X size={20} color="#9CA3AF" />
+                <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity style={styles.menuItem} onPress={expandAll}>
-              <ChevronDown size={18} color="#38BDF8" />
+              <ChevronDown size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Expand All Exercises</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={collapseAll}>
-              <ChevronUp size={18} color="#38BDF8" />
+              <ChevronUp size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Collapse All Exercises</Text>
             </TouchableOpacity>
 
@@ -1935,7 +1900,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               accessibilityRole="button"
               accessibilityLabel="Reorder exercises"
             >
-              <ArrowUpDown size={18} color="#38BDF8" />
+              <ArrowUpDown size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Reorder Exercises</Text>
             </TouchableOpacity>
 
@@ -1949,7 +1914,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 accessibilityRole="button"
                 accessibilityLabel={`Change workout gym, currently ${displayedActiveGym.name}`}
               >
-                <MapPin size={18} color="#38BDF8" />
+                <MapPin size={18} color={colors.primary} />
                 <Text style={styles.menuItemText} numberOfLines={1}>
                   Change Gym · {displayedActiveGym.name}
                 </Text>
@@ -1966,7 +1931,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               accessibilityRole="button"
               accessibilityLabel="Adjust workout duration"
             >
-              <Clock size={18} color="#38BDF8" />
+              <Clock size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>Adjust Workout Time</Text>
             </TouchableOpacity>
 
@@ -1977,7 +1942,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 setShowWorkoutMenu(false);
               }}
             >
-              <Clock size={18} color="#38BDF8" />
+              <Clock size={18} color={colors.primary} />
               <Text style={styles.menuItemText}>
                 {showRpeColumn ? 'Hide RPE Column' : 'Show RPE Column'}
               </Text>
@@ -1987,7 +1952,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               style={[styles.menuItem, styles.menuItemDestructive]}
               onPress={handleDiscard}
             >
-              <Trash2 size={18} color="#EF4444" />
+              <Trash2 size={18} color={colors.danger} />
               <Text style={styles.menuItemTextDestructive}>Discard Workout</Text>
             </TouchableOpacity>
           </View>
@@ -2030,71 +1995,48 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#0D0E12',
+    backgroundColor: colors.bg,
   },
   // Top App Bar
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 50,
-    paddingBottom: 12,
+    paddingBottom: 10,
     paddingHorizontal: 16,
-    backgroundColor: '#14171F',
-    borderBottomWidth: 1,
-    borderBottomColor: '#20242E',
-  },
-  timerWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#1A202C',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#2D3748',
-  },
-  timerText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    gap: 12,
+    backgroundColor: colors.bg,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceHigh,
   },
   topRightWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  reorderHeaderBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1E232E',
+    gap: 8,
   },
   finishBtn: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 7,
-    paddingHorizontal: 16,
-    borderRadius: 18,
+    backgroundColor: colors.success,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 19,
   },
   finishBtnText: {
-    color: '#FFFFFF',
+    color: colors.onAccent,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   moreBtn: {
-    padding: 6,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceHigh,
   },
   btnDisabled: {
     opacity: 0.5,
@@ -2102,40 +2044,26 @@ const styles = StyleSheet.create({
 
   // Metrics Strip (Lyfta Screenshot 2)
   metricsContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  metricsCard: {
     flexDirection: 'row',
-    backgroundColor: '#181A20',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#262A34',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 12,
   },
   metricColumn: {
     flex: 1,
-    alignItems: 'center',
   },
   metricColLabel: {
-    color: '#6B7280',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    marginBottom: 3,
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 1,
   },
   metricColValue: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: colors.text,
+    fontSize: 18,
     fontWeight: '800',
-  },
-  metricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#262A34',
+    letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
   },
 
   // Scroll Content
@@ -2143,7 +2071,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 12,
+    paddingTop: 14,
     paddingBottom: 130,
   },
 
@@ -2151,22 +2080,21 @@ const styles = StyleSheet.create({
   collapsedCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#181A20',
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
-    padding: 12,
-    marginBottom: 10,
+    borderColor: colors.border,
+    padding: 10,
+    marginBottom: 8,
   },
   exerciseAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    backgroundColor: '#20242E',
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#2C3240',
+    overflow: 'hidden',
   },
   collapsedContent: {
     flex: 1,
@@ -2174,28 +2102,22 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   collapsedTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   collapsedMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  collapsedSecondary: {
-    color: '#6B7280',
-    fontSize: 11,
-    marginLeft: 8,
-    flexShrink: 1,
-  },
   collapsedSubtitle: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
   completedSubtitleText: {
-    color: '#10B981',
+    color: colors.success,
     fontWeight: '600',
   },
   collapsedActions: {
@@ -2203,39 +2125,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  reorderBtn: {
-    width: 26,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
-    backgroundColor: '#1E232E',
-  },
-  inlineDragHandle: {
-    width: 26,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
-    backgroundColor: '#1E232E',
-  },
-  inlineDragHandleActive: {
-    backgroundColor: '#2563EB',
-  },
 
   // Expanded Exercise Card
   exerciseCard: {
-    backgroundColor: '#181A20',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
+    paddingHorizontal: 2,
   },
   exerciseTitleGroup: {
     flex: 1,
@@ -2243,10 +2148,11 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   exerciseName: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 4,
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    marginBottom: 3,
   },
   badgeRow: {
     flexDirection: 'row',
@@ -2255,38 +2161,33 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   muscleBadge: {
-    color: '#38BDF8',
-    fontSize: 11,
-    fontWeight: '600',
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
     textTransform: 'capitalize',
-  },
-  equipmentBadge: {
-    color: '#6B7280',
-    fontSize: 11,
-    textTransform: 'capitalize',
+    flexShrink: 1,
   },
   targetBadge: {
-    color: '#38BDF8',
-    backgroundColor: '#0C4A6E',
-    fontSize: 10,
+    color: colors.primaryLight,
+    backgroundColor: colors.primarySoft,
+    fontSize: 11,
     fontWeight: '700',
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 4,
-  },
-  secondaryMuscleBadge: {
-    color: '#6B7280',
-    fontSize: 10,
-    textTransform: 'capitalize',
+    borderRadius: 6,
+    overflow: 'hidden',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
   },
   iconBtn: {
-    padding: 6,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Note Row (Lyfta style)
@@ -2294,84 +2195,88 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#14171F',
-    borderRadius: 8,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#222734',
+    paddingVertical: 8,
+    marginBottom: 10,
+    marginHorizontal: 2,
   },
   exerciseNoteInput: {
     flex: 1,
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 13,
     padding: 0,
   },
   addNotePrompt: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-    marginBottom: 8,
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceAlt,
   },
   addNotePromptText: {
-    color: '#6B7280',
-    fontSize: 13,
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   // Rest Timer Row (Lyfta style)
   restTimerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-    marginBottom: 12,
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.primarySoft,
   },
   restTimerRowText: {
-    color: '#38BDF8',
-    fontSize: 13,
-    fontWeight: '600',
+    color: colors.primaryLight,
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   // Table Header
   tableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
-    marginBottom: 8,
+    paddingBottom: 6,
+    marginBottom: 2,
   },
   colHeader: {
-    color: '#6B7280',
-    fontSize: 11,
+    color: colors.textMuted,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.7,
+    letterSpacing: 0.8,
   },
 
   // Set Rows
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
   setRowCompleted: {
-    backgroundColor: '#12241E',
+    backgroundColor: colors.successSoft,
   },
   setBadge: {
-    width: 36,
-    height: 38,
-    borderRadius: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
+    marginRight: 4,
+    marginLeft: 2,
     borderWidth: 1,
   },
   setBadgeText: {
     fontSize: 14,
     fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   previousCell: {
     flex: 1,
@@ -2397,13 +2302,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   prOptionsBannerTitle: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   prOptionsDetailText: {
-    color: '#FDE68A',
+    color: colors.goldLight,
     fontSize: 13,
     fontWeight: '500',
     lineHeight: 18,
@@ -2416,18 +2321,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   previousText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
   },
   previousTextClickable: {
-    color: '#CBD5E1',
+    color: colors.textSoft,
     textDecorationLine: 'underline',
     textDecorationStyle: 'dotted',
-    textDecorationColor: '#64748B',
+    textDecorationColor: colors.textMuted,
   },
   previousPlaceholder: {
-    color: '#4B5563',
+    color: colors.textFaint,
     fontSize: 14,
   },
   inputWrapWeight: {
@@ -2440,68 +2345,63 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   cellInput: {
-    backgroundColor: '#20242E',
-    borderRadius: 8,
+    backgroundColor: colors.surfaceHigh,
+    borderRadius: 10,
     height: 40,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
-    borderWidth: 1,
-    borderColor: '#2D3342',
+    borderWidth: 0,
   },
   inputCompleted: {
-    backgroundColor: '#133529',
-    borderColor: '#10B981',
-    color: '#FFFFFF',
+    backgroundColor: 'transparent',
+    color: colors.text,
   },
   compactRpeBadge: {
     position: 'absolute',
     top: -6,
     right: 0,
-    backgroundColor: '#2D1E4A',
-    borderColor: '#581C87',
+    backgroundColor: colors.purpleSoft,
+    borderColor: colors.purpleBorder,
     borderWidth: 1,
     borderRadius: 6,
     paddingHorizontal: 4,
     paddingVertical: 1,
   },
   compactRpeText: {
-    color: '#C084FC',
+    color: colors.purpleLight,
     fontSize: 9,
     fontWeight: '800',
   },
   rpeColCell: {
     width: 44,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#20242E',
-    borderWidth: 1,
-    borderColor: '#2D3342',
+    backgroundColor: colors.surfaceHigh,
     marginRight: 4,
   },
   rpeColCellText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
   checkBtn: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 4,
+    marginRight: 2,
   },
   checkBtnInactive: {
-    backgroundColor: '#20242E',
-    borderWidth: 1,
-    borderColor: '#2D3342',
+    backgroundColor: colors.surfaceHigh,
   },
   checkBtnActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
   },
 
   // Wide Add Set Button (Lyfta Style)
@@ -2510,15 +2410,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#20242E',
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#2A303F',
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: 11,
+    borderRadius: 12,
+    marginTop: 8,
+    marginHorizontal: 2,
   },
   addSetBtnWideText: {
-    color: '#FFFFFF',
+    color: colors.textSoft,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -2528,14 +2427,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563EB',
-    paddingVertical: 14,
-    borderRadius: 14,
+    backgroundColor: colors.primarySoft,
+    paddingVertical: 15,
+    borderRadius: 16,
     gap: 8,
     marginTop: 6,
   },
   addExerciseMainBtnText: {
-    color: '#FFFFFF',
+    color: colors.primaryLight,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -2543,24 +2442,26 @@ const styles = StyleSheet.create({
   // Modals & Sheets
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#181A20',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderBottomWidth: 0,
+    borderColor: colors.border,
   },
   setOptionsSheet: {
-    backgroundColor: '#181A20',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderBottomWidth: 0,
+    borderColor: colors.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2569,23 +2470,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalHeaderTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '800',
   },
   modalHeaderSubtitle: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     marginTop: 2,
   },
   modalCloseBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceHigh,
   },
   optionsSection: {
     marginBottom: 18,
   },
   sectionLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
@@ -2597,24 +2503,24 @@ const styles = StyleSheet.create({
   },
   typeChip: {
     flex: 1,
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2D3342',
+    borderColor: colors.borderStrong,
   },
   typeChipActive: {
-    backgroundColor: '#1E3A8A',
-    borderColor: '#3B82F6',
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
   },
   typeChipText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
   typeChipTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
 
   // 1-Tap RPE Grid
@@ -2625,7 +2531,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rpeSublabel: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -2637,36 +2543,36 @@ const styles = StyleSheet.create({
   rpeChip: {
     width: '18%',
     aspectRatio: 1.3,
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#2D3342',
+    borderColor: colors.borderStrong,
   },
   rpeChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#38BDF8',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   rpeChipText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
   rpeChipTextActive: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
   rpeLegend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
-    backgroundColor: '#14171F',
+    backgroundColor: colors.surfaceSunken,
     padding: 8,
     borderRadius: 8,
   },
   rpeLegendItem: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     marginRight: 6,
   },
@@ -2682,14 +2588,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#2D3342',
+    borderColor: colors.borderStrong,
   },
   shortcutBtnText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -2699,25 +2605,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#2A181C',
+    backgroundColor: colors.dangerSoft,
     paddingVertical: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#581C23',
+    borderColor: colors.dangerSoft,
   },
   shortcutDeleteText: {
-    color: '#EF4444',
+    color: colors.danger,
     fontSize: 13,
     fontWeight: '700',
   },
   doneModalBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     paddingVertical: 13,
     borderRadius: 12,
     alignItems: 'center',
   },
   doneModalBtnText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -2729,10 +2635,10 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#20242E',
+    borderBottomColor: colors.surfaceAlt,
   },
   menuItemText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -2744,42 +2650,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   menuItemTextDestructive: {
-    color: '#EF4444',
+    color: colors.danger,
     fontSize: 15,
     fontWeight: '600',
   },
 
   // Bottom of Card Actions Row (Add Set + Warmup)
-  cardBottomActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-  },
-  warmupRampBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#2A1D17',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#7C2D12',
-  },
-  warmupRampBtnText: {
-    color: '#FB923C',
-    fontSize: 13,
-    fontWeight: '700',
-  },
 
   // Supersets & Giant Sets
   supersetGroupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -2803,7 +2686,7 @@ const styles = StyleSheet.create({
   },
   supersetCountText: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   supersetConnectorWrap: {
@@ -2839,7 +2722,7 @@ const styles = StyleSheet.create({
     bottom: 80,
     left: 16,
     right: 16,
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -2849,7 +2732,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: '#8B5CF680',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -2867,20 +2750,20 @@ const styles = StyleSheet.create({
   supersetCueBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#C4B5FD',
+    color: colors.purpleLight,
     letterSpacing: 0.5,
   },
   supersetCueText: {
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: '#F3F4F6',
+    color: colors.text,
   },
   dropHelperBox: {
     marginTop: 10,
     padding: 10,
     borderRadius: 8,
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: '#EC489940',
     gap: 6,
@@ -2893,7 +2776,7 @@ const styles = StyleSheet.create({
   },
   dropHelperDesc: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   dropChipsRow: {
@@ -2905,9 +2788,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     alignItems: 'center',
   },
   dropChipActive: {
@@ -2925,10 +2808,72 @@ const styles = StyleSheet.create({
   dropChipWeight: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#E5E7EB',
+    color: colors.text,
     marginTop: 2,
   },
   dropChipWeightActive: {
-    color: '#FFFFFF',
+    color: colors.text,
+  },
+  topBarTitleWrap: {
+    flex: 1,
+  },
+  topBarTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  topBarSubtitle: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  metricColValueMuted: {
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+  progressTrack: {
+    height: 2,
+    backgroundColor: colors.border,
+  },
+  progressFill: {
+    height: 2,
+    backgroundColor: colors.success,
+  },
+  exerciseMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  addExerciseMainBtnSolid: {
+    backgroundColor: colors.primary,
+  },
+  emptyWorkout: {
+    alignItems: 'center',
+    paddingTop: 48,
+    paddingBottom: 28,
+  },
+  emptyWorkoutIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyWorkoutTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  emptyWorkoutText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
   },
 });

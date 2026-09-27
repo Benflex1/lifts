@@ -15,6 +15,7 @@ import {
   getPausedWorkoutModalSubtitle,
   PAUSED_WORKOUT_MODAL_TITLE,
 } from '../workout/session-copy';
+import { colors } from '../theme';
 
 interface DraftRecoveryModalProps {
   visible: boolean;
@@ -59,7 +60,7 @@ export function DraftRecoveryModal({
               </Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -83,13 +84,13 @@ export function DraftRecoveryModal({
                     </Text>
                     <View style={styles.badgeRow}>
                       <View style={styles.badge}>
-                        <Clock size={12} color="#9CA3AF" />
+                        <Clock size={12} color={colors.textSecondary} />
                         <Text style={styles.badgeText}>
                           {formatDuration(item.workout.durationSeconds || 0)}
                         </Text>
                       </View>
                       <View style={styles.badge}>
-                        <Dumbbell size={12} color="#9CA3AF" />
+                        <Dumbbell size={12} color={colors.textSecondary} />
                         <Text style={styles.badgeText}>
                           {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} • {completedSetsCount} sets
                         </Text>
@@ -103,14 +104,14 @@ export function DraftRecoveryModal({
                       onPress={() => onDiscard(item.workout.id)}
                       activeOpacity={0.7}
                     >
-                      <Trash2 size={16} color="#EF4444" />
+                      <Trash2 size={16} color={colors.danger} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.resumeBtn}
                       onPress={() => onResume(item)}
                       activeOpacity={0.7}
                     >
-                      <Play size={14} color="#000000" fill="#000000" />
+                      <Play size={14} color={colors.black} fill={colors.black} />
                       <Text style={styles.resumeText}>Continue</Text>
                     </TouchableOpacity>
                   </View>
@@ -131,13 +132,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   container: {
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '80%',
     paddingBottom: 24,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   header: {
     flexDirection: 'row',
@@ -146,33 +147,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#F9FAFB',
+    color: colors.text,
   },
   subtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
     padding: 6,
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   list: {
     padding: 16,
     gap: 12,
   },
   card: {
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#2D3442',
+    borderColor: colors.borderStrong,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -182,12 +183,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   workoutName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
   },
   cardMeta: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     marginTop: 3,
   },
@@ -201,13 +202,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   badgeText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -219,19 +220,19 @@ const styles = StyleSheet.create({
   discardBtn: {
     padding: 10,
     borderRadius: 8,
-    backgroundColor: '#2A171B',
+    backgroundColor: colors.dangerSoft,
   },
   resumeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
   },
   resumeText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 13,
     fontWeight: '700',
   },

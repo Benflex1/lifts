@@ -21,6 +21,7 @@ import {
 } from '../workout/duration';
 import { formatDuration } from '../utils/calculator';
 import { sanitizeWeightInput, sanitizeRepsInput } from '../workout/sets';
+import { colors } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -303,7 +304,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
               disabled={saving}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <X size={24} color="#9CA3AF" />
+              <X size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -315,7 +316,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
               value={name}
               onChangeText={setName}
               placeholder="Workout name"
-              placeholderTextColor="#6B7280"
+              placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
@@ -326,14 +327,14 @@ export const WorkoutEditModal: React.FC<Props> = ({
             <Text style={styles.label}>WORKOUT DURATION</Text>
             <View style={styles.durationCard}>
               <View style={styles.durationRow}>
-                <Clock size={18} color="#38BDF8" />
+                <Clock size={18} color={colors.primary} />
                 <View style={styles.durationInputGroup}>
                   <TextInput
                     style={styles.durationInput}
                     value={hours}
                     onChangeText={setHours}
                     placeholder="0"
-                    placeholderTextColor="#6B7280"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
                     maxLength={3}
                     autoCapitalize="none"
@@ -350,7 +351,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                     value={minutes}
                     onChangeText={setMinutes}
                     placeholder="0"
-                    placeholderTextColor="#6B7280"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
                     maxLength={2}
                     autoCapitalize="none"
@@ -368,7 +369,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   accessibilityRole="button"
                   accessibilityLabel="Auto-estimate duration based on sets"
                 >
-                  <Sparkles size={14} color="#F59E0B" />
+                  <Sparkles size={14} color={colors.warning} />
                   <Text style={styles.autoEstimateBtnText}>Auto</Text>
                 </TouchableOpacity>
               </View>
@@ -381,7 +382,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
               value={notes}
               onChangeText={setNotes}
               placeholder="Optional notes"
-              placeholderTextColor="#6B7280"
+              placeholderTextColor={colors.textMuted}
               multiline
               autoCapitalize="none"
               autoCorrect={false}
@@ -429,7 +430,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Add exercise to workout"
               >
-                <Plus size={14} color="#38BDF8" />
+                <Plus size={14} color={colors.primary} />
                 <Text style={styles.addExerciseHeaderBtnText}>Add Exercise</Text>
               </TouchableOpacity>
             </View>
@@ -442,7 +443,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   onPress={() => setShowExercisePicker(true)}
                   disabled={saving}
                 >
-                  <Plus size={16} color="#000000" />
+                  <Plus size={16} color={colors.black} />
                   <Text style={styles.addExercisePrimaryBtnText}>Add Exercise</Text>
                 </TouchableOpacity>
               </View>
@@ -463,7 +464,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                       accessibilityRole="button"
                       accessibilityLabel={`Remove ${exercise.exercise.name} from workout`}
                     >
-                      <Trash2 size={16} color="#EF4444" />
+                      <Trash2 size={16} color={colors.danger} />
                     </TouchableOpacity>
                   </View>
 
@@ -556,7 +557,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         >
                           <Check
                             size={14}
-                            color={set.isCompleted ? '#000000' : '#6B7280'}
+                            color={set.isCompleted ? colors.black : colors.textMuted}
                           />
                         </TouchableOpacity>
 
@@ -568,7 +569,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                           accessibilityRole="button"
                           accessibilityLabel={`Delete set ${set.setNumber}`}
                         >
-                          <X size={16} color="#6B7280" />
+                          <X size={16} color={colors.textMuted} />
                         </TouchableOpacity>
                       </View>
                     );
@@ -582,7 +583,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                     accessibilityRole="button"
                     accessibilityLabel={`Add set to ${exercise.exercise.name}`}
                   >
-                    <Plus size={14} color="#38BDF8" />
+                    <Plus size={14} color={colors.primary} />
                     <Text style={styles.addSetButtonText}>Add Set</Text>
                   </TouchableOpacity>
                 </View>
@@ -599,9 +600,9 @@ export const WorkoutEditModal: React.FC<Props> = ({
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
               {saving ? (
-                <ActivityIndicator size="small" color="#000000" />
+                <ActivityIndicator size="small" color={colors.black} />
               ) : (
-                <Check size={18} color="#000000" />
+                <Check size={18} color={colors.black} />
               )}
               <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
             </TouchableOpacity>
@@ -627,11 +628,11 @@ const styles = StyleSheet.create({
   },
   container: {
     maxHeight: '94%',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
   },
   header: {
     flexDirection: 'row',
@@ -639,10 +640,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
+    borderBottomColor: colors.border,
   },
   title: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '800',
   },
@@ -651,23 +652,23 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   label: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 10,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 14,
   },
   durationCard: {
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 10,
     padding: 10,
     marginBottom: 14,
@@ -680,29 +681,29 @@ const styles = StyleSheet.create({
   durationInputGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     paddingHorizontal: 8,
     paddingVertical: 4,
     gap: 4,
   },
   durationInput: {
     width: 32,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
     paddingVertical: 2,
   },
   durationUnitLabel: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   durationColon: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -719,7 +720,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   autoEstimateBtnText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -736,16 +737,16 @@ const styles = StyleSheet.create({
   gymOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   gymOptionSelected: {
     backgroundColor: 'rgba(59, 130, 246, 0.16)',
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
   },
   gymSwatch: {
     width: 10,
@@ -754,12 +755,12 @@ const styles = StyleSheet.create({
     marginRight: 7,
   },
   gymOptionText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   gymOptionTextSelected: {
-    color: '#FFFFFF',
+    color: colors.text,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -769,7 +770,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionTitle: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -784,7 +785,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   addExerciseHeaderBtnText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -794,28 +795,28 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyExercisesText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 13,
   },
   addExercisePrimaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#38BDF8',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   addExercisePrimaryBtnText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 13,
     fontWeight: '700',
   },
   exerciseBlock: {
-    backgroundColor: '#14161D',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     padding: 12,
     marginBottom: 12,
   },
@@ -830,12 +831,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   exerciseName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
   exerciseCategory: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
     textTransform: 'capitalize',
@@ -845,12 +846,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#20242E',
+    borderBottomColor: colors.surfaceAlt,
     marginBottom: 8,
     gap: 6,
   },
   setsTableCol: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -863,7 +864,7 @@ const styles = StyleSheet.create({
   },
   setNumber: {
     width: 30,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
@@ -872,7 +873,7 @@ const styles = StyleSheet.create({
     width: 48,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -886,16 +887,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
   },
   setTypePillText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 10,
     fontWeight: '800',
   },
   setInput: {
     flex: 1,
     minWidth: 52,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 8,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
     paddingHorizontal: 8,
@@ -904,9 +905,9 @@ const styles = StyleSheet.create({
   },
   repsInput: {
     width: 52,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderRadius: 8,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '600',
     paddingHorizontal: 8,
@@ -914,7 +915,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   timesText: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -922,30 +923,30 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 6,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   completeToggleActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
   },
   addSetButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     paddingVertical: 8,
     marginTop: 4,
   },
   addSetButtonText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
   },
   errorText: {
-    color: '#FCA5A5',
+    color: colors.dangerLight,
     fontSize: 13,
     marginTop: 4,
   },
@@ -954,7 +955,7 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: '#262A34',
+    borderTopColor: colors.border,
   },
   cancelButton: {
     flex: 1,
@@ -962,11 +963,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     paddingVertical: 12,
   },
   cancelText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -977,11 +978,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     borderRadius: 12,
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     paddingVertical: 12,
   },
   saveText: {
-    color: '#000000',
+    color: colors.black,
     fontSize: 14,
     fontWeight: '800',
   },

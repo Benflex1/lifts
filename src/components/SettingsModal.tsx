@@ -14,6 +14,7 @@ import { useSettings } from '../context/SettingsContext';
 import { WeightUnit } from '../utils/units';
 import { GymProfilesModal } from './GymProfilesModal';
 import { useWorkout } from '../context/WorkoutContext';
+import { colors } from '../theme';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -96,7 +97,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               accessibilityRole="button"
               accessibilityLabel="Close settings"
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -112,8 +113,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 value={gymTrackingEnabled}
                 onValueChange={handleGymTrackingChange}
                 disabled={isSaving}
-                trackColor={{ false: '#374151', true: '#2563EB' }}
-                thumbColor={gymTrackingEnabled ? '#FFFFFF' : '#9CA3AF'}
+                trackColor={{ false: colors.control, true: colors.primary }}
+                thumbColor={gymTrackingEnabled ? colors.text : colors.textSecondary}
                 accessibilityLabel="Gym Tracking"
                 accessibilityRole="switch"
                 accessibilityState={{ checked: gymTrackingEnabled, disabled: isSaving }}
@@ -143,8 +144,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                   value={healthSyncEnabled}
                   onValueChange={handleHealthSyncChange}
                   disabled={isSaving}
-                  trackColor={{ false: '#374151', true: '#2563EB' }}
-                  thumbColor={healthSyncEnabled ? '#FFFFFF' : '#9CA3AF'}
+                  trackColor={{ false: colors.control, true: colors.primary }}
+                  thumbColor={healthSyncEnabled ? colors.text : colors.textSecondary}
                   accessibilityLabel="Sync completed workouts"
                   accessibilityRole="switch"
                   accessibilityState={{ checked: healthSyncEnabled, disabled: isSaving }}
@@ -183,7 +184,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                   </Text>
                   <Text style={styles.unitOptionDescription}>Metric system</Text>
                 </View>
-                {unit === 'kg' && <Check size={20} color="#3B82F6" />}
+                {unit === 'kg' && <Check size={20} color={colors.primary} />}
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -208,14 +209,14 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                   </Text>
                   <Text style={styles.unitOptionDescription}>Imperial system</Text>
                 </View>
-                {unit === 'lb' && <Check size={20} color="#3B82F6" />}
+                {unit === 'lb' && <Check size={20} color={colors.primary} />}
               </TouchableOpacity>
             </View>
           </View>
 
           {isSaving && (
             <View style={styles.savingRow}>
-              <ActivityIndicator size="small" color="#3B82F6" />
+              <ActivityIndicator size="small" color={colors.primary} />
               <Text style={styles.savingText}>Saving...</Text>
             </View>
           )}
@@ -253,10 +254,10 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     padding: 20,
   },
   header: {
@@ -268,7 +269,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
   },
   closeButton: {
     minWidth: 44,
@@ -276,7 +277,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   section: {
     marginBottom: 20,
@@ -293,12 +294,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F3F4F6',
+    color: colors.text,
     marginBottom: 4,
   },
   sectionSubtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     marginBottom: 14,
     lineHeight: 18,
   },
@@ -312,11 +313,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#262A34',
+    borderColor: colors.control,
+    backgroundColor: colors.border,
   },
   manageButtonText: {
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -324,15 +325,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
   },
   unitOptionActive: {
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
     backgroundColor: 'rgba(59, 130, 246, 0.1)',
   },
   unitTextContainer: {
@@ -341,14 +342,14 @@ const styles = StyleSheet.create({
   unitOptionTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#D1D5DB',
+    color: colors.textSoft,
   },
   unitOptionTitleActive: {
-    color: '#3B82F6',
+    color: colors.primary,
   },
   unitOptionDescription: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   savingRow: {
@@ -360,10 +361,10 @@ const styles = StyleSheet.create({
   },
   savingText: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   doneButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
@@ -371,6 +372,6 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text,
   },
 });

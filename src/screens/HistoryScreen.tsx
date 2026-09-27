@@ -9,8 +9,10 @@ import {
   ScrollView,
 } from 'react-native';
 import {
-  Calendar as CalendarIcon,
   Clock,
+  Edit2,
+  History,
+  MoreHorizontal,
   Dumbbell,
   Repeat,
   Trophy,
@@ -46,6 +48,8 @@ import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { PRBadge } from '../components/PRBadge';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { getSupersetMetadata } from '../workout/supersets';
+import { colors, radii } from '../theme';
+import { ActionSheet, Chip, IconButton, Medal, ScreenHeader } from '../components/ui';
 
 interface HistoryScreenProps {
   workoutUpdate?: Workout | null;
@@ -66,6 +70,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [menuWorkout, setMenuWorkout] = useState<WorkoutHistorySummary | null>(null);
   const [workoutDetails, setWorkoutDetails] = useState<Record<string, Workout>>({});
   const [workoutPRs, setWorkoutPRs] = useState<Record<string, WorkoutPRSummary>>({});
   const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
@@ -346,25 +351,16 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>History</Text>
-      </View>
+      <ScreenHeader
+        title="History"
+        subtitle={
+          totalWorkouts > 0
+            ? `${totalWorkouts} ${totalWorkouts === 1 ? 'workout' : 'workouts'} · ${formatWeight(totalVolume, unit)} lifted`
+            : undefined
+        }
+      />
 
-      {/* Stats Summary Strip */}
-      <View style={styles.summaryBar}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>WORKOUTS</Text>
-          <Text style={styles.summaryValue}>{totalWorkouts}</Text>
-        </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>ALL-TIME VOLUME</Text>
-          <Text style={styles.summaryValue}>{formatWeight(totalVolume, unit)}</Text>
-        </View>
-      </View>
-
-      {gymTrackingEnabled && (
+      {gymTrackingEnabled && gyms.length > 1 && (
         <View style={styles.gymFilterSection}>
           <ScrollView
             horizontal
@@ -372,38 +368,29 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
             contentContainerStyle={styles.gymFilterScroll}
             keyboardShouldPersistTaps="handled"
           >
-            <TouchableOpacity
-              style={[styles.gymFilterChip, selectedGymId === null && styles.gymFilterChipActive]}
+            <Chip
+              label="All Gyms"
+              selected={selectedGymId === null}
               onPress={() => setSelectedGymId(null)}
-              accessibilityRole="button"
               accessibilityLabel="Show all gyms"
-              accessibilityState={{ selected: selectedGymId === null }}
-            >
-              <Text style={[styles.gymFilterText, selectedGymId === null && styles.gymFilterTextActive]}>All Gyms</Text>
-            </TouchableOpacity>
-            {gyms.map(gym => {
-              const selected = selectedGymId === gym.id;
-              return (
-                <TouchableOpacity
-                  key={gym.id}
-                  style={[styles.gymFilterChip, selected && styles.gymFilterChipActive]}
-                  onPress={() => setSelectedGymId(gym.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Show ${gym.name} workouts`}
-                  accessibilityState={{ selected }}
-                >
-                  <View style={[styles.gymSwatch, { backgroundColor: gym.color }]} />
-                  <Text style={[styles.gymFilterText, selected && styles.gymFilterTextActive]}>{gym.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            />
+            {gyms.map(gym => (
+              <Chip
+                key={gym.id}
+                label={gym.name}
+                selected={selectedGymId === gym.id}
+                onPress={() => setSelectedGymId(gym.id)}
+                accessibilityLabel={`Show ${gym.name} workouts`}
+                leading={<View style={[styles.gymSwatch, { backgroundColor: gym.color }]} />}
+              />
+            ))}
           </ScrollView>
         </View>
       )}
 
       {loading ? (
         <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -422,107 +409,85 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
 
             return (
               <View key={item.id} style={styles.historyCard}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={styles.workoutName}>{item.name}</Text>
-                    <View style={styles.dateRow}>
-                      <CalendarIcon size={13} color="#9CA3AF" />
-                      <Text style={styles.dateText}>{formatDate(item.startTime)}</Text>
-                    </View>
+                <View style={styles.cardTop}>
+                  <TouchableOpacity
+                    style={styles.cardToggle}
+                    onPress={() => handleToggleExpand(item.id)}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.name}, ${isExpanded ? 'hide' : 'show'} details`}
+                    accessibilityState={{ expanded: isExpanded }}
+                  >
+                    <Text style={styles.dateText}>{formatDate(item.startTime)}</Text>
+                    <Text style={styles.workoutName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
                     {gymTrackingEnabled && gymById.get(item.gymId) && (
                       <View style={styles.gymTag}>
                         <View style={[styles.gymSwatch, { backgroundColor: gymById.get(item.gymId)!.color }]} />
                         <Text style={styles.gymTagText}>{gymById.get(item.gymId)!.name}</Text>
                       </View>
                     )}
-                  </View>
 
-                  <View style={styles.headerRightActions}>
-                    <TouchableOpacity
-                      style={styles.repeatBtn}
-                      onPress={() => handlePerformAgain(item)}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Repeat size={14} color="#10B981" />
-                      <Text style={styles.repeatBtnText}>Repeat</Text>
-                    </TouchableOpacity>
+                    {/* Metrics Row */}
+                    <View style={styles.metricsRow}>
+                      <View style={styles.metric}>
+                        <Clock size={14} color={colors.textMuted} />
+                        <Text style={styles.metricText}>{formatDuration(item.durationSeconds)}</Text>
+                      </View>
+                      <View style={styles.metric}>
+                        <Dumbbell size={14} color={colors.textMuted} />
+                        <Text style={styles.metricText}>{formatWeight(item.totalVolumeKg, unit)}</Text>
+                      </View>
+                      <View style={styles.metric}>
+                        <Layers size={14} color={colors.textMuted} />
+                        <Text style={styles.metricText}>{item.totalSets} sets</Text>
+                      </View>
+                      {prSummary && prSummary.totalCount > 0 && (
+                        <View style={[styles.metric, styles.prMetric]}>
+                          <Trophy size={13} color={colors.gold} />
+                          <Text style={styles.metricPRText}>
+                            {prSummary.totalCount} PR{prSummary.totalCount > 1 ? 's' : ''}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
 
+                  <View style={styles.cardSide}>
+                    <IconButton
+                      icon={MoreHorizontal}
+                      tone="ghost"
+                      size={34}
+                      onPress={() => setMenuWorkout(item)}
+                      accessibilityLabel={`${item.name} options`}
+                    />
                     <TouchableOpacity
-                      style={styles.deleteBtn}
-                      onPress={() => handleDelete(item)}
+                      style={styles.expandIndicator}
+                      onPress={() => handleToggleExpand(item.id)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={isExpanded ? 'Hide details' : 'Show details'}
                     >
-                      <Trash2 size={16} color="#EF4444" />
+                      {isExpanded ? (
+                        <ChevronUp size={18} color={colors.textMuted} />
+                      ) : (
+                        <ChevronDown size={18} color={colors.textMuted} />
+                      )}
                     </TouchableOpacity>
                   </View>
                 </View>
-
-                {/* Metrics Row */}
-                <View style={styles.metricsRow}>
-                  <View style={styles.metric}>
-                    <Clock size={15} color="#9CA3AF" />
-                    <Text style={styles.metricText}>
-                      {formatDuration(item.durationSeconds)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.metric}>
-                    <Dumbbell size={15} color="#9CA3AF" />
-                    <Text style={styles.metricText}>
-                      {formatWeight(item.totalVolumeKg, unit)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.metric}>
-                    <Trophy size={15} color="#9CA3AF" />
-                    <Text style={styles.metricText}>{item.totalSets} sets</Text>
-                  </View>
-
-                  {(supersetMetaMap.size > 0 || Boolean(item.hasSupersets)) && (
-                    <View style={styles.metric}>
-                      <Layers size={14} color="#8B5CF6" />
-                      <Text style={[styles.metricText, { color: '#C4B5FD', fontWeight: '700' }]}>
-                        Supersets
-                      </Text>
-                    </View>
-                  )}
-
-                  {prSummary && prSummary.totalCount > 0 && (
-                    <View style={styles.metric}>
-                      <Text style={styles.metricPRText}>
-                        {prSummary.goldCount > 0 ? '🥇' : prSummary.silverCount > 0 ? '🥈' : '🥉'}{' '}
-                        {prSummary.totalCount} PR{prSummary.totalCount > 1 ? 's' : ''}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Toggle Detail Button */}
-                <TouchableOpacity
-                  style={styles.toggleDetailBar}
-                  onPress={() => handleToggleExpand(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.toggleDetailText}>
-                    {isExpanded ? 'Hide Details' : 'View Set Breakdown'}
-                  </Text>
-                  {isExpanded ? (
-                    <ChevronUp size={16} color="#3B82F6" />
-                  ) : (
-                    <ChevronDown size={16} color="#3B82F6" />
-                  )}
-                </TouchableOpacity>
 
                 {/* Expanded Set Details */}
                 {isExpanded && (
                   <View style={styles.expandedSection}>
                     {loadingDetailId === item.id ? (
-                      <ActivityIndicator size="small" color="#3B82F6" style={{ marginVertical: 12 }} />
+                      <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
                     ) : detail && detail.exercises.length > 0 ? (
                       <>
                         {prSummary && prSummary.totalCount > 0 && (
                           <View style={styles.historyPRBanner}>
-                            <Trophy size={14} color="#F59E0B" />
+                            <Trophy size={14} color={colors.warning} />
                             <Text style={styles.historyPRBannerText}>
                               {prSummary.totalCount} PR{prSummary.totalCount > 1 ? 's' : ''} achieved in this workout
                             </Text>
@@ -582,12 +547,16 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                                   </View>
                                   {exercisePRs && exercisePRs.length > 0 && (
                                     <View style={styles.detailExPRBadge}>
+                                      <Medal
+                                        rank={Math.min(...exercisePRs.map(a => a.achievement.rank)) as 1 | 2 | 3}
+                                        size={11}
+                                      />
                                       <Text style={styles.detailExPRBadgeText}>
                                         {exercisePRs.some(a => a.achievement.rank === 1)
-                                          ? '🥇 PR'
+                                          ? 'Gold PR'
                                           : exercisePRs.some(a => a.achievement.rank === 2)
-                                          ? '🥈 2nd'
-                                          : '🥉 3rd'}
+                                          ? 'Silver'
+                                          : 'Bronze'}
                                       </Text>
                                     </View>
                                   )}
@@ -617,11 +586,11 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                                                 title:
                                                   setPR.primary?.rank === 1
                                                     ? setPR.primary?.isTie
-                                                      ? 'Tied Personal Record 🥇'
-                                                      : 'Personal Record 🥇'
+                                                      ? 'Tied Personal Record'
+                                                      : 'Personal Record'
                                                     : setPR.primary?.rank === 2
-                                                    ? 'Silver Record 🥈'
-                                                    : 'Bronze Record 🥉',
+                                                    ? 'Silver Record'
+                                                    : 'Bronze Record',
                                                 message: `${ex.exercise.name} (Set #${s.setNumber})\n\n${desc}`,
                                               });
                                             }}
@@ -676,7 +645,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                       <TouchableOpacity
                         style={styles.editWorkoutButton}
                         onPress={() => setEditingWorkout(detail)}
+                        accessibilityRole="button"
                       >
+                        <Edit2 size={15} color={colors.textSoft} />
                         <Text style={styles.editWorkoutButtonText}>Edit Workout</Text>
                       </TouchableOpacity>
                     )}
@@ -687,7 +658,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
                 {!isExpanded && item.exerciseNames.length > 0 && (
                   <View style={styles.exerciseNamesBox}>
                     <Text style={styles.exerciseNamesText} numberOfLines={2}>
-                      {item.exerciseNames.join(' • ')}
+                      {item.exerciseNames.join(' · ')}
                     </Text>
                   </View>
                 )}
@@ -696,17 +667,45 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
           }}
           ListEmptyComponent={(
             <View style={styles.emptyBox}>
-              <Dumbbell size={48} color="#2A2E3B" />
+              <View style={styles.emptyIcon}>
+                <History size={26} color={colors.primary} />
+              </View>
               <Text style={styles.emptyTitle}>
                 {selectedGymId ? 'No workouts at this gym' : 'No workouts logged yet'}
               </Text>
               <Text style={styles.emptySub}>
-                Start your first workout to view your history and progression!
+                Finished workouts show up here with every set, PR and note.
               </Text>
             </View>
           )}
         />
       )}
+
+      <ActionSheet
+        visible={menuWorkout !== null}
+        title={menuWorkout?.name}
+        subtitle={menuWorkout ? formatDate(menuWorkout.startTime) : undefined}
+        onClose={() => setMenuWorkout(null)}
+        actions={
+          menuWorkout
+            ? [
+                {
+                  key: 'repeat',
+                  label: 'Perform Again',
+                  icon: Repeat,
+                  onPress: () => handlePerformAgain(menuWorkout),
+                },
+                {
+                  key: 'delete',
+                  label: 'Delete Workout',
+                  icon: Trash2,
+                  destructive: true,
+                  onPress: () => handleDelete(menuWorkout),
+                },
+              ]
+            : []
+        }
+      />
 
       <WorkoutEditModal
         visible={editingWorkout !== null}
@@ -733,228 +732,115 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ workoutUpdate = nu
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0E12',
-  },
-  header: {
-    paddingTop: 54,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#181A20',
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  summaryBar: {
-    flexDirection: 'row',
-    backgroundColor: '#13151B',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#20242E',
-  },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryDivider: {
-    width: 1,
-    backgroundColor: '#262A34',
-  },
-  summaryLabel: {
-    fontSize: 10,
-    color: '#6B7280',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    backgroundColor: colors.bg,
   },
   gymFilterSection: {
-    backgroundColor: '#13151B',
-    borderBottomWidth: 1,
-    borderBottomColor: '#20242E',
+    paddingBottom: 12,
   },
   gymFilterScroll: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     gap: 8,
-  },
-  gymFilterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 44,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: '#181A20',
-    borderWidth: 1,
-    borderColor: '#2F3748',
-  },
-  gymFilterChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#3B82F6',
-  },
-  gymFilterText: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  gymFilterTextActive: {
-    color: '#FFFFFF',
+    paddingHorizontal: 16,
   },
   gymSwatch: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    marginRight: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   gymTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 7,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: '#20242E',
+    gap: 6,
+    marginTop: 6,
   },
   gymTagText: {
-    color: '#D1D5DB',
-    fontSize: 11,
+    color: colors.textSecondary,
+    fontSize: 12,
     fontWeight: '600',
   },
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 120,
   },
   emptyListContent: {
     flexGrow: 1,
   },
   historyCard: {
-    backgroundColor: '#181A20',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    borderColor: colors.border,
     marginBottom: 12,
   },
   workoutName: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: colors.text,
+    fontSize: 17,
     fontWeight: '700',
-    marginBottom: 4,
-  },
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    letterSpacing: -0.2,
   },
   dateText: {
-    color: '#9CA3AF',
+    color: colors.textMuted,
     fontSize: 12,
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  repeatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#132E27',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  repeatBtnText: {
-    color: '#10B981',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  deleteBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#2A171B',
+    fontWeight: '600',
+    marginBottom: 3,
   },
   metricsRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 10,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginTop: 12,
   },
   metric: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   metricText: {
-    color: '#D1D5DB',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  toggleDetailBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#20242E',
-    marginTop: 4,
-  },
-  toggleDetailText: {
-    color: '#3B82F6',
+    color: colors.textSoft,
     fontSize: 13,
     fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   expandedSection: {
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#20242E',
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderStrong,
     gap: 10,
   },
   editWorkoutButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1D4ED8',
-    borderRadius: 8,
-    marginTop: 2,
-    paddingVertical: 10,
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceHigh,
+    borderRadius: radii.md,
+    marginTop: 4,
+    paddingVertical: 12,
   },
   editWorkoutButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    color: colors.textSoft,
+    fontSize: 14,
     fontWeight: '700',
   },
   detailExBlock: {
-    backgroundColor: '#14161D',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
+    padding: 12,
+    borderRadius: radii.md,
   },
   detailExTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 4,
   },
   detailExNotes: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontStyle: 'italic',
     marginBottom: 6,
@@ -967,36 +853,31 @@ const styles = StyleSheet.create({
   detailSetPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 6,
     gap: 6,
   },
   detailSetNum: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
   detailSetWeight: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 12,
     fontWeight: '600',
   },
-  detailSetType: {
-    color: '#F59E0B',
-    fontSize: 10,
-    fontWeight: '700',
-  },
   detailRpe: {
-    color: '#A855F7',
+    color: colors.purple,
     fontSize: 10,
     fontWeight: '700',
   },
   metricPRText: {
-    color: '#FBBF24',
-    fontSize: 13,
-    fontWeight: '700',
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: '800',
   },
   historyPRBanner: {
     flexDirection: 'row',
@@ -1011,7 +892,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   historyPRBannerText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1022,6 +903,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   detailExPRBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#78350F30',
     borderColor: '#F59E0B50',
     borderWidth: 1,
@@ -1030,19 +914,17 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   detailExPRBadgeText: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 10,
     fontWeight: '800',
   },
   exerciseNamesBox: {
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#20242E',
+    marginTop: 12,
   },
   exerciseNamesText: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    lineHeight: 18,
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
   },
   centerBox: {
     flex: 1,
@@ -1050,19 +932,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyBox: {
+    flex: 1,
+    justifyContent: 'center',
     paddingVertical: 60,
     alignItems: 'center',
     paddingHorizontal: 30,
   },
   emptyTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 18,
     fontWeight: '700',
     marginTop: 16,
     marginBottom: 6,
   },
   emptySub: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -1092,7 +976,7 @@ const styles = StyleSheet.create({
   },
   historySupersetSubtext: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   detailExTitleWrap: {
@@ -1106,7 +990,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: 4,
     borderWidth: 1,
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
   },
   historySupersetPosText: {
     fontSize: 9,
@@ -1127,7 +1011,7 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B60',
   },
   detailSetTypeWarmupText: {
-    color: '#F59E0B',
+    color: colors.warning,
   },
   detailSetTypeDrop: {
     backgroundColor: '#83184330',
@@ -1141,6 +1025,38 @@ const styles = StyleSheet.create({
     borderColor: '#EF444460',
   },
   detailSetTypeFailureText: {
-    color: '#EF4444',
+    color: colors.danger,
+  },
+  prMetric: {
+    backgroundColor: colors.warningSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  expandIndicator: {
+    width: 34,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  cardToggle: {
+    flex: 1,
+    marginRight: 8,
+  },
+  cardSide: {
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 });

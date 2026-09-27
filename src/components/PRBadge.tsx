@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { PRAchievement, formatPRBadgeLabel } from '../workout/pr';
+import { colors } from '../theme';
+import { Medal } from './ui';
 
 interface PRBadgeProps {
   achievement: PRAchievement;
@@ -26,13 +28,13 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
     ? {
         bg: '#78350F35',
         border: '#F59E0B70',
-        text: '#FBBF24',
+        text: colors.gold,
       }
     : isSilver
     ? {
         bg: '#33415545',
         border: '#94A3B870',
-        text: '#F1F5F9',
+        text: colors.text,
       }
     : {
         bg: '#451A0345',
@@ -54,10 +56,12 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
 
   const content = compact ? (
     <View style={[styles.compactContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
+      <Medal rank={rank} size={11} />
       <Text style={[styles.compactText, { color: theme.text }]}>{badgeText}{suffix}</Text>
     </View>
   ) : (
     <View style={[styles.fullContainer, { backgroundColor: theme.bg, borderColor: theme.border }]}>
+      <Medal rank={rank} size={13} />
       <Text style={[styles.fullText, { color: theme.text }]}>
         {badgeText} · {metricLabel}{suffix}
       </Text>
@@ -84,14 +88,11 @@ const styles = StyleSheet.create({
   compactContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 6,
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
     borderWidth: 1,
-  },
-  compactEmoji: {
-    fontSize: 10,
   },
   compactText: {
     fontSize: 10,
@@ -101,14 +102,11 @@ const styles = StyleSheet.create({
   fullContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 7,
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
     borderWidth: 1,
-  },
-  fullEmoji: {
-    fontSize: 12,
   },
   fullText: {
     fontSize: 11,

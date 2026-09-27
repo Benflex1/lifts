@@ -3,7 +3,7 @@ import { calculate1RM } from '../utils/calculator';
 import { formatWeight, WeightUnit } from '../utils/units';
 import { getAllowedGymIds, resolveExerciseScope } from './gym-scope';
 
-export type PRRank = 1 | 2 | 3; // 1 = Gold 🥇, 2 = Silver 🥈, 3 = Bronze 🥉
+export type PRRank = 1 | 2 | 3; // 1 = Gold, 2 = Silver, 3 = Bronze
 export type PRMetric = 'weight' | '1rm' | 'volume' | 'reps';
 export type PRScope = 'global' | 'gym';
 
@@ -350,26 +350,26 @@ export function evaluateWorkoutPRs(
 }
 
 /**
- * Formats a short badge label (e.g. "🥇 PR", "🥈 2nd", "🥉 3rd", "🏅 FitX PR")
+ * Formats a short badge label (e.g. "PR", "2nd", "3rd", "FitX PR"). The medal
+ * itself is rendered visually by the <Medal /> component next to this text.
  */
 export function formatPRBadgeLabel(achievement: PRAchievement, showGymName = false): string {
-  const medal = achievement.rank === 1 ? '🥇' : achievement.rank === 2 ? '🥈' : '🥉';
   const rankLabel = achievement.rank === 1 ? (achievement.isTie ? 'Tied PR' : 'PR') : achievement.rank === 2 ? '2nd' : '3rd';
 
   if (achievement.scope === 'gym') {
     if (showGymName && achievement.gymName) {
-      return `${medal} ${achievement.gymName} ${rankLabel}`;
+      return `${achievement.gymName} ${rankLabel}`;
     }
-    return `${medal} Gym ${rankLabel}`;
+    return `Gym ${rankLabel}`;
   }
-  return `${medal} ${rankLabel}`;
+  return rankLabel;
 }
 
 /**
  * Formats detailed human-readable achievement description
  */
 export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit = 'kg'): string {
-  const medal = achievement.rank === 1 ? '🥇 Gold' : achievement.rank === 2 ? '🥈 Silver' : '🥉 Bronze';
+  const medal = achievement.rank === 1 ? 'Gold' : achievement.rank === 2 ? 'Silver' : 'Bronze';
   const rankStr = achievement.rank === 1 ? (achievement.isTie ? 'Tied Best' : 'Best') : achievement.rank === 2 ? '2nd Best' : '3rd Best';
   const metricStr =
     achievement.metric === 'weight'

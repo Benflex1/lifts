@@ -26,6 +26,7 @@ import {
 import { formatWeight, kgToDisplay, WeightUnit } from '../utils/units';
 import { Trophy, TrendingUp, TrendingDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { colors } from '../theme';
 
 export { isPointPrForMetric };
 
@@ -252,7 +253,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
   if (points.length === 0) {
     return (
       <View style={[styles.emptyContainer, { height }]}>
-        <TrendingUp size={28} color="#4B5563" />
+        <TrendingUp size={28} color={colors.textFaint} />
         <Text style={styles.emptyTitle}>No progression data yet</Text>
         <Text style={styles.emptySubtitle}>
           Complete workouts with this exercise to visualize your 1RM and load curves over time.
@@ -286,18 +287,18 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
               ]}
             >
               {trajectoryStats.changePct > 0 ? (
-                <TrendingUp size={12} color="#10B981" />
+                <TrendingUp size={12} color={colors.success} />
               ) : trajectoryStats.changePct < 0 ? (
-                <TrendingDown size={12} color="#EF4444" />
+                <TrendingDown size={12} color={colors.danger} />
               ) : null}
               <Text
                 style={[
                   styles.trajectoryPillText,
                   trajectoryStats.changePct > 0
-                    ? { color: '#10B981' }
+                    ? { color: colors.success }
                     : trajectoryStats.changePct < 0
-                    ? { color: '#EF4444' }
-                    : { color: '#9CA3AF' },
+                    ? { color: colors.danger }
+                    : { color: colors.textSecondary },
                 ]}
               >
                 {trajectoryStats.changePct > 0 ? `+${trajectoryStats.changePct}%` : `${trajectoryStats.changePct}%`}
@@ -328,7 +329,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
             <Text style={styles.calloutDate}>{activePoint.dateLabel}</Text>
             {isPointPrForMetric(activePoint, metric) && (
               <View style={styles.prBadge}>
-                <Trophy size={11} color="#F59E0B" />
+                <Trophy size={11} color={colors.warning} />
                 <Text style={styles.prBadgeText}>
                   {metric === 'e1rm'
                     ? 'NEW 1RM PR'
@@ -364,7 +365,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
             </Text>
             {gymTrackingEnabled && activePoint.gymName && (
               <Text style={styles.calloutGym} numberOfLines={1}>
-                📍 {activePoint.gymName}
+                {activePoint.gymName}
               </Text>
             )}
           </View>
@@ -382,8 +383,8 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
         <Svg width={containerWidth} height={height} pointerEvents="none">
           <Defs>
             <LinearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="#38BDF8" stopOpacity="0.28" />
-              <Stop offset="1" stopColor="#38BDF8" stopOpacity="0.0" />
+              <Stop offset="0" stopColor={colors.primary} stopOpacity="0.28" />
+              <Stop offset="1" stopColor={colors.primary} stopOpacity="0.0" />
             </LinearGradient>
           </Defs>
 
@@ -395,14 +396,14 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
                 y1={grid.y}
                 x2={containerWidth - paddingRight}
                 y2={grid.y}
-                stroke="#262A34"
+                stroke={colors.border}
                 strokeWidth="1"
                 strokeDasharray="3 3"
               />
               <SvgText
                 x={paddingLeft - 8}
                 y={grid.y + 4}
-                fill="#6B7280"
+                fill={colors.textMuted}
                 fontSize="10"
                 fontWeight="600"
                 textAnchor="end"
@@ -422,7 +423,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
             <Path
               d={linePath}
               fill="none"
-              stroke="#38BDF8"
+              stroke={colors.primary}
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -464,8 +465,8 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
                   cx={c.x}
                   cy={c.y}
                   r={isSelected ? 5 : isPr ? 4.5 : 3.5}
-                  fill={isPr ? '#F59E0B' : isSelected ? '#38BDF8' : '#1E293B'}
-                  stroke={isPr ? '#F59E0B' : '#38BDF8'}
+                  fill={isPr ? colors.warning : isSelected ? colors.primary : colors.surfaceAlt}
+                  stroke={isPr ? colors.warning : colors.primary}
                   strokeWidth={isSelected ? 2.5 : 1.5}
                 />
               </G>
@@ -478,7 +479,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
               <SvgText
                 x={coords[0].x}
                 y={paddingTop + chartHeight + 18}
-                fill="#9CA3AF"
+                fill={colors.textSecondary}
                 fontSize="10"
                 fontWeight="500"
                 textAnchor={coords.length === 1 ? 'middle' : 'start'}
@@ -489,7 +490,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
                 <SvgText
                   x={coords[coords.length - 1].x}
                   y={paddingTop + chartHeight + 18}
-                  fill="#9CA3AF"
+                  fill={colors.textSecondary}
                   fontSize="10"
                   fontWeight="500"
                   textAnchor="end"
@@ -542,8 +543,8 @@ const styles = StyleSheet.create({
     borderColor: '#EF444440',
   },
   trajectoryPillNeutral: {
-    backgroundColor: '#262A34',
-    borderColor: '#374151',
+    backgroundColor: colors.border,
+    borderColor: colors.control,
   },
   trajectoryPillText: {
     fontSize: 11,
@@ -553,29 +554,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#14171F',
+    backgroundColor: colors.surfaceSunken,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   summaryMetaLabel: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '600',
   },
   summaryMetaValue: {
-    color: '#E2E8F0',
+    color: colors.text,
     fontSize: 11,
     fontWeight: '700',
   },
   calloutCard: {
     width: '100%',
-    backgroundColor: '#181D27',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2D3748',
+    borderColor: colors.borderStrong,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 10,
@@ -587,7 +588,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   calloutDate: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -603,7 +604,7 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B50',
   },
   prBadgeText: {
-    color: '#F59E0B',
+    color: colors.warning,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -615,12 +616,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   calloutMainVal: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 22,
     fontWeight: '800',
   },
   calloutMetricLabel: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -629,44 +630,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#262A34',
+    borderTopColor: colors.border,
     paddingTop: 6,
     marginTop: 2,
   },
   calloutTopSet: {
-    color: '#CBD5E1',
+    color: colors.textSoft,
     fontSize: 12,
     fontWeight: '500',
   },
   calloutGym: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     maxWidth: '40%',
   },
   scrubHint: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '500',
     marginTop: 6,
   },
   emptyContainer: {
     width: '100%',
-    backgroundColor: '#14171F',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
     gap: 8,
   },
   emptyTitle: {
-    color: '#E2E8F0',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '700',
   },
   emptySubtitle: {
-    color: '#6B7280',
+    color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

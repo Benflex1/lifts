@@ -5,20 +5,19 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  FlatList,
 } from 'react-native';
 import {
   Play,
   Plus,
   Folder,
+  FolderCog,
   Edit2,
   Trash2,
-  Dumbbell,
-  Sparkles,
-  Calendar,
   Copy,
   Settings2,
   Layers,
+  MoreHorizontal,
+  ChevronRight,
 } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { Routine } from '../types';
@@ -31,6 +30,8 @@ import { resolveInitialStartGymId } from '../workout/gym-session';
 import { useSettings } from '../context/SettingsContext';
 import { useDialog } from '../context/DialogContext';
 import { getSupersetMetadata } from '../workout/supersets';
+import { colors, radii } from '../theme';
+import { ActionSheet, Chip, IconButton, ScreenHeader, SectionHeader } from '../components/ui';
 
 export const WorkoutScreen: React.FC = () => {
   const { startWorkout, gyms, refreshGyms } = useWorkout();
@@ -42,6 +43,7 @@ export const WorkoutScreen: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [routineToEdit, setRoutineToEdit] = useState<Routine | null>(null);
   const [showFolderManage, setShowFolderManage] = useState(false);
+  const [menuRoutine, setMenuRoutine] = useState<Routine | null>(null);
   const [pendingStart, setPendingStart] = useState<{
     routine?: Routine;
     customName: string;
@@ -152,188 +154,203 @@ export const WorkoutScreen: React.FC = () => {
       ? routines
       : routines.filter(r => r.folderName === selectedFolder);
 
+  const openEditor = (routine: Routine | null) => {
+    setRoutineToEdit(routine);
+    setShowEditor(true);
+  };
+
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+
   return (
     <View style={styles.container}>
-      {/* Top App Header */}
-      <View style={styles.appHeader}>
-        <View>
-          <Text style={styles.appTitle}>LIFTS</Text>
-          <Text style={styles.appSubtitle}>Think Less. Lift More.</Text>
-        </View>
-        <View style={styles.appHeaderActions}>
-          <TouchableOpacity
-            style={styles.settingsHeaderBtn}
+      <ScreenHeader
+        eyebrow={todayLabel}
+        title="Workout"
+        right={
+          <IconButton
+            icon={Settings2}
             onPress={() => setShowSettings(true)}
-            accessibilityRole="button"
             accessibilityLabel="Open settings"
-          >
-            <Settings2 size={20} color="#9CA3AF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.newRoutineHeaderBtn}
-            onPress={() => {
-              setRoutineToEdit(null);
-              setShowEditor(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="New routine"
-          >
-            <Plus size={18} color="#FFFFFF" />
-            <Text style={styles.newRoutineHeaderBtnText}>New Routine</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+          />
+        }
+      />
 
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* Quick Start Card */}
-        <View style={styles.quickStartCard}>
+        {/* Quick Start */}
+        <TouchableOpacity
+          style={styles.quickStartCard}
+          onPress={handleStartEmpty}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Start empty workout"
+        >
+          <View style={styles.quickStartIcon}>
+            <Play size={20} color={colors.primary} fill={colors.primary} />
+          </View>
           <View style={styles.quickStartInfo}>
-            <Text style={styles.quickStartTitle}>Quick Start</Text>
-            <Text style={styles.quickStartSubtitle}>
-              Start an empty workout and log on the fly
-            </Text>
+            <Text style={styles.quickStartTitle}>Start Empty Workout</Text>
+            <Text style={styles.quickStartSubtitle}>Log exercises as you go</Text>
           </View>
-          <TouchableOpacity style={styles.quickStartBtn} onPress={handleStartEmpty}>
-            <Play size={18} color="#000000" fill="#000000" />
-            <Text style={styles.quickStartBtnText}>Start Empty</Text>
-          </TouchableOpacity>
-        </View>
+          <ChevronRight size={20} color={colors.onPrimary} />
+        </TouchableOpacity>
 
-        {/* Routines Section Header */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>My Routines</Text>
-            <View style={styles.unlimitedBadge}>
-              <Sparkles size={12} color="#10B981" />
-              <Text style={styles.unlimitedBadgeText}>{routines.length} Routines (Unlimited)</Text>
-            </View>
-          </View>
-        </View>
+        {/* Routines */}
+        <SectionHeader
+          title="Routines"
+          meta={routines.length > 0 ? String(routines.length) : undefined}
+          actionLabel="+ New"
+          onAction={() => openEditor(null)}
+          style={styles.sectionHeader}
+        />
 
-        {/* Folder Filter Horizontal Chips */}
         {folders.length > 1 && (
           <View style={styles.folderChipsHeader}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.folderChipsContainer}
+              style={styles.folderChipsScroll}
             >
               {folders.map(f => (
-                <TouchableOpacity
+                <Chip
                   key={f}
-                  style={[styles.folderChip, selectedFolder === f && styles.folderChipActive]}
+                  label={f}
+                  selected={selectedFolder === f}
                   onPress={() => setSelectedFolder(f)}
-                >
-                  {f !== 'All' && (
-                    <Folder
-                      size={13}
-                      color={selectedFolder === f ? '#FFFFFF' : '#9CA3AF'}
-                      style={{ marginRight: 4 }}
-                    />
-                  )}
-                  <Text
-                    style={[
-                      styles.folderChipText,
-                      selectedFolder === f && styles.folderChipTextActive,
-                    ]}
-                  >
-                    {f}
-                  </Text>
-                </TouchableOpacity>
+                  leading={
+                    f !== 'All' ? (
+                      <Folder size={13} color={selectedFolder === f ? colors.bg : colors.textMuted} />
+                    ) : undefined
+                  }
+                />
               ))}
             </ScrollView>
-            <TouchableOpacity onPress={() => setShowFolderManage(true)} style={styles.manageBtn}>
-              <Settings2 size={16} color="#9CA3AF" />
-            </TouchableOpacity>
+            <IconButton
+              icon={FolderCog}
+              size={36}
+              iconSize={17}
+              onPress={() => setShowFolderManage(true)}
+              accessibilityLabel="Manage folders"
+            />
           </View>
         )}
 
-        {/* Routines List */}
-        {filteredRoutines.map(routine => (
-          <View key={routine.id} style={styles.routineCard}>
-            <View style={styles.routineCardHeader}>
-              <View style={styles.routineTitleGroup}>
-                <Text style={styles.routineName}>{routine.name}</Text>
-                <View style={styles.routineBadgesRow}>
-                  {routine.folderName && (
-                    <View style={styles.folderBadge}>
-                      <Folder size={11} color="#3B82F6" />
-                      <Text style={styles.folderBadgeText}>{routine.folderName}</Text>
-                    </View>
-                  )}
-                  {getSupersetMetadata(routine.exercises).size > 0 && (
-                    <View style={styles.supersetTagBadge}>
-                      <Layers size={11} color="#A855F7" />
-                      <Text style={styles.supersetTagBadgeText}>Supersets</Text>
-                    </View>
-                  )}
+        {filteredRoutines.map(routine => {
+          const hasSupersets = getSupersetMetadata(routine.exercises).size > 0;
+          const exerciseCount = routine.exercises.length;
+          const setCount = routine.exercises.reduce((sum, re) => sum + (re.targetSets || 0), 0);
+          const preview = routine.exercises.map(re => re.exercise.name).join(' · ');
+
+          return (
+            <View key={routine.id} style={styles.routineCard}>
+              <View style={styles.routineCardHeader}>
+                <View style={styles.routineTitleGroup}>
+                  <Text style={styles.routineName} numberOfLines={2}>
+                    {routine.name}
+                  </Text>
+                  <View style={styles.routineMetaRow}>
+                    <Text style={styles.routineMeta}>
+                      {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} · {setCount} sets
+                    </Text>
+                    {routine.folderName && selectedFolder === 'All' && (
+                      <View style={styles.metaTag}>
+                        <Folder size={11} color={colors.textMuted} />
+                        <Text style={styles.metaTagText}>{routine.folderName}</Text>
+                      </View>
+                    )}
+                    {hasSupersets && (
+                      <View style={[styles.metaTag, styles.supersetTag]}>
+                        <Layers size={11} color={colors.purpleLight} />
+                        <Text style={[styles.metaTagText, { color: colors.purpleLight }]}>Supersets</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
+
+                <IconButton
+                  icon={MoreHorizontal}
+                  tone="ghost"
+                  size={34}
+                  onPress={() => setMenuRoutine(routine)}
+                  accessibilityLabel={`${routine.name} options`}
+                />
               </View>
 
-              <View style={styles.routineActions}>
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => handleDuplicateRoutine(routine)}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <Copy size={16} color="#9CA3AF" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => {
-                    setRoutineToEdit(routine);
-                    setShowEditor(true);
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <Edit2 size={16} color="#9CA3AF" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => handleDeleteRoutine(routine)}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <Trash2 size={16} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Exercise Badges Preview */}
-            <View style={styles.exPreviewWrap}>
-              {routine.exercises.slice(0, 5).map((re, idx) => (
-                <Text key={idx} style={styles.exPreviewItem} numberOfLines={1}>
-                  {re.targetSets}× {re.exercise.name}
-                  {idx < Math.min(routine.exercises.length - 1, 4) ? ', ' : ''}
+              {preview.length > 0 && (
+                <Text style={styles.exPreview} numberOfLines={2}>
+                  {preview}
                 </Text>
-              ))}
-              {routine.exercises.length > 5 && (
-                <Text style={styles.exPreviewMore}>+{routine.exercises.length - 5} more</Text>
               )}
+
+              <TouchableOpacity
+                style={styles.startRoutineBtn}
+                onPress={() => handleStartRoutine(routine)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Start ${routine.name}`}
+              >
+                <Play size={15} color={colors.primaryLight} fill={colors.primaryLight} />
+                <Text style={styles.startRoutineBtnText}>Start Routine</Text>
+              </TouchableOpacity>
             </View>
+          );
+        })}
 
-            {/* Start Button */}
-            <TouchableOpacity
-              style={styles.startRoutineBtn}
-              onPress={() => handleStartRoutine(routine)}
-            >
-              <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
-              <Text style={styles.startRoutineBtnText}>Start Workout</Text>
-            </TouchableOpacity>
+        {routines.length === 0 ? (
+          <TouchableOpacity
+            style={styles.emptyRoutinesBox}
+            onPress={() => openEditor(null)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <View style={styles.emptyIcon}>
+              <Plus size={22} color={colors.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>Create your first routine</Text>
+            <Text style={styles.emptyText}>Save your go-to workouts and start them in one tap.</Text>
+          </TouchableOpacity>
+        ) : filteredRoutines.length === 0 ? (
+          <View style={styles.emptyFolderBox}>
+            <Text style={styles.emptyText}>No routines in this folder.</Text>
           </View>
-        ))}
-
-        {filteredRoutines.length === 0 && (
-          <View style={styles.emptyRoutinesBox}>
-            <Text style={styles.emptyRoutinesText}>No routines in this folder.</Text>
-          </View>
-        )}
+        ) : null}
       </ScrollView>
+
+      <ActionSheet
+        visible={menuRoutine !== null}
+        title={menuRoutine?.name}
+        subtitle={menuRoutine?.folderName || undefined}
+        onClose={() => setMenuRoutine(null)}
+        actions={
+          menuRoutine
+            ? [
+                { key: 'edit', label: 'Edit Routine', icon: Edit2, onPress: () => openEditor(menuRoutine) },
+                {
+                  key: 'duplicate',
+                  label: 'Duplicate',
+                  icon: Copy,
+                  onPress: () => handleDuplicateRoutine(menuRoutine),
+                },
+                {
+                  key: 'delete',
+                  label: 'Delete Routine',
+                  icon: Trash2,
+                  destructive: true,
+                  onPress: () => handleDeleteRoutine(menuRoutine),
+                },
+              ]
+            : []
+        }
+      />
 
       {/* Routine Editor Modal */}
       <RoutineEditorModal
@@ -374,266 +391,171 @@ export const WorkoutScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D0E12',
-  },
-  appHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 54,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#181A20',
-    borderBottomWidth: 1,
-    borderBottomColor: '#262A34',
-  },
-  appTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 1.5,
-  },
-  appSubtitle: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-  newRoutineHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#2563EB',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  appHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  settingsHeaderBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#262A34',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newRoutineHeaderBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+    backgroundColor: colors.bg,
   },
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 100,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 120,
   },
   quickStartCard: {
-    backgroundColor: '#1E2129',
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#2D323F',
-    marginBottom: 24,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 14,
+    backgroundColor: colors.primary,
+    borderRadius: radii.xl,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 28,
+  },
+  quickStartIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 3,
   },
   quickStartInfo: {
     flex: 1,
-    marginRight: 12,
   },
   quickStartTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
+    color: colors.onPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   quickStartSubtitle: {
-    color: '#9CA3AF',
+    color: colors.onPrimary,
+    opacity: 0.75,
     fontSize: 13,
+    fontWeight: '500',
+    marginTop: 2,
   },
-  quickStartBtn: {
-    backgroundColor: '#10B981',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  quickStartBtnText: {
-    color: '#000000',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  sectionHeaderRow: {
-    marginBottom: 12,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  sectionTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  unlimitedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#132E27',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-  },
-  unlimitedBadgeText: {
-    color: '#10B981',
-    fontSize: 11,
-    fontWeight: '700',
+  sectionHeader: {
+    paddingHorizontal: 4,
   },
   folderChipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 14,
   },
-  manageBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#20242E',
-    marginLeft: 8,
+  folderChipsScroll: {
+    flex: 1,
   },
   folderChipsContainer: {
     gap: 8,
-  },
-  folderChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#181A20',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#262A34',
-  },
-  folderChipActive: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
-  },
-  folderChipText: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  folderChipTextActive: {
-    color: '#FFFFFF',
+    paddingRight: 8,
   },
   routineCard: {
-    backgroundColor: '#181A20',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
-    marginBottom: 14,
+    borderColor: colors.border,
+    marginBottom: 12,
   },
   routineCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   routineTitleGroup: {
     flex: 1,
     marginRight: 8,
   },
   routineName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 17,
     fontWeight: '700',
-    marginBottom: 4,
+    letterSpacing: -0.2,
+    marginBottom: 6,
   },
-  folderBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  folderBadgeText: {
-    color: '#3B82F6',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  routineBadgesRow: {
+  routineMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 8,
   },
-  supersetTagBadge: {
+  routineMeta: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  metaTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#261834',
-    borderWidth: 1,
-    borderColor: '#6B21A8',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 6,
   },
-  supersetTagBadgeText: {
-    color: '#C084FC',
+  supersetTag: {
+    backgroundColor: colors.purpleSoft,
+  },
+  metaTagText: {
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
-  routineActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  iconBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#20242E',
-  },
-  exPreviewWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  exPreview: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
     marginBottom: 14,
   },
-  exPreviewItem: {
-    color: '#9CA3AF',
-    fontSize: 13,
-  },
-  exPreviewMore: {
-    color: '#6B7280',
-    fontSize: 13,
-    fontStyle: 'italic',
-  },
   startRoutineBtn: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primarySoft,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: radii.md,
     gap: 8,
   },
   startRoutineBtnText: {
-    color: '#FFFFFF',
+    color: colors.primaryLight,
     fontSize: 15,
     fontWeight: '700',
   },
   emptyRoutinesBox: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
+  },
+  emptyIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptyFolderBox: {
     padding: 30,
     alignItems: 'center',
   },
-  emptyRoutinesText: {
-    color: '#6B7280',
+  emptyText: {
+    color: colors.textMuted,
     fontSize: 14,
+    textAlign: 'center',
   },
 });

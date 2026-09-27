@@ -6,6 +6,7 @@ import { formatDuration } from '../utils/calculator';
 import { DraftRecoveryModal } from './DraftRecoveryModal';
 import { useDialog } from '../context/DialogContext';
 import { getPausedWorkoutCountLabel } from '../workout/session-copy';
+import { colors } from '../theme';
 
 export const DraftResumeBanner: React.FC = () => {
   const { confirm } = useDialog();
@@ -51,7 +52,7 @@ export const DraftResumeBanner: React.FC = () => {
         <View style={styles.bannerActions}>
           {availableDrafts.length > 1 ? (
             <TouchableOpacity style={styles.reviewBtn} onPress={openDraftModal} activeOpacity={0.7}>
-              <List size={14} color="#000000" />
+              <List size={14} color={colors.black} />
               <Text style={styles.reviewBtnText}>Review & Continue</Text>
             </TouchableOpacity>
           ) : (
@@ -63,7 +64,7 @@ export const DraftResumeBanner: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel="Discard paused workout"
               >
-                <Trash2 size={14} color="#EF4444" />
+                <Trash2 size={14} color={colors.danger} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.resumeBtn}
@@ -72,7 +73,7 @@ export const DraftResumeBanner: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel="Continue paused workout"
               >
-                <Play size={14} color="#000000" fill="#000000" />
+                <Play size={14} color={colors.black} fill={colors.black} />
                 <Text style={styles.resumeBtnText}>Continue</Text>
               </TouchableOpacity>
             </>
@@ -96,43 +97,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     marginHorizontal: 16,
     marginBottom: 8,
     marginTop: 4,
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2D3442',
-    shadowColor: '#000',
+    borderColor: colors.borderStrong,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 6,
   },
   bannerInfo: { flex: 1, marginRight: 12 },
-  bannerTitle: { color: '#F59E0B', fontSize: 13, fontWeight: '700', marginBottom: 2 },
-  bannerSub: { color: '#9CA3AF', fontSize: 12 },
+  bannerTitle: { color: colors.warning, fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  bannerSub: { color: colors.textSecondary, fontSize: 12 },
   bannerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  discardBtn: { padding: 8, borderRadius: 8, backgroundColor: '#2A171B' },
+  discardBtn: { padding: 8, borderRadius: 8, backgroundColor: colors.dangerSoft },
   resumeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
   },
-  resumeBtnText: { color: '#000000', fontSize: 13, fontWeight: '700' },
+  resumeBtnText: { color: colors.black, fontSize: 13, fontWeight: '700' },
   reviewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.primary,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
   },
-  reviewBtnText: { color: '#000000', fontSize: 13, fontWeight: '700' },
+  reviewBtnText: { color: colors.black, fontSize: 13, fontWeight: '700' },
 });

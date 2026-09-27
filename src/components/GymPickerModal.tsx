@@ -12,6 +12,7 @@ import {
 import { Check, X } from 'lucide-react-native';
 import { Gym } from '../types';
 import { canDismissGymPicker } from '../utils/gym-picker';
+import { colors } from '../theme';
 
 export interface GymPickerModalProps {
   visible: boolean;
@@ -77,7 +78,7 @@ export function GymPickerModal({
               accessibilityLabel="Close gym picker"
               hitSlop={8}
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -105,9 +106,9 @@ export function GymPickerModal({
                     {gym.isDefault && <Text style={styles.defaultText}>Default gym</Text>}
                   </View>
                   {selecting ? (
-                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <ActivityIndicator size="small" color={colors.primary} />
                   ) : selected ? (
-                    <Check size={20} color="#3B82F6" />
+                    <Check size={20} color={colors.primary} />
                   ) : null}
                 </TouchableOpacity>
               );
@@ -134,8 +135,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#262A34',
-    backgroundColor: '#181A20',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -148,13 +149,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   title: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 20,
     fontWeight: '700',
   },
   description: {
     marginTop: 4,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -164,7 +165,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   gymRow: {
     minHeight: 56,
@@ -173,12 +174,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
     borderRadius: 12,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
   },
   gymRowSelected: {
-    borderColor: '#3B82F6',
+    borderColor: colors.primary,
     backgroundColor: 'rgba(59, 130, 246, 0.12)',
   },
   swatch: {
@@ -191,13 +192,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   gymName: {
-    color: '#F3F4F6',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '600',
   },
   defaultText: {
     marginTop: 2,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 12,
   },
   emptyList: {
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     paddingVertical: 28,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
   },

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Dumbbell } from 'lucide-react-native';
+import { colors } from '../theme';
 
 export interface ExerciseVisualErrorBoundaryProps {
   dimension: number;
@@ -26,7 +27,7 @@ export class ExerciseVisualErrorBoundary extends React.Component<
       return (
         <Dumbbell
           size={this.props.dimension}
-          color="#CBD5E1"
+          color={colors.textSoft}
           accessibilityLabel={this.props.accessibilityLabel}
         />
       );

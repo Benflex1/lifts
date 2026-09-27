@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Timer, Plus, Minus, X } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatTimer } from '../utils/calculator';
+import { colors } from '../theme';
 
 export interface RestTimerOverlayProps {
   nextUpText?: string | null;
@@ -17,7 +18,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
   }
 
   const isWarning = restTimer.remainingSeconds <= 3 && restTimer.remainingSeconds > 0;
-  const accentColor = isWarning ? '#F59E0B' : '#10B981';
+  const accentColor = isWarning ? colors.warning : colors.success;
 
   const progressPercent = Math.min(
     100,
@@ -59,7 +60,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
             onPress={() => adjustRestTimer(-30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Minus size={16} color="#D1D5DB" />
+            <Minus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
           </TouchableOpacity>
 
@@ -68,7 +69,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
             onPress={() => adjustRestTimer(30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Plus size={16} color="#D1D5DB" />
+            <Plus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
           </TouchableOpacity>
 
@@ -77,7 +78,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
             onPress={stopRestTimer}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <X size={18} color="#D1D5DB" />
+            <X size={18} color={colors.textSoft} />
           </TouchableOpacity>
         </View>
       </View>
@@ -103,15 +104,15 @@ const styles = StyleSheet.create({
     bottom: 75,
     left: 16,
     right: 16,
-    backgroundColor: '#1E2129',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 16,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 10,
     borderWidth: 1,
-    borderColor: '#2F3442',
+    borderColor: colors.borderStrong,
     overflow: 'hidden',
     zIndex: 999,
   },
@@ -119,19 +120,19 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B66',
   },
   timerIconWrapWarning: {
-    backgroundColor: '#382510',
+    backgroundColor: colors.warningSoft,
   },
   timerTitleWarning: {
-    color: '#F59E0B',
+    color: colors.warning,
   },
   progressBarBackground: {
     height: 4,
-    backgroundColor: '#262A34',
+    backgroundColor: colors.border,
     width: '100%',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#10B981',
+    backgroundColor: colors.success,
   },
   contentRow: {
     flexDirection: 'row',
@@ -149,13 +150,13 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#132E27',
+    backgroundColor: colors.successSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   timerTitle: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
   timerCountdown: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#10B981',
+    color: colors.success,
     letterSpacing: 0.5,
   },
   controlsRow: {
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
   adjustButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2A2E3B',
+    backgroundColor: colors.borderStrong,
     minHeight: 40,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -184,13 +185,13 @@ const styles = StyleSheet.create({
   adjustText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#E5E7EB',
+    color: colors.text,
   },
   skipButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#2A2E3B',
+    backgroundColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 2,
@@ -198,11 +199,11 @@ const styles = StyleSheet.create({
   nextUpContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#2A303F',
+    borderTopColor: colors.borderStrong,
     gap: 8,
   },
   nextUpBadge: {
@@ -216,13 +217,13 @@ const styles = StyleSheet.create({
   nextUpBadgeText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#A78BFA',
+    color: colors.purpleLight,
     letterSpacing: 0.5,
   },
   nextUpText: {
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: '#E5E7EB',
+    color: colors.text,
   },
 });

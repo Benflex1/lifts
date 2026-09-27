@@ -23,6 +23,7 @@ import {
 } from '../workout/warmup';
 import { WeightInput } from './WeightInput';
 import { BarbellSleeveVisual } from './BarbellSleeveVisual';
+import { colors } from '../theme';
 
 interface WarmupModalProps {
   visible: boolean;
@@ -209,7 +210,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
-              <Flame size={20} color="#F59E0B" />
+              <Flame size={20} color={colors.warning} />
               <Text style={styles.headerTitle}>Warmup Calculator</Text>
             </View>
             <TouchableOpacity
@@ -219,7 +220,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
               accessibilityRole="button"
               accessibilityLabel="Close warmup calculator"
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <Text style={styles.exerciseSubtitle} numberOfLines={1}>
@@ -335,7 +336,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                       style={styles.addCustomStepBtn}
                       onPress={handleAddCustomStep}
                     >
-                      <Plus size={13} color="#38BDF8" />
+                      <Plus size={13} color={colors.primary} />
                       <Text style={styles.addCustomStepText}>Add Step</Text>
                     </TouchableOpacity>
                   </View>
@@ -352,7 +353,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                             disabled={cs.percentage <= 0}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
-                            <Minus size={10} color={cs.percentage <= 0 ? '#4B5563' : '#9CA3AF'} />
+                            <Minus size={10} color={cs.percentage <= 0 ? colors.textFaint : colors.textSecondary} />
                           </TouchableOpacity>
                           <Text style={styles.customStepLabel}>
                             {cs.percentage === 0 && cs.useBarIfAvailable ? 'Bar' : `${Math.round(cs.percentage * 100)}%`}
@@ -363,7 +364,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                             disabled={cs.percentage >= 0.95}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
-                            <Plus size={10} color={cs.percentage >= 0.95 ? '#4B5563' : '#9CA3AF'} />
+                            <Plus size={10} color={cs.percentage >= 0.95 ? colors.textFaint : colors.textSecondary} />
                           </TouchableOpacity>
                         </View>
 
@@ -377,7 +378,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                             disabled={cs.reps <= 1}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
-                            <Minus size={10} color={cs.reps <= 1 ? '#4B5563' : '#9CA3AF'} />
+                            <Minus size={10} color={cs.reps <= 1 ? colors.textFaint : colors.textSecondary} />
                           </TouchableOpacity>
                           <Text style={styles.customStepReps}>{cs.reps} reps</Text>
                           <TouchableOpacity
@@ -385,7 +386,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                             onPress={() => adjustCustomStepReps(cIdx, 1)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
-                            <Plus size={10} color="#9CA3AF" />
+                            <Plus size={10} color={colors.textSecondary} />
                           </TouchableOpacity>
                         </View>
 
@@ -395,7 +396,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                             onPress={() => handleRemoveCustomStep(cIdx)}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
-                            <Trash2 size={14} color="#EF4444" />
+                            <Trash2 size={14} color={colors.danger} />
                           </TouchableOpacity>
                         )}
                       </View>
@@ -439,7 +440,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                       onPress={() => toggleIncludeStep(step.setIndex)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      {!isExcluded && <Check size={11} color="#FFFFFF" strokeWidth={3} />}
+                      {!isExcluded && <Check size={11} color={colors.text} strokeWidth={3} />}
                     </TouchableOpacity>
 
                     {/* Set Pill */}
@@ -463,7 +464,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                         disabled={effectiveReps <= 1}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
-                        <Minus size={11} color={effectiveReps <= 1 ? '#4B5563' : '#D1D5DB'} />
+                        <Minus size={11} color={effectiveReps <= 1 ? colors.textFaint : colors.textSoft} />
                       </TouchableOpacity>
                       <Text style={[styles.tdReps, isExcluded && styles.tdTextExcluded]}>
                         {effectiveReps}
@@ -473,7 +474,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                         onPress={() => adjustStepReps(step.setIndex, 1, step.reps)}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                       >
-                        <Plus size={11} color="#D1D5DB" />
+                        <Plus size={11} color={colors.textSoft} />
                       </TouchableOpacity>
                     </View>
 
@@ -497,7 +498,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
               <View style={styles.visualSection}>
                 <View style={styles.visualHeader}>
                   <View style={styles.visualHeaderLeft}>
-                    <Layers size={14} color="#38BDF8" />
+                    <Layers size={14} color={colors.primary} />
                     <Text style={styles.visualTitle}>
                       SLEEVE LOADING · SET #{activeSelectedStep.setIndex} ({activeSelectedStep.displayWeight} {unit})
                     </Text>
@@ -518,7 +519,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
               activeOpacity={0.7}
             >
               <View style={[styles.checkbox, replaceExisting && styles.checkboxChecked]}>
-                {replaceExisting && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+                {replaceExisting && <Check size={14} color={colors.text} strokeWidth={3} />}
               </View>
               <Text style={styles.optionText}>Replace existing warmup sets</Text>
             </TouchableOpacity>
@@ -537,7 +538,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
               disabled={includedSteps.length === 0}
               onPress={handleApply}
             >
-              <Flame size={16} color="#FFFFFF" />
+              <Flame size={16} color={colors.text} />
               <Text style={styles.applyBtnText}>
                 Add {includedSteps.length} Warmup {includedSteps.length === 1 ? 'Set' : 'Sets'}
               </Text>
@@ -561,10 +562,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 440,
     maxHeight: '90%',
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#262A36',
+    borderColor: colors.border,
     overflow: 'hidden',
     display: 'flex',
   },
@@ -583,7 +584,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#F9FAFB',
+    color: colors.text,
   },
   closeButton: {
     padding: 4,
@@ -591,7 +592,7 @@ const styles = StyleSheet.create({
   exerciseSubtitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     paddingHorizontal: 16,
     marginTop: 2,
     marginBottom: 12,
@@ -600,7 +601,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   configSection: {
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 10,
     padding: 12,
     marginBottom: 14,
@@ -612,7 +613,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -629,20 +630,20 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#161922',
+    borderColor: colors.control,
+    backgroundColor: colors.surfaceSunken,
   },
   chipActive: {
-    borderColor: '#F59E0B',
+    borderColor: colors.warning,
     backgroundColor: '#78350F30',
   },
   chipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   chipTextActive: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontWeight: '700',
   },
   presetsSection: {
@@ -657,15 +658,15 @@ const styles = StyleSheet.create({
   presetCard: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 10,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#2D3342',
+    borderColor: colors.borderStrong,
   },
   presetCardActive: {
-    borderColor: '#F59E0B',
-    backgroundColor: '#2A2318',
+    borderColor: colors.warning,
+    backgroundColor: colors.warningSoft,
   },
   presetHeader: {
     flexDirection: 'row',
@@ -676,26 +677,26 @@ const styles = StyleSheet.create({
   presetTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#E5E7EB',
+    color: colors.text,
   },
   presetTitleActive: {
-    color: '#FBBF24',
+    color: colors.gold,
   },
   presetCount: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   presetCountActive: {
-    color: '#F59E0B',
+    color: colors.warning,
   },
   presetDesc: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     lineHeight: 14,
   },
   tableSection: {
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 10,
     padding: 10,
     marginBottom: 14,
@@ -705,13 +706,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#2D3342',
+    borderBottomColor: colors.borderStrong,
     marginBottom: 4,
   },
   th: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#6B7280',
+    color: colors.textMuted,
     letterSpacing: 0.5,
   },
   tableRow: {
@@ -719,15 +720,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 7,
     borderBottomWidth: 1,
-    borderBottomColor: '#252B3B',
+    borderBottomColor: colors.borderStrong,
   },
   warmupBadge: {
     width: 24,
     height: 22,
     borderRadius: 6,
-    backgroundColor: '#372B10',
+    backgroundColor: colors.warningSoft,
     borderWidth: 1,
-    borderColor: '#78350F',
+    borderColor: colors.warningSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -735,47 +736,47 @@ const styles = StyleSheet.create({
   warmupBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#F59E0B',
+    color: colors.warning,
   },
   tdPct: {
     width: 50,
     fontSize: 12,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   tdWeight: {
     flex: 1,
     fontSize: 13,
     fontWeight: '700',
-    color: '#F3F4F6',
+    color: colors.text,
   },
   tdReps: {
     width: 44,
     fontSize: 13,
     fontWeight: '600',
-    color: '#E5E7EB',
+    color: colors.text,
     textAlign: 'center',
   },
   tdPlates: {
     flex: 1.2,
     fontSize: 11,
     fontWeight: '500',
-    color: '#38BDF8',
+    color: colors.primary,
     textAlign: 'right',
   },
   emptyNotice: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     textAlign: 'center',
     paddingVertical: 16,
   },
   customStepsContainer: {
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 8,
     padding: 10,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#2A303F',
+    borderColor: colors.borderStrong,
   },
   customStepsHeader: {
     flexDirection: 'row',
@@ -786,7 +787,7 @@ const styles = StyleSheet.create({
   customStepsTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -802,7 +803,7 @@ const styles = StyleSheet.create({
   addCustomStepText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#38BDF8',
+    color: colors.primary,
   },
   customStepsList: {
     gap: 6,
@@ -813,13 +814,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
     paddingHorizontal: 8,
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 6,
   },
   customStepNum: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#6B7280',
+    color: colors.textMuted,
     width: 20,
   },
   customStepper: {
@@ -831,7 +832,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 4,
-    backgroundColor: '#262D3D',
+    backgroundColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -844,16 +845,16 @@ const styles = StyleSheet.create({
   customStepLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#E5E7EB',
+    color: colors.text,
   },
   customStepSeparator: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   customStepReps: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#F59E0B',
+    color: colors.warning,
   },
   deleteCustomBtn: {
     padding: 4,
@@ -863,18 +864,18 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: '#4B5563',
+    borderColor: colors.textFaint,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 6,
-    backgroundColor: '#1F2937',
+    backgroundColor: colors.surfaceAlt,
   },
   stepCheckboxChecked: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   tableRowSelected: {
-    backgroundColor: '#1A2333',
+    backgroundColor: colors.surfaceAlt,
     borderColor: '#38BDF880',
     borderWidth: 1,
     borderRadius: 8,
@@ -885,7 +886,7 @@ const styles = StyleSheet.create({
   },
   tdTextExcluded: {
     textDecorationLine: 'line-through',
-    color: '#6B7280',
+    color: colors.textMuted,
   },
   repsControl: {
     flexDirection: 'row',
@@ -898,17 +899,17 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 4,
-    backgroundColor: '#2A303F',
+    backgroundColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   visualSection: {
-    backgroundColor: '#161922',
+    backgroundColor: colors.surfaceSunken,
     borderRadius: 10,
     padding: 10,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#262A36',
+    borderColor: colors.border,
   },
   visualHeader: {
     flexDirection: 'row',
@@ -924,12 +925,12 @@ const styles = StyleSheet.create({
   visualTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#38BDF8',
+    color: colors.primary,
     letterSpacing: 0.5,
   },
   visualHint: {
     fontSize: 10,
-    color: '#6B7280',
+    color: colors.textMuted,
     fontWeight: '500',
   },
   optionRow: {
@@ -944,25 +945,25 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#4B5563',
+    borderColor: colors.textFaint,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1F2937',
+    backgroundColor: colors.surfaceAlt,
   },
   checkboxChecked: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   optionText: {
     fontSize: 13,
-    color: '#D1D5DB',
+    color: colors.textSoft,
     fontWeight: '500',
   },
   actionRow: {
     flexDirection: 'row',
     padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#262A36',
+    borderTopColor: colors.border,
     gap: 10,
   },
   cancelBtn: {
@@ -971,14 +972,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
-    backgroundColor: '#1E232F',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: colors.control,
   },
   cancelBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   applyBtn: {
     flex: 2,
@@ -988,7 +989,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#D97706',
+    backgroundColor: colors.warning,
   },
   applyBtnDisabled: {
     opacity: 0.5,
@@ -996,6 +997,6 @@ const styles = StyleSheet.create({
   applyBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
   },
 });

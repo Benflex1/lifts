@@ -23,6 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveExercise } from '../types';
 import { ExerciseVisual } from './ExerciseVisual';
+import { colors } from '../theme';
 
 interface ExerciseReorderModalProps {
   visible: boolean;
@@ -142,7 +143,7 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
         {item.exercise ? (
           <ExerciseVisual exercise={item.exercise} size="compact" />
         ) : (
-          <Dumbbell size={18} color="#38BDF8" />
+          <Dumbbell size={18} color={colors.primary} />
         )}
       </View>
 
@@ -167,7 +168,7 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
           accessibilityRole="button"
           accessibilityLabel={`Move ${item.exercise?.name || 'exercise'} up`}
         >
-          <ArrowUp size={16} color={isFirst ? '#4B5563' : '#38BDF8'} />
+          <ArrowUp size={16} color={isFirst ? colors.textFaint : colors.primary} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -178,7 +179,7 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
           accessibilityRole="button"
           accessibilityLabel={`Move ${item.exercise?.name || 'exercise'} down`}
         >
-          <ArrowDown size={16} color={isLast ? '#4B5563' : '#38BDF8'} />
+          <ArrowDown size={16} color={isLast ? colors.textFaint : colors.primary} />
         </TouchableOpacity>
 
         {/* Drag Handle */}
@@ -189,7 +190,7 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
           accessibilityRole="adjustable"
           accessibilityLabel={`Drag ${item.exercise?.name || 'exercise'} to reorder`}
         >
-          <GripVertical size={18} color={isDragging ? '#38BDF8' : '#9CA3AF'} />
+          <GripVertical size={18} color={isDragging ? colors.primary : colors.textSecondary} />
         </View>
       </View>
     </Animated.View>
@@ -249,7 +250,7 @@ export const ExerciseReorderModal: React.FC<ExerciseReorderModalProps> = ({
               accessibilityRole="button"
               accessibilityLabel="Close exercise reorder modal"
             >
-              <X size={20} color="#9CA3AF" />
+              <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -286,7 +287,7 @@ export const ExerciseReorderModal: React.FC<ExerciseReorderModalProps> = ({
             accessibilityRole="button"
             accessibilityLabel="Done reordering"
           >
-            <Check size={18} color="#0D0E12" strokeWidth={2.5} />
+            <Check size={18} color={colors.bg} strokeWidth={2.5} />
             <Text style={styles.doneBtnText}>Done</Text>
           </TouchableOpacity>
         </View>
@@ -302,11 +303,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetContainer: {
-    backgroundColor: '#14171F',
+    backgroundColor: colors.surfaceSunken,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: 1,
-    borderColor: '#20242E',
+    borderColor: colors.surfaceAlt,
     maxHeight: '85%',
     paddingTop: 16,
     paddingHorizontal: 16,
@@ -317,7 +318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#20242E',
+    borderBottomColor: colors.surfaceAlt,
   },
   headerLeft: {
     flex: 1,
@@ -326,17 +327,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   closeBtn: {
     padding: 6,
     borderRadius: 18,
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
   },
   scrollList: {
     maxHeight: 460,
@@ -348,19 +349,19 @@ const styles = StyleSheet.create({
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#181A20',
+    backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#262A34',
+    borderColor: colors.border,
     padding: 10,
     height: ROW_HEIGHT,
   },
   exerciseRowDragging: {
-    borderColor: '#38BDF8',
-    backgroundColor: '#1E232E',
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceAlt,
     zIndex: 999,
     elevation: 10,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 8,
@@ -369,7 +370,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -377,13 +378,13 @@ const styles = StyleSheet.create({
   indexText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#38BDF8',
+    color: colors.primary,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#20242E',
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -396,12 +397,12 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 2,
   },
   exerciseMeta: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: colors.textSecondary,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -412,15 +413,15 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#2D3342',
+    borderColor: colors.borderStrong,
   },
   arrowBtnDisabled: {
-    backgroundColor: '#14171F',
-    borderColor: '#1E232E',
+    backgroundColor: colors.surfaceSunken,
+    borderColor: colors.surfaceAlt,
     opacity: 0.35,
   },
   dragHandle: {
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E232E',
+    backgroundColor: colors.surfaceAlt,
     marginLeft: 2,
   },
   dragHandleActive: {
@@ -440,7 +441,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#38BDF8',
+    backgroundColor: colors.primary,
     paddingVertical: 13,
     borderRadius: 12,
     marginTop: 12,
@@ -448,6 +449,6 @@ const styles = StyleSheet.create({
   doneBtnText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0D0E12',
+    color: colors.bg,
   },
 });

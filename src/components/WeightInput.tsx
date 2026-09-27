@@ -3,6 +3,7 @@ import { TextInput, StyleProp, TextStyle } from 'react-native';
 import { useSettings } from '../context/SettingsContext';
 import { kgToDisplay, displayToKg } from '../utils/units';
 import { sanitizeWeightInput } from '../workout/sets';
+import { colors } from '../theme';
 
 interface Props {
   value: number;
@@ -111,7 +112,7 @@ export const WeightInput: React.FC<Props> = ({
       returnKeyType="done"
       value={shownText}
       placeholder={placeholder !== undefined ? placeholder : '-'}
-      placeholderTextColor="#6B7280"
+      placeholderTextColor={colors.textMuted}
       autoCapitalize="none"
       autoCorrect={false}
       spellCheck={false}

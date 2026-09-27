@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Trophy } from 'lucide-react-native';
 import { ExercisePodium, PodiumEntry, PRMetric } from '../workout/pr';
 import { formatWeight, WeightUnit } from '../utils/units';
+import { colors } from '../theme';
+import { Medal } from './ui';
 
 interface ExercisePodiumViewProps {
   podium: ExercisePodium | null;
@@ -79,7 +81,6 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
       border: string;
       titleColor: string;
       title: string;
-      emoji: string;
       height: number;
     }
   ) => {
@@ -95,7 +96,7 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
         ]}
       >
         <View style={styles.slotHeader}>
-          <Text style={styles.slotEmoji}>{theme.emoji}</Text>
+          <Medal rank={rank} size={26} numbered />
           <Text style={[styles.slotTitle, { color: theme.titleColor }]}>{theme.title}</Text>
         </View>
 
@@ -110,7 +111,7 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
             {gymTrackingEnabled && entry.gymName && (
               <View style={styles.slotGymBadge}>
                 <Text style={styles.slotGymText} numberOfLines={1}>
-                  📍 {entry.gymName}
+                  {entry.gymName}
                 </Text>
               </View>
             )}
@@ -128,7 +129,7 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.titleRow}>
-          <Trophy size={16} color="#F59E0B" />
+          <Trophy size={16} color={colors.warning} />
           <Text style={styles.title}>ALL-TIME PODIUM</Text>
         </View>
 
@@ -203,29 +204,26 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
       {/* Podium Columns (Silver - Gold - Bronze) */}
       <View style={styles.podiumRow}>
         {renderSlot(2, second, {
-          bg: '#1A202C',
+          bg: colors.surfaceAlt,
           border: '#94A3B850',
-          titleColor: '#CBD5E1',
+          titleColor: colors.textSoft,
           title: '2ND',
-          emoji: '🥈',
           height: 110,
         })}
 
         {renderSlot(1, first, {
-          bg: '#271E11',
+          bg: colors.warningSoft,
           border: '#F59E0B70',
-          titleColor: '#FBBF24',
+          titleColor: colors.gold,
           title: '1ST',
-          emoji: '🥇',
           height: 128,
         })}
 
         {renderSlot(3, third, {
-          bg: '#231812',
+          bg: colors.warningSoft,
           border: '#D9770650',
           titleColor: '#FED7AA',
           title: '3RD',
-          emoji: '🥉',
           height: 98,
         })}
       </View>
@@ -235,8 +233,8 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#111827',
-    borderColor: '#374151',
+    backgroundColor: colors.surfaceSunken,
+    borderColor: colors.control,
     borderWidth: 1,
     borderRadius: 14,
     padding: 14,
@@ -256,14 +254,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: {
-    color: '#FBBF24',
+    color: colors.gold,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   metricTabs: {
     flexDirection: 'row',
-    backgroundColor: '#1F2937',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     padding: 2,
     gap: 2,
@@ -274,15 +272,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   metricTabActive: {
-    backgroundColor: '#374151',
+    backgroundColor: colors.control,
   },
   metricTabText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
   metricTabTextActive: {
-    color: '#F9FAFB',
+    color: colors.text,
   },
   podiumRow: {
     flexDirection: 'row',
@@ -316,13 +314,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   slotPrimaryText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 13,
     fontWeight: '800',
     textAlign: 'center',
   },
   slotSecondaryText: {
-    color: '#9CA3AF',
+    color: colors.textSecondary,
     fontSize: 10,
     fontWeight: '500',
     marginTop: 2,
@@ -330,13 +328,13 @@ const styles = StyleSheet.create({
   },
   slotGymBadge: {
     marginTop: 4,
-    backgroundColor: '#1E293B',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
   },
   slotGymText: {
-    color: '#38BDF8',
+    color: colors.primary,
     fontSize: 9,
     fontWeight: '700',
   },
@@ -347,7 +345,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   slotEmptyText: {
-    color: '#4B5563',
+    color: colors.textFaint,
     fontSize: 16,
     fontWeight: '700',
   },
