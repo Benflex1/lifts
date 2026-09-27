@@ -20,7 +20,7 @@ export interface ExerciseVisualProps {
   intervalMs?: number;
 }
 
-const SIZE = {
+export const EXERCISE_VISUAL_SIZES = {
   compact: 56,
   standard: 112,
   hero: 220,
@@ -125,6 +125,7 @@ const AnimatedRemoteExerciseImage: React.FC<{
   onImageError,
 }) => {
   const [internalFrame, setInternalFrame] = React.useState<0 | 1>(frameIndex ?? 0);
+  const [secondFrameFailed, setSecondFrameFailed] = React.useState(false);
 
   React.useEffect(() => {
     if (frameIndex !== undefined) {
@@ -133,19 +134,34 @@ const AnimatedRemoteExerciseImage: React.FC<{
   }, [frameIndex]);
 
   React.useEffect(() => {
-    if (!animated) return;
+    if (!animated || secondFrameFailed) return;
+    let currentFrame = internalFrame;
     const timer = setInterval(() => {
-      setInternalFrame((prev) => {
-        const next: 0 | 1 = prev === 0 ? 1 : 0;
-        onFrameChange?.(next);
-        return next;
-      });
+      const next: 0 | 1 = currentFrame === 0 ? 1 : 0;
+      currentFrame = next;
+      setInternalFrame(next);
+      onFrameChange?.(next);
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [animated, intervalMs, onFrameChange]);
+  }, [animated, internalFrame, intervalMs, onFrameChange, secondFrameFailed]);
 
-  const activeFrame = frameIndex !== undefined ? frameIndex : internalFrame;
-  const [frame0Url, frame1Url] = descriptor.imageUrls;
+  React.useEffect(() => {
+    setSecondFrameFailed(false);
+  }, [descriptor.imageUrl]);
+
+  React.useEffect(() => {
+    if (secondFrameFailed && frameIndex === 1) {
+      onFrameChange?.(0);
+    }
+  }, [frameIndex, onFrameChange, secondFrameFailed]);
+
+  const activeFrame = secondFrameFailed
+    ? 0
+    : frameIndex !== undefined
+      ? frameIndex
+      : internalFrame;
+  const frame0Url = descriptor.imageUrls[descriptor.reverseFrameOrder ? 1 : 0];
+  const frame1Url = descriptor.imageUrls[descriptor.reverseFrameOrder ? 0 : 1];
 
   return (
     <View style={[styles.multiFrameContainer, { width: dimension, height: dimension }]}>
@@ -171,7 +187,10 @@ const AnimatedRemoteExerciseImage: React.FC<{
         resizeMode="contain"
         accessibilityRole="image"
         accessibilityLabel={`${descriptor.alt} - Frame 2: Peak Contraction`}
-        onError={onImageError}
+        onError={() => {
+          setSecondFrameFailed(true);
+          onFrameChange?.(0);
+        }}
       />
     </View>
   );
@@ -270,7 +289,7 @@ export const ExerciseVisual: React.FC<ExerciseVisualProps> = ({
   onFrameChange,
   intervalMs,
 }) => {
-  const dimension = SIZE[size];
+  const dimension = EXERCISE_VISUAL_SIZES[size];
   const label = accessibilityLabel || defaultAccessibilityLabel(exercise);
 
   return (

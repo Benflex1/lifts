@@ -19,6 +19,7 @@ export type ExerciseVisualDescriptor =
       kind: 'remote-image';
       imageUrl: string;
       imageUrls: readonly [string, string];
+      reverseFrameOrder?: boolean;
       alt: string;
       fallbackTemplate: ExerciseVisualTemplate;
     }
@@ -33,6 +34,18 @@ export const REVIEWED_EXERCISE_ASSETS: Readonly<Record<string, string>> = Object
 });
 
 const bundledExerciseIds = new Set(DEFAULT_EXERCISES.map(exercise => exercise.id));
+
+// The upstream image sequence is not consistently ordered as setup then
+// contraction. These reviewed IDs have the contraction image at 0.jpg.
+const reversedFrameOrderExerciseIds = new Set([
+  'Barbell_Bench_Press_-_Medium_Grip',
+  'Barbell_Incline_Bench_Press_-_Medium_Grip',
+  'Bench_Press_-_Powerlifting',
+  'Pushups',
+  'Leg_Press',
+  'Narrow_Stance_Leg_Press',
+  'Smith_Machine_Leg_Press',
+]);
 
 const normalize = (value: unknown): string => {
   if (typeof value !== 'string') return '';
@@ -124,6 +137,7 @@ export function getExerciseVisual(exercise: Exercise): ExerciseVisualDescriptor 
       kind: 'remote-image',
       imageUrl: imageUrls[0],
       imageUrls,
+      ...(reversedFrameOrderExerciseIds.has(exercise.id) ? { reverseFrameOrder: true } : {}),
       alt,
       fallbackTemplate: selectTemplate(exercise),
     };

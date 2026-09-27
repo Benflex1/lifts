@@ -26,7 +26,7 @@ import { ExercisePodiumView } from './ExercisePodiumView';
 import { ProgressionCurveView } from './ProgressionCurveView';
 import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
 import { calculate1RM } from '../utils/calculator';
-import { ExerciseVisual } from './ExerciseVisual';
+import { ExerciseVisual, EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
 import { openExerciseInstructionLink } from '../utils/exercise-links';
 import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
 import { getExerciseVisual } from '../utils/exercise-media';
@@ -196,7 +196,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     return null;
   }
 
-  const visualDescriptor = React.useMemo(() => getExerciseVisual(exercise), [exercise]);
+  const visualDescriptor = getExerciseVisual(exercise);
   const hasTwoFrames =
     visualDescriptor.kind === 'remote-image' &&
     Array.isArray(visualDescriptor.imageUrls) &&
@@ -1347,14 +1347,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   heroVisualWrap: {
-    borderRadius: 220 / 7,
+    borderRadius: EXERCISE_VISUAL_SIZES.hero / 7,
     overflow: 'hidden',
   },
   formGalleryBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: 220,
+    width: EXERCISE_VISUAL_SIZES.hero,
     marginTop: 10,
     paddingHorizontal: 4,
     paddingVertical: 4,

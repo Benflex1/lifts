@@ -10,7 +10,7 @@ This document tracks upcoming feature milestones for **Lifts**, prioritized base
 ### Objectives
 - **Two-Frame Movement Loop:**
   - Leverage pinned Free Exercise DB photographs (`0.jpg` start position and `1.jpg` peak contraction/lockout) to deliver an interactive 2-frame exercise animation.
-  - Auto-looping animation with smooth transition (1.0s – 1.2s cadence) inside [ExerciseDetailModal](file:///workspace/lifts/src/components/ExerciseDetailModal.tsx).
+  - Auto-looping animation with smooth transition (1.0s – 1.2s cadence) inside [ExerciseDetailModal](../src/components/ExerciseDetailModal.tsx).
 - **Interactive Controls:**
   - Play / Pause button and manual frame scrubber (Frame 1: Starting Setup ↔ Frame 2: Peak Contraction).
   - Fullscreen/hero visual view option in the detail modal for technique inspection.
