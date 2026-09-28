@@ -7,6 +7,11 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Changed
+- Android rest-timer alerts now use a small built-in alarm module instead of `expo-notifications`, so the Android app no longer contains Firebase or any Google Play Services library. This is required for F-Droid.
+- Android rest alerts are delivered on time while the phone is locked when Lifts may set exact alarms. On Android 14 and later, Settings shows an "Allow Alarms & Reminders" button when that permission is off.
+- Tapping the rest alert opens Lifts, and cancelling a rest timer no longer clears Lifts' other notifications.
+
 ## [1.0.0]
 
 The first public release of Lifts: a free, open-source, offline-first gym tracker

@@ -1,3 +1,5 @@
+import { restNotificationContent } from './restNotificationContent';
+
 let lastWebTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function initRestNotifications(): Promise<void> {
@@ -19,10 +21,8 @@ export async function scheduleRestNotification(
   if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
     lastWebTimer = setTimeout(() => {
       try {
-        new Notification('Rest Finished!', {
-          body: exerciseName ? `Time for your next set of ${exerciseName}.` : 'Time for your next set.',
-          icon: '/favicon.png',
-        });
+        const { title, body } = restNotificationContent(exerciseName);
+        new Notification(title, { body, icon: '/favicon.png' });
       } catch {}
     }, diffMs);
     return 'web-timer';

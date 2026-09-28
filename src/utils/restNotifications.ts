@@ -48,7 +48,7 @@ export async function initRestNotifications(): Promise<void> {
   if (isNodeEnvironment() || isExpoGoAndroid()) {
     return;
   }
-  const { initRestNotifications } = await import('./restNotifications.native');
+  const { initRestNotifications } = await import('./restNotifications.ios');
   return initRestNotifications();
 }
 
@@ -63,7 +63,7 @@ export async function scheduleRestNotification(
   if (isNodeEnvironment() || isExpoGoAndroid()) {
     return null;
   }
-  const { scheduleRestNotification } = await import('./restNotifications.native');
+  const { scheduleRestNotification } = await import('./restNotifications.ios');
   return scheduleRestNotification(endsAtMs, exerciseName);
 }
 
@@ -75,7 +75,7 @@ export async function cancelRestNotification(): Promise<void> {
   if (isNodeEnvironment() || isExpoGoAndroid()) {
     return;
   }
-  const { cancelRestNotification } = await import('./restNotifications.native');
+  const { cancelRestNotification } = await import('./restNotifications.ios');
   return cancelRestNotification();
 }
 

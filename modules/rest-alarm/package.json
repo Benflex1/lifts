@@ -1,0 +1,6 @@
+{
+  "name": "rest-alarm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Android module for Lifts rest-timer alarms without Firebase"
+}

@@ -9,6 +9,8 @@ on:
       - 'assets/**'
       - 'App.tsx'
       - 'plugins/**'
+      - 'modules/**'
+      - 'scripts/check-android-nonfree.sh'
       - 'app.json'
       - 'eas.json'
       - 'package.json'
@@ -51,6 +53,9 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease -x lint -x lintVitalRelease --no-daemon
+
+      - name: Check for non-free dependencies (F-Droid)
+        run: scripts/check-android-nonfree.sh
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
