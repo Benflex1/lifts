@@ -21,9 +21,9 @@
 | **Active Session Minimization** | Minimizes to bottom bar while browsing | Floating mini-bar | Completed with Android BackHandler minimization |
 | **Set Logging & Auto-Fill** | Auto-copies previous set weight/reps | 1-tap straight-set auto-fill & 1-tap clickable ghost stats | Completed (Straight-set auto-fill & 1-tap ghost stats) |
 | **Touch Targets & Sizing** | Large, high-visibility numbers | Large 44–54px gym-first touch targets | Completed (Scaled checkmarks, sets, pills, inputs & icons) |
-| **Exercise Library** | ~500 exercises with animations | 876 categorized exercises + offline static visuals | 876 exercises with written instructions, primary/secondary muscle metadata, local static visuals, and external form references; animation remains Phase 4 |
+| **Exercise Library** | ~500 exercises with animations | 876 categorized exercises + offline static visuals | Completed (876 exercises with written instructions, primary/secondary muscle metadata, two-frame movement visuals, and external form references) |
 | **Set Check Haptics** | Subtle vibration on check | Tactile haptic ticks on every set completion & PR alerts | Completed (Tactile feedback on every set check + PR alerts) |
-| **Exercise History & PRs** | Displays past weight/reps for that lift | Heaviest lift, Est. 1RM, session tally & full chronological log | Partial (Scalar stats completed; deep chronological log in Phase 3) |
+| **Exercise History & PRs** | Displays past weight/reps for that lift | Heaviest lift, Est. 1RM, session tally & full chronological log | Completed (Scalar stats, per-exercise chronological log, and PR badges) |
 | **Workout History Drill-Down** | Detailed set view | Expandable set & rep breakdown | Completed (Detailed set breakdown + safe deletion) |
 | **Repeat Workout ("Perform Again")** | Freemium feature | 1-tap recreate workout from history | Completed (Full workout reconstructed with ghost suggestions) |
 | **Routine Duplication** | Freemium limit | 1-tap clone any routine | Completed (Clones all exercises, targets, and notes) |
@@ -36,12 +36,12 @@
 | **Data Ownership & Backup** | Locked / proprietary export | Schema v2 import compatibility with current Schema v3 export & restore | Completed (Atomic cross-platform backup and restore; v2 imports, v3 exports) |
 | **Crash Recovery & Drafts** | Cloud sync required | Local draft autosave & multi-draft recovery | Completed (3s periodic + background saves + recovery modal) |
 | **RPE Tracking** | Premium feature | Interactive RPE cycle badge (optional, None by default) | Completed (Interactive cycle badge with None by default) |
-| **Supersets & Giant Sets** | Premium feature | Planned Phase 3 | Backlog |
-| **Warmup Set Progression** | Premium feature | Planned Phase 3 | Backlog |
-| **Progress Charts & Graphs** | Premium feature | Weekly volume, muscle-frequency & 1RM trend curves | Partial (Volume/frequency delivered with separate primary/secondary roles; 1RM trend curves in Phase 3) |
+| **Supersets & Giant Sets** | Premium feature | Grouped supersets & giant sets with alternating navigation | Completed (Routine template support and group color coding) |
+| **Warmup Set Progression** | Premium feature | Automatic warmup ramps with plate rounding | Completed (Strength, Hypertrophy, Quick & Heavy presets) |
+| **Progress Charts & Graphs** | Premium feature | Weekly volume, muscle-frequency & 1RM trend curves | Completed (Volume/frequency with primary/secondary roles plus strength, volume & est. 1RM curves) |
 | **CSV / Third-Party Import** | Freemium feature | Cross-platform importer for Hevy, Strong, Lyfta, FitNotes & CSV | Completed (Auto-format detection, unit normalization, exercise matching) |
-| **Exercise Demonstration Media**| Premium feature | Static visual cues, written instructions & form references | Static visuals, instructions, and external form references delivered; animation and richer media remain planned for Phase 4 |
-| **Apple Health / Health Connect** | Premium feature | Opt-in completed-workout session summary export; custom native build required | Current implementation (device acceptance pending) |
+| **Exercise Demonstration Media**| Premium feature | Static visual cues, written instructions & form references | Two-frame movement visuals, instructions, and external form references delivered; looped animation and richer media remain planned for Phase 4 |
+| **Apple Health / Health Connect** | Premium feature | Opt-in completed-workout session summary export; custom native build required | Completed (Android verified on device; iOS device acceptance pending) |
 
 ---
 
@@ -71,7 +71,7 @@
 - [x] Dual-drum rest time wheel modal and quick presets.
 - [x] Expandable workout history cards with set summaries and delete options.
 - [x] Screen keep-awake lock during gym sessions.
-- [x] **Multi-Gym Tracking & Machine Isolation**: Gym profiles, active-gym workout assignment, machine/cable history isolation, global/current-gym records, linked scopes, and v2 import/v3 export. Implementation is complete; native/manual release acceptance remains pending.
+- [x] **Multi-Gym Tracking & Machine Isolation**: Gym profiles, active-gym workout assignment, machine/cable history isolation, global/current-gym records, linked scopes, and v2 import/v3 export. Verified on Android, iOS, and Web (REL-24).
 
 ### Phase 2.1: Gym-Floor Ergonomics & Input Polish [Completed]
 - [x] **Background Rest Alarms & Notifications**: Schedule local system notifications via `expo-notifications` with sound and vibration so rest timers alert reliably when the screen is locked or the app is backgrounded.
@@ -96,8 +96,8 @@
 - [x] **Comprehensive Training Analytics**: Muscle balance heatmaps, fatigue & recovery estimates, rep range distributions, and consistency timelines.
 - [x] **CSV / Strong / Hevy / Lyfta Data Import**: Cross-platform importer supporting Hevy, Strong, Lyfta, FitNotes, and generic CSV exports with fuzzy exercise matching, synonym expansion, interactive exercise library assignment & custom creation picker, unit normalization, duplicate workout detection, and dry-run preview.
 
-### Phase 4: Ecosystem & Rich Media [Planned]
-- [x] **Health Connect (Android) & Apple Health (iOS)**: Opt-in export after local completion. The Health Connect payload includes the workout title, strength-workout type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. No health reads or set-level export; standard web/non-health native work remains local-first and custom native builds are required. Implementation is complete; iOS and Android custom-build device acceptance remains unverified.
-- [ ] **Rich Exercise Media & Visual Demonstration Guides**: Additional rich media and looped vector/GIF animations beyond the delivered static visuals, written instructions, and external form references.
+### Phase 4: Ecosystem & Rich Media [In Progress]
+- [x] **Health Connect (Android) & Apple Health (iOS)**: Opt-in export after local completion. The Health Connect payload includes the workout title, strength-workout type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. No health reads or set-level export; standard web/non-health native work remains local-first and custom native builds are required. Android verified on device (REL-35); iOS custom-build device acceptance remains unverified (REL-34).
+- [ ] **Rich Exercise Media & Visual Demonstration Guides**: Additional rich media and looped vector/GIF animations beyond the delivered two-frame movement visuals, written instructions, and external form references.
 - [ ] **Wear OS / Apple Watch Companion**: Companion app for quick set logging and wrist rest countdowns.
-- [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities.
+- [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities. The signed GitHub Release pipeline is in place (see `docs/release-checklist.md` §7); F-Droid is blocked on removing the Firebase Messaging dependency pulled in by `expo-notifications`.

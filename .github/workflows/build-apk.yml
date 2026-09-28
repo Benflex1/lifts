@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'assets/**'
       - 'App.tsx'
+      - 'plugins/**'
       - 'app.json'
       - 'eas.json'
       - 'package.json'
@@ -43,6 +44,8 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      # No LIFTS_UPLOAD_* variables here: preview APKs stay on the debug key and
+      # cannot be installed over a published release. See release.yml.
       - name: Build Android Release APK (Standalone offline preview)
         working-directory: android
         run: |
@@ -52,6 +55,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lifts-preview-apk
+          name: lifts-preview-apk-debug-signed
           path: android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error

@@ -109,3 +109,68 @@ Automated acceptance covers the local-first and provider-boundary guarantees. Th
 | **REL-33** | Retry deduplication | Run the automated health-sync tests for pending/failed retries and concurrent calls for one workout/provider | Retries use the same payload fingerprint, while concurrent or already-synced calls produce at most one provider write | Verified |
 | **REL-34** | iOS HealthKit custom-build device acceptance | On a physical iOS device, build the app with the native HealthKit configuration, authorize write access, complete a workout, retry a failed write, and inspect Apple Health | Only the completed workout session summary is written; no health reads or set-level export occur; local completion remains successful on denial/unavailability/failure | **Unverified — deferred until user performs device testing** |
 | **REL-35** | Android Health Connect custom-build device acceptance | On a physical Android device, build the app with the native Health Connect configuration, authorize write access, complete a workout, retry a failed write, and inspect Health Connect | Only the completed workout session summary is written; no health reads or set-level export occur; local completion remains successful on denial/unavailability/failure | **User-verified on the current branch's standalone Android APK; device details not recorded** |
+
+---
+
+## 7. Signing & Publishing Releases
+
+Releases are built by `.github/workflows/release.yml` and signed with the Lifts upload key. The `plugins/withAndroidRelease.js` config plugin wires the key into the generated `android/app/build.gradle` during `expo prebuild`, so no native files are committed.
+
+### Versioning
+
+- `expo.version` in `app.json` is the single source of truth and must be `MAJOR.MINOR.PATCH`.
+- The Android `versionCode` is derived from it: `MAJOR × 1,000,000 + MINOR × 1,000 + PATCH` (`1.0.0` → `1000000`, `1.2.3` → `1002003`). Never set `android.versionCode` by hand.
+- Release tags are `v` + `expo.version` (for example `v1.0.0`). The workflow rejects a tag that does not match `app.json`.
+
+### One-time setup: upload key
+
+1. Generate the key **outside the repository** (`*.jks` is ignored, but keep it out of the working tree anyway). PKCS12 keystores use one password for both the store and the key.
+   ```bash
+   keytool -genkeypair -v -storetype PKCS12 -keystore ~/lifts-upload.jks \
+     -alias lifts-upload -keyalg RSA -keysize 4096 -validity 10000
+   ```
+2. **Back up the keystore and its password in at least two places** (for example a password manager plus an offline copy). Android only installs an update signed by the same key. If the key is lost, everyone who installed a GitHub Release APK has to uninstall (losing local data unless they exported a backup) to move to a new key.
+3. Store it as repository secrets:
+   ```bash
+   base64 -w0 ~/lifts-upload.jks | gh secret set LIFTS_UPLOAD_KEYSTORE_BASE64
+   gh secret set LIFTS_UPLOAD_STORE_PASSWORD      # prompts for the password
+   gh secret set LIFTS_UPLOAD_KEY_PASSWORD        # same password for PKCS12
+   gh secret set LIFTS_UPLOAD_KEY_ALIAS --body lifts-upload
+   ```
+4. Pin the certificate fingerprint so the workflow rejects APKs signed with any other key:
+   ```bash
+   keytool -list -v -keystore ~/lifts-upload.jks -alias lifts-upload | grep 'SHA256:'
+   gh variable set LIFTS_UPLOAD_CERT_SHA256 --body '<the SHA256 value>'
+   ```
+5. Dry-run the pipeline from `main`: `gh workflow run release.yml`. It builds, verifies the signature, and uploads the signed APK/AAB as workflow artifacts without publishing a release.
+
+### Cutting a release
+
+1. Set `expo.version` in `app.json` to the new version.
+2. In `CHANGELOG.md`, move the `[Unreleased]` entries into a new `## [X.Y.Z]` section.
+3. Merge to `main`, then tag the merge commit and push the tag:
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+4. The workflow runs typecheck and both test suites, builds with `LIFTS_REQUIRE_RELEASE_SIGNING=true` (Gradle fails instead of falling back to the debug key), rejects the Android debug certificate, checks the pinned fingerprint, and publishes `lifts-X.Y.Z.apk` plus `SHA256SUMS.txt` as a GitHub Release. The AAB (for a future Play Store listing) is kept as a workflow artifact only.
+
+### Signed local builds
+
+Export the same variables before building. Without them, release builds keep Expo's debug signing, which is what `build-apk.yml` preview APKs use. Those previews cannot be installed over a signed release, and a signed release cannot be installed over them.
+
+```bash
+export LIFTS_UPLOAD_STORE_FILE=~/lifts-upload.jks
+export LIFTS_UPLOAD_STORE_PASSWORD=... LIFTS_UPLOAD_KEY_PASSWORD=... LIFTS_UPLOAD_KEY_ALIAS=lifts-upload
+npx expo prebuild --platform android --clean
+cd android && ./gradlew assembleRelease
+```
+
+### Distribution status
+
+| Check ID | Channel | Status |
+| :--- | :--- | :--- |
+| **REL-36** | GitHub Releases (signed APK) | Pipeline in place; pending upload-key setup and first dry run |
+| **REL-37** | F-Droid | **Blocked**: `expo-notifications` depends on `com.google.firebase:firebase-messaging` even though Lifts only schedules local notifications. F-Droid requires removing it (for example, a local-notification-only module or a flavor that excludes FCM). |
+| **REL-38** | Google Play | Not started. The AAB artifact is ready to upload, and enrolling in Play App Signing would make this key the resettable upload key. |
+| **REL-39** | Apple App Store | Not started; depends on REL-34 and an Apple Developer account. |

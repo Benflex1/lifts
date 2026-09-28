@@ -4,7 +4,7 @@ This document tracks upcoming feature milestones for **Lifts**, prioritized base
 
 ---
 
-## Milestone 1: Exercise Library Two-Frame Animation & Form Gallery
+## Milestone 1: Exercise Library Two-Frame Animation & Form Gallery [Delivered in #17]
 **Focus:** Visual movement demonstration and technique guidance for all 876 bundled exercises.
 
 ### Objectives
@@ -20,7 +20,9 @@ This document tracks upcoming feature milestones for **Lifts**, prioritized base
 
 ---
 
-## Milestone 2: Expanded Analytics & Training Insights
+## Milestone 2: Expanded Analytics & Training Insights [Partially delivered]
+> Muscle frequency, the consistency heatmap with streaks, rep-range distribution, and strength/volume/est. 1RM curves with 1M–All-time timeframes shipped in Phase 3 (#12). Remaining: push/pull and upper/lower balance indicators.
+
 **Focus:** Deeper training intelligence, recovery balance, and consistency visualization.
 
 ### Objectives
@@ -35,7 +37,9 @@ This document tracks upcoming feature milestones for **Lifts**, prioritized base
 
 ---
 
-## Milestone 3: Routine & Workout Template Enhancements
+## Milestone 3: Routine & Workout Template Enhancements [Partially delivered]
+> Routine folders and 1-tap cloning already exist. Remaining: reordering routines within a folder, day-of-week split scheduling, template-level target RPE and warmup protocols, and carried-forward exercise notes and seat/pin settings.
+
 **Focus:** Advanced workout split planning, routine management, and template ergonomics.
 
 ### Objectives

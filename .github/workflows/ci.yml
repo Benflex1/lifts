@@ -32,5 +32,8 @@ jobs:
       - name: Integration test suite
         run: npm run test:integration
 
+      - name: Android prebuild (applies config plugins)
+        run: npx expo prebuild --platform android --clean --no-install
+
       - name: Web bundle export
         run: npx expo export --platform web --output-dir dist-ci-web
