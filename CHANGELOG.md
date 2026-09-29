@@ -7,6 +7,11 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.0.3]
+
+### Changed
+- Every native module is now compiled with React Native's Android NDK, so a build needs a single NDK. This makes F-Droid builds more reliable; the app itself is unchanged.
+
 ## [1.0.2]
 
 ### Changed

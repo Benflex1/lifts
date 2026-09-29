@@ -3,8 +3,9 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { toVersionCode, resolveVersionCode, applyReleaseSigning, applyAbiBuilds } = require('../../plugins/withAndroidRelease') as {
+const { toVersionCode, resolveVersionCode, applyReleaseSigning, applyAbiBuilds, applyUniformNdk } = require('../../plugins/withAndroidRelease') as {
   applyAbiBuilds: (gradle: string) => string;
+  applyUniformNdk: (rootGradle: string) => string;
   toVersionCode: (version: unknown) => number;
   resolveVersionCode: (version: unknown, explicitVersionCode?: number) => number;
   applyReleaseSigning: (gradle: string) => string;
@@ -110,5 +111,28 @@ describe('applyAbiBuilds', () => {
 
   it('fails loudly when the Expo template no longer matches', () => {
     assert.throws(() => applyAbiBuilds(template.replace(/versionCode 1\n/, 'versionCode = 1\n')), /no longer matches/);
+  });
+});
+
+describe('applyUniformNdk', () => {
+  // Unmodified android/build.gradle from `expo prebuild --platform android` on Expo SDK 57.
+  const rootTemplate = readFileSync(join(__dirname, '../fixtures/expo-57-root.build.gradle'), 'utf8');
+
+  it("sets every Android library module's NDK to React Native's", () => {
+    const patched = applyUniformNdk(rootTemplate);
+    assert.match(
+      patched,
+      /subprojects \{\n  plugins\.withId\('com\.android\.library'\) \{\n    android\.ndkVersion = rootProject\.ext\.ndkVersion\n  \}\n\}\n$/
+    );
+    assert.ok(patched.startsWith(rootTemplate.trimEnd()));
+  });
+
+  it('is idempotent', () => {
+    const once = applyUniformNdk(rootTemplate);
+    assert.equal(applyUniformNdk(once), once);
+  });
+
+  it('fails loudly when the Expo template no longer matches', () => {
+    assert.throws(() => applyUniformNdk('buildscript {}\n'), /no longer matches the expected Expo template/);
   });
 });

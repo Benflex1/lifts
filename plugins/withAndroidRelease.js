@@ -6,14 +6,18 @@
 // - Gradle's versionCode is that value × 10 plus an ABI digit: 0 for the universal APK,
 //   and with -PliftsAbi=<abi> a single-ABI APK (armeabi-v7a 1, arm64-v8a 2, x86 3,
 //   x86_64 4). F-Droid builds one APK per ABI this way.
+// - Every Android library module is built with React Native's NDK. Modules that set no
+//   ndkVersion (expo-sqlite) would otherwise fall back to the Android Gradle Plugin's
+//   default NDK, which F-Droid would then have to download mid-build.
 // - The release build type is signed with the upload key named by the
 //   LIFTS_UPLOAD_* environment variables. Without them (local and preview builds)
 //   it keeps Expo's debug signing, unless LIFTS_REQUIRE_RELEASE_SIGNING=true, in
 //   which case Gradle refuses to build.
-const { withAppBuildGradle } = require('expo/config-plugins');
+const { withAppBuildGradle, withProjectBuildGradle } = require('expo/config-plugins');
 
 const MARKER = '// lifts-release-signing';
 const ABI_MARKER = '// lifts-abi-builds';
+const NDK_MARKER = '// lifts-uniform-ndk';
 
 function toVersionCode(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version ?? ''));
@@ -100,9 +104,37 @@ function applyAbiBuilds(gradle) {
     );
 }
 
+const UNIFORM_NDK = `
+${NDK_MARKER}: build every native module with React Native's NDK (rootProject.ext.ndkVersion).
+subprojects {
+  plugins.withId('com.android.library') {
+    android.ndkVersion = rootProject.ext.ndkVersion
+  }
+}
+`;
+
+function applyUniformNdk(rootGradle) {
+  if (rootGradle.includes(NDK_MARKER)) return rootGradle;
+  if (!/\napply plugin: "expo-root-project"\n/.test(rootGradle)) {
+    throw new Error(
+      'withAndroidRelease: android/build.gradle no longer matches the expected Expo template; ' +
+        'update plugins/withAndroidRelease.js before building a release'
+    );
+  }
+  return rootGradle.replace(/\n*$/, '\n') + UNIFORM_NDK;
+}
+
 function withAndroidRelease(config) {
   config.android = { ...config.android };
   config.android.versionCode = resolveVersionCode(config.version, config.android.versionCode);
+
+  config = withProjectBuildGradle(config, (mod) => {
+    if (mod.modResults.language !== 'groovy') {
+      throw new Error('withAndroidRelease: only a Groovy android/build.gradle is supported');
+    }
+    mod.modResults.contents = applyUniformNdk(mod.modResults.contents);
+    return mod;
+  });
 
   return withAppBuildGradle(config, (mod) => {
     if (mod.modResults.language !== 'groovy') {
@@ -118,3 +150,4 @@ module.exports.toVersionCode = toVersionCode;
 module.exports.resolveVersionCode = resolveVersionCode;
 module.exports.applyReleaseSigning = applyReleaseSigning;
 module.exports.applyAbiBuilds = applyAbiBuilds;
+module.exports.applyUniformNdk = applyUniformNdk;
