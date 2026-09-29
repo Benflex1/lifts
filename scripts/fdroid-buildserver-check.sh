@@ -71,6 +71,9 @@ fi
 popd >/dev/null
 
 pushd "$home_vagrant" >/dev/null
+# In --on-server mode `fdroid build` expects the app source (and any srclibs) to be
+# checked out already; fetchsrclibs does that, as on F-Droid's own infrastructure.
+fdroid_as_vagrant fetchsrclibs "$BUILD_SPEC" --verbose
 set +e
 (unset CI; fdroid_as_vagrant build --verbose --test --refresh-scanner --on-server --no-tarball "$BUILD_SPEC") \
   2>&1 | tee "$OUT/fdroid-build.log"
