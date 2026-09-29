@@ -3,8 +3,9 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { toVersionCode, applyReleaseSigning } = require('../../plugins/withAndroidRelease') as {
+const { toVersionCode, resolveVersionCode, applyReleaseSigning } = require('../../plugins/withAndroidRelease') as {
   toVersionCode: (version: unknown) => number;
+  resolveVersionCode: (version: unknown, explicitVersionCode?: number) => number;
   applyReleaseSigning: (gradle: string) => string;
 };
 
@@ -28,6 +29,19 @@ describe('toVersionCode', () => {
     for (const bad of [undefined, '', '1.0', '1.0.0-beta.1', 'v1.0.0', '0.9.0', '1.1000.0', '1.0.1000']) {
       assert.throws(() => toVersionCode(bad), /withAndroidRelease/, String(bad));
     }
+  });
+});
+
+describe('resolveVersionCode', () => {
+  it('accepts an explicit versionCode only when it matches the version', () => {
+    assert.equal(resolveVersionCode('1.0.1'), 1_000_001);
+    assert.equal(resolveVersionCode('1.0.1', 1_000_001), 1_000_001);
+    assert.throws(() => resolveVersionCode('1.0.2', 1_000_001), /does not match expo\.version 1\.0\.2 \(expected 1000002\)/);
+  });
+
+  it('matches the versionCode stated in app.json', () => {
+    const { expo } = JSON.parse(readFileSync(join(__dirname, '../../app.json'), 'utf8'));
+    assert.equal(expo.android.versionCode, toVersionCode(expo.version));
   });
 });
 

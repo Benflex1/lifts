@@ -7,6 +7,14 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.0.1]
+
+The first release built for F-Droid. The app itself is unchanged from 1.0.0.
+
+### Changed
+- Every Expo native module is now compiled from source instead of using prebuilt libraries, as F-Droid requires.
+- Added F-Droid store listing metadata (description, icon, and changelog).
+
 ## [1.0.0]
 
 The first public release of Lifts: a free, open-source, offline-first gym tracker

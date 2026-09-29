@@ -119,7 +119,7 @@ Releases are built by `.github/workflows/release.yml` and signed with the Lifts 
 ### Versioning
 
 - `expo.version` in `app.json` is the single source of truth and must be `MAJOR.MINOR.PATCH`.
-- The Android `versionCode` is derived from it: `MAJOR × 1,000,000 + MINOR × 1,000 + PATCH` (`1.0.0` → `1000000`, `1.2.3` → `1002003`). Never set `android.versionCode` by hand.
+- The Android `versionCode` is `MAJOR × 1,000,000 + MINOR × 1,000 + PATCH` (`1.0.0` → `1000000`, `1.2.3` → `1002003`). Update `android.versionCode` in `app.json` together with `expo.version` (F-Droid reads it from there); prebuild fails if it does not match.
 - Release tags are `v` + `expo.version` (for example `v1.0.0`). The workflow rejects a tag that does not match `app.json`.
 
 ### One-time setup: upload key
@@ -146,7 +146,7 @@ Releases are built by `.github/workflows/release.yml` and signed with the Lifts 
 
 ### Cutting a release
 
-1. Set `expo.version` in `app.json` to the new version.
+1. Set `expo.version` and the matching `android.versionCode` in `app.json`, and add `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
 2. In `CHANGELOG.md`, move the `[Unreleased]` entries into a new `## [X.Y.Z]` section.
 3. Merge to `main`, then tag the merge commit and push the tag:
    ```bash
@@ -171,7 +171,8 @@ cd android && ./gradlew assembleRelease
 | Check ID | Channel | Status |
 | :--- | :--- | :--- |
 | **REL-36** | GitHub Releases (signed APK) | **Verified**: v1.0.0 published by `release.yml`, signed with the pinned upload key |
-| **REL-37** | F-Droid / IzzyOnDroid | **Unblocked in code**: `expo-notifications` is excluded from Android autolinking and replaced by the local `modules/rest-alarm` module; `scripts/check-android-nonfree.sh` fails CI if Firebase, Play Services, or similar libraries reach the release classpath or merged manifest. Submission pending. |
+| **REL-37** | F-Droid | Recipe in `.fdroid.yml`, built in F-Droid's build-server image by `.github/workflows/fdroid.yml`; see §8. `expo-notifications` is excluded from Android autolinking in favor of `modules/rest-alarm`, and `scripts/check-android-nonfree.sh` guards against Firebase/Play Services. |
+| **REL-37b** | IzzyOnDroid | Deferred: its 30 MB per-app limit is below the ~35 MB per-architecture APK. Revisit with per-ABI APKs and/or R8 shrinking. |
 | **REL-38** | Google Play | Not started. The AAB artifact is ready to upload, and enrolling in Play App Signing would make this key the resettable upload key. |
 | **REL-39** | Apple App Store | Not started; depends on REL-34 and an Apple Developer account. |
 
@@ -183,3 +184,27 @@ cd android && ./gradlew assembleRelease
 | **REL-41** | Exact-alarm permission | On Android 14+, fresh install: open Settings, tap "Allow Alarms & Reminders", enable it, return | The Settings row disappears; later rest alerts are exact | Unverified |
 | **REL-42** | Timer changes | Skip, extend, and shorten a running rest timer | Only the latest end time alerts; skipping removes the pending and shown alert | Unverified |
 | **REL-43** | Upgrade from 1.0.0 | Install over v1.0.0 with notifications allowed | Existing "Rest Timer" channel settings are kept; alerts still arrive | Unverified |
+
+---
+
+## 8. F-Droid
+
+F-Droid builds Lifts from source with the recipe in `.fdroid.yml` and signs the result with its own key. Store listing text, icon, and changelogs come from `fastlane/metadata/android/en-US/` at the built tag. The changelog file is named after the versionCode (`changelogs/1000001.txt` for 1.0.1).
+
+### Keeping the recipe buildable
+
+- `.github/workflows/fdroid.yml` runs on every PR that touches the recipe, app config, dependencies, plugins, or native modules. Inside `registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie`, it runs `fdroid lint`, checks `fdroid rewritemeta` leaves the recipe unchanged, and performs `fdroid build --on-server` with the commit pinned to the PR head.
+- If the F-Droid scanner flags a file under `node_modules`, add a `scanignore` entry only after reviewing that the flagged Gradle/binary file is legitimate, and note why in `MaintainerNotes`.
+- Keep `android.versionCode` in `app.json` in step with `expo.version`; F-Droid's update checker reads both from there, and prebuild fails if they disagree.
+
+### First submission (maintainer, needs a GitLab account)
+
+1. Release the version named in `.fdroid.yml` (tag `vX.Y.Z` as usual) and confirm the F-Droid workflow passed for that commit.
+2. Fork https://gitlab.com/fdroid/fdroiddata and create a branch named `com.benflex1.lifts`.
+3. Copy `.fdroid.yml` to `metadata/com.benflex1.lifts.yml`. Nothing needs changing: `commit: vX.Y.Z` points at the release tag.
+4. Open a merge request with the "App inclusion" template and answer its checklist. The fdroiddata pipeline repeats the lint and build.
+5. Respond to reviewer feedback. After merge, the app appears in F-Droid within a few days. Later releases are picked up automatically (`AutoUpdateMode: Version`, `UpdateCheckMode: Tags`).
+
+### Signing
+
+F-Droid-built APKs are signed with F-Droid's key, so users cannot switch between F-Droid and GitHub Release builds without uninstalling. Making the build reproducible would let F-Droid ship the APK signed with the Lifts upload key instead (via `Binaries:` and `AllowedAPKSigningKeys: 627ae4049be4512f3d32e85335027a7e45407e47a96c1f7f717ca326877f1ba2`). That is a possible follow-up.
