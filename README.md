@@ -115,7 +115,7 @@ Health export is disabled by default and hidden/no-op on Web. When enabled in a 
 
 ## Installing
 
-Signed Android APKs are published on the [GitHub Releases](https://github.com/Benflex1/lifts/releases) page. Updates install over the previous release and keep your data. APKs from the preview workflow and local debug builds use a different signing key, so they cannot be installed over a release build (or the other way round) without uninstalling first. Export a backup before switching.
+Signed Android APKs are published on the [GitHub Releases](https://github.com/Benflex1/lifts/releases) page. Pick `arm64-v8a` for almost any phone from the last several years, `armeabi-v7a` for older 32-bit phones, `x86_64` for emulators and Chromebooks, or `universal` if unsure. Updates install over the previous release and keep your data. The per-architecture APKs are reproducible builds identical to what F-Droid builds, so F-Droid and GitHub installs can update each other. APKs from the preview workflow and local debug builds use a different signing key, so they cannot be installed over a release build (or the other way round) without uninstalling first. Export a backup before switching.
 
 ## Building an Android Debug APK
 

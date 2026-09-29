@@ -2,7 +2,7 @@
   "expo": {
     "name": "Lifts",
     "slug": "Lifts",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.benflex1.lifts",
-      "versionCode": 1000001,
+      "versionCode": 1000002,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.health.WRITE_EXERCISE",

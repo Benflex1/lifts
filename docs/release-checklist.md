@@ -119,7 +119,8 @@ Releases are built by `.github/workflows/release.yml` and signed with the Lifts 
 ### Versioning
 
 - `expo.version` in `app.json` is the single source of truth and must be `MAJOR.MINOR.PATCH`.
-- The Android `versionCode` is `MAJOR × 1,000,000 + MINOR × 1,000 + PATCH` (`1.0.0` → `1000000`, `1.2.3` → `1002003`). Update `android.versionCode` in `app.json` together with `expo.version` (F-Droid reads it from there); prebuild fails if it does not match.
+- The base versionCode is `MAJOR × 1,000,000 + MINOR × 1,000 + PATCH` (`1.0.2` → `1000002`). Keep `android.versionCode` in `app.json` equal to it (F-Droid reads it from there); prebuild fails if it does not match.
+- Built APKs use `base × 10 + ABI digit`: universal `0`, `armeabi-v7a` `1`, `arm64-v8a` `2`, `x86_64` `4` (`-PliftsAbi=<abi>` selects a single-ABI build). 1.0.0 and 1.0.1 predate this and used the base code directly; every later code is higher.
 - Release tags are `v` + `expo.version` (for example `v1.0.0`). The workflow rejects a tag that does not match `app.json`.
 
 ### One-time setup: upload key
@@ -146,14 +147,20 @@ Releases are built by `.github/workflows/release.yml` and signed with the Lifts 
 
 ### Cutting a release
 
-1. Set `expo.version` and the matching `android.versionCode` in `app.json`, and add `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
+1. Set `expo.version` and the matching `android.versionCode` in `app.json`. Update the three `.fdroid.yml` build blocks and `CurrentVersion`/`CurrentVersionCode`, and add `fastlane/metadata/android/en-US/changelogs/<code>.txt` for each ABI code (`base × 10 + 1`, `+ 2`, `+ 4`).
 2. In `CHANGELOG.md`, move the `[Unreleased]` entries into a new `## [X.Y.Z]` section.
 3. Merge to `main`, then tag the merge commit and push the tag:
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-4. The workflow runs typecheck and both test suites, builds with `LIFTS_REQUIRE_RELEASE_SIGNING=true` (Gradle fails instead of falling back to the debug key), rejects the Android debug certificate, checks the pinned fingerprint, and publishes `lifts-X.Y.Z.apk` plus `SHA256SUMS.txt` as a GitHub Release. The AAB (for a future Play Store listing) is kept as a workflow artifact only.
+4. The workflow runs typecheck and both test suites, then:
+   - builds one unsigned APK per ABI with `fdroid build` in F-Droid's `buildserver-trixie` image from `.fdroid.yml` (the same bytes F-Droid will build), and signs each with the upload key using `apksigner` 34.0.0;
+   - builds a universal APK with Gradle and `LIFTS_REQUIRE_RELEASE_SIGNING=true`;
+   - rejects the Android debug certificate, checks the pinned fingerprint, and runs `apksigcopier compare` to prove the signature copies onto the unsigned F-Droid build;
+   - publishes `lifts-X.Y.Z-{armeabi-v7a,arm64-v8a,x86_64,universal}.apk` plus `SHA256SUMS.txt`;
+   - re-runs `fdroid build` in release mode per ABI, which downloads the published APK and performs F-Droid's own signature-copy verification. If this job fails, F-Droid will skip that version: fix the cause and release a new patch version (never move a tag).
+   The AAB (for a future Play Store listing) is kept as a workflow artifact only.
 
 ### Signed local builds
 
@@ -189,11 +196,12 @@ cd android && ./gradlew assembleRelease
 
 ## 8. F-Droid
 
-F-Droid builds Lifts from source with the recipe in `.fdroid.yml` and signs the result with its own key. Store listing text, icon, and changelogs come from `fastlane/metadata/android/en-US/` at the built tag. The changelog file is named after the versionCode (`changelogs/1000001.txt` for 1.0.1).
+F-Droid builds Lifts from source with the recipe in `.fdroid.yml`, one APK per ABI. Because the build is reproducible, F-Droid then publishes our developer-signed APK from the GitHub Release (`binary:` + `AllowedAPKSigningKeys`) instead of signing with its own key. Store listing text, icon, and changelogs come from `fastlane/metadata/android/en-US/` at the built tag. The changelog file is named after the versionCode (`changelogs/1000001.txt` for 1.0.1).
 
 ### Keeping the recipe buildable
 
-- `.github/workflows/fdroid.yml` runs on every PR that touches the recipe, app config, dependencies, plugins, or native modules. Inside `registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie`, it runs `fdroid lint`, checks `fdroid rewritemeta` leaves the recipe unchanged, and performs `fdroid build --on-server` with the commit pinned to the PR head.
+- `.github/workflows/fdroid.yml` runs on every PR that touches the recipe, app config, dependencies, plugins, or native modules. For each ABI, inside `registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie`, it runs `fdroid lint`, checks `fdroid rewritemeta` leaves the recipe unchanged, and performs `fdroid build --on-server` with the commit pinned to the PR head (`binary:` lines are dropped because no release exists yet).
+- Reproducibility was established by building one commit twice on independent runners: the APKs were byte-identical (1163 entries, same order). Anything that makes builds depend on time, machine, or path (for example a new native dependency) must keep that property; the release workflow's `fdroid-verify` job is the gate.
 - If the F-Droid scanner flags a file under `node_modules`, add a `scanignore` entry only after reviewing that the flagged Gradle/binary file is legitimate, and note why in `MaintainerNotes`.
 - Keep `android.versionCode` in `app.json` in step with `expo.version`; F-Droid's update checker reads both from there, and prebuild fails if they disagree.
 
@@ -201,10 +209,10 @@ F-Droid builds Lifts from source with the recipe in `.fdroid.yml` and signs the 
 
 1. Release the version named in `.fdroid.yml` (tag `vX.Y.Z` as usual) and confirm the F-Droid workflow passed for that commit.
 2. Fork https://gitlab.com/fdroid/fdroiddata and create a branch named `com.benflex1.lifts`.
-3. Copy `.fdroid.yml` to `metadata/com.benflex1.lifts.yml`. Nothing needs changing: `commit: vX.Y.Z` points at the release tag.
+3. Copy `.fdroid.yml` to `metadata/com.benflex1.lifts.yml` and replace every `commit: vX.Y.Z` with the tag's full commit hash (`git rev-list -n1 vX.Y.Z`); fdroiddata requires full hashes.
 4. Open a merge request with the "App inclusion" template and answer its checklist. The fdroiddata pipeline repeats the lint and build.
 5. Respond to reviewer feedback. After merge, the app appears in F-Droid within a few days. Later releases are picked up automatically (`AutoUpdateMode: Version`, `UpdateCheckMode: Tags`).
 
 ### Signing
 
-F-Droid-built APKs are signed with F-Droid's key, so users cannot switch between F-Droid and GitHub Release builds without uninstalling. Making the build reproducible would let F-Droid ship the APK signed with the Lifts upload key instead (via `Binaries:` and `AllowedAPKSigningKeys: 627ae4049be4512f3d32e85335027a7e45407e47a96c1f7f717ca326877f1ba2`). That is a possible follow-up.
+F-Droid ships the GitHub Release APKs signed with the Lifts upload key (`AllowedAPKSigningKeys: 627ae4049be4512f3d32e85335027a7e45407e47a96c1f7f717ca326877f1ba2`), so F-Droid and GitHub installs are interchangeable. This is only possible because the first F-Droid version is already reproducible: an app first published with F-Droid's key cannot switch later.

@@ -1,0 +1,3 @@
+Reproducible builds: this APK is byte-for-byte what F-Droid builds from source, signed with the Lifts key, so you can switch between F-Droid and GitHub releases without reinstalling.
+
+- One APK per CPU architecture, about 40% of the old size.

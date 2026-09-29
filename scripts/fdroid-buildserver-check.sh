@@ -3,12 +3,19 @@
 # (.fdroid.yml). Runs as root inside registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie
 # (see .github/workflows/fdroid.yml).
 #
-# Usage: scripts/fdroid-buildserver-check.sh <commit-sha>
-# The recipe's `commit:` is replaced with <commit-sha>, so unreleased commits can be tested.
+# Usage: scripts/fdroid-buildserver-check.sh <commit-sha> <versionCode> [source|release]
+# Every `commit:` in the recipe is replaced with <commit-sha>, and the build block with
+# <versionCode> (one per ABI) is built.
+#   source  (default) drops `binary:`/AllowedAPKSigningKeys, for commits without a release.
+#   release keeps them: fdroid build downloads the published signed APK and verifies that
+#           its signature copies onto this build, exactly as F-Droid's publish step does.
 set -euo pipefail
 
 APP_ID="com.benflex1.lifts"
-SOURCE_REF="${1:?usage: $0 <commit-sha>}"
+SOURCE_REF="${1:?usage: $0 <commit-sha> <versionCode> [source|release]}"
+VERSION_CODE="${2:?usage: $0 <commit-sha> <versionCode> [source|release]}"
+MODE="${3:-source}"
+[[ "$MODE" == source || "$MODE" == release ]] || { echo "mode must be source or release" >&2; exit 2; }
 ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
 WORK="$ROOT/.fdroid-check"
 OUT="$ROOT/fdroid-check-output"
@@ -16,9 +23,9 @@ OUT="$ROOT/fdroid-check-output"
 rm -rf "$WORK" "$OUT"
 mkdir -p "$WORK" "$OUT"
 
-VERSION_CODE=$(python3 -c 'import json; print(json.load(open("app.json"))["expo"]["android"]["versionCode"])')
 BUILD_SPEC="$APP_ID:$VERSION_CODE"
-echo "Checking $BUILD_SPEC at $SOURCE_REF"
+grep -q "^    versionCode: $VERSION_CODE\$" .fdroid.yml || { echo "::error::.fdroid.yml has no build with versionCode $VERSION_CODE"; exit 2; }
+echo "Checking $BUILD_SPEC at $SOURCE_REF ($MODE mode)"
 
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -39,7 +46,10 @@ git clone --quiet --depth 1 https://gitlab.com/fdroid/fdroidserver.git "$WORK/fd
 git clone --quiet --depth 1 https://gitlab.com/fdroid/fdroiddata.git "$WORK/fdroiddata"
 
 # Effective recipe: the checked-in one, pinned to the commit under test.
-sed -E "0,/^    commit: .*/s//    commit: $SOURCE_REF/" .fdroid.yml > "$WORK/$APP_ID.yml"
+sed -E "s/^    commit: .*/    commit: $SOURCE_REF/" .fdroid.yml > "$WORK/$APP_ID.yml"
+if [[ "$MODE" == source ]]; then
+  sed -E -i -e '/^    binary: /d' -e '/^AllowedAPKSigningKeys: /,+1d' "$WORK/$APP_ID.yml"
+fi
 cp "$WORK/$APP_ID.yml" "$OUT/metadata-used.yml"
 
 mkdir -p "$home_vagrant"/{build,logs,tmp,unsigned,metadata,.android,.gradle}
@@ -85,7 +95,7 @@ for apk in "$home_vagrant/unsigned/${APP_ID}_${VERSION_CODE}.apk" \
            "$home_vagrant/tmp/${APP_ID}_${VERSION_CODE}.apk" \
            "$home_vagrant/build/$APP_ID/android/app/build/outputs/apk/release/app-release-unsigned.apk"; do
   if [[ -f "$apk" ]]; then
-    cp "$apk" "$OUT/lifts-fdroid-unsigned.apk"
+    cp "$apk" "$OUT/lifts-fdroid-unsigned-$VERSION_CODE.apk"
     break
   fi
 done

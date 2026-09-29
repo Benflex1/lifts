@@ -1,9 +1,13 @@
 name: Release
 
-# Pushing a tag vX.Y.Z (matching expo.version in app.json) builds a signed APK and
-# publishes it as a GitHub Release with notes from CHANGELOG.md.
-# Running the workflow manually is a dry run: it builds and verifies the signed
-# APK/AAB and uploads them as workflow artifacts without publishing anything.
+# Pushing a tag vX.Y.Z (matching expo.version in app.json) publishes a GitHub Release:
+# - one APK per ABI, built unsigned by F-Droid's own tooling in its buildserver image
+#   from .fdroid.yml and then signed with the upload key. F-Droid rebuilds the same
+#   bytes, so it can ship these developer-signed APKs (reproducible builds);
+# - a universal APK built with Gradle directly (not part of F-Droid).
+# After publishing, F-Droid's verification is re-run against the published APKs.
+# Running the workflow manually is a dry run: everything is built, signed, and verified
+# and uploaded as workflow artifacts, but nothing is published.
 
 on:
   push:
@@ -18,9 +22,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  checks:
     runs-on: ubuntu-latest
-
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,6 +41,10 @@ jobs:
           fi
           if ! grep -q "^## \[$version\]" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no '## [$version]' section"
+            exit 1
+          fi
+          if ! grep -q "^    versionName: $version\$" .fdroid.yml; then
+            echo "::error::.fdroid.yml builds are not for version $version"
             exit 1
           fi
 
@@ -55,12 +64,6 @@ jobs:
           done
           exit $missing
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -79,6 +82,65 @@ jobs:
       - name: Integration test suite
         run: npm run test:integration
 
+  fdroid-build:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie
+    strategy:
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86_64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build unsigned APK with fdroidserver
+        env:
+          ABI: ${{ matrix.abi }}
+          SOURCE_REF: ${{ github.sha }}
+        run: |
+          code=$(python3 scripts/fdroid-version-code.py "$ABI")
+          bash scripts/fdroid-buildserver-check.sh "$SOURCE_REF" "$code" source
+          mv "fdroid-check-output/lifts-fdroid-unsigned-$code.apk" "fdroid-check-output/unsigned-$ABI.apk"
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-${{ matrix.abi }}
+          path: fdroid-check-output/unsigned-${{ matrix.abi }}.apk
+          if-no-files-found: error
+
+      - name: Upload fdroid build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fdroid-log-${{ matrix.abi }}
+          path: fdroid-check-output/fdroid-build.log
+          if-no-files-found: warn
+
+  universal:
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --clean
 
@@ -92,7 +154,7 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
           echo "LIFTS_UPLOAD_STORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
 
-      - name: Build signed APK and AAB
+      - name: Build signed universal APK and AAB
         working-directory: android
         env:
           LIFTS_REQUIRE_RELEASE_SIGNING: 'true'
@@ -110,34 +172,83 @@ jobs:
       - name: Check for non-free dependencies (F-Droid)
         run: scripts/check-android-nonfree.sh
 
-      - name: Verify APK signature
+      - name: Upload universal APK and AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: universal
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+  publish:
+    needs: [checks, fdroid-build, universal]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.checks.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build outputs
+        uses: actions/download-artifact@v4
+        with:
+          path: build
+
+      - name: Install apksigner 34.0.0 and apksigcopier
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;34.0.0" >/dev/null
+          echo "APKSIGNER=$ANDROID_HOME/build-tools/34.0.0/apksigner" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/build-tools/34.0.0" >> "$GITHUB_PATH"
+          pipx install apksigcopier
+
+      - name: Sign ABI APKs with the upload key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.LIFTS_UPLOAD_KEYSTORE_BASE64 }}
+          LIFTS_UPLOAD_STORE_PASSWORD: ${{ secrets.LIFTS_UPLOAD_STORE_PASSWORD }}
+          LIFTS_UPLOAD_KEY_ALIAS: ${{ secrets.LIFTS_UPLOAD_KEY_ALIAS }}
+          LIFTS_UPLOAD_KEY_PASSWORD: ${{ secrets.LIFTS_UPLOAD_KEY_PASSWORD }}
+        run: |
+          keystore="$RUNNER_TEMP/upload.jks"
+          trap 'rm -f "$keystore"' EXIT
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          mkdir -p release
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            "$APKSIGNER" sign --ks "$keystore" --ks-type PKCS12 \
+              --ks-key-alias "$LIFTS_UPLOAD_KEY_ALIAS" \
+              --ks-pass env:LIFTS_UPLOAD_STORE_PASSWORD --key-pass env:LIFTS_UPLOAD_KEY_PASSWORD \
+              --out "release/lifts-$VERSION-$abi.apk" "build/unsigned-$abi/unsigned-$abi.apk"
+          done
+          cp build/universal/apk/release/app-release.apk "release/lifts-$VERSION-universal.apk"
+          cp build/universal/bundle/release/app-release.aab "release/lifts-$VERSION.aab"
+
+      - name: Verify signatures and F-Droid signature copy
         env:
           EXPECTED_CERT_SHA256: ${{ vars.LIFTS_UPLOAD_CERT_SHA256 }}
         run: |
-          apk=android/app/build/outputs/apk/release/app-release.apk
-          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)/apksigner
-          certs=$("$apksigner" verify --print-certs "$apk")
-          echo "$certs"
-          if grep -q 'CN=Android Debug' <<<"$certs"; then
-            echo "::error::APK is signed with the Android debug key"
-            exit 1
-          fi
-          if [ -n "$EXPECTED_CERT_SHA256" ]; then
-            expected=$(echo "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')
-            if ! grep -q "certificate SHA-256 digest: $expected" <<<"$certs"; then
-              echo "::error::APK signing certificate does not match vars.LIFTS_UPLOAD_CERT_SHA256"
+          expected=$(echo "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          for apk in release/*.apk; do
+            certs=$("$APKSIGNER" verify --print-certs "$apk")
+            echo "$apk: $(grep 'certificate SHA-256 digest' <<<"$certs" | head -n 1)"
+            if grep -q 'CN=Android Debug' <<<"$certs"; then
+              echo "::error::$apk is signed with the Android debug key"
               exit 1
             fi
-          fi
+            if [ -n "$expected" ] && ! grep -q "certificate SHA-256 digest: $expected" <<<"$certs"; then
+              echo "::error::$apk signing certificate does not match vars.LIFTS_UPLOAD_CERT_SHA256"
+              exit 1
+            fi
+          done
+          # What F-Droid does: copy our signature onto its own unsigned build and verify.
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            apksigcopier compare --unsigned "release/lifts-$VERSION-$abi.apk" "build/unsigned-$abi/unsigned-$abi.apk"
+            echo "$abi: signature copies onto the unsigned F-Droid build"
+          done
 
-      - name: Collect release files
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
+      - name: Collect checksums and notes
         run: |
-          mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk "release/lifts-$VERSION.apk"
-          cp android/app/build/outputs/bundle/release/app-release.aab "release/lifts-$VERSION.aab"
-          (cd release && sha256sum "lifts-$VERSION.apk" > SHA256SUMS.txt)
+          (cd release && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          ls -l release
           awk -v version="$VERSION" '
             $0 ~ "^## \\[" version "\\]" { found = 1; next }
             found && /^## \[/ { exit }
@@ -145,10 +256,10 @@ jobs:
           ' CHANGELOG.md > release/NOTES.md
           cat release/NOTES.md
 
-      - name: Upload build artifacts
+      - name: Upload release files
         uses: actions/upload-artifact@v4
         with:
-          name: lifts-${{ steps.version.outputs.version }}-signed
+          name: lifts-${{ needs.checks.outputs.version }}-signed
           path: |
             release/*.apk
             release/*.aab
@@ -159,11 +270,31 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "release/lifts-$VERSION.apk" \
-            release/SHA256SUMS.txt \
+          gh release create "$GITHUB_REF_NAME" release/*.apk release/SHA256SUMS.txt \
             --title "Lifts $VERSION" \
             --notes-file release/NOTES.md \
             --verify-tag
+
+  fdroid-verify:
+    if: github.ref_type == 'tag'
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86_64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Rebuild and verify against the published APK
+        env:
+          ABI: ${{ matrix.abi }}
+          SOURCE_REF: ${{ github.sha }}
+        run: |
+          code=$(python3 scripts/fdroid-version-code.py "$ABI")
+          bash scripts/fdroid-buildserver-check.sh "$SOURCE_REF" "$code" release
