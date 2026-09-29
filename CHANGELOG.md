@@ -7,11 +7,6 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
-### Changed
-- Android rest-timer alerts now use a small built-in alarm module instead of `expo-notifications`, so the Android app no longer contains Firebase or any Google Play Services library. This is required for F-Droid.
-- Android rest alerts are delivered on time while the phone is locked when Lifts may set exact alarms. On Android 14 and later, Settings shows an "Allow Alarms & Reminders" button when that permission is off.
-- Tapping the rest alert opens Lifts, and cancelling a rest timer no longer clears Lifts' other notifications.
-
 ## [1.0.0]
 
 The first public release of Lifts: a free, open-source, offline-first gym tracker
@@ -22,7 +17,7 @@ with no paywalls, accounts, ads, or tracking.
 - Set types (warmup, normal, drop, failure) and optional RPE.
 - Supersets and giant sets with grouped, alternating set navigation.
 - Warmup ramp calculator with plate rounding and presets.
-- Rest timer with a precision wheel, presets, background notifications, and a 3-2-1 haptic countdown.
+- Rest timer with a precision wheel, presets, a 3-2-1 haptic countdown, and an alert when rest is over, even with the phone locked. On Android 14 and later, allow "Alarms & reminders" from Settings so alerts arrive exactly on time.
 - Wall-clock workout and rest timers that stay accurate when the phone is locked or the app is backgrounded.
 - Draft autosave every 3 seconds with crash recovery, a floating mini-bar while browsing, and screen keep-awake.
 - Edit finished workouts, including their duration.
@@ -41,6 +36,6 @@ with no paywalls, accounts, ads, or tracking.
 - Plate calculator and 1RM calculator (Epley and Brzycki), in kg or lb.
 
 ### Your data
-- Everything is stored on your device (SQLite on Android and iOS, IndexedDB on web).
+- Everything is stored on your device (SQLite on Android and iOS, IndexedDB on web). The Android app contains no Firebase or Google Play Services libraries.
 - Full JSON backup and atomic restore, and CSV import from Hevy, Strong, Lyfta, FitNotes, and generic CSV.
 - Optional export of completed workout sessions to Health Connect (Android) and Apple Health (iOS). Lifts never reads health data.
