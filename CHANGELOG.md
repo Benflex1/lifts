@@ -11,7 +11,7 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ### Changed
 - Android APKs are now reproducible: the GitHub Release APKs are built in F-Droid's build environment and match F-Droid's own builds byte for byte, so both carry the Lifts signature and you can switch between them without reinstalling.
-- Android releases now ship one APK per CPU architecture (`arm64-v8a` for most phones, `armeabi-v7a` for older 32-bit phones, `x86_64` for emulators and Chromebooks), each far smaller than before, plus a universal APK. Android version codes are now `base × 10 + architecture`, so 1.0.2 installs over 1.0.1.
+- Android releases now ship one APK per CPU architecture (`arm64-v8a` for most phones, `armeabi-v7a` for older 32-bit phones, `x86_64` for emulators and Chromebooks), each about a third of the size (34 MB instead of 91 MB for `arm64-v8a`), plus a universal APK. Android version codes are now `base × 10 + architecture`, so 1.0.2 installs over 1.0.1.
 
 ## [1.0.1]
 
