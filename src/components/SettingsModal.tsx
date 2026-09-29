@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  AppState,
   Modal,
   View,
   Text,
@@ -15,6 +16,7 @@ import { WeightUnit } from '../utils/units';
 import { GymProfilesModal } from './GymProfilesModal';
 import { useWorkout } from '../context/WorkoutContext';
 import { colors } from '../theme';
+import { ExactAlarmStatus, getExactAlarmStatus, openExactAlarmSettings } from '../utils/exactAlarms';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -33,6 +35,17 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
   const [showGymProfiles, setShowGymProfiles] = useState(false);
+  const [exactAlarmStatus, setExactAlarmStatus] = useState<ExactAlarmStatus>('unsupported');
+
+  // Re-check when the modal opens and when the user returns from system settings.
+  useEffect(() => {
+    if (!visible) return;
+    setExactAlarmStatus(getExactAlarmStatus());
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setExactAlarmStatus(getExactAlarmStatus());
+    });
+    return () => subscription.remove();
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -151,6 +164,23 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                   accessibilityState={{ checked: healthSyncEnabled, disabled: isSaving }}
                 />
               </View>
+            </View>
+          )}
+
+          {exactAlarmStatus === 'denied' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>On-time rest alerts</Text>
+              <Text style={styles.sectionSubtitle}>
+                Android can delay rest-timer alerts while your phone is locked. Allow Lifts to set alarms and reminders so they arrive on time.
+              </Text>
+              <TouchableOpacity
+                style={styles.manageButton}
+                onPress={() => openExactAlarmSettings()}
+                accessibilityRole="button"
+                accessibilityLabel="Allow alarms and reminders"
+              >
+                <Text style={styles.manageButtonText}>Allow Alarms & Reminders</Text>
+              </TouchableOpacity>
             </View>
           )}
 

@@ -107,6 +107,9 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/upload.jks"
 
+      - name: Check for non-free dependencies (F-Droid)
+        run: scripts/check-android-nonfree.sh
+
       - name: Verify APK signature
         env:
           EXPECTED_CERT_SHA256: ${{ vars.LIFTS_UPLOAD_CERT_SHA256 }}

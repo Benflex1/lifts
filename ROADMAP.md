@@ -74,7 +74,7 @@
 - [x] **Multi-Gym Tracking & Machine Isolation**: Gym profiles, active-gym workout assignment, machine/cable history isolation, global/current-gym records, linked scopes, and v2 import/v3 export. Verified on Android, iOS, and Web (REL-24).
 
 ### Phase 2.1: Gym-Floor Ergonomics & Input Polish [Completed]
-- [x] **Background Rest Alarms & Notifications**: Schedule local system notifications via `expo-notifications` with sound and vibration so rest timers alert reliably when the screen is locked or the app is backgrounded.
+- [x] **Background Rest Alarms & Notifications**: Schedule local system notifications (a local `AlarmManager` module on Android, `expo-notifications` on iOS) with sound and vibration so rest timers alert reliably when the screen is locked or the app is backgrounded.
 - [x] **Intense 3-2-1 Countdown Warning**: Multi-pulse haptic alerts during the final 3 seconds of rest countdown (3... 2... 1... DONE) to signal impending sets without looking at the screen.
 - [x] **1-Tap Clickable Previous Stats**: Make ghost metrics (`100 kg × 8`) clickable touch targets that instantly populate active set weight and reps.
 - [x] **Universal Set Completion Haptic**: Crisp tactile feedback immediately on checking off any set, independent of PR or rest timer activation.
@@ -100,4 +100,4 @@
 - [x] **Health Connect (Android) & Apple Health (iOS)**: Opt-in export after local completion. The Health Connect payload includes the workout title, strength-workout type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. No health reads or set-level export; standard web/non-health native work remains local-first and custom native builds are required. Android verified on device (REL-35); iOS custom-build device acceptance remains unverified (REL-34).
 - [ ] **Rich Exercise Media & Visual Demonstration Guides**: Additional rich media and looped vector/GIF animations beyond the delivered two-frame movement visuals, written instructions, and external form references.
 - [ ] **Wear OS / Apple Watch Companion**: Companion app for quick set logging and wrist rest countdowns.
-- [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities. The signed GitHub Release pipeline is in place (see `docs/release-checklist.md` §7); F-Droid is blocked on removing the Firebase Messaging dependency pulled in by `expo-notifications`.
+- [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities. Signed GitHub Releases ship from `release.yml` (v1.0.0 published). The Android build no longer contains Firebase (rest alarms use a local module and CI rejects non-free Google dependencies); IzzyOnDroid and F-Droid submissions are next (see `docs/release-checklist.md` §7).

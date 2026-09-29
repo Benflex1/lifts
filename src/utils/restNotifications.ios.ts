@@ -1,62 +1,18 @@
-import { Platform } from 'react-native';
+// iOS rest-timer notifications via expo-notifications. Android uses the local
+// rest-alarm module (restNotifications.android.ts) so its build carries no Firebase.
+import { restNotificationContent } from './restNotificationContent';
 
 type NotificationsModule = typeof import('expo-notifications');
 
-let channelCreated = false;
 let handlerConfigured = false;
 let permissionRequested = false;
 let lastScheduledId: string | null = null;
 let notificationsModule: NotificationsModule | null = null;
 let notificationsModuleLoaded = false;
-let didLogExpoGoWarning = false;
-
-export function isExpoGoAndroid(): boolean {
-  try {
-    if (Platform.OS !== 'android') {
-      return false;
-    }
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const expo = require('expo');
-      if (typeof expo?.isRunningInExpoGo === 'function' && expo.isRunningInExpoGo()) {
-        return true;
-      }
-    } catch {}
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const mod = require('expo-constants');
-      const Constants = mod?.default ?? mod;
-      if (
-        Constants?.appOwnership === 'expo' ||
-        Constants?.executionEnvironment === 'storeClient'
-      ) {
-        return true;
-      }
-    } catch {}
-
-    return false;
-  } catch {
-    return false;
-  }
-}
 
 function getNotificationsModule(): NotificationsModule | null {
   if (notificationsModuleLoaded) {
     return notificationsModule;
-  }
-
-  if (isExpoGoAndroid()) {
-    if (!didLogExpoGoWarning && (globalThis as any).__DEV__) {
-      didLogExpoGoWarning = true;
-      console.info(
-        '[restNotifications] Expo Go on Android does not support expo-notifications in SDK 53+. Local in-app rest timer and haptics remain active; background system notifications are bypassed. Use a development build for background notifications.'
-      );
-    }
-    notificationsModuleLoaded = true;
-    notificationsModule = null;
-    return null;
   }
 
   try {
@@ -90,24 +46,6 @@ export async function initRestNotifications(): Promise<void> {
       }),
     });
     handlerConfigured = true;
-  }
-
-  if (Platform.OS === 'android' && !channelCreated) {
-    try {
-      await Notifications.setNotificationChannelAsync('rest-timer', {
-        name: 'Rest Timer',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 800, 400, 800, 400, 800],
-        sound: 'default',
-        enableVibrate: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
-        showBadge: false,
-      });
-      channelCreated = true;
-    } catch (e) {
-      console.warn('Failed to set Android notification channel for rest timer:', e);
-    }
   }
 
   if (!permissionRequested) {
@@ -148,25 +86,18 @@ export async function scheduleRestNotification(
   }
 
   try {
-    const title = 'Rest Finished!';
-    const body = exerciseName
-      ? `Time for your next set of ${exerciseName}.`
-      : 'Time for your next set.';
+    const { title, body } = restNotificationContent(exerciseName);
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
         sound: 'default',
-        priority: Notifications.AndroidNotificationPriority.MAX,
-        vibrate: [0, 800, 400, 800, 400, 800],
-        ...(Platform.OS === 'android' ? { channelId: 'rest-timer' } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: new Date(endsAtMs),
-        ...(Platform.OS === 'android' ? { channelId: 'rest-timer' } : {}),
-      } as any,
+      },
     });
 
     lastScheduledId = id;
@@ -195,4 +126,3 @@ export async function cancelRestNotification(): Promise<void> {
     console.warn('Failed to cancel rest notification:', e);
   }
 }
-

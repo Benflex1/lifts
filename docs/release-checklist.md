@@ -170,7 +170,16 @@ cd android && ./gradlew assembleRelease
 
 | Check ID | Channel | Status |
 | :--- | :--- | :--- |
-| **REL-36** | GitHub Releases (signed APK) | Pipeline in place; pending upload-key setup and first dry run |
-| **REL-37** | F-Droid | **Blocked**: `expo-notifications` depends on `com.google.firebase:firebase-messaging` even though Lifts only schedules local notifications. F-Droid requires removing it (for example, a local-notification-only module or a flavor that excludes FCM). |
+| **REL-36** | GitHub Releases (signed APK) | **Verified**: v1.0.0 published by `release.yml`, signed with the pinned upload key |
+| **REL-37** | F-Droid / IzzyOnDroid | **Unblocked in code**: `expo-notifications` is excluded from Android autolinking and replaced by the local `modules/rest-alarm` module; `scripts/check-android-nonfree.sh` fails CI if Firebase, Play Services, or similar libraries reach the release classpath or merged manifest. Submission pending. |
 | **REL-38** | Google Play | Not started. The AAB artifact is ready to upload, and enrolling in Play App Signing would make this key the resettable upload key. |
 | **REL-39** | Apple App Store | Not started; depends on REL-34 and an Apple Developer account. |
+
+### Android rest alarm acceptance
+
+| Check ID | Verification Area | Test Procedure | Expected Result | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **REL-40** | Locked-screen rest alert | Start a 2-minute rest, lock the phone, and leave it untouched | Alert sounds and vibrates on time; tapping it opens Lifts | Unverified |
+| **REL-41** | Exact-alarm permission | On Android 14+, fresh install: open Settings, tap "Allow Alarms & Reminders", enable it, return | The Settings row disappears; later rest alerts are exact | Unverified |
+| **REL-42** | Timer changes | Skip, extend, and shorten a running rest timer | Only the latest end time alerts; skipping removes the pending and shown alert | Unverified |
+| **REL-43** | Upgrade from 1.0.0 | Install over v1.0.0 with notifications allowed | Existing "Rest Timer" channel settings are kept; alerts still arrive | Unverified |

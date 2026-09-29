@@ -45,5 +45,14 @@
     "test": "node --experimental-test-module-mocks --import tsx --test tests/unit/*.test.ts",
     "test:integration": "tsx --test tests/integration/*.test.ts"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "android": {
+        "exclude": [
+          "expo-notifications"
+        ]
+      }
+    }
+  }
 }

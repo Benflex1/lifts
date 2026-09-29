@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Granted by default before Android 14; on 14+ the user allows it from Settings. -->
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+  <application>
+    <receiver
+      android:name="expo.modules.restalarm.RestAlarmReceiver"
+      android:exported="false" />
+  </application>
+</manifest>
