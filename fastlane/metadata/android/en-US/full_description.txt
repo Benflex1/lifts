@@ -1,0 +1,36 @@
+<p>Lifts is a free and open-source gym workout tracker. There are no paywalls, subscriptions, accounts, ads, or trackers, and everything works offline in a basement gym with no signal.</p>
+
+<p><b>Log workouts quickly</b></p>
+<ul>
+<li>One-tap set logging that pre-fills weight and reps from your last workout</li>
+<li>Warmup, drop, and failure sets, plus optional RPE</li>
+<li>Supersets and giant sets</li>
+<li>Warmup ramp calculator with plate rounding</li>
+<li>Rest timer with a 3-2-1 haptic countdown and an alert when rest is over, even with the screen locked</li>
+<li>Autosave and crash recovery, so an interrupted workout can be resumed</li>
+</ul>
+
+<p><b>Plan your training</b></p>
+<ul>
+<li>Unlimited routines and folders</li>
+<li>Rep targets as numbers, ranges (8-12), per-set lists (10, 8, 6), or AMRAP</li>
+<li>876 built-in exercises with instructions, muscle groups, and movement visuals</li>
+<li>Search that understands gym shorthand like ohp, rdl, or db</li>
+<li>Track several gyms and keep machine history separate for each</li>
+</ul>
+
+<p><b>See your progress</b></p>
+<ul>
+<li>Personal records with celebrations when you beat them</li>
+<li>Strength, volume, and estimated 1RM charts for every exercise</li>
+<li>Weekly volume, muscle balance, rep ranges, and training consistency</li>
+<li>Plate calculator and 1RM calculator, in kg or lb</li>
+</ul>
+
+<p><b>Own your data</b></p>
+<ul>
+<li>All data stays on your device</li>
+<li>Full backup and restore to a file</li>
+<li>Import from Hevy, Strong, Lyfta, FitNotes, or any CSV</li>
+<li>Optional export of finished workouts to Health Connect. Lifts never reads your health data.</li>
+</ul>

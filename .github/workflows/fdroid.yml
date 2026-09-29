@@ -1,0 +1,46 @@
+name: F-Droid build
+
+# Builds the .fdroid.yml recipe in F-Droid's own build-server image with the real
+# `fdroid lint`, `rewritemeta`, and `fdroid build --on-server`, so recipe problems
+# surface here instead of in the fdroiddata merge request.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.fdroid.yml'
+      - '.github/workflows/fdroid.yml'
+      - 'scripts/fdroid-buildserver-check.sh'
+      - 'app.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'plugins/**'
+      - 'modules/**'
+
+permissions:
+  contents: read
+
+jobs:
+  fdroid-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container:
+      image: registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build with fdroidserver
+        env:
+          SOURCE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash scripts/fdroid-buildserver-check.sh "$SOURCE_REF"
+
+      - name: Upload build output and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fdroid-build-${{ github.sha }}
+          path: fdroid-check-output/
+          if-no-files-found: warn

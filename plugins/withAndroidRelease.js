@@ -1,7 +1,8 @@
 // Expo config plugin: Android release versioning and upload-key signing.
 //
 // - versionCode is derived from the semver `expo.version` (1.2.3 -> 1002003) so it
-//   always increases with the version and never needs a manual bump.
+//   always increases with the version. app.json also states it explicitly (F-Droid's
+//   update checker reads it from there); prebuild fails if the two disagree.
 // - The release build type is signed with the upload key named by the
 //   LIFTS_UPLOAD_* environment variables. Without them (local and preview builds)
 //   it keeps Expo's debug signing, unless LIFTS_REQUIRE_RELEASE_SIGNING=true, in
@@ -52,9 +53,20 @@ function applyReleaseSigning(gradle) {
     .replace(releaseSigning, '$1signingConfig signingConfigs.findByName(\'release\') ?: signingConfigs.debug');
 }
 
+function resolveVersionCode(version, explicitVersionCode) {
+  const derived = toVersionCode(version);
+  if (explicitVersionCode != null && explicitVersionCode !== derived) {
+    throw new Error(
+      `withAndroidRelease: android.versionCode ${explicitVersionCode} does not match ` +
+        `expo.version ${version} (expected ${derived})`
+    );
+  }
+  return derived;
+}
+
 function withAndroidRelease(config) {
   config.android = { ...config.android };
-  config.android.versionCode ??= toVersionCode(config.version);
+  config.android.versionCode = resolveVersionCode(config.version, config.android.versionCode);
 
   return withAppBuildGradle(config, (mod) => {
     if (mod.modResults.language !== 'groovy') {
@@ -67,4 +79,5 @@ function withAndroidRelease(config) {
 
 module.exports = withAndroidRelease;
 module.exports.toVersionCode = toVersionCode;
+module.exports.resolveVersionCode = resolveVersionCode;
 module.exports.applyReleaseSigning = applyReleaseSigning;

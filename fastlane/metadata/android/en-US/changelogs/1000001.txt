@@ -1,0 +1,5 @@
+First F-Droid release.
+
+- Rest alerts arrive on time with the screen locked. On Android 14+, allow "Alarms & reminders" in Settings.
+- The app contains no Firebase or Google Play Services libraries.
+- Everything from 1.0.0: routines, fast set logging, supersets, rest timer, PRs, progress charts, backup, and CSV import.
