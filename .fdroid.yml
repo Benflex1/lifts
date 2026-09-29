@@ -13,9 +13,9 @@ RepoType: git
 Repo: https://github.com/Benflex1/lifts.git
 
 Builds:
-  - versionName: 1.0.2
-    versionCode: 10000021
-    commit: v1.0.2
+  - versionName: 1.0.3
+    versionCode: 10000031
+    commit: v1.0.3
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -40,9 +40,9 @@ Builds:
       - gradle assembleRelease -PliftsAbi=armeabi-v7a -PreactNativeArchitectures=armeabi-v7a
     ndk: r27b
 
-  - versionName: 1.0.2
-    versionCode: 10000022
-    commit: v1.0.2
+  - versionName: 1.0.3
+    versionCode: 10000032
+    commit: v1.0.3
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -67,9 +67,9 @@ Builds:
       - gradle assembleRelease -PliftsAbi=arm64-v8a -PreactNativeArchitectures=arm64-v8a
     ndk: r27b
 
-  - versionName: 1.0.2
-    versionCode: 10000024
-    commit: v1.0.2
+  - versionName: 1.0.3
+    versionCode: 10000034
+    commit: v1.0.3
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -122,7 +122,8 @@ MaintainerNotes: |-
   independent buildserver builds of one commit are byte-identical.
 
   Node.js/npm come from Debian forky. React Native 0.86 pins NDK 27.1.12297006
-  (r27b).
+  (r27b); the upstream plugin makes every native module (including expo-sqlite,
+  which sets no ndkVersion) use it, so no other NDK is needed.
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
@@ -131,5 +132,5 @@ VercodeOperation:
   - '%c * 10 + 2'
   - '%c * 10 + 4'
 UpdateCheckData: app.json|"versionCode":\s*(\d+)|app.json|"version":\s*"([\d.]+)"
-CurrentVersion: 1.0.2
-CurrentVersionCode: 10000024
+CurrentVersion: 1.0.3
+CurrentVersionCode: 10000034
