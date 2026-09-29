@@ -43,7 +43,7 @@ jobs:
             echo "::error::CHANGELOG.md has no '## [$version]' section"
             exit 1
           fi
-          if ! grep -q "^    versionName: $version\$" .fdroid.yml; then
+          if ! grep -q "^  - versionName: $version\$" .fdroid.yml; then
             echo "::error::.fdroid.yml builds are not for version $version"
             exit 1
           fi
