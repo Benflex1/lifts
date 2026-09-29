@@ -3,6 +3,9 @@
 // - versionCode is derived from the semver `expo.version` (1.2.3 -> 1002003) so it
 //   always increases with the version. app.json also states it explicitly (F-Droid's
 //   update checker reads it from there); prebuild fails if the two disagree.
+// - Gradle's versionCode is that value × 10 plus an ABI digit: 0 for the universal APK,
+//   and with -PliftsAbi=<abi> a single-ABI APK (armeabi-v7a 1, arm64-v8a 2, x86 3,
+//   x86_64 4). F-Droid builds one APK per ABI this way.
 // - The release build type is signed with the upload key named by the
 //   LIFTS_UPLOAD_* environment variables. Without them (local and preview builds)
 //   it keeps Expo's debug signing, unless LIFTS_REQUIRE_RELEASE_SIGNING=true, in
@@ -10,6 +13,7 @@
 const { withAppBuildGradle } = require('expo/config-plugins');
 
 const MARKER = '// lifts-release-signing';
+const ABI_MARKER = '// lifts-abi-builds';
 
 function toVersionCode(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version ?? ''));
@@ -64,6 +68,38 @@ function resolveVersionCode(version, explicitVersionCode) {
   return derived;
 }
 
+const ABI_SETUP = `${ABI_MARKER}: -PliftsAbi=<abi> builds a single-ABI APK with versionCode base * 10 + digit.
+def liftsAbiDigits = ['armeabi-v7a': 1, 'arm64-v8a': 2, 'x86': 3, 'x86_64': 4]
+def liftsAbi = findProperty('liftsAbi')
+if (liftsAbi != null && !liftsAbiDigits.containsKey(liftsAbi)) {
+    throw new GradleException("liftsAbi must be one of \${liftsAbiDigits.keySet()}, got '\${liftsAbi}'")
+}
+def liftsAbiDigit = liftsAbi != null ? liftsAbiDigits[liftsAbi] : 0
+
+`;
+
+function applyAbiBuilds(gradle) {
+  if (gradle.includes(ABI_MARKER)) return gradle;
+
+  const androidBlock = /\nandroid \{\n/;
+  const versionCode = /(\n(\s+)versionCode (\d+)\n)/;
+  if (!androidBlock.test(gradle) || !versionCode.test(gradle)) {
+    throw new Error(
+      'withAndroidRelease: app/build.gradle no longer matches the expected Expo template; ' +
+        'update plugins/withAndroidRelease.js before building a release'
+    );
+  }
+
+  return gradle
+    .replace(androidBlock, `\n${ABI_SETUP}android {\n`)
+    .replace(
+      versionCode,
+      (_, _line, indent, code) =>
+        `\n${indent}versionCode ${code} * 10 + liftsAbiDigit\n` +
+        `${indent}if (liftsAbi != null) {\n${indent}    ndk { abiFilters liftsAbi }\n${indent}}\n`
+    );
+}
+
 function withAndroidRelease(config) {
   config.android = { ...config.android };
   config.android.versionCode = resolveVersionCode(config.version, config.android.versionCode);
@@ -72,7 +108,7 @@ function withAndroidRelease(config) {
     if (mod.modResults.language !== 'groovy') {
       throw new Error('withAndroidRelease: only a Groovy app/build.gradle is supported');
     }
-    mod.modResults.contents = applyReleaseSigning(mod.modResults.contents);
+    mod.modResults.contents = applyAbiBuilds(applyReleaseSigning(mod.modResults.contents));
     return mod;
   });
 }
@@ -81,3 +117,4 @@ module.exports = withAndroidRelease;
 module.exports.toVersionCode = toVersionCode;
 module.exports.resolveVersionCode = resolveVersionCode;
 module.exports.applyReleaseSigning = applyReleaseSigning;
+module.exports.applyAbiBuilds = applyAbiBuilds;

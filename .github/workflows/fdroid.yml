@@ -12,6 +12,7 @@ on:
       - '.fdroid.yml'
       - '.github/workflows/fdroid.yml'
       - 'scripts/fdroid-buildserver-check.sh'
+      - 'scripts/fdroid-version-code.py'
       - 'app.json'
       - 'package.json'
       - 'package-lock.json'
@@ -27,6 +28,10 @@ jobs:
     timeout-minutes: 120
     container:
       image: registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86_64]
 
     steps:
       - name: Checkout repository
@@ -34,13 +39,14 @@ jobs:
 
       - name: Build with fdroidserver
         env:
+          ABI: ${{ matrix.abi }}
           SOURCE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: bash scripts/fdroid-buildserver-check.sh "$SOURCE_REF"
+        run: bash scripts/fdroid-buildserver-check.sh "$SOURCE_REF" "$(python3 scripts/fdroid-version-code.py "$ABI")" source
 
       - name: Upload build output and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fdroid-build-${{ github.sha }}
+          name: fdroid-build-${{ matrix.abi }}-${{ github.sha }}
           path: fdroid-check-output/
           if-no-files-found: warn

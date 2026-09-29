@@ -3,7 +3,8 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { toVersionCode, resolveVersionCode, applyReleaseSigning } = require('../../plugins/withAndroidRelease') as {
+const { toVersionCode, resolveVersionCode, applyReleaseSigning, applyAbiBuilds } = require('../../plugins/withAndroidRelease') as {
+  applyAbiBuilds: (gradle: string) => string;
   toVersionCode: (version: unknown) => number;
   resolveVersionCode: (version: unknown, explicitVersionCode?: number) => number;
   applyReleaseSigning: (gradle: string) => string;
@@ -75,5 +76,39 @@ describe('applyReleaseSigning', () => {
     const drifted = template.replace(/\n        release \{/, '\n        releaseRenamed {');
     assert.throws(() => applyReleaseSigning(drifted), /no longer matches the expected Expo template/);
     assert.throws(() => applyReleaseSigning('android {}'), /no longer matches the expected Expo template/);
+  });
+});
+
+describe('applyAbiBuilds', () => {
+  const patched = applyAbiBuilds(template);
+
+  it('multiplies the versionCode by 10 and adds the ABI digit', () => {
+    assert.match(patched, /\n\s+versionCode 1 \* 10 \+ liftsAbiDigit\n/);
+    assert.match(patched, /def liftsAbiDigits = \['armeabi-v7a': 1, 'arm64-v8a': 2, 'x86': 3, 'x86_64': 4\]/);
+    assert.match(patched, /def liftsAbiDigit = liftsAbi != null \? liftsAbiDigits\[liftsAbi\] : 0/);
+  });
+
+  it('restricts packaged native libraries to the requested ABI', () => {
+    const defaultConfig = patched.slice(patched.indexOf('defaultConfig {'), patched.indexOf('signingConfigs {'));
+    assert.match(defaultConfig, /if \(liftsAbi != null\) \{\n\s+ndk \{ abiFilters liftsAbi \}\n\s+\}/);
+  });
+
+  it('rejects unknown ABIs instead of building a mislabeled APK', () => {
+    assert.match(patched, /throw new GradleException\("liftsAbi must be one of/);
+  });
+
+  it('defines the ABI settings before the android block and is idempotent', () => {
+    assert.ok(patched.indexOf('def liftsAbi =') < patched.indexOf('\nandroid {'));
+    assert.equal(applyAbiBuilds(patched), patched);
+  });
+
+  it('composes with release signing', () => {
+    const both = applyAbiBuilds(applyReleaseSigning(template));
+    assert.match(both, /lifts-release-signing/);
+    assert.match(both, /versionCode 1 \* 10 \+ liftsAbiDigit/);
+  });
+
+  it('fails loudly when the Expo template no longer matches', () => {
+    assert.throws(() => applyAbiBuilds(template.replace(/versionCode 1\n/, 'versionCode = 1\n')), /no longer matches/);
   });
 });
