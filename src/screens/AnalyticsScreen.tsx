@@ -1276,7 +1276,7 @@ const AnalyticsScreenInner: React.FC = () => {
           </TouchableOpacity>
         </View>
         <Text style={styles.dataFootnote}>
-          Lifts is local-first: everything stays on this device unless you export it.
+          Lifts stores workout data locally. Backups are written only to a folder you choose.
         </Text>
       </ScrollView>
       )}

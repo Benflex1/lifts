@@ -61,6 +61,7 @@ Most modern fitness apps start out great, only to lock your workouts behind expe
 - **Expandable Workout Log**: Drill down into every past workout to inspect completed weights, reps, and RPE pills.
 - **Perform Again**: 1-tap restart of past completed workouts from History, reconstructing all exercises, target sets, reps, and historical weights as suggestions.
 - **Atomic Backup & Restore (v3 export, v2 import)**: New exports include gym profiles and exercise scopes. Existing Schema v2 backups remain importable, and restore merges records safely with collision prevention.
+- **Automatic Android Backups**: Opt-in backups after completed workouts to a chosen folder, with a manual backup action, last-backup status, and retention of the newest 10 files. The folder permission stays on that device and is excluded from exported backups.
 - **Opt-In Health Export**: After local completion, export the session summary to Apple Health/HealthKit on iOS or Health Connect on Android. The Health Connect payload includes the workout title, strength-workout session type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. Lifts does not read health data or export sets. The device-local `health_sync_enabled` setting and sync ledger are excluded from backups.
 
 ---

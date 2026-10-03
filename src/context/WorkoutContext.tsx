@@ -27,6 +27,7 @@ import {
   createWorkoutSetsFromSuggestions,
 } from '../workout/gym-session';
 import { resolveActiveGymAfterRefresh } from '../workout/gym-profile';
+import { runAutomaticBackup } from '../utils/automaticBackup';
 import { useDialog } from './DialogContext';
 import { useSettings } from './SettingsContext';
 import {
@@ -719,6 +720,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     try {
       const finished = await ctrl.finish(durationSecondsOverride);
+      void runAutomaticBackup().catch((error) => {
+        console.warn('Automatic workout backup failed', error);
+      });
       const settings = healthSyncSettingsRef.current;
       if (settings.loading) {
         pendingHealthSyncsRef.current.push(finished);
