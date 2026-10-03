@@ -7,7 +7,7 @@ name: F-Droid build
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - '.fdroid.yml'
       - '.github/workflows/fdroid.yml'
