@@ -16,6 +16,7 @@ import {
   moveActiveExerciseToIndex,
   replaceActiveExercise,
 } from '../../workout/active-exercises';
+import { runAutomaticBackup } from '../../utils/automaticBackup';
 import {
   captureWorkoutVersion,
   appendExercisesToCurrentWorkout,
@@ -273,6 +274,9 @@ export function useWorkoutMutations({
 
     try {
       const finished = await ctrl.finish(durationSecondsOverride);
+      void runAutomaticBackup().catch(error => {
+        console.warn('Automatic workout backup failed', error);
+      });
       health.enqueueCompleted(finished);
       setMinimized(false);
       accordion.reset();

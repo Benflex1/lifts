@@ -7,6 +7,9 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+- Optional Android backups after each completed workout, saved to a folder you choose, with a manual backup action, status display, and retention of the newest 10 copies.
+
 ## [1.0.5]
 
 ### Changed

@@ -101,3 +101,16 @@
 - [ ] **Rich Exercise Media & Visual Demonstration Guides**: Additional rich media and looped vector/GIF animations beyond the delivered two-frame movement visuals, written instructions, and external form references.
 - [ ] **Wear OS / Apple Watch Companion**: Companion app for quick set logging and wrist rest countdowns.
 - [ ] **F-Droid & App Store Publishing**: Packaged releases with compliant data licensing and production signing identities. Signed GitHub Releases ship from `release.yml` (v1.0.0 published). The Android build no longer contains Firebase (rest alarms use a local module and CI rejects non-free Google dependencies); The F-Droid recipe (`.fdroid.yml`) is built in F-Droid's build-server image on every relevant PR; submission to fdroiddata is next (see `docs/release-checklist.md` §8). IzzyOnDroid is deferred because of its 30 MB size limit.
+
+### Phase 5: Data Safety, Training Depth & Reach [Planned]
+Ranked by priority. Finishing the F-Droid submission (Phase 4) comes first; the Phase 4 Wear OS companion and rich exercise media rank below everything here.
+
+- [x] **Automatic Local Backups (Android)**: Opt-in timestamped backups after completed workouts to a user-chosen folder, with manual backup, visible status, and retention of the newest 10 copies. iOS and web automation remain planned. A folder synced by Syncthing or Nextcloud also gives server-free sync.
+- [ ] **Exercise Tracking Types (Time, Distance, Bodyweight)**: Sets are currently weight × reps only, but the library includes 123 stretching, 14 cardio, and 188 body-only exercises. Add duration (planks, stretches), distance + time (cardio), bodyweight, weighted bodyweight, and assisted tracking. This changes the backup schema, the CSV importer (Strong/Hevy distance and seconds columns), PRs, and analytics, so it should land before more features build on the weight × reps model.
+- [ ] **Progressive Overload Suggestions**: Turn last session's numbers into a target for the next one, using double progression or RPE (e.g. "3×12 at 60 kg last time, try 62.5 kg").
+- [ ] **Body Weight & Measurements Log**: Local body weight and body-measurement tracking with trends. Needed for bodyweight volume, assisted-lift loads, and strength relative to body weight.
+- [ ] **Per-Gym Plate & Equipment Inventory**: Record the plates, dumbbell steps, and machine increments each gym has, so the plate calculator, warmup ramps, and suggestions only use loads that exist there.
+- [ ] **Programs & Scheduling**: Multi-week programs (PPL rotations, 5/3/1, deload weeks) with a "next workout" pointer, building on routines and folders (extends the split scheduling in [docs/roadmap.md](docs/roadmap.md) Milestone 3).
+- [ ] **Lock-Screen Rest Timer & Home-Screen Widget**: An ongoing notification or widget showing the rest countdown and the next set. Gives most of a watch companion's value for much less work.
+- [ ] **Translations (i18n)**: Translation infrastructure with English and German first. F-Droid's audience is international, and it gets more expensive to add the more screens there are.
+- [ ] **Light Theme & Accessibility Pass**: Screen-reader labels across all screens and a light or high-contrast theme option.
