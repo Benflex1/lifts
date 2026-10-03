@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   AppState,
   Modal,
   View,
   Text,
   TouchableOpacity,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
   Switch,
@@ -17,6 +18,14 @@ import { GymProfilesModal } from './GymProfilesModal';
 import { useWorkout } from '../context/WorkoutContext';
 import { colors } from '../theme';
 import { ExactAlarmStatus, getExactAlarmStatus, openExactAlarmSettings } from '../utils/exactAlarms';
+import {
+  AutomaticBackupState,
+  chooseAutomaticBackupFolder,
+  getAutomaticBackupState,
+  runAutomaticBackup,
+  setAutomaticBackupEnabled,
+} from '../utils/automaticBackup';
+import { useDialog } from '../context/DialogContext';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -34,18 +43,38 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
   } = useSettings();
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
+  const [isBackupBusy, setIsBackupBusy] = useState(false);
+  const [automaticBackup, setAutomaticBackup] = useState<AutomaticBackupState>({
+    directoryUri: null,
+    enabled: false,
+    lastSuccessAt: null,
+    lastError: null,
+  });
   const [showGymProfiles, setShowGymProfiles] = useState(false);
   const [exactAlarmStatus, setExactAlarmStatus] = useState<ExactAlarmStatus>('unsupported');
+  const { notify } = useDialog();
+
+  const refreshAutomaticBackupState = useCallback(async () => {
+    try {
+      setAutomaticBackup(await getAutomaticBackupState());
+    } catch (error) {
+      console.error('Unable to load automatic backup settings', error);
+    }
+  }, []);
 
   // Re-check when the modal opens and when the user returns from system settings.
   useEffect(() => {
     if (!visible) return;
     setExactAlarmStatus(getExactAlarmStatus());
+    void refreshAutomaticBackupState();
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setExactAlarmStatus(getExactAlarmStatus());
+      if (state === 'active') {
+        setExactAlarmStatus(getExactAlarmStatus());
+        void refreshAutomaticBackupState();
+      }
     });
     return () => subscription.remove();
-  }, [visible]);
+  }, [visible, refreshAutomaticBackupState]);
 
   if (!visible) return null;
 
@@ -85,6 +114,59 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     }
   };
 
+  const handleChooseBackupFolder = async () => {
+    if (isBackupBusy) return;
+    setIsBackupBusy(true);
+    try {
+      const directoryUri = await chooseAutomaticBackupFolder(automaticBackup.directoryUri);
+      if (directoryUri) await refreshAutomaticBackupState();
+    } catch (error: any) {
+      await notify({
+        title: 'Backup Folder Error',
+        message: error?.message || 'Unable to select a backup folder.',
+      });
+    } finally {
+      setIsBackupBusy(false);
+    }
+  };
+
+  const handleAutomaticBackupChange = async (enabled: boolean) => {
+    if (isBackupBusy || enabled === automaticBackup.enabled) return;
+    setIsBackupBusy(true);
+    try {
+      await setAutomaticBackupEnabled(enabled);
+      await refreshAutomaticBackupState();
+    } catch (error: any) {
+      await notify({
+        title: 'Automatic Backup Error',
+        message: error?.message || 'Unable to update automatic backup settings.',
+      });
+    } finally {
+      setIsBackupBusy(false);
+    }
+  };
+
+  const handleBackupNow = async () => {
+    if (isBackupBusy || !automaticBackup.directoryUri) return;
+    setIsBackupBusy(true);
+    try {
+      await runAutomaticBackup({ force: true });
+      await refreshAutomaticBackupState();
+      await notify({
+        title: 'Backup Saved',
+        message: 'Your latest backup was saved. Lifts keeps the newest 10 backups in this folder.',
+      });
+    } catch (error: any) {
+      await refreshAutomaticBackupState();
+      await notify({
+        title: 'Backup Failed',
+        message: error?.message || 'Unable to save a backup. Choose the folder again and retry.',
+      });
+    } finally {
+      setIsBackupBusy(false);
+    }
+  };
+
   const handleClose = () => {
     setShowGymProfiles(false);
     onClose();
@@ -114,6 +196,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
             </TouchableOpacity>
           </View>
 
+          <ScrollView style={styles.settingsContent} keyboardShouldPersistTaps="handled">
           <View style={styles.section}>
             <View style={styles.settingHeaderRow}>
               <View style={styles.settingTextContainer}>
@@ -143,6 +226,70 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               <Text style={styles.manageButtonText}>Manage Gyms</Text>
             </TouchableOpacity>
           </View>
+
+          {Platform.OS === 'android' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Automatic Backups</Text>
+              <Text style={styles.sectionSubtitle}>
+                Save a full backup after each completed workout and keep the newest 10 copies.
+              </Text>
+              <Text style={styles.backupStatus}>
+                {automaticBackup.directoryUri ? 'Backup folder selected on this device.' : 'Choose a folder for your backups.'}
+              </Text>
+              <TouchableOpacity
+                style={styles.manageButton}
+                onPress={handleChooseBackupFolder}
+                disabled={isBackupBusy}
+                accessibilityRole="button"
+                accessibilityLabel={automaticBackup.directoryUri ? 'Change automatic backup folder' : 'Choose automatic backup folder'}
+              >
+                <Text style={styles.manageButtonText}>
+                  {automaticBackup.directoryUri ? 'Change Backup Folder' : 'Choose Backup Folder'}
+                </Text>
+              </TouchableOpacity>
+              <View style={[styles.settingHeaderRow, styles.backupSwitchRow]}>
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.backupSwitchTitle}>After each workout</Text>
+                </View>
+                <Switch
+                  value={automaticBackup.enabled}
+                  onValueChange={handleAutomaticBackupChange}
+                  disabled={isBackupBusy || !automaticBackup.directoryUri}
+                  trackColor={{ false: colors.control, true: colors.primary }}
+                  thumbColor={automaticBackup.enabled ? colors.text : colors.textSecondary}
+                  accessibilityLabel="Back up automatically after each workout"
+                  accessibilityRole="switch"
+                  accessibilityState={{
+                    checked: automaticBackup.enabled,
+                    disabled: isBackupBusy || !automaticBackup.directoryUri,
+                  }}
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.manageButton, styles.backupNowButton]}
+                onPress={handleBackupNow}
+                disabled={isBackupBusy || !automaticBackup.directoryUri}
+                accessibilityRole="button"
+                accessibilityLabel="Back up now"
+              >
+                {isBackupBusy ? (
+                  <ActivityIndicator size="small" color={colors.textSoft} />
+                ) : (
+                  <Text style={styles.manageButtonText}>Back Up Now</Text>
+                )}
+              </TouchableOpacity>
+              <Text style={styles.backupStatus}>
+                {automaticBackup.lastSuccessAt
+                  ? `Last backup: ${new Date(automaticBackup.lastSuccessAt).toLocaleString()}`
+                  : 'No backup saved yet.'}
+              </Text>
+              {!!automaticBackup.lastError && (
+                <Text style={styles.backupError}>
+                  Latest attempt failed: {automaticBackup.lastError}
+                </Text>
+              )}
+            </View>
+          )}
 
           {Platform.OS !== 'web' && (
             <View style={styles.section}>
@@ -250,6 +397,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
               <Text style={styles.savingText}>Saving...</Text>
             </View>
           )}
+          </ScrollView>
 
           {/* Footer button */}
           <TouchableOpacity
@@ -284,6 +432,7 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     maxWidth: 420,
+    maxHeight: '90%',
     backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
@@ -311,6 +460,9 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 20,
+  },
+  settingsContent: {
+    flexShrink: 1,
   },
   settingHeaderRow: {
     flexDirection: 'row',
@@ -350,6 +502,31 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
     fontSize: 14,
     fontWeight: '600',
+  },
+  backupSwitchRow: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  backupSwitchTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSoft,
+  },
+  backupNowButton: {
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  backupStatus: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 6,
+    lineHeight: 17,
+  },
+  backupError: {
+    fontSize: 12,
+    color: colors.dangerLight,
+    marginTop: 6,
+    lineHeight: 17,
   },
   unitOption: {
     flexDirection: 'row',

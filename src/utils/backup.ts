@@ -615,6 +615,7 @@ export async function buildBackupJson(store?: Store): Promise<string> {
       !k.startsWith('schema_') &&
       !k.startsWith('writer_') &&
       !k.startsWith('migration_') &&
+      !k.startsWith('automatic_backup_') &&
       k !== 'writer_lease' &&
       k !== 'health_sync_enabled'
     ) {
