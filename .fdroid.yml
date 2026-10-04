@@ -13,9 +13,9 @@ RepoType: git
 Repo: https://github.com/Benflex1/lifts.git
 
 Builds:
-  - versionName: 1.0.3
-    versionCode: 10000031
-    commit: v1.0.3
+  - versionName: 1.0.4
+    versionCode: 10000041
+    commit: v1.0.4
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -40,9 +40,9 @@ Builds:
       - gradle assembleRelease -PliftsAbi=armeabi-v7a -PreactNativeArchitectures=armeabi-v7a
     ndk: r27b
 
-  - versionName: 1.0.3
-    versionCode: 10000032
-    commit: v1.0.3
+  - versionName: 1.0.4
+    versionCode: 10000042
+    commit: v1.0.4
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -67,9 +67,9 @@ Builds:
       - gradle assembleRelease -PliftsAbi=arm64-v8a -PreactNativeArchitectures=arm64-v8a
     ndk: r27b
 
-  - versionName: 1.0.3
-    versionCode: 10000034
-    commit: v1.0.3
+  - versionName: 1.0.4
+    versionCode: 10000044
+    commit: v1.0.4
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -119,7 +119,10 @@ MaintainerNotes: |-
 
   Builds are reproducible: upstream builds each release APK with this recipe in
   the fdroidserver buildserver-trixie image and signs it with apksigner, and
-  independent buildserver builds of one commit are byte-identical.
+  independent buildserver builds of one commit are byte-identical. The React
+  Native Gradle plugin writes the build host's IP into react_native_dev_server_ip;
+  the upstream plugin pins it for release builds, and upstream CI fails if a
+  built APK contains the builder's IP or hostname.
 
   Node.js/npm come from Debian forky. React Native 0.86 pins NDK 27.1.12297006
   (r27b); the upstream plugin makes every native module (including expo-sqlite,
@@ -132,5 +135,5 @@ VercodeOperation:
   - '%c * 10 + 2'
   - '%c * 10 + 4'
 UpdateCheckData: app.json|"versionCode":\s*(\d+)|app.json|"version":\s*"([\d.]+)"
-CurrentVersion: 1.0.3
-CurrentVersionCode: 10000034
+CurrentVersion: 1.0.4
+CurrentVersionCode: 10000044
