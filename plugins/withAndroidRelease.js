@@ -9,6 +9,10 @@
 // - Every Android library module is built with React Native's NDK. Modules that set no
 //   ndkVersion (expo-sqlite) would otherwise fall back to the Android Gradle Plugin's
 //   default NDK, which F-Droid would then have to download mid-build.
+// - Release builds pin react_native_dev_server_ip, which the React Native Gradle plugin
+//   otherwise fills with the build machine's IP address. Release APKs never use it, but it
+//   made their bytes depend on the build host and broke F-Droid reproducibility. Debug
+//   builds keep the detected IP so they still find Metro.
 // - The release build type is signed with the upload key named by the
 //   LIFTS_UPLOAD_* environment variables. Without them (local and preview builds)
 //   it keeps Expo's debug signing, unless LIFTS_REQUIRE_RELEASE_SIGNING=true, in
@@ -18,6 +22,7 @@ const { withAppBuildGradle, withProjectBuildGradle } = require('expo/config-plug
 const MARKER = '// lifts-release-signing';
 const ABI_MARKER = '// lifts-abi-builds';
 const NDK_MARKER = '// lifts-uniform-ndk';
+const DEV_SERVER_MARKER = '// lifts-reproducible-dev-server-ip';
 
 function toVersionCode(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version ?? ''));
@@ -59,6 +64,24 @@ function applyReleaseSigning(gradle) {
   return gradle
     .replace(signingConfigs, `$1${RELEASE_SIGNING_CONFIG}`)
     .replace(releaseSigning, '$1signingConfig signingConfigs.findByName(\'release\') ?: signingConfigs.debug');
+}
+
+function applyReproducibleDevServerIp(gradle) {
+  if (gradle.includes(DEV_SERVER_MARKER)) return gradle;
+
+  const releaseBuildType = /(\n    buildTypes \{\n(?:[^\n]*\n)*?(\s+)release \{\n)/;
+  if (!releaseBuildType.test(gradle)) {
+    throw new Error(
+      'withAndroidRelease: app/build.gradle no longer matches the expected Expo template; ' +
+        'update plugins/withAndroidRelease.js before building a release'
+    );
+  }
+  return gradle.replace(
+    releaseBuildType,
+    (match, _block, indent) =>
+      `${match}${indent}    ${DEV_SERVER_MARKER}: release APKs must not embed the build host's IP.\n` +
+      `${indent}    resValue "string", "react_native_dev_server_ip", "localhost"\n`
+  );
 }
 
 function resolveVersionCode(version, explicitVersionCode) {
@@ -140,7 +163,9 @@ function withAndroidRelease(config) {
     if (mod.modResults.language !== 'groovy') {
       throw new Error('withAndroidRelease: only a Groovy app/build.gradle is supported');
     }
-    mod.modResults.contents = applyAbiBuilds(applyReleaseSigning(mod.modResults.contents));
+    mod.modResults.contents = applyReproducibleDevServerIp(
+      applyAbiBuilds(applyReleaseSigning(mod.modResults.contents))
+    );
     return mod;
   });
 }
@@ -151,3 +176,4 @@ module.exports.resolveVersionCode = resolveVersionCode;
 module.exports.applyReleaseSigning = applyReleaseSigning;
 module.exports.applyAbiBuilds = applyAbiBuilds;
 module.exports.applyUniformNdk = applyUniformNdk;
+module.exports.applyReproducibleDevServerIp = applyReproducibleDevServerIp;

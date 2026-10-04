@@ -100,6 +100,28 @@ for apk in "$home_vagrant/unsigned/${APP_ID}_${VERSION_CODE}.apk" \
   fi
 done
 
+# Reproducibility guard: nothing about this machine may end up in the APK. F-Droid
+# rebuilds on other hosts, so an embedded IP or hostname makes the bytes differ (this
+# is how react_native_dev_server_ip broke v1.0.3).
+if [[ "$status" -eq 0 && -f "$OUT/lifts-fdroid-unsigned-$VERSION_CODE.apk" ]]; then
+  python3 - "$OUT/lifts-fdroid-unsigned-$VERSION_CODE.apk" "$(hostname)" $(hostname -I 2>/dev/null) <<'PY' || status=1
+import re, sys, zipfile
+apk, host, *ips = sys.argv[1:]
+needles = [ip for ip in ips if ip and not ip.startswith("127.")] + ([host] if len(host) >= 8 else [])
+leaks = []
+with zipfile.ZipFile(apk) as z:
+    for name in z.namelist():
+        data = z.read(name)
+        for needle in needles:
+            if re.search(rb"(?<![0-9A-Za-z.])" + re.escape(needle.encode()) + rb"(?![0-9A-Za-z])", data):
+                leaks.append(f"{needle} in {name}")
+if leaks:
+    print("::error::APK embeds build-host details, so other builders cannot reproduce it: " + "; ".join(leaks))
+    sys.exit(1)
+print(f"Reproducibility guard: no build-host IP/hostname in the APK (checked {', '.join(needles) or 'nothing'})")
+PY
+fi
+
 if [[ "$status" -ne 0 ]]; then
   echo "::error::fdroid build failed for $BUILD_SPEC (see fdroid-build.log in the uploaded artifact)"
   exit "$status"
