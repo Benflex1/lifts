@@ -10,6 +10,11 @@ GitHub Release notes for tag `vX.Y.Z`.
 ### Added
 - Optional Android backups after each completed workout, saved to a chosen folder with a manual backup action, status display, and retention of the newest 10 copies.
 
+## [1.0.4]
+
+### Fixed
+- Release APKs no longer contain the IP address of the machine that built them. React Native stores it for development builds; in release builds it only made the APK differ between builders, so F-Droid could not reproduce 1.0.3. The app itself is unchanged.
+
 ## [1.0.3]
 
 ### Changed
