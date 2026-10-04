@@ -3,9 +3,10 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const { toVersionCode, resolveVersionCode, applyReleaseSigning, applyAbiBuilds, applyUniformNdk } = require('../../plugins/withAndroidRelease') as {
+const { toVersionCode, resolveVersionCode, applyReleaseSigning, applyAbiBuilds, applyUniformNdk, applyReproducibleDevServerIp } = require('../../plugins/withAndroidRelease') as {
   applyAbiBuilds: (gradle: string) => string;
   applyUniformNdk: (rootGradle: string) => string;
+  applyReproducibleDevServerIp: (gradle: string) => string;
   toVersionCode: (version: unknown) => number;
   resolveVersionCode: (version: unknown, explicitVersionCode?: number) => number;
   applyReleaseSigning: (gradle: string) => string;
@@ -134,5 +135,27 @@ describe('applyUniformNdk', () => {
 
   it('fails loudly when the Expo template no longer matches', () => {
     assert.throws(() => applyUniformNdk('buildscript {}\n'), /no longer matches the expected Expo template/);
+  });
+});
+
+describe('applyReproducibleDevServerIp', () => {
+  const patched = applyReproducibleDevServerIp(applyReleaseSigning(template));
+
+  it("pins the dev server IP for release builds instead of the build host's address", () => {
+    assert.match(releaseBuildType(patched), /resValue "string", "react_native_dev_server_ip", "localhost"\n/);
+  });
+
+  it('leaves debug builds on the detected IP so they still reach Metro', () => {
+    const debugBuildType = patched.slice(patched.indexOf('buildTypes {'), patched.indexOf('\n        release {', patched.indexOf('buildTypes {')));
+    assert.doesNotMatch(debugBuildType, /react_native_dev_server_ip/);
+  });
+
+  it('keeps release signing intact and is idempotent', () => {
+    assert.match(releaseBuildType(patched), /signingConfig signingConfigs\.findByName\('release'\) \?: signingConfigs\.debug/);
+    assert.equal(applyReproducibleDevServerIp(patched), patched);
+  });
+
+  it('fails loudly when the Expo template no longer matches', () => {
+    assert.throws(() => applyReproducibleDevServerIp('android {}'), /no longer matches the expected Expo template/);
   });
 });
