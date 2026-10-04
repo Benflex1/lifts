@@ -28,6 +28,8 @@ Builds:
       - sed -i '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
         node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
       - npx expo prebuild --platform android --clean --no-install
+      - echo 'org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
+        >> android/gradle.properties
       - sed -i -e '/signingConfig /d' android/app/build.gradle
     scanignore:
       - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
@@ -55,6 +57,8 @@ Builds:
       - sed -i '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
         node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
       - npx expo prebuild --platform android --clean --no-install
+      - echo 'org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
+        >> android/gradle.properties
       - sed -i -e '/signingConfig /d' android/app/build.gradle
     scanignore:
       - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
@@ -82,6 +86,8 @@ Builds:
       - sed -i '/jvmToolchain\|JavaVersion/s/17/21/' node_modules/@react-native/gradle-plugin/*/build.gradle.kts
         node_modules/@react-native/gradle-plugin/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/utils/JdkConfiguratorUtils.kt
       - npx expo prebuild --platform android --clean --no-install
+      - echo 'org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8'
+        >> android/gradle.properties
       - sed -i -e '/signingConfig /d' android/app/build.gradle
     scanignore:
       - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
@@ -123,6 +129,10 @@ MaintainerNotes: |-
   Native Gradle plugin writes the build host's IP into react_native_dev_server_ip;
   the upstream plugin pins it for release builds, and upstream CI fails if a
   built APK contains the builder's IP or hostname.
+
+  Gradle's heap and metaspace are raised after prebuild (Expo's generated
+  gradle.properties caps metaspace at 512 MiB, which the release packaging step can
+  exceed); this does not change the build output.
 
   Node.js/npm come from Debian forky. React Native 0.86 pins NDK 27.1.12297006
   (r27b); the upstream plugin makes every native module (including expo-sqlite,
