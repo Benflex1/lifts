@@ -1,0 +1,3 @@
+First F-Droid release. This APK is byte-for-byte what F-Droid builds from source, signed with the Lifts key, so F-Droid and GitHub installs can update each other.
+
+- One APK per CPU architecture, and smaller thanks to code shrinking.

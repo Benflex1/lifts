@@ -7,6 +7,11 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.0.5]
+
+### Changed
+- Release APKs are now shrunk and optimized with R8, as F-Droid asked, so they are smaller. The app's features are unchanged.
+
 ## [1.0.4]
 
 ### Fixed
