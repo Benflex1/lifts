@@ -35,6 +35,7 @@ Builds:
       - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
       - node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
       - node_modules/react-native-safe-area-context/android/build.gradle
+      - node_modules/react-native-svg/android/build.gradle
     scandelete:
       - node_modules
     build:
@@ -64,6 +65,7 @@ Builds:
       - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
       - node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
       - node_modules/react-native-safe-area-context/android/build.gradle
+      - node_modules/react-native-svg/android/build.gradle
     scandelete:
       - node_modules
     build:
@@ -93,6 +95,7 @@ Builds:
       - node_modules/hermes-compiler/hermesc/linux64-bin/hermesc
       - node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle
       - node_modules/react-native-safe-area-context/android/build.gradle
+      - node_modules/react-native-svg/android/build.gradle
     scandelete:
       - node_modules
     build:
