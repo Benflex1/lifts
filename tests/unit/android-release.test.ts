@@ -159,3 +159,27 @@ describe('applyReproducibleDevServerIp', () => {
     assert.throws(() => applyReproducibleDevServerIp('android {}'), /no longer matches the expected Expo template/);
   });
 });
+
+describe('app.json permissions', () => {
+  const app = JSON.parse(readFileSync(join(__dirname, '../../app.json'), 'utf8')) as {
+    expo: { android: { permissions?: string[]; blockedPermissions?: string[] } };
+  };
+
+  it('blocks the permissions the Expo template adds that Lifts does not use', () => {
+    const blocked = app.expo.android.blockedPermissions ?? [];
+    for (const permission of [
+      'android.permission.SYSTEM_ALERT_WINDOW',
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+    ]) {
+      assert.ok(blocked.includes(permission), permission);
+    }
+  });
+
+  it('never blocks a permission Lifts requests', () => {
+    const blocked = app.expo.android.blockedPermissions ?? [];
+    for (const permission of app.expo.android.permissions ?? []) {
+      assert.ok(!blocked.includes(permission), permission);
+    }
+  });
+});

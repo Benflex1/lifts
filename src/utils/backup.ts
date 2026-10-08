@@ -1,3 +1,4 @@
+import { isDeviceLocalSetting } from './settings';
 import { DataSnapshot, Store, WorkoutDraft } from '../database/contract';
 import { DEFAULT_EXERCISES } from '../database/seedData';
 import { ActiveExercise, Exercise, ExerciseGymScope, Gym, Routine, RoutineExercise, Workout, WorkoutSet } from '../types';
@@ -617,7 +618,7 @@ export async function buildBackupJson(store?: Store): Promise<string> {
       !k.startsWith('migration_') &&
       !k.startsWith('automatic_backup_') &&
       k !== 'writer_lease' &&
-      k !== 'health_sync_enabled'
+      !isDeviceLocalSetting(k)
     ) {
       safeSettings[k] = v;
     }

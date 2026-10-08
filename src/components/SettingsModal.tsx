@@ -40,6 +40,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setGymTrackingEnabled,
     healthSyncEnabled,
     setHealthSyncEnabled,
+    remoteImagesEnabled,
+    setRemoteImagesEnabled,
   } = useSettings();
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
@@ -95,6 +97,18 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setIsSaving(true);
     try {
       await setGymTrackingEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoteImagesChange = async (enabled: boolean) => {
+    if (isSaving || enabled === remoteImagesEnabled) return;
+    setIsSaving(true);
+    try {
+      await setRemoteImagesEnabled(enabled);
     } catch {
       // Error handled by SettingsContext notification.
     } finally {
@@ -225,6 +239,27 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
             >
               <Text style={styles.manageButtonText}>Manage Gyms</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.settingHeaderRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.sectionTitle}>Exercise Photos</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Load exercise photos from GitHub. Off shows the built-in illustrations and stops those requests.
+                </Text>
+              </View>
+              <Switch
+                value={remoteImagesEnabled}
+                onValueChange={handleRemoteImagesChange}
+                disabled={isSaving}
+                trackColor={{ false: colors.control, true: colors.primary }}
+                thumbColor={remoteImagesEnabled ? colors.text : colors.textSecondary}
+                accessibilityLabel="Exercise Photos"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: remoteImagesEnabled, disabled: isSaving }}
+              />
+            </View>
           </View>
 
           {Platform.OS === 'android' && (

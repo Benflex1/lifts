@@ -386,6 +386,46 @@ describe('Backup Roundtrip & Merge Safety', () => {
     });
   });
 
+  it('keeps the exercise photo preference device-local across backup and restore', async () => {
+    for (const platform of ['native', 'web'] as const) {
+      const sourceFixture = await createStoreFixture(platform);
+      const protectedDestination = await createStoreFixture(platform);
+      const emptyDestination = await createStoreFixture(platform);
+      try {
+        await sourceFixture.store.setSetting('remote_exercise_images', 'false');
+        await sourceFixture.store.setSetting('unit', 'lb');
+
+        const exported = JSON.parse(await buildBackupJson(sourceFixture.store));
+        assert.equal(exported.settings.remote_exercise_images, undefined);
+        assert.equal(exported.settings.unit, 'lb');
+
+        await protectedDestination.store.setSetting('remote_exercise_images', 'true');
+        await restoreBackup(JSON.stringify({
+          ...exported,
+          settings: { ...exported.settings, remote_exercise_images: 'false' },
+        }), protectedDestination.store);
+        assert.equal(await protectedDestination.store.getSetting('remote_exercise_images'), 'true');
+
+        await restoreBackup(JSON.stringify({
+          ...exported,
+          settings: { ...exported.settings, remote_exercise_images: 'false' },
+        }), emptyDestination.store);
+        assert.equal(await emptyDestination.store.getSetting('remote_exercise_images'), null);
+
+        const emptySnapshot = await emptyDestination.store.readSnapshot();
+        await emptyDestination.store.mergeSnapshot({
+          ...emptySnapshot,
+          settings: { ...emptySnapshot.settings, remote_exercise_images: 'false' },
+        });
+        assert.equal(await emptyDestination.store.getSetting('remote_exercise_images'), null);
+      } finally {
+        await sourceFixture.dispose();
+        await protectedDestination.dispose();
+        await emptyDestination.dispose();
+      }
+    }
+  });
+
   it('keeps health sync opt-in device-local across backup and restore', async () => {
     for (const platform of ['native', 'web'] as const) {
       const sourceFixture = await createStoreFixture(platform);

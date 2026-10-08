@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { parseGymTrackingEnabled, parseHealthSyncEnabled } from '../../src/utils/settings';
+import { isDeviceLocalSetting, parseGymTrackingEnabled, parseHealthSyncEnabled, parseRemoteExerciseImagesEnabled } from '../../src/utils/settings';
 
 describe('gym tracking setting', () => {
   it('defaults to enabled and only disables for the persisted false value', () => {
@@ -20,5 +20,23 @@ describe('health sync setting', () => {
     assert.equal(parseHealthSyncEnabled('true', 'web'), false);
     assert.equal(parseHealthSyncEnabled('TRUE'), false);
     assert.equal(parseHealthSyncEnabled('unexpected'), false);
+  });
+});
+
+describe('remote exercise images setting', () => {
+  it('defaults to enabled and only disables for the persisted false value', () => {
+    assert.equal(parseRemoteExerciseImagesEnabled(null), true);
+    assert.equal(parseRemoteExerciseImagesEnabled('true'), true);
+    assert.equal(parseRemoteExerciseImagesEnabled('false'), false);
+    assert.equal(parseRemoteExerciseImagesEnabled('unexpected'), true);
+  });
+});
+
+describe('device-local settings', () => {
+  it('keeps per-device health and image-network preferences out of backups and restores', () => {
+    assert.equal(isDeviceLocalSetting('health_sync_enabled'), true);
+    assert.equal(isDeviceLocalSetting('remote_exercise_images'), true);
+    assert.equal(isDeviceLocalSetting('unit'), false);
+    assert.equal(isDeviceLocalSetting('gym_tracking_enabled'), false);
   });
 });

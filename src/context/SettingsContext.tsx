@@ -5,7 +5,7 @@ import { getSetting, setSetting } from '../database/db';
 import { useDialog } from './DialogContext';
 import { getPlatformHealthProvider, retryPendingHealthSyncs } from '../health';
 import { updateHealthSyncSetting } from '../health/settings';
-import { parseGymTrackingEnabled, parseHealthSyncEnabled } from '../utils/settings';
+import { parseGymTrackingEnabled, parseHealthSyncEnabled, parseRemoteExerciseImagesEnabled } from '../utils/settings';
 
 export interface SettingsContextType {
   unit: WeightUnit;
@@ -14,6 +14,8 @@ export interface SettingsContextType {
   setGymTrackingEnabled: (enabled: boolean) => Promise<void>;
   healthSyncEnabled: boolean;
   setHealthSyncEnabled: (enabled: boolean) => Promise<void>;
+  remoteImagesEnabled: boolean;
+  setRemoteImagesEnabled: (enabled: boolean) => Promise<void>;
   loading: boolean;
 }
 
@@ -24,6 +26,8 @@ const SettingsContext = createContext<SettingsContextType>({
   setGymTrackingEnabled: async () => {},
   healthSyncEnabled: false,
   setHealthSyncEnabled: async () => {},
+  remoteImagesEnabled: true,
+  setRemoteImagesEnabled: async () => {},
   loading: true,
 });
 
@@ -31,21 +35,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [unit, setUnitState] = useState<WeightUnit>('kg');
   const [gymTrackingEnabled, setGymTrackingEnabledState] = useState(true);
   const [healthSyncEnabled, setHealthSyncEnabledState] = useState(false);
+  const [remoteImagesEnabled, setRemoteImagesEnabledState] = useState(true);
   const [loading, setLoading] = useState(true);
   const { notify } = useDialog();
 
   useEffect(() => {
     (async () => {
       try {
-        const [storedUnit, storedGymTracking, storedHealthSync] = await Promise.all([
+        const [storedUnit, storedGymTracking, storedHealthSync, storedRemoteImages] = await Promise.all([
           getSetting('unit'),
           getSetting('gym_tracking_enabled'),
           getSetting('health_sync_enabled'),
+          getSetting('remote_exercise_images'),
         ]);
         if (storedUnit === 'kg' || storedUnit === 'lb') setUnitState(storedUnit);
         setGymTrackingEnabledState(parseGymTrackingEnabled(storedGymTracking));
         const persistedHealthSync = parseHealthSyncEnabled(storedHealthSync, Platform.OS);
         setHealthSyncEnabledState(persistedHealthSync);
+        setRemoteImagesEnabledState(parseRemoteExerciseImagesEnabled(storedRemoteImages));
         if (persistedHealthSync) {
           void retryPendingHealthSyncs().catch((error) => {
             console.error('Unable to retry pending health syncs', error);
@@ -89,6 +96,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [gymTrackingEnabled, notify]);
 
+  const setRemoteImagesEnabled = useCallback(async (enabled: boolean) => {
+    const previous = remoteImagesEnabled;
+    setRemoteImagesEnabledState(enabled);
+    try {
+      await setSetting('remote_exercise_images', enabled ? 'true' : 'false');
+    } catch (err: any) {
+      setRemoteImagesEnabledState(previous);
+      await notify({
+        title: 'Settings Error',
+        message: err?.message || 'Failed to save exercise photo setting.',
+      });
+      throw err;
+    }
+  }, [remoteImagesEnabled, notify]);
+
   const setHealthSyncEnabled = useCallback(async (enabled: boolean) => {
     await updateHealthSyncSetting(enabled, healthSyncEnabled, {
       loadProvider: getPlatformHealthProvider,
@@ -111,6 +133,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setGymTrackingEnabled,
         healthSyncEnabled,
         setHealthSyncEnabled,
+        remoteImagesEnabled,
+        setRemoteImagesEnabled,
         loading,
       }}
     >

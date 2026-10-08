@@ -1,3 +1,4 @@
+import { isDeviceLocalSetting } from './settings';
 import { Store, DataSnapshot, WorkoutDraft } from '../database/contract';
 import { parseBackup, BackupV3 } from './backup';
 import { Exercise, ExerciseGymScope, Routine, Workout } from '../types';
@@ -239,7 +240,7 @@ export async function computeRestorePlan(
   const settingsToInsert: Record<string, string> = {};
   let newSettingsCount = 0;
   for (const [k, v] of Object.entries(remappedBackup.settings || {})) {
-    if (k === 'health_sync_enabled') continue;
+    if (isDeviceLocalSetting(k)) continue;
     if (existing.settings[k] === undefined) {
       settingsToInsert[k] = v;
       newSettingsCount++;

@@ -1,3 +1,4 @@
+import { isDeviceLocalSetting } from '../utils/settings';
 import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
@@ -1433,7 +1434,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const sStore = tx.objectStore('settings');
       for (const [k, v] of Object.entries(snapshot.settings)) {
-        if (k === 'health_sync_enabled') continue;
+        if (isDeviceLocalSetting(k)) continue;
         const getReq = sStore.get(k);
         getReq.onsuccess = () => {
           if (!getReq.result) {
