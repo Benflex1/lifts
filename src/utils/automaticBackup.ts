@@ -1,12 +1,12 @@
 import { Platform } from 'react-native';
 import { getSetting, setSetting } from '../database/db';
 import { buildBackupJson, MAX_BACKUP_SIZE_BYTES } from './backup';
+import { backupTimestampFromUri } from './automaticBackupNames';
 
 const DIRECTORY_KEY = 'automatic_backup_directory_uri';
 const ENABLED_KEY = 'automatic_backup_enabled';
 const LAST_SUCCESS_KEY = 'automatic_backup_last_success_at';
 const LAST_ERROR_KEY = 'automatic_backup_last_error';
-const BACKUP_FILE_PATTERN = /lifts-backup-(\d{17})\.json/i;
 const RETAINED_BACKUPS = 10;
 
 export interface AutomaticBackupState {
@@ -92,7 +92,7 @@ async function performAutomaticBackup(force: boolean, now: Date): Promise<boolea
     await setSetting(LAST_SUCCESS_KEY, now.toISOString());
 
     const backupUris = (await storage.readDirectoryAsync(state.directoryUri))
-      .map((uri) => ({ uri, timestamp: uri.match(BACKUP_FILE_PATTERN)?.[1] ?? null }))
+      .map((uri) => ({ uri, timestamp: backupTimestampFromUri(uri) }))
       .filter((item): item is { uri: string; timestamp: string } => item.timestamp !== null)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
