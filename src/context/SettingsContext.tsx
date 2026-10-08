@@ -26,7 +26,7 @@ const SettingsContext = createContext<SettingsContextType>({
   setGymTrackingEnabled: async () => {},
   healthSyncEnabled: false,
   setHealthSyncEnabled: async () => {},
-  remoteImagesEnabled: true,
+  remoteImagesEnabled: false,
   setRemoteImagesEnabled: async () => {},
   loading: true,
 });
@@ -35,7 +35,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [unit, setUnitState] = useState<WeightUnit>('kg');
   const [gymTrackingEnabled, setGymTrackingEnabledState] = useState(true);
   const [healthSyncEnabled, setHealthSyncEnabledState] = useState(false);
-  const [remoteImagesEnabled, setRemoteImagesEnabledState] = useState(true);
+  // Off until the stored preference is read, so a slow or failed read never fetches photos the user turned off.
+  const [remoteImagesEnabled, setRemoteImagesEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const { notify } = useDialog();
 
