@@ -30,7 +30,7 @@ import { EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { openExerciseInstructionLink } from '../utils/exercise-links';
 import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
-import { getExerciseVisual } from '../utils/exercise-media';
+import { getExerciseVisual, resolveExerciseVisual } from '../utils/exercise-media';
 import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { colors } from '../theme';
@@ -57,7 +57,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   refreshKey,
 }) => {
   const insets = useSafeAreaInsets();
-  const { unit, gymTrackingEnabled } = useSettings();
+  const { unit, gymTrackingEnabled, remoteImagesEnabled } = useSettings();
   const { notify, confirm } = useDialog();
 
   const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
@@ -198,7 +198,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     return null;
   }
 
-  const visualDescriptor = getExerciseVisual(exercise);
+  const visualDescriptor = resolveExerciseVisual(getExerciseVisual(exercise), remoteImagesEnabled);
   const hasTwoFrames =
     visualDescriptor.kind === 'remote-image' &&
     Array.isArray(visualDescriptor.imageUrls) &&

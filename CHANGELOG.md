@@ -9,6 +9,10 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ### Added
 - Optional Android backups after each completed workout, saved to a chosen folder with a manual backup action, status display, and retention of the newest 10 copies.
+- Settings switch to turn off exercise photos downloaded from GitHub. When off, exercises show the built-in illustrations.
+
+### Changed
+- Android builds no longer request the draw-over-other-apps or legacy storage permissions that the Expo template adds.
 
 ## [1.0.4]
 

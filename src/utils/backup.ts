@@ -1,3 +1,4 @@
+import { isBackupExcludedSetting } from './settings';
 import { DataSnapshot, Store, WorkoutDraft } from '../database/contract';
 import { DEFAULT_EXERCISES } from '../database/seedData';
 import { ActiveExercise, Exercise, ExerciseGymScope, Gym, Routine, RoutineExercise, Workout, WorkoutSet } from '../types';
@@ -611,14 +612,7 @@ export async function buildBackupJson(store?: Store): Promise<string> {
 
   const safeSettings: Record<string, string> = {};
   for (const [k, v] of Object.entries(snapshot.settings || {})) {
-    if (
-      !k.startsWith('schema_') &&
-      !k.startsWith('writer_') &&
-      !k.startsWith('migration_') &&
-      !k.startsWith('automatic_backup_') &&
-      k !== 'writer_lease' &&
-      k !== 'health_sync_enabled'
-    ) {
+    if (!isBackupExcludedSetting(k)) {
       safeSettings[k] = v;
     }
   }

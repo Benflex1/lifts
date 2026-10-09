@@ -1,4 +1,4 @@
-<p>Lifts is a free and open-source gym workout tracker. There are no paywalls, subscriptions, accounts, ads, or trackers, and everything works offline in a basement gym with no signal.</p>
+<p>Lifts is a free and open-source gym workout tracker. There are no paywalls, subscriptions, accounts, ads, or trackers, and logging works offline in a basement gym with no signal.</p>
 
 <p><b>Log workouts quickly</b></p>
 <ul>
@@ -30,6 +30,7 @@
 <p><b>Own your data</b></p>
 <ul>
 <li>All data stays on your device</li>
+<li>Exercise photos download from GitHub when you are online. Turn them off in Settings to show the built-in illustrations only.</li>
 <li>Full backup and restore to a file</li>
 <li>Import from Hevy, Strong, Lyfta, FitNotes, or any CSV</li>
 <li>Optional export of finished workouts to Health Connect. Lifts never reads your health data.</li>

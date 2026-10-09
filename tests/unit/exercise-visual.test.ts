@@ -90,6 +90,8 @@ async function loadBoundary(t: { mock: { module: (specifier: string, options: { 
   return import('../../src/components/ExerciseVisualErrorBoundary');
 }
 
+let remoteImagesEnabled = true;
+
 describe('ExerciseVisual runtime guard', () => {
   it('renders the existing dumbbell icon at the requested size after a child error', async (t) => {
     if (typeof t.mock.module !== 'function') {
@@ -124,6 +126,7 @@ describe('ExerciseVisual runtime guard', () => {
       exports: { ExerciseVisualErrorBoundary: ({ children }: { children: unknown }) => children },
     });
 
+    t.mock.module('../../src/context/SettingsContext', { exports: { useSettings: () => ({ remoteImagesEnabled }) } });
     const { ExerciseVisual } = await import('../../src/components/ExerciseVisual');
     const bundled = (await import('../../src/database/seedData')).DEFAULT_EXERCISES[0];
     const root = ExerciseVisual({ exercise: bundled }) as unknown as { props: { children: { props: { children: { props: Record<string, unknown>; type: (props: Record<string, unknown>) => unknown } } } } };
@@ -157,6 +160,7 @@ describe('ExerciseVisual runtime guard', () => {
       exports: { ExerciseVisualErrorBoundary: ({ children }: { children: unknown }) => children },
     });
 
+    t.mock.module('../../src/context/SettingsContext', { exports: { useSettings: () => ({ remoteImagesEnabled }) } });
     const { ExerciseVisual } = await import('../../src/components/ExerciseVisual');
     const bundled = (await import('../../src/database/seedData')).DEFAULT_EXERCISES[0];
     const root = ExerciseVisual({ exercise: bundled, frameIndex: 1 }) as unknown as { props: { children: { props: { children: { props: Record<string, unknown>; type: (props: Record<string, unknown>) => unknown } } } } };
@@ -215,6 +219,7 @@ describe('ExerciseVisual runtime guard', () => {
       frameEvents.push(index);
     };
 
+    t.mock.module('../../src/context/SettingsContext', { exports: { useSettings: () => ({ remoteImagesEnabled }) } });
     const { ExerciseVisual } = await import('../../src/components/ExerciseVisual');
     const bundled = (await import('../../src/database/seedData')).DEFAULT_EXERCISES[0];
     const root = ExerciseVisual({
@@ -245,5 +250,34 @@ describe('ExerciseVisual runtime guard', () => {
     assert.deepEqual(frameEvents, [1, 0, 1]);
 
     harness.reset();
+  });
+
+  it('renders the generated illustration instead of a remote photo when remote images are off', async (t) => {
+    if (typeof t.mock.module !== 'function') {
+      t.skip('Node module mocks are required to isolate React Native in Node');
+      return;
+    }
+
+    t.mock.module('react', { exports: harness.React });
+    t.mock.module('react-native', { exports: { Image, View, StyleSheet: { create: (styles: unknown) => styles } } });
+    t.mock.module('react-native-svg', { exports: SvgExports });
+    t.mock.module('../../src/components/ExerciseVisualErrorBoundary', {
+      exports: { ExerciseVisualErrorBoundary: ({ children }: { children: unknown }) => children },
+    });
+    t.mock.module('../../src/context/SettingsContext', { exports: { useSettings: () => ({ remoteImagesEnabled }) } });
+
+    const { ExerciseVisual } = await import('../../src/components/ExerciseVisual');
+    const bundled = (await import('../../src/database/seedData')).DEFAULT_EXERCISES[0];
+    const root = ExerciseVisual({ exercise: bundled }) as unknown as { props: { children: { props: { children: { type: (props: Record<string, unknown>) => unknown; props: Record<string, unknown> } } } } };
+    const content = root.props.children.props.children;
+
+    remoteImagesEnabled = false;
+    try {
+      const rendered = content.type(content.props) as { props: Record<string, unknown> };
+      assert.equal(rendered.props.descriptor, undefined, 'no remote image descriptor is rendered');
+      assert.equal(rendered.props.template, 'core', 'the generated fallback uses the exercise template');
+    } finally {
+      remoteImagesEnabled = true;
+    }
   });
 });
