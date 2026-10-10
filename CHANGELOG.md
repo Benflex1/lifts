@@ -13,6 +13,12 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ### Changed
 - Android builds no longer request the draw-over-other-apps or legacy storage permissions that the Expo template adds.
+- Android rests end with a vibration cue instead of a notification: a pulse at 3, 2 and 1 seconds left and a harder buzz at 0. It plays on time with the phone locked or the app closed. Lifts no longer asks for notification permission on Android.
+- On the first rest, Android 14 and later ask once to allow alarms, which keeps the cue on time.
+
+### Fixed
+- The Android rest countdown buzz no longer depends on the app being on screen or on the system touch-vibration setting, which made it unreliable and silent on the lock screen.
+- Adding or subtracting time during a rest keeps the progress bar in place.
 
 ## [1.0.4]
 

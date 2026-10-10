@@ -6,10 +6,11 @@ import android.content.Intent
 
 class RestAlarmReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
-    RestAlarm.showNotification(
-      context,
-      intent.getStringExtra(RestAlarm.EXTRA_TITLE) ?: "Rest Finished!",
-      intent.getStringExtra(RestAlarm.EXTRA_BODY) ?: "Time for your next set."
-    )
+    val endsAt = intent.getLongExtra(RestAlarm.EXTRA_ENDS_AT, -1L)
+    if (endsAt <= 0L) return
+    // Keeps the broadcast, and with it the alarm's wake lock and the process, alive for the ~4s the
+    // pulses take to play.
+    val pending = goAsync()
+    RestAlarm.playCue(context.applicationContext, endsAt, onDone = { pending.finish() })
   }
 }

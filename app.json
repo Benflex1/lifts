@@ -23,8 +23,7 @@
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "android.permission.health.WRITE_EXERCISE",
-        "android.permission.VIBRATE",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.VIBRATE"
       ],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",

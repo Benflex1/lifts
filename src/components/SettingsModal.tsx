@@ -353,7 +353,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>On-time rest alerts</Text>
               <Text style={styles.sectionSubtitle}>
-                Android can delay rest-timer alerts while your phone is locked. Allow Lifts to set alarms and reminders so they arrive on time.
+                Android can delay the end-of-rest buzz while your phone is locked. Allow Lifts to set alarms and reminders so it buzzes on time.
               </Text>
               <TouchableOpacity
                 style={styles.manageButton}
