@@ -1,5 +1,5 @@
 import type { RestAlarmNativeModule } from '../../modules/rest-alarm/RestAlarm.types';
-import { restNotificationContent } from './restNotificationContent';
+import { restCountdownContent, restNotificationContent } from './restNotificationContent';
 
 export type ExactAlarmStatus = 'granted' | 'denied' | 'unsupported';
 
@@ -42,8 +42,9 @@ export function createAndroidRestNotifications(
     if (endsAtMs - now() <= MIN_SCHEDULE_LEAD_MS) return null;
 
     const { title, body } = restNotificationContent(exerciseName);
+    const countdown = restCountdownContent(exerciseName);
     try {
-      await native.schedule(endsAtMs, title, body);
+      await native.schedule(endsAtMs, title, body, countdown.title, countdown.body);
       return 'rest-alarm';
     } catch (e) {
       console.warn('Failed to schedule rest notification:', e);

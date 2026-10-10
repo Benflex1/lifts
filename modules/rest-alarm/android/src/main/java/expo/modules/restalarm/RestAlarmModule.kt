@@ -55,8 +55,13 @@ class RestAlarmModule : Module() {
       true
     }
 
-    AsyncFunction("schedule") { triggerAtMillis: Double, title: String, body: String ->
-      RestAlarm.schedule(context, triggerAtMillis.toLong(), title, body)
+    AsyncFunction("schedule") {
+        triggerAtMillis: Double,
+        title: String,
+        body: String,
+        countdownTitle: String,
+        countdownBody: String ->
+      RestAlarm.schedule(context, triggerAtMillis.toLong(), title, body, countdownTitle, countdownBody)
     }
 
     AsyncFunction("cancel") {

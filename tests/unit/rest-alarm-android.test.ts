@@ -9,7 +9,13 @@ const NOW = 1_700_000_000_000;
 
 function fakeNative(overrides: Partial<RestAlarmNativeModule> = {}) {
   const calls: string[] = [];
-  const scheduled: Array<{ triggerAtMs: number; title: string; body: string }> = [];
+  const scheduled: Array<{
+    triggerAtMs: number;
+    title: string;
+    body: string;
+    countdownTitle: string;
+    countdownBody: string;
+  }> = [];
   const native: RestAlarmNativeModule = {
     areNotificationsEnabled: () => {
       calls.push('areNotificationsEnabled');
@@ -24,9 +30,9 @@ function fakeNative(overrides: Partial<RestAlarmNativeModule> = {}) {
       calls.push('openExactAlarmSettings');
       return true;
     },
-    schedule: async (triggerAtMs, title, body) => {
+    schedule: async (triggerAtMs, title, body, countdownTitle, countdownBody) => {
       calls.push('schedule');
-      scheduled.push({ triggerAtMs, title, body });
+      scheduled.push({ triggerAtMs, title, body, countdownTitle, countdownBody });
       return true;
     },
     cancel: async () => {
@@ -47,8 +53,22 @@ describe('Android rest notifications', () => {
     assert.equal(id, 'rest-alarm');
     assert.deepEqual(calls.slice(-2), ['cancel', 'schedule']);
     assert.deepEqual(scheduled, [
-      { triggerAtMs: NOW + 90_000, title: 'Rest Finished!', body: 'Time for your next set of Bench Press.' },
+      {
+        triggerAtMs: NOW + 90_000,
+        title: 'Rest Finished!',
+        body: 'Time for your next set of Bench Press.',
+        countdownTitle: 'Resting',
+        countdownBody: 'Up next: Bench Press',
+      },
     ]);
+  });
+
+  it('passes a countdown that names the next set when no exercise is known', async () => {
+    const { native, scheduled } = fakeNative();
+    await createAndroidRestNotifications(native, () => NOW).scheduleRestNotification(NOW + 60_000);
+
+    assert.equal(scheduled[0].countdownTitle, 'Resting');
+    assert.equal(scheduled[0].countdownBody, 'Up next: your next set');
   });
 
   it('only cancels when the rest ends within a second', async () => {
@@ -118,6 +138,28 @@ describe('Android rest notifications', () => {
     assert.equal(notifications.getExactAlarmStatus(), 'denied');
     assert.equal(notifications.openExactAlarmSettings(), true);
     assert.deepEqual(denied.calls, ['openExactAlarmSettings']);
+  });
+});
+
+describe('Rest alarm native bridge', () => {
+  // The Kotlin module cannot be compiled in this repo's test run, so check that its schedule
+  // parameters line up with the TypeScript signature the JS side calls.
+  const root = join(__dirname, '../..');
+
+  it('takes the same schedule arguments in Kotlin as in the TypeScript interface', () => {
+    const kotlin = readFileSync(
+      join(root, 'modules/rest-alarm/android/src/main/java/expo/modules/restalarm/RestAlarmModule.kt'),
+      'utf8'
+    );
+    const types = readFileSync(join(root, 'modules/rest-alarm/RestAlarm.types.ts'), 'utf8');
+
+    const kotlinParams = kotlin.match(/AsyncFunction\("schedule"\)\s*\{([^]*?)->/)?.[1] ?? '';
+    const tsParams = types.match(/schedule\(([^)]*)\)\s*:\s*Promise/)?.[1] ?? '';
+    const names = (params: string) => [...params.matchAll(/(\w+)\s*:/g)].map((m) => m[1]);
+
+    assert.ok(names(kotlinParams).length > 0, 'Kotlin schedule parameters not found');
+    assert.deepEqual(names(kotlinParams).slice(1), names(tsParams).slice(1));
+    assert.equal(names(kotlinParams).length, names(tsParams).length);
   });
 });
 

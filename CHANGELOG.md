@@ -10,9 +10,16 @@ GitHub Release notes for tag `vX.Y.Z`.
 ### Added
 - Optional Android backups after each completed workout, saved to a chosen folder with a manual backup action, status display, and retention of the newest 10 copies.
 - Settings switch to turn off exercise photos downloaded from GitHub. When off, exercises show the built-in illustrations.
+- Android shows a rest countdown with the next exercise on the lock screen while the app is in the background.
 
 ### Changed
 - Android builds no longer request the draw-over-other-apps or legacy storage permissions that the Expo template adds.
+- The last three seconds of a rest give a double pulse on each count.
+
+### Fixed
+- Rest-end alerts on Android now arrive with the phone locked, even after you returned to the app during the rest. Previously returning to the app cancelled the alert.
+- A rest that ends while the app is open no longer also posts a system notification on top of the in-app buzz.
+- Adding or subtracting time during a rest keeps the progress bar in place, and the notification keeps the exercise name.
 
 ## [1.0.4]
 
