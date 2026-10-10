@@ -13,6 +13,7 @@ on:
       - '.github/workflows/fdroid.yml'
       - 'scripts/fdroid-buildserver-check.sh'
       - 'scripts/fdroid-version-code.py'
+      - 'scripts/android-smoke-test.sh'
       - 'app.json'
       - 'package.json'
       - 'package-lock.json'
@@ -49,4 +50,44 @@ jobs:
         with:
           name: fdroid-build-${{ matrix.abi }}-${{ github.sha }}
           path: fdroid-check-output/
+          if-no-files-found: warn
+
+  smoke-test:
+    # Launch the F-Droid-built APK: byte comparisons cannot catch a reproducible but
+    # broken build (v1.0.2-1.0.4 per-ABI APKs crashed on launch).
+    needs: fdroid-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download x86_64 F-Droid build
+        uses: actions/download-artifact@v4
+        with:
+          name: fdroid-build-x86_64-${{ github.sha }}
+          path: smoke-apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch on an Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash scripts/android-smoke-test.sh "$(ls smoke-apk/*.apk | head -n 1)" smoke.png
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-screenshot-${{ github.sha }}
+          path: smoke.png
           if-no-files-found: warn
