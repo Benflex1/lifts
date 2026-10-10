@@ -20,7 +20,7 @@ import { smartSearchExercises } from '../utils/search';
 import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
-import { DEFAULT_TRACKING_TYPE, isTrackingType } from '../workout/tracking';
+import { DEFAULT_TRACKING_TYPE, EXERCISE_TRACKING_TYPES_KEY, isTrackingType } from '../workout/tracking';
 import {
   DEFAULT_GYM_COLOR,
   isActiveWorkoutForGym,
@@ -1537,11 +1537,13 @@ export function createNativeStore(driver: SqliteDriver): Store {
           );
         }
 
-        // Merge settings (only missing keys)
+        // Merge settings (only missing keys; per-exercise tracking types arrive already merged)
         for (const [k, v] of Object.entries(snapshot.settings)) {
           if (isDeviceLocalSetting(k)) continue;
           await driver.runAsync(
-            'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
+            k === EXERCISE_TRACKING_TYPES_KEY
+              ? 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
+              : 'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
             k,
             v
           );
