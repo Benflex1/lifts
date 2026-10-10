@@ -1,4 +1,4 @@
-import { ActiveExercise, Exercise, TrackingType, WorkoutSet } from '../types';
+import { ActiveExercise, Exercise, SetType, TrackingType, WorkoutSet } from '../types';
 import { formatWeight, WeightUnit } from '../utils/units';
 
 // Exercise tracking types are opt-in. With the setting off (the default) every exercise logs as
@@ -281,21 +281,30 @@ export function hasTrackedValues(set: TrackedSetValues | undefined): boolean {
 
 // --- Previous-session suggestions -------------------------------------------------------------
 
-type PreviousTrackedFields = Pick<WorkoutSet, 'previousDurationSeconds' | 'previousDistanceM'>;
+type PreviousTrackedFields = Pick<WorkoutSet, 'previousDurationSeconds' | 'previousDistanceM' | 'previousType' | 'previousRpe'>;
 
 /**
- * Replaces a set's previous time and distance with a suggestion's. Sets logged as weight × reps
- * never gain these keys, so they stay exactly as they were before tracking types existed.
+ * Replaces a set's previous time, distance, set type and RPE with a suggestion's. Sets logged as
+ * weight × reps never gain the time and distance keys, so they stay exactly as they were before
+ * tracking types existed.
  */
 export function withPreviousTracked<T extends PreviousTrackedFields>(
   set: T,
-  source: { durationSeconds?: number; distanceM?: number } | undefined,
+  source: { durationSeconds?: number; distanceM?: number; type?: SetType; rpe?: number } | undefined,
 ): T {
-  const { previousDurationSeconds: _duration, previousDistanceM: _distance, ...rest } = set;
+  const {
+    previousDurationSeconds: _duration,
+    previousDistanceM: _distance,
+    previousType: _type,
+    previousRpe: _rpe,
+    ...rest
+  } = set;
   return {
     ...rest,
     ...(source?.durationSeconds !== undefined ? { previousDurationSeconds: source.durationSeconds } : {}),
     ...(source?.distanceM !== undefined ? { previousDistanceM: source.distanceM } : {}),
+    ...(source?.type !== undefined ? { previousType: source.type } : {}),
+    ...(source?.rpe !== undefined && source.rpe !== null ? { previousRpe: source.rpe } : {}),
   } as T;
 }
 

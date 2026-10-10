@@ -43,6 +43,8 @@ export interface PreviousSetSuggestion {
   reps: number;
   durationSeconds?: number;
   distanceM?: number;
+  type?: SetType;
+  rpe?: number;
   sourceGymId?: string;
   sourceGymName?: string;
 }
@@ -63,6 +65,8 @@ export interface WorkoutSet {
   previousReps?: number;
   previousDurationSeconds?: number;
   previousDistanceM?: number;
+  previousType?: SetType; // last session's set type, used for overload suggestions
+  previousRpe?: number;
   previousGymId?: string;
   previousGymName?: string;
   isWeightEdited?: boolean;

@@ -1098,6 +1098,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
                 reps: set.reps,
                 ...(set.durationSeconds !== undefined ? { durationSeconds: set.durationSeconds } : {}),
                 ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+                type: set.type,
+                ...(set.rpe !== undefined && set.rpe !== null ? { rpe: set.rpe } : {}),
               })) || [],
           };
         });
