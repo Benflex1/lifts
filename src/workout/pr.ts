@@ -452,6 +452,45 @@ export class PRHistoryIndex implements PriorRecordSource {
 }
 
 /**
+ * Indexes the prior records for a workout that is still being logged. Every completed workout
+ * other than the active one counts, whatever its start time: a resumed draft or an edited
+ * duration can leave the active workout starting before workouts that were already saved, and
+ * those records still stand.
+ */
+export function buildActiveWorkoutRecordIndex(
+  historyByExercise: Record<string, Workout[]>,
+  activeWorkoutId: string | undefined
+): PRHistoryIndex {
+  const index = new PRHistoryIndex();
+  const loadedExerciseIds = new Set(Object.keys(historyByExercise));
+  const added = new Set<string>();
+  for (const list of Object.values(historyByExercise)) {
+    for (const workout of list) {
+      if (workout.id === activeWorkoutId || added.has(workout.id)) continue;
+      added.add(workout.id);
+      index.add(workout, loadedExerciseIds);
+    }
+  }
+  return index;
+}
+
+/**
+ * Ranks the sets of a workout that is still being logged. Exercises whose history has not loaded
+ * yet are skipped; ranking them against an empty history would flag every set as a new record.
+ */
+export function evaluateActiveWorkoutPRs(
+  workout: Workout,
+  historyByExercise: Record<string, Workout[]>,
+  index: PriorRecordSource,
+  gyms: Gym[],
+  gymTrackingEnabled: boolean,
+  scopesByExercise?: Record<string, ExerciseGymScope | undefined>
+): WorkoutPRSummary {
+  const loaded = { ...workout, exercises: workout.exercises.filter((ex) => ex.exerciseId in historyByExercise) };
+  return evaluateWorkoutPRsWithSource(loaded, index, gyms, gymTrackingEnabled, scopesByExercise);
+}
+
+/**
  * Evaluates PRs for every workout in one chronological pass. Equivalent to calling
  * evaluateWorkoutPRs for each workout against the full history, but linear in history size
  * instead of quadratic.
