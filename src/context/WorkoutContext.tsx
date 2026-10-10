@@ -1241,8 +1241,19 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
+    // Completed sets that don't hold the new type's values go back to unchecked, so the
+    // workout never stores a completed set that later edits would reject.
     const updatedExercises = state.workout.exercises.map((ex) =>
-      ex.id === activeExerciseId ? withTrackingType(ex, type) : ex
+      ex.id === activeExerciseId
+        ? withTrackingType({
+            ...ex,
+            sets: ex.sets.map((s) =>
+              s.isCompleted && validateTrackedSet(s, type)
+                ? { ...s, isCompleted: false, completedAt: undefined }
+                : s
+            ),
+          }, type)
+        : ex
     );
     const updated: Workout = {
       ...state.workout,

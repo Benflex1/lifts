@@ -159,7 +159,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setExerciseTrackingType = useCallback(async (exerciseId: string, type: TrackingType) => {
     const previous = trackingTypeOverrides;
-    const next = { ...previous, [exerciseId]: type };
+    // Start from what is stored, so choices a backup restore merged in since launch are kept.
+    let stored = previous;
+    try {
+      stored = parseTrackingTypeOverrides(await getSetting(EXERCISE_TRACKING_TYPES_KEY));
+    } catch (_) {}
+    const next = { ...stored, [exerciseId]: type };
     setTrackingTypeOverridesState(next);
     try {
       await setSetting(EXERCISE_TRACKING_TYPES_KEY, serializeTrackingTypeOverrides(next));
