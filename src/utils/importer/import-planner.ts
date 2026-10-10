@@ -1,9 +1,21 @@
 import { DataSnapshot } from '../../database/contract';
 import { validateSnapshotForMerge } from '../../database/snapshot-validation';
-import { ActiveExercise, Exercise, Workout, WorkoutSet } from '../../types';
+import { ActiveExercise, Exercise, TrackingType, Workout, WorkoutSet } from '../../types';
+import { DEFAULT_TRACKING_TYPE, exerciseVolumeKg, withTrackingType } from '../../workout/tracking';
 import { createScopedId } from '../ids';
 import { parseWorkoutCsv } from './csv-parser';
 import { CsvImportOptions, CsvImportPreview } from './types';
+
+/**
+ * Imported sets with a time or distance but no weight or reps came from a timed or cardio
+ * exercise, so they keep that type. Everything else imports as weight × reps, as before.
+ */
+export function inferImportedTrackingType(sets: WorkoutSet[]): TrackingType {
+  const hasTimeOrDistance = sets.some((set) => (set.durationSeconds ?? 0) > 0 || (set.distanceM ?? 0) > 0);
+  const hasLoadOrReps = sets.some((set) => set.weightKg > 0 || set.reps > 0);
+  if (!hasTimeOrDistance || hasLoadOrReps) return DEFAULT_TRACKING_TYPE;
+  return sets.some((set) => (set.distanceM ?? 0) > 0) ? 'distance_duration' : 'duration';
+}
 
 export function computeCsvImportPlan(
   csvText: string,
@@ -59,7 +71,6 @@ export function computeCsvImportPlan(
         const pSet = group.sets[sIdx];
         const setId = createScopedId('set');
         totalSetsCount++;
-        workoutVolumeKg += pSet.weightKg * pSet.reps;
 
         sets.push({
           id: setId,
@@ -67,20 +78,24 @@ export function computeCsvImportPlan(
           type: pSet.type,
           weightKg: pSet.weightKg,
           reps: pSet.reps,
+          ...(pSet.durationSeconds !== undefined ? { durationSeconds: pSet.durationSeconds } : {}),
+          ...(pSet.distanceM !== undefined ? { distanceM: pSet.distanceM } : {}),
           rpe: pSet.rpe,
           isCompleted: true,
           completedAt: session.startTime,
         });
       }
 
-      activeExercises.push({
+      const activeExercise = withTrackingType<ActiveExercise>({
         id: activeExerciseId,
         exerciseId: group.matchedExercise.id,
         exercise: group.matchedExercise,
         sets,
         restTimerSeconds: 0,
         notes: group.notes,
-      });
+      }, inferImportedTrackingType(sets));
+      workoutVolumeKg += exerciseVolumeKg(activeExercise);
+      activeExercises.push(activeExercise);
     }
 
     workoutsToInsert.push({
