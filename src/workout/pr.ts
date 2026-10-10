@@ -2,9 +2,27 @@ import { Exercise, ExerciseGymScope, Gym, Workout, WorkoutSet } from '../types';
 import { calculate1RM } from '../utils/calculator';
 import { formatWeight, WeightUnit } from '../utils/units';
 import { getAllowedGymIds, resolveExerciseScope } from './gym-scope';
+import {
+  distanceUnitFor,
+  formatDistance,
+  formatSetDuration,
+  getTrackingType,
+  setRecordValues,
+  SetRecordValues,
+} from './tracking';
+import type { TrackingType } from '../types';
 
 export type PRRank = 1 | 2 | 3; // 1 = Gold, 2 = Silver, 3 = Bronze
-export type PRMetric = 'weight' | '1rm' | 'volume' | 'reps';
+export type PRMetric = 'weight' | '1rm' | 'volume' | 'reps' | 'duration' | 'distance';
+
+export const PR_METRICS: PRMetric[] = ['weight', '1rm', 'volume', 'reps', 'duration', 'distance'];
+
+function recordValues(
+  set: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>,
+  type: TrackingType,
+): SetRecordValues {
+  return setRecordValues(set, type, (weightKg, reps) => calculate1RM(weightKg, reps).average);
+}
 export type PRScope = 'global' | 'gym';
 
 export interface PRAchievement {
@@ -29,6 +47,12 @@ export interface ExerciseLeaderboard {
   '1rm': number[];
   volume: number[];
   reps: number[];
+  duration: number[];
+  distance: number[];
+}
+
+function emptyLeaderboard(): ExerciseLeaderboard {
+  return { weight: [], '1rm': [], volume: [], reps: [], duration: [], distance: [] };
 }
 
 export interface WorkoutPRAchievementItem {
@@ -38,6 +62,9 @@ export interface WorkoutPRAchievementItem {
   setNumber: number;
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
+  trackingType?: TrackingType;
   achievement: PRAchievement;
 }
 
@@ -119,10 +146,7 @@ export function extractLeaderboard(
   gymFilter: Set<string> | null,
   beforeStartTime?: string
 ): ExerciseLeaderboard {
-  const weights = new Set<number>();
-  const oneRMs = new Set<number>();
-  const volumes = new Set<number>();
-  const reps = new Set<number>();
+  const values = Object.fromEntries(PR_METRICS.map((metric) => [metric, new Set<number>()])) as Record<PRMetric, Set<number>>;
 
   for (const w of workouts) {
     if (beforeStartTime && w.startTime >= beforeStartTime) continue;
@@ -130,29 +154,21 @@ export function extractLeaderboard(
 
     for (const ex of w.exercises) {
       if (ex.exerciseId !== exerciseId) continue;
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets) {
         if (!s.isCompleted || s.type === 'warmup') continue;
-
-        if (s.weightKg > 0) {
-          weights.add(s.weightKg);
-          if (s.reps > 0) {
-            oneRMs.add(calculate1RM(s.weightKg, s.reps).average);
-            volumes.add(s.weightKg * s.reps);
-          }
-        } else if (s.reps > 0) {
-          reps.add(s.reps);
+        const setValues = recordValues(s, trackingType);
+        for (const metric of PR_METRICS) {
+          if (setValues[metric] > 0) values[metric].add(setValues[metric]);
         }
       }
     }
   }
 
   const desc = (a: number, b: number) => b - a;
-  return {
-    weight: Array.from(weights).sort(desc),
-    '1rm': Array.from(oneRMs).sort(desc),
-    volume: Array.from(volumes).sort(desc),
-    reps: Array.from(reps).sort(desc),
-  };
+  const leaderboard = emptyLeaderboard();
+  for (const metric of PR_METRICS) leaderboard[metric] = Array.from(values[metric]).sort(desc);
+  return leaderboard;
 }
 
 /**
@@ -177,6 +193,8 @@ export function compareAchievements(a: PRAchievement, b: PRAchievement): number 
     '1rm': 1,
     volume: 2,
     reps: 3,
+    distance: 4,
+    duration: 5,
   };
   return metricOrder[a.metric] - metricOrder[b.metric];
 }
@@ -207,8 +225,10 @@ function sourceFromWorkouts(priorWorkoutsByExercise: Record<string, Workout[]>):
         if (gymFilter !== null && !gymFilter.has(pw.gymId)) continue;
         for (const ex of pw.exercises) {
           if (ex.exerciseId !== exerciseId) continue;
+          const trackingType = getTrackingType(ex);
           for (const s of ex.sets) {
-            if (s.isCompleted && s.type !== 'warmup' && s.weightKg === weightKg && s.reps > maxReps) {
+            if (!s.isCompleted || s.type === 'warmup') continue;
+            if (recordValues(s, trackingType).weight === weightKg && s.reps > maxReps) {
               maxReps = s.reps;
             }
           }
@@ -267,8 +287,10 @@ export function evaluateWorkoutPRsWithSource(
     // Leaderboard strictly before this workout started, scoped to the allowed gyms when gym-specific
     const gymFilter = isGymSpecific ? allowedGymIds : null;
     const targetLeaderboard = source.leaderboard(exerciseId, gymFilter, workout.startTime);
+    const trackingType = getTrackingType(activeEx);
     const completedSets = activeEx.sets.filter((s) => s.isCompleted && s.type !== 'warmup');
-    const metrics: PRMetric[] = ['weight', '1rm', 'volume', 'reps'];
+    const completedValues = new Map(completedSets.map((set) => [set.id, recordValues(set, trackingType)]));
+    const metrics = PR_METRICS;
 
     // Map each set ID to its earned achievements in this session
     const setAchievementsMap = new Map<string, PRAchievement[]>();
@@ -278,16 +300,7 @@ export function evaluateWorkoutPRsWithSource(
       let bestSet: WorkoutSet | null = null;
 
       for (const set of completedSets) {
-        let val = 0;
-        if (metric === 'weight' && set.weightKg > 0) {
-          val = set.weightKg;
-        } else if (metric === '1rm' && set.weightKg > 0 && set.reps > 0) {
-          val = calculate1RM(set.weightKg, set.reps).average;
-        } else if (metric === 'volume' && set.weightKg > 0 && set.reps > 0) {
-          val = set.weightKg * set.reps;
-        } else if (metric === 'reps' && set.weightKg === 0 && set.reps > 0) {
-          val = set.reps;
-        }
+        const val = completedValues.get(set.id)![metric];
 
         if (val > bestVal) {
           bestVal = val;
@@ -348,6 +361,9 @@ export function evaluateWorkoutPRsWithSource(
           setNumber: set.setNumber,
           weightKg: set.weightKg,
           reps: set.reps,
+          ...(set.durationSeconds !== undefined ? { durationSeconds: set.durationSeconds } : {}),
+          ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+          ...(activeEx.trackingType ? { trackingType: activeEx.trackingType } : {}),
           achievement: primary,
         });
 
@@ -399,28 +415,24 @@ export class PRHistoryIndex implements PriorRecordSource {
   add(workout: Workout, onlyExerciseIds?: ReadonlySet<string>): void {
     for (const ex of workout.exercises || []) {
       if (onlyExerciseIds && !onlyExerciseIds.has(ex.exerciseId)) continue;
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets || []) {
         if (!s.isCompleted || s.type === 'warmup') continue;
         const board = this.boardFor(ex.exerciseId, workout.gymId);
-        if (s.weightKg > 0) {
-          insertTopDistinct(board.weight, s.weightKg);
-          if (s.reps > (board.repsAtWeight.get(s.weightKg) ?? 0)) board.repsAtWeight.set(s.weightKg, s.reps);
-          if (s.reps > 0) {
-            insertTopDistinct(board['1rm'], calculate1RM(s.weightKg, s.reps).average);
-            insertTopDistinct(board.volume, s.weightKg * s.reps);
-          }
-        } else if (s.reps > 0) {
-          insertTopDistinct(board.reps, s.reps);
+        const setValues = recordValues(s, trackingType);
+        if (setValues.weight > 0 && s.reps > (board.repsAtWeight.get(s.weightKg) ?? 0)) {
+          board.repsAtWeight.set(s.weightKg, s.reps);
         }
+        for (const metric of PR_METRICS) insertTopDistinct(board[metric], setValues[metric]);
       }
     }
   }
 
   leaderboard(exerciseId: string, gymFilter: Set<string> | null): ExerciseLeaderboard {
-    const merged: ExerciseLeaderboard = { weight: [], '1rm': [], volume: [], reps: [] };
+    const merged = emptyLeaderboard();
     for (const [gymId, board] of this.boards.get(exerciseId) ?? []) {
       if (gymFilter !== null && !gymFilter.has(gymId)) continue;
-      for (const metric of ['weight', '1rm', 'volume', 'reps'] as const) {
+      for (const metric of PR_METRICS) {
         for (const value of board[metric]) insertTopDistinct(merged[metric], value);
       }
     }
@@ -444,7 +456,7 @@ export class PRHistoryIndex implements PriorRecordSource {
     }
     let board = byGym.get(gymId);
     if (!board) {
-      board = { weight: [], '1rm': [], volume: [], reps: [], repsAtWeight: new Map() };
+      board = { ...emptyLeaderboard(), repsAtWeight: new Map() };
       byGym.set(gymId, board);
     }
     return board;
@@ -554,6 +566,8 @@ const PR_METRIC_WORDING: Record<PRMetric, { best: string; ranked: string }> = {
   '1rm': { best: 'Best estimated 1RM', ranked: 'best estimated 1RM' },
   volume: { best: 'Most volume in one set', ranked: 'highest set volume' },
   reps: { best: 'Most reps', ranked: 'most reps' },
+  duration: { best: 'Longest time', ranked: 'longest time' },
+  distance: { best: 'Longest distance', ranked: 'longest distance' },
 };
 
 /**
@@ -583,6 +597,10 @@ export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit
       prevStr = ` (${action} ${formatWeight(achievement.previousRecord, unit)})`;
     } else if (achievement.metric === 'reps') {
       prevStr = ` (${action} ${achievement.previousRecord} reps)`;
+    } else if (achievement.metric === 'duration') {
+      prevStr = ` (${action} ${formatSetDuration(achievement.previousRecord)})`;
+    } else if (achievement.metric === 'distance') {
+      prevStr = ` (${action} ${formatDistance(achievement.previousRecord, distanceUnitFor(unit))})`;
     }
   }
 
@@ -595,6 +613,9 @@ export interface PodiumEntry {
   value: number;
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
+  trackingType?: TrackingType;
   date: string;
   gymId: string;
   gymName?: string;
@@ -602,12 +623,7 @@ export interface PodiumEntry {
   workoutName: string;
 }
 
-export interface ExercisePodium {
-  weight: PodiumEntry[];
-  '1rm': PodiumEntry[];
-  volume: PodiumEntry[];
-  reps: PodiumEntry[];
-}
+export type ExercisePodium = Record<PRMetric, PodiumEntry[]>;
 
 /**
  * Extracts top 3 all-time distinct historical podium performances (1st Gold, 2nd Silver, 3rd Bronze)
@@ -624,15 +640,15 @@ export function extractExercisePodium(
   interface CandidateSet {
     weightKg: number;
     reps: number;
+    durationSeconds?: number;
+    distanceM?: number;
+    trackingType?: TrackingType;
     date: string;
     gymId: string;
     gymName?: string;
     workoutId: string;
     workoutName: string;
-    weight: number;
-    '1rm': number;
-    volume: number;
-    repsMetric: number;
+    values: SetRecordValues;
   }
 
   const candidates: CandidateSet[] = [];
@@ -643,30 +659,32 @@ export function extractExercisePodium(
 
     for (const ex of w.exercises) {
       if (ex.exerciseId !== exerciseId) continue;
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets) {
         if (!s.isCompleted || s.type === 'warmup') continue;
-
-        const weight = s.weightKg > 0 ? s.weightKg : 0;
-        const oneRM = s.weightKg > 0 && s.reps > 0 ? calculate1RM(s.weightKg, s.reps).average : 0;
-        const volume = s.weightKg > 0 && s.reps > 0 ? s.weightKg * s.reps : 0;
-        const repsMetric = s.weightKg === 0 && s.reps > 0 ? s.reps : 0;
 
         candidates.push({
           weightKg: s.weightKg,
           reps: s.reps,
+          ...(s.durationSeconds !== undefined ? { durationSeconds: s.durationSeconds } : {}),
+          ...(s.distanceM !== undefined ? { distanceM: s.distanceM } : {}),
+          ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
           date: w.startTime,
           gymId: w.gymId,
           gymName: currentGymName,
           workoutId: w.id,
           workoutName: w.name,
-          weight,
-          '1rm': oneRM,
-          volume,
-          repsMetric,
+          values: recordValues(s, trackingType),
         });
       }
     }
   }
+
+  const podiumTrackedFields = (c: CandidateSet) => ({
+    ...(c.durationSeconds !== undefined ? { durationSeconds: c.durationSeconds } : {}),
+    ...(c.distanceM !== undefined ? { distanceM: c.distanceM } : {}),
+    ...(c.trackingType ? { trackingType: c.trackingType } : {}),
+  });
 
   const buildPodiumForMetric = (
     metric: PRMetric,
@@ -699,6 +717,7 @@ export function extractExercisePodium(
       value: rank1Val,
       weightKg: candidate1.weightKg,
       reps: candidate1.reps,
+      ...podiumTrackedFields(candidate1),
       date: candidate1.date,
       gymId: candidate1.gymId,
       gymName: candidate1.gymName,
@@ -716,6 +735,7 @@ export function extractExercisePodium(
           value: rank2Val,
           weightKg: candidate2.weightKg,
           reps: candidate2.reps,
+          ...podiumTrackedFields(candidate2),
           date: candidate2.date,
           gymId: candidate2.gymId,
           gymName: candidate2.gymName,
@@ -735,6 +755,7 @@ export function extractExercisePodium(
           value: rank3Val,
           weightKg: candidate3.weightKg,
           reps: candidate3.reps,
+          ...podiumTrackedFields(candidate3),
           date: candidate3.date,
           gymId: candidate3.gymId,
           gymName: candidate3.gymName,
@@ -747,11 +768,8 @@ export function extractExercisePodium(
     return podium;
   };
 
-  return {
-    weight: buildPodiumForMetric('weight', (c) => c.weight),
-    '1rm': buildPodiumForMetric('1rm', (c) => c['1rm']),
-    volume: buildPodiumForMetric('volume', (c) => c.volume),
-    reps: buildPodiumForMetric('reps', (c) => c.repsMetric),
-  };
+  return Object.fromEntries(
+    PR_METRICS.map((metric) => [metric, buildPodiumForMetric(metric, (c) => c.values[metric])])
+  ) as ExercisePodium;
 }
 

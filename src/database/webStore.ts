@@ -1092,7 +1092,12 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             sets: selected?.sets
               .filter(set => set.isCompleted)
               .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
-              .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
+              .map(set => ({
+                weightKg: set.weightKg,
+                reps: set.reps,
+                ...(set.durationSeconds !== undefined ? { durationSeconds: set.durationSeconds } : {}),
+                ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+              })) || [],
           };
         });
         resolve(resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined));

@@ -2,13 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { Platform, AppState, AppStateStatus, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
-import { ActiveExercise, Exercise, Gym, Routine, SetType, Workout, WorkoutSet } from '../types';
+import { ActiveExercise, Exercise, Gym, Routine, SetType, TrackingType, Workout, WorkoutSet } from '../types';
 import { getSetting, getStore, setSetting } from '../database/db';
 import { getExactAlarmStatus, openExactAlarmSettings } from '../utils/exactAlarms';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
-import { initialReps, moveWorkoutSet, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
+import { initialReps, moveWorkoutSet, resolveRestTimerSeconds } from '../workout/sets';
 import {
   moveActiveExercise,
   moveActiveExerciseToIndex,
@@ -49,6 +49,15 @@ import {
 } from '../workout/supersets';
 import { enqueueCompletedWorkoutSync } from '../health';
 import { RestCountdown, restAlarmForAppState, shiftRestCountdown } from '../utils/restTimer';
+import {
+  fillTrackedSetFromPrevious,
+  getTrackingType,
+  resolveTrackingTypeForExercise,
+  usesWeight,
+  validateTrackedSet,
+  withTrackingType,
+  workoutVolumeKg,
+} from '../workout/tracking';
 
 const EXACT_ALARM_PROMPTED_KEY = 'exact_alarm_prompted';
 
@@ -115,6 +124,7 @@ interface WorkoutContextType {
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
   updateExerciseRestTimer: (activeExerciseId: string, seconds: number) => void;
+  setExerciseTrackingType: (activeExerciseId: string, type: TrackingType) => void;
   updateWorkoutDuration: (seconds: number) => void;
   toggleSetComplete: (activeExerciseId: string, setId: string) => void;
   startRestTimer: (seconds: number, exerciseName?: string) => void;
@@ -188,7 +198,20 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
   const { confirm, notify } = useDialog();
-  const { healthSyncEnabled, loading: settingsLoading } = useSettings();
+  const {
+    healthSyncEnabled,
+    loading: settingsLoading,
+    trackingTypesEnabled,
+    trackingTypeOverrides,
+  } = useSettings();
+  const trackingSettingsRef = useRef({ enabled: trackingTypesEnabled, overrides: trackingTypeOverrides });
+  trackingSettingsRef.current = { enabled: trackingTypesEnabled, overrides: trackingTypeOverrides };
+  const trackingTypeFor = (exercise: Exercise): TrackingType =>
+    resolveTrackingTypeForExercise(
+      exercise,
+      trackingSettingsRef.current.enabled,
+      trackingSettingsRef.current.overrides,
+    );
 
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
@@ -573,7 +596,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
         });
 
-        exercises.push({
+        exercises.push(withTrackingType<ActiveExercise>({
           id: activeExId,
           exerciseId: item.exerciseId,
           exercise: item.exercise,
@@ -582,7 +605,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           targetReps: item.targetReps,
           restTimerSeconds: resolveRestTimerSeconds(item.restTimerSeconds),
           supersetId: item.supersetId,
-        });
+        }, trackingTypeFor(item.exercise)));
       }
     }
 
@@ -824,7 +847,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
 
 
-      newActiveExercises.push({
+      newActiveExercises.push(withTrackingType<ActiveExercise>({
         id: activeExId,
         exerciseId: exercise.id,
         exercise,
@@ -832,7 +855,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         notes: '',
         targetReps: '10',
         restTimerSeconds: 0,
-      });
+      }, trackingTypeFor(exercise)));
     }
 
     appendExercisesToCurrentWorkout(ctrl, expectedVersion, newActiveExercises);
@@ -943,13 +966,14 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const latestState = ctrl.getState();
     if (latestState.phase !== 'active' || !latestState.workout) return;
 
+    const replacementType = trackingTypeFor(exercise);
     const updatedExercises = replaceActiveExercise(
       latestState.workout.exercises,
       activeExerciseId,
       exercise,
       prevSets,
       currentWorkout.gymId,
-    );
+    ).map((ex) => (ex.id === activeExerciseId ? withTrackingType(ex, replacementType) : ex));
 
     const totalVol = calculateTotalVolume(updatedExercises);
     const updated: Workout = {
@@ -1207,6 +1231,23 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
+  const setExerciseTrackingType = (activeExerciseId: string, type: TrackingType) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    const updatedExercises = state.workout.exercises.map((ex) =>
+      ex.id === activeExerciseId ? withTrackingType(ex, type) : ex
+    );
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: calculateTotalVolume(updatedExercises),
+    };
+    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+  };
+
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
@@ -1217,12 +1258,15 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const targetSet = targetEx?.sets.find((s) => s.id === setId);
     if (!targetSet || !targetEx) return;
 
+    const trackingType = getTrackingType(targetEx);
     let effectiveSet = targetSet;
     if (!targetSet.isCompleted) {
       const isWeightEdited = targetSet.isWeightEdited ?? (targetSet.weightKg > 0);
       const needsReps = targetSet.reps <= 0;
-      const needsWeight = !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
-      if (needsReps || needsWeight) {
+      const needsWeight = usesWeight(trackingType) && !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
+      if (trackingType === 'duration' || trackingType === 'distance_duration') {
+        effectiveSet = fillTrackedSetFromPrevious(targetSet, trackingType);
+      } else if (needsReps || needsWeight) {
         const setIdx = targetEx.sets.findIndex((s) => s.id === setId);
         const fallbackReps = needsReps
           ? initialReps(targetEx.targetReps, setIdx >= 0 ? setIdx : 0, targetSet.previousReps)
@@ -1238,7 +1282,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       }
 
-      const validationError = validateCompletedSet(effectiveSet);
+      const validationError = validateTrackedSet(effectiveSet, trackingType);
       if (validationError) {
         notify({
           title: 'Invalid Set',
@@ -1268,6 +1312,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ...s,
             reps: nextCompleted ? effectiveSet.reps : s.reps,
             weightKg: nextCompleted ? effectiveSet.weightKg : s.weightKg,
+            ...(nextCompleted && effectiveSet.durationSeconds !== undefined
+              ? { durationSeconds: effectiveSet.durationSeconds }
+              : {}),
+            ...(nextCompleted && effectiveSet.distanceM !== undefined ? { distanceM: effectiveSet.distanceM } : {}),
             isWeightEdited: nextCompleted ? true : s.isWeightEdited,
             isCompleted: nextCompleted,
             completedAt: nextCompleted ? new Date().toISOString() : undefined,
@@ -1303,16 +1351,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ctrl.flush().catch(console.error);
   };
 
-  const calculateTotalVolume = (exercises: ActiveExercise[]): number => {
-    return exercises.reduce((sum, ex) => {
-      return (
-        sum +
-        ex.sets
-          .filter((s) => s.isCompleted)
-          .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0)
-      );
-    }, 0);
-  };
+  const calculateTotalVolume = (exercises: ActiveExercise[]): number => workoutVolumeKg(exercises);
 
   const actions = {
     refreshGyms,
@@ -1340,6 +1379,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     updateSet,
     updateExerciseNotes,
     updateExerciseRestTimer,
+    setExerciseTrackingType,
     updateWorkoutDuration,
     toggleSetComplete,
     startRestTimer,

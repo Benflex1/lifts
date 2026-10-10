@@ -77,6 +77,7 @@ import { applyPreviousSetStats } from '../workout/gym-session';
 import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
 import { isExcessiveDuration } from '../workout/duration';
 import { colors } from '../theme';
+import { getTrackingType, setVolumeKg } from '../workout/tracking';
 
 /** Renders the ticking workout duration without re-rendering the whole logger every second. */
 const LiveWorkoutClock: React.FC = () => {
@@ -313,6 +314,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 exerciseName: ex.exercise?.name || 'Exercise',
                 weightKg: foundSet.weightKg,
                 reps: foundSet.reps,
+                durationSeconds: foundSet.durationSeconds,
+                distanceM: foundSet.distanceM,
+                trackingType: ex.trackingType,
                 achievement: pr.primary,
                 secondaryCount: Math.max(0, pr.achievements.length - 1),
               });
@@ -453,10 +457,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     let total = 0;
 
     for (const ex of activeWorkout.exercises) {
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets) {
         total++;
         if (s.isCompleted) {
-          volume += s.weightKg * s.reps;
+          volume += setVolumeKg(s, trackingType);
           completed++;
         }
       }

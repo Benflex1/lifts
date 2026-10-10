@@ -7,7 +7,7 @@ export interface CompletedExerciseOccurrence {
   gymId: string;
   gymName: string;
   occurrenceIndex: number;
-  sets: Array<{ weightKg: number; reps: number }>;
+  sets: Array<{ weightKg: number; reps: number; durationSeconds?: number; distanceM?: number }>;
 }
 
 export function resolvePreviousSetsForExercise(
@@ -26,9 +26,11 @@ export function resolvePreviousSetsForExercise(
   if (!fallback || fallback.sets.length === 0) return [];
 
   const isForeignFallback = selected === undefined && allowedGymIds !== null;
-  return fallback.sets.map(({ weightKg, reps }) => ({
+  return fallback.sets.map(({ weightKg, reps, durationSeconds, distanceM }) => ({
     weightKg,
     reps,
+    ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+    ...(distanceM !== undefined ? { distanceM } : {}),
     ...(isForeignFallback ? { sourceGymId: fallback.gymId, sourceGymName: fallback.gymName } : {}),
   }));
 }

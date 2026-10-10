@@ -1,5 +1,6 @@
 import { Store, WorkoutDraft } from '../database/contract';
 import { Workout } from '../types';
+import { workoutVolumeKg } from './tracking';
 
 export type SessionPhase = 'idle' | 'starting' | 'active' | 'finishing' | 'discarding';
 
@@ -267,13 +268,8 @@ export function createSessionController(
     const finalDuration = durationSecondsOverride !== undefined && durationSecondsOverride >= 0
       ? Math.floor(durationSecondsOverride)
       : Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
-    const calculatedVolume = (currentWorkout.exercises || []).reduce(
-      (sum, ex) =>
-        sum +
-        (ex.sets || [])
-          .filter((s) => s.isCompleted)
-          .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0),
-      0
+    const calculatedVolume = workoutVolumeKg(
+      (currentWorkout.exercises || []).map((ex) => ({ ...ex, sets: ex.sets || [] }))
     );
 
     const completedWorkout: Workout = {

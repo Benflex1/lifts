@@ -1,4 +1,5 @@
 import { ActiveExercise, Workout, WorkoutSet } from '../types';
+import { workoutVolumeKg } from './tracking';
 
 export interface WorkoutSetEdit {
   exerciseId: string;
@@ -118,13 +119,7 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
     }));
   }
 
-  const totalVolumeKg = exercises.reduce(
-    (workoutVolume, exercise) => workoutVolume + exercise.sets.reduce(
-      (exerciseVolume, set) => exerciseVolume + (set.isCompleted ? set.weightKg * set.reps : 0),
-      0
-    ),
-    0
-  );
+  const totalVolumeKg = workoutVolumeKg(exercises);
 
   const nextDuration = edits.durationSeconds !== undefined
     ? Math.max(0, Math.floor(edits.durationSeconds))

@@ -18,6 +18,8 @@ const METRIC_LABELS: Record<PRAchievement['metric'], string> = {
   '1rm': 'e1RM',
   volume: 'Volume',
   reps: 'Reps',
+  duration: 'Time',
+  distance: 'Distance',
 };
 
 /**

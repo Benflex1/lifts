@@ -390,4 +390,24 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       );
     });
   }
+
+  // Migration 9: exercise tracking types (time, distance, bodyweight). Only adds empty columns:
+  // existing sets keep reading as weight × reps.
+  if (!applied.has(9) && (options?.maxVersion === undefined || options.maxVersion >= 9)) {
+    await driver.withTransactionAsync(async () => {
+      const weCols = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workout_exercises);');
+      if (!weCols.some(c => c.name === 'tracking_type')) {
+        await driver.execAsync('ALTER TABLE workout_exercises ADD COLUMN tracking_type TEXT;');
+      }
+      const setCols = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercise_sets);');
+      if (!setCols.some(c => c.name === 'duration_seconds')) {
+        await driver.execAsync('ALTER TABLE exercise_sets ADD COLUMN duration_seconds INTEGER;');
+      }
+      if (!setCols.some(c => c.name === 'distance_m')) {
+        await driver.execAsync('ALTER TABLE exercise_sets ADD COLUMN distance_m REAL;');
+      }
+      if (options?.failAtVersion === 9) throw new Error('Injected migration failure at version 9');
+      await driver.runAsync('INSERT INTO schema_migrations (version, applied_at) VALUES (9, ?)', new Date().toISOString());
+    });
+  }
 }
