@@ -4,6 +4,9 @@ import { createScopedId } from './ids';
 
 export interface GymRestoreMapping {
   gymsToInsert: Gym[];
+  // The destination default gym carrying the backup default's name and color,
+  // present only when they differ.
+  defaultGymUpdate?: Gym;
   idMap: Map<string, string>;
 }
 
@@ -35,10 +38,14 @@ export function buildGymRestoreMapping(
   const gymsToInsert: Gym[] = [];
   const destinationById = new Map(destinationGyms.map((gym) => [gym.id, gym]));
   const usedIds = new Set([...destinationById.keys(), ...sourceIds]);
+  let defaultGymUpdate: Gym | undefined;
 
   for (const source of sourceGyms) {
     if (source.isDefault || source.id === 'gym-default') {
       idMap.set(source.id, destinationDefault.id);
+      if (source.name !== destinationDefault.name || source.color !== destinationDefault.color) {
+        defaultGymUpdate = { ...destinationDefault, name: source.name, color: source.color, isDefault: true };
+      }
       continue;
     }
 
@@ -63,7 +70,7 @@ export function buildGymRestoreMapping(
     gymsToInsert.push({ ...source, id: targetId, isDefault: false });
   }
 
-  return { gymsToInsert, idMap };
+  return { gymsToInsert, defaultGymUpdate, idMap };
 }
 
 function idMapHasValue(idMap: Map<string, string>, value: string): boolean {

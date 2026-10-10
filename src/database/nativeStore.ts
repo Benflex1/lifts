@@ -1369,7 +1369,12 @@ export function createNativeStore(driver: SqliteDriver): Store {
       validateSharedSnapshotForMerge(snapshot, existing);
       validateSnapshotMergeConflicts(snapshot, existing);
       await driver.withTransactionAsync(async () => {
+        const existingDefaultGymId = existing.gyms.find((gym) => gym.isDefault)?.id;
         for (const gym of snapshot.gyms || []) {
+          if (gym.isDefault && gym.id === existingDefaultGymId) {
+            await driver.runAsync('UPDATE gyms SET name = ?, color = ? WHERE id = ?', gym.name, gym.color, gym.id);
+            continue;
+          }
           await driver.runAsync(
             `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)`,
             gym.id, gym.name, gym.color, gym.createdAt

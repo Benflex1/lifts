@@ -324,6 +324,7 @@ const AnalyticsScreenInner: React.FC = () => {
       const message =
         `Backup Summary:\n` +
         `• ${preview.gymsCount} gyms to import\n` +
+        (preview.defaultGymUpdated ? `• Default gym name and color restored\n` : '') +
         `• ${preview.scopeOverridesCount} exercise scope overrides to import\n` +
         `• ${preview.workoutsCount} workouts to import (${preview.skippedWorkoutsCount} identical skipped)\n` +
         `• ${preview.routinesCount} routines to import (${preview.skippedRoutinesCount} identical skipped)\n` +

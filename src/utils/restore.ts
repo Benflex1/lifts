@@ -4,9 +4,11 @@ import { parseBackup, BackupV3 } from './backup';
 import { Exercise, ExerciseGymScope, Routine, Workout } from '../types';
 import { buildGymRestoreMapping, remapGymReferences } from './gym-restore';
 import { validateExerciseGymScope } from '../workout/gym-scope';
+import { buildDefaultRoutines } from '../database/seedData';
 
 export interface RestorePreview {
   gymsCount: number;
+  defaultGymUpdated: boolean;
   scopeOverridesCount: number;
   workoutsCount: number;
   routinesCount: number;
@@ -132,6 +134,13 @@ function isIdenticalDraft(a: WorkoutDraft, b: WorkoutDraft): boolean {
   return true;
 }
 
+// Built-in routines the user never edited on this device are replaced by the
+// backup's version instead of being treated as a conflict.
+function isUntouchedSeedRoutine(routine: Routine): boolean {
+  const seed = buildDefaultRoutines().find((candidate) => candidate.id === routine.id);
+  return Boolean(seed && isIdenticalRoutine(seed, routine));
+}
+
 export async function computeRestorePlan(
   backup: BackupV3,
   store: Store
@@ -198,6 +207,8 @@ export async function computeRestorePlan(
     if (exR) {
       if (isIdenticalRoutine(r, exR)) {
         skippedRoutinesCount++;
+      } else if (isUntouchedSeedRoutine(exR)) {
+        routinesToInsert.push(r);
       } else {
         throw new Error(
           `Conflicting routine ID: ${r.id} ("${r.name}") already exists with different data`
@@ -253,12 +264,15 @@ export async function computeRestorePlan(
     workouts: workoutsToInsert,
     drafts: draftsToInsert,
     settings: settingsToInsert,
-    gyms: gymMapping.gymsToInsert,
+    gyms: gymMapping.defaultGymUpdate
+      ? [gymMapping.defaultGymUpdate, ...gymMapping.gymsToInsert]
+      : gymMapping.gymsToInsert,
     exerciseGymScopes: scopesToInsert,
   };
 
   const preview: RestorePreview = {
     gymsCount: gymMapping.gymsToInsert.length,
+    defaultGymUpdated: Boolean(gymMapping.defaultGymUpdate),
     scopeOverridesCount: scopesToInsert.length,
     workoutsCount: workoutsToInsert.length,
     routinesCount: routinesToInsert.length,

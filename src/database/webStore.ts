@@ -1401,8 +1401,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const gymStore = tx.objectStore('gyms');
       const destinationGymIds = new Set(destinationGyms.map((gym) => gym.id));
+      const destinationDefaultGym = destinationGyms.find((gym) => gym.isDefault);
       for (const gym of incomingGyms) {
-        if (!destinationGymIds.has(gym.id)) gymStore.put({ ...gym, isDefault: false });
+        if (gym.isDefault && destinationDefaultGym && gym.id === destinationDefaultGym.id) {
+          gymStore.put({ ...destinationDefaultGym, name: gym.name, color: gym.color });
+        } else if (!destinationGymIds.has(gym.id)) {
+          gymStore.put({ ...gym, isDefault: false });
+        }
       }
       const scopeStore = tx.objectStore('exercise_gym_scopes');
       for (const scope of snapshot.exerciseGymScopes || []) {
