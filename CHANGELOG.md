@@ -20,6 +20,11 @@ GitHub Release notes for tag `vX.Y.Z`.
 - The Android rest countdown buzz no longer depends on the app being on screen or on the system touch-vibration setting, which made it unreliable and silent on the lock screen.
 - Adding or subtracting time during a rest keeps the progress bar in place.
 
+## [1.0.5]
+
+### Changed
+- Release APKs are now shrunk and optimized with R8, as F-Droid asked, so they are smaller. The app's features are unchanged.
+
 ## [1.0.4]
 
 ### Fixed
