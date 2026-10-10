@@ -64,7 +64,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
 import { formatPreviousMetric } from '../workout/gym-display';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
-import { evaluateWorkoutPRsWithSource, formatPRDescription, PRHistoryIndex, WorkoutPRSummary } from '../workout/pr';
+import { buildActiveWorkoutRecordIndex, evaluateActiveWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from '../components/PRBadge';
 import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { WarmupModal } from '../components/WarmupModal';
@@ -265,26 +265,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   // Prior records are indexed once per loaded history, so re-ranking after each set change only
   // looks at this workout's sets instead of rescanning every past workout.
-  const activeStartTime = activeWorkout?.startTime;
-  const priorRecordIndex = useMemo(() => {
-    const index = new PRHistoryIndex();
-    const loadedExerciseIds = new Set(Object.keys(exerciseWorkouts));
-    const added = new Set<string>();
-    for (const list of Object.values(exerciseWorkouts)) {
-      for (const workout of list) {
-        if (added.has(workout.id)) continue;
-        if (activeStartTime && workout.startTime >= activeStartTime) continue;
-        added.add(workout.id);
-        index.add(workout, loadedExerciseIds);
-      }
-    }
-    return index;
-  }, [exerciseWorkouts, activeStartTime]);
+  const activeWorkoutId = activeWorkout?.id;
+  const priorRecordIndex = useMemo(
+    () => buildActiveWorkoutRecordIndex(exerciseWorkouts, activeWorkoutId),
+    [exerciseWorkouts, activeWorkoutId]
+  );
 
   const prSummary = useMemo(() => {
     if (!activeWorkout) return null;
-    return evaluateWorkoutPRsWithSource(activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes);
-  }, [activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
+    return evaluateActiveWorkoutPRs(activeWorkout, exerciseWorkouts, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes);
+  }, [activeWorkout, exerciseWorkouts, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
 
   const previousCompletedSetIdsRef = useRef<Set<string> | null>(null);
 
