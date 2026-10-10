@@ -347,3 +347,24 @@ export function setRecordValues(
   }
   return values;
 }
+
+/** Headline for a type's best completed set, e.g. "25 reps", "1:30" or "5 km". Null for weight × reps. */
+export function formatBestTrackedSet(
+  sets: Pick<WorkoutSet, 'weightKg' | 'reps' | 'durationSeconds' | 'distanceM'>[],
+  type: TrackingType,
+  unit: WeightUnit,
+): string | null {
+  if (countsLoad(type) || sets.length === 0) return null;
+  if (type === 'duration') {
+    const best = Math.max(0, ...sets.map((set) => set.durationSeconds ?? 0));
+    return best > 0 ? formatSetDuration(best) : null;
+  }
+  if (type === 'distance_duration') {
+    const bestDistance = Math.max(0, ...sets.map((set) => set.distanceM ?? 0));
+    if (bestDistance > 0) return formatDistance(bestDistance, distanceUnitFor(unit));
+    const bestDuration = Math.max(0, ...sets.map((set) => set.durationSeconds ?? 0));
+    return bestDuration > 0 ? formatSetDuration(bestDuration) : null;
+  }
+  const bestReps = Math.max(0, ...sets.map((set) => set.reps));
+  return bestReps > 0 ? `${bestReps} reps` : null;
+}

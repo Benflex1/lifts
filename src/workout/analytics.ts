@@ -1,5 +1,6 @@
 import { Exercise, Workout } from '../types';
 import { calculate1RM } from '../utils/calculator';
+import { countsLoad, getTrackingType, setVolumeKg } from './tracking';
 
 export interface WeeklyVolumePoint {
   key: string;
@@ -232,6 +233,9 @@ export function extractExerciseProgression(
     const occurrences = (workout.exercises || []).filter((e) => e.exerciseId === exerciseId);
     const completedSets = occurrences.flatMap((e) => e.sets || []).filter((s) => s.isCompleted);
     if (completedSets.length === 0) continue;
+    const unloadedSets = new Set(
+      occurrences.filter((e) => !countsLoad(getTrackingType(e))).flatMap((e) => e.sets || [])
+    );
 
     let maxWeightKg = 0;
     let maxReps = 0;
@@ -241,7 +245,7 @@ export function extractExerciseProgression(
     let topSetScore = -1;
 
     for (const set of completedSets) {
-      const weight = Number.isFinite(set.weightKg) ? Math.max(0, set.weightKg) : 0;
+      const weight = Number.isFinite(set.weightKg) && !unloadedSets.has(set) ? Math.max(0, set.weightKg) : 0;
       const reps = Number.isFinite(set.reps) ? Math.max(0, set.reps) : 0;
       const setVol = weight * reps;
       totalVolumeKg += setVol;
@@ -410,7 +414,11 @@ export function buildTrainingDistribution(
         ? rawMuscles.map((m) => m.trim().toLowerCase()).filter(Boolean)
         : ['other'];
 
-      const totalExVolume = completedSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+      const trackingType = getTrackingType(ex);
+      const totalExVolume = completedSets.reduce(
+        (sum, s) => sum + setVolumeKg({ weightKg: s.weightKg || 0, reps: s.reps || 0 }, trackingType),
+        0,
+      );
       const totalExSets = completedSets.length;
       grandTotalVolume += totalExVolume;
       grandTotalSets += totalExSets;
@@ -473,11 +481,12 @@ export function buildLifetimeTrainingStats(
 
     let workoutVolume = 0;
     for (const ex of w.exercises || []) {
+      const hasLoad = countsLoad(getTrackingType(ex));
       for (const s of ex.sets || []) {
         if (!s.isCompleted) continue;
         totalSets++;
         const reps = Number.isFinite(s.reps) ? Math.max(0, s.reps) : 0;
-        const weight = Number.isFinite(s.weightKg) ? Math.max(0, setWeightOrZero(s.weightKg)) : 0;
+        const weight = hasLoad && Number.isFinite(s.weightKg) ? Math.max(0, setWeightOrZero(s.weightKg)) : 0;
         totalReps += reps;
         const setVol = weight * reps;
         workoutVolume += setVol;
