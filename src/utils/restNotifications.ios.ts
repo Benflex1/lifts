@@ -126,3 +126,8 @@ export async function cancelRestNotification(): Promise<void> {
     console.warn('Failed to cancel rest notification:', e);
   }
 }
+
+// Only Android has a native rest cue (see restNotifications.android.ts); here the app buzzes.
+export function isRestCueNative(): boolean {
+  return false;
+}
