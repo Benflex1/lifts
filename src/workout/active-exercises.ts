@@ -1,4 +1,5 @@
 import { ActiveExercise, Exercise, PreviousSetSuggestion, WorkoutSet } from '../types';
+import { withPreviousTracked } from './tracking';
 
 export type ExerciseMoveDirection = -1 | 1;
 
@@ -123,8 +124,9 @@ export function replaceActiveExercise(
       if (set.isCompleted) return set;
       const ghost = suggestions[idx] ?? (suggestions.length > 0 ? suggestions[suggestions.length - 1] : undefined);
       const isSameGym = Boolean(currentGymId && ghost?.sourceGymId === currentGymId);
+      const { durationSeconds: _duration, distanceM: _distance, ...rest } = set;
       return {
-        ...set,
+        ...withPreviousTracked(rest, ghost),
         weightKg: 0,
         reps: 0,
         isWeightEdited: false,

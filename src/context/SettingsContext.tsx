@@ -6,6 +6,15 @@ import { useDialog } from './DialogContext';
 import { getPlatformHealthProvider, retryPendingHealthSyncs } from '../health';
 import { updateHealthSyncSetting } from '../health/settings';
 import { parseGymTrackingEnabled, parseHealthSyncEnabled, parseRemoteExerciseImagesEnabled } from '../utils/settings';
+import { TrackingType } from '../types';
+import {
+  EXERCISE_TRACKING_TYPES_KEY,
+  parseTrackingTypeOverrides,
+  parseTrackingTypesEnabled,
+  serializeTrackingTypeOverrides,
+  TRACKING_TYPES_ENABLED_KEY,
+  TrackingTypeOverrides,
+} from '../workout/tracking';
 
 export interface SettingsContextType {
   unit: WeightUnit;
@@ -16,6 +25,10 @@ export interface SettingsContextType {
   setHealthSyncEnabled: (enabled: boolean) => Promise<void>;
   remoteImagesEnabled: boolean;
   setRemoteImagesEnabled: (enabled: boolean) => Promise<void>;
+  trackingTypesEnabled: boolean;
+  setTrackingTypesEnabled: (enabled: boolean) => Promise<void>;
+  trackingTypeOverrides: TrackingTypeOverrides;
+  setExerciseTrackingType: (exerciseId: string, type: TrackingType) => Promise<void>;
   loading: boolean;
 }
 
@@ -28,6 +41,10 @@ const SettingsContext = createContext<SettingsContextType>({
   setHealthSyncEnabled: async () => {},
   remoteImagesEnabled: false,
   setRemoteImagesEnabled: async () => {},
+  trackingTypesEnabled: false,
+  setTrackingTypesEnabled: async () => {},
+  trackingTypeOverrides: {},
+  setExerciseTrackingType: async () => {},
   loading: true,
 });
 
@@ -37,23 +54,36 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [healthSyncEnabled, setHealthSyncEnabledState] = useState(false);
   // Off until the stored preference is read, so a slow or failed read never fetches photos the user turned off.
   const [remoteImagesEnabled, setRemoteImagesEnabledState] = useState(false);
+  const [trackingTypesEnabled, setTrackingTypesEnabledState] = useState(false);
+  const [trackingTypeOverrides, setTrackingTypeOverridesState] = useState<TrackingTypeOverrides>({});
   const [loading, setLoading] = useState(true);
   const { notify } = useDialog();
 
   useEffect(() => {
     (async () => {
       try {
-        const [storedUnit, storedGymTracking, storedHealthSync, storedRemoteImages] = await Promise.all([
+        const [
+          storedUnit,
+          storedGymTracking,
+          storedHealthSync,
+          storedRemoteImages,
+          storedTrackingTypes,
+          storedTrackingTypeOverrides,
+        ] = await Promise.all([
           getSetting('unit'),
           getSetting('gym_tracking_enabled'),
           getSetting('health_sync_enabled'),
           getSetting('remote_exercise_images'),
+          getSetting(TRACKING_TYPES_ENABLED_KEY),
+          getSetting(EXERCISE_TRACKING_TYPES_KEY),
         ]);
         if (storedUnit === 'kg' || storedUnit === 'lb') setUnitState(storedUnit);
         setGymTrackingEnabledState(parseGymTrackingEnabled(storedGymTracking));
         const persistedHealthSync = parseHealthSyncEnabled(storedHealthSync, Platform.OS);
         setHealthSyncEnabledState(persistedHealthSync);
         setRemoteImagesEnabledState(parseRemoteExerciseImagesEnabled(storedRemoteImages));
+        setTrackingTypesEnabledState(parseTrackingTypesEnabled(storedTrackingTypes));
+        setTrackingTypeOverridesState(parseTrackingTypeOverrides(storedTrackingTypeOverrides));
         if (persistedHealthSync) {
           void retryPendingHealthSyncs().catch((error) => {
             console.error('Unable to retry pending health syncs', error);
@@ -112,6 +142,42 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [remoteImagesEnabled, notify]);
 
+  const setTrackingTypesEnabled = useCallback(async (enabled: boolean) => {
+    const previous = trackingTypesEnabled;
+    setTrackingTypesEnabledState(enabled);
+    try {
+      await setSetting(TRACKING_TYPES_ENABLED_KEY, enabled ? 'true' : 'false');
+    } catch (err: any) {
+      setTrackingTypesEnabledState(previous);
+      await notify({
+        title: 'Settings Error',
+        message: err?.message || 'Failed to save exercise tracking setting.',
+      });
+      throw err;
+    }
+  }, [trackingTypesEnabled, notify]);
+
+  const setExerciseTrackingType = useCallback(async (exerciseId: string, type: TrackingType) => {
+    const previous = trackingTypeOverrides;
+    // Start from what is stored, so choices a backup restore merged in since launch are kept.
+    let stored = previous;
+    try {
+      stored = parseTrackingTypeOverrides(await getSetting(EXERCISE_TRACKING_TYPES_KEY));
+    } catch (_) {}
+    const next = { ...stored, [exerciseId]: type };
+    setTrackingTypeOverridesState(next);
+    try {
+      await setSetting(EXERCISE_TRACKING_TYPES_KEY, serializeTrackingTypeOverrides(next));
+    } catch (err: any) {
+      setTrackingTypeOverridesState(previous);
+      await notify({
+        title: 'Settings Error',
+        message: err?.message || 'Failed to save how this exercise is tracked.',
+      });
+      throw err;
+    }
+  }, [trackingTypeOverrides, notify]);
+
   const setHealthSyncEnabled = useCallback(async (enabled: boolean) => {
     await updateHealthSyncSetting(enabled, healthSyncEnabled, {
       loadProvider: getPlatformHealthProvider,
@@ -136,6 +202,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setHealthSyncEnabled,
         remoteImagesEnabled,
         setRemoteImagesEnabled,
+        trackingTypesEnabled,
+        setTrackingTypesEnabled,
+        trackingTypeOverrides,
+        setExerciseTrackingType,
         loading,
       }}
     >

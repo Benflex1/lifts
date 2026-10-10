@@ -42,6 +42,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setHealthSyncEnabled,
     remoteImagesEnabled,
     setRemoteImagesEnabled,
+    trackingTypesEnabled,
+    setTrackingTypesEnabled,
   } = useSettings();
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
@@ -109,6 +111,18 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setIsSaving(true);
     try {
       await setRemoteImagesEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTrackingTypesChange = async (enabled: boolean) => {
+    if (isSaving || enabled === trackingTypesEnabled) return;
+    setIsSaving(true);
+    try {
+      await setTrackingTypesEnabled(enabled);
     } catch {
       // Error handled by SettingsContext notification.
     } finally {
@@ -239,6 +253,27 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
             >
               <Text style={styles.manageButtonText}>Manage Gyms</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.settingHeaderRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.sectionTitle}>Time, Distance & Bodyweight</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Log planks and stretches by time, cardio by distance and time, and bodyweight moves by reps. Change how an exercise is tracked from its menu in a workout.
+                </Text>
+              </View>
+              <Switch
+                value={trackingTypesEnabled}
+                onValueChange={handleTrackingTypesChange}
+                disabled={isSaving}
+                trackColor={{ false: colors.control, true: colors.primary }}
+                thumbColor={trackingTypesEnabled ? colors.text : colors.textSecondary}
+                accessibilityLabel="Time, Distance and Bodyweight tracking"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: trackingTypesEnabled, disabled: isSaving }}
+              />
+            </View>
           </View>
 
           <View style={styles.section}>

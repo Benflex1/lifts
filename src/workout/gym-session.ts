@@ -1,5 +1,6 @@
 import { Gym, PreviousSetSuggestion, Workout, WorkoutSet } from '../types';
 import type { Store } from '../database/contract';
+import { withPreviousTracked } from './tracking';
 
 export interface StartWorkoutOptions {
   gymId?: string;
@@ -207,7 +208,7 @@ export function rehydrateUntouchedSuggestions(
 
           const suggestion = suggestions[index];
           return {
-            ...set,
+            ...withPreviousTracked(set, suggestion),
             previousWeightKg: suggestion?.weightKg,
             previousReps: suggestion?.reps,
             ...clearSameGymProvenance(
@@ -250,6 +251,10 @@ export function applyPreviousSetStats<T extends {
   isCompleted: boolean;
   previousWeightKg?: number;
   previousReps?: number;
+  durationSeconds?: number;
+  distanceM?: number;
+  previousDurationSeconds?: number;
+  previousDistanceM?: number;
 }>(set: T, fallbackReps: number = 10): T {
   if (set.isCompleted) return set;
   if (set.previousWeightKg === undefined && set.previousReps === undefined) return set;
@@ -257,6 +262,8 @@ export function applyPreviousSetStats<T extends {
     ...set,
     weightKg: set.previousWeightKg !== undefined ? set.previousWeightKg : set.weightKg,
     reps: set.previousReps !== undefined ? set.previousReps : fallbackReps,
+    ...(set.previousDurationSeconds !== undefined ? { durationSeconds: set.previousDurationSeconds } : {}),
+    ...(set.previousDistanceM !== undefined ? { distanceM: set.previousDistanceM } : {}),
     isWeightEdited: true,
   };
 }
@@ -264,6 +271,8 @@ export function applyPreviousSetStats<T extends {
 export interface AddedSetGhostStats {
   previousWeightKg?: number;
   previousReps?: number;
+  previousDurationSeconds?: number;
+  previousDistanceM?: number;
   provenanceSet?: Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>;
 }
 
@@ -272,16 +281,30 @@ export function resolveAddedSetGhostStats(
 ): AddedSetGhostStats {
   // 1. Look for the most recent completed or edited set in reverse
   const lastCompletedOrEditedSet = [...existingSets].reverse().find(
-    (s) => s.isCompleted || s.isWeightEdited || s.weightKg > 0 || s.reps > 0,
+    (s) =>
+      s.isCompleted ||
+      s.isWeightEdited ||
+      s.weightKg > 0 ||
+      s.reps > 0 ||
+      (s.durationSeconds ?? 0) > 0 ||
+      (s.distanceM ?? 0) > 0,
   );
 
   if (lastCompletedOrEditedSet) {
     const isEdited = lastCompletedOrEditedSet.isWeightEdited ?? (lastCompletedOrEditedSet.weightKg > 0 || lastCompletedOrEditedSet.isCompleted);
     const ghostWeight = isEdited ? lastCompletedOrEditedSet.weightKg : lastCompletedOrEditedSet.previousWeightKg;
     const ghostReps = lastCompletedOrEditedSet.reps > 0 ? lastCompletedOrEditedSet.reps : lastCompletedOrEditedSet.previousReps;
+    const ghostDuration = (lastCompletedOrEditedSet.durationSeconds ?? 0) > 0
+      ? lastCompletedOrEditedSet.durationSeconds
+      : lastCompletedOrEditedSet.previousDurationSeconds;
+    const ghostDistance = (lastCompletedOrEditedSet.distanceM ?? 0) > 0
+      ? lastCompletedOrEditedSet.distanceM
+      : lastCompletedOrEditedSet.previousDistanceM;
     return {
       previousWeightKg: ghostWeight,
       previousReps: ghostReps,
+      ...(ghostDuration !== undefined ? { previousDurationSeconds: ghostDuration } : {}),
+      ...(ghostDistance !== undefined ? { previousDistanceM: ghostDistance } : {}),
       provenanceSet: lastCompletedOrEditedSet.isCompleted ? undefined : lastCompletedOrEditedSet,
     };
   }
@@ -295,6 +318,10 @@ export function resolveAddedSetGhostStats(
     return {
       previousWeightKg: lastGhostSet.previousWeightKg,
       previousReps: lastGhostSet.previousReps,
+      ...(lastGhostSet.previousDurationSeconds !== undefined
+        ? { previousDurationSeconds: lastGhostSet.previousDurationSeconds }
+        : {}),
+      ...(lastGhostSet.previousDistanceM !== undefined ? { previousDistanceM: lastGhostSet.previousDistanceM } : {}),
       provenanceSet: lastGhostSet,
     };
   }
@@ -328,7 +355,7 @@ export function createWorkoutSetsFromSuggestions(options: CreateWorkoutSetsOptio
       ? idGenerator(i)
       : `set-${activeExerciseId}-${i}`;
 
-    sets.push({
+    sets.push(withPreviousTracked<WorkoutSet>({
       id: setId,
       setNumber: i,
       type: 'normal',
@@ -342,7 +369,7 @@ export function createWorkoutSetsFromSuggestions(options: CreateWorkoutSetsOptio
       previousReps: ghost ? ghost.reps : undefined,
       previousGymId: isSameGym ? undefined : ghost?.sourceGymId,
       previousGymName: isSameGym ? undefined : ghost?.sourceGymName,
-    });
+    }, ghost));
   }
 
   return sets;

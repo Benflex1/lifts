@@ -1,4 +1,5 @@
 import { ActiveExercise, Workout, WorkoutSet } from '../types';
+import { DEFAULT_TRACKING_TYPE, getTrackingType, validateTrackedSet, workoutVolumeKg } from './tracking';
 
 export interface WorkoutSetEdit {
   exerciseId: string;
@@ -71,9 +72,15 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
 
   if (edits.exercises) {
     for (const ex of edits.exercises) {
+      const trackingType = getTrackingType(ex);
       for (const set of ex.sets) {
         if (set.isCompleted) {
-          validateSetEdit(set);
+          if (trackingType === DEFAULT_TRACKING_TYPE) {
+            validateSetEdit(set);
+          } else {
+            const error = validateTrackedSet(set, trackingType);
+            if (error) throw new Error(error);
+          }
         } else {
           // Guard incomplete sets against NaN or invalid numbers to protect persistence
           if (!Number.isFinite(set.weightKg) || set.weightKg < 0) {
@@ -118,13 +125,7 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
     }));
   }
 
-  const totalVolumeKg = exercises.reduce(
-    (workoutVolume, exercise) => workoutVolume + exercise.sets.reduce(
-      (exerciseVolume, set) => exerciseVolume + (set.isCompleted ? set.weightKg * set.reps : 0),
-      0
-    ),
-    0
-  );
+  const totalVolumeKg = workoutVolumeKg(exercises);
 
   const nextDuration = edits.durationSeconds !== undefined
     ? Math.max(0, Math.floor(edits.durationSeconds))

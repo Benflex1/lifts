@@ -2,6 +2,7 @@ import { Exercise, ExerciseGymScope, Gym, Workout } from '../types';
 import { calculate1RM } from '../utils/calculator';
 import { getAllowedGymIds, resolveExerciseScope } from './gym-scope';
 import { extractExercisePodium } from './pr';
+import { getTrackingType, setRecordValues } from './tracking';
 
 export const MUSCLE_GROUP_MAP: Record<string, string[]> = {
   chest: ['chest', 'pectorals', 'pecs'],
@@ -185,11 +186,13 @@ export function buildTrophyRoomSummary(
         recordsByExerciseId.set(exerciseId, summary);
       }
 
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets) {
         if (!s.isCompleted || s.type === 'warmup') continue;
+        const values = setRecordValues(s, trackingType, (weightKg, reps) => calculate1RM(weightKg, reps).average);
 
         // Weight record
-        if (s.weightKg > 0) {
+        if (values.weight > 0) {
           if (!summary.bestWeight || s.weightKg > summary.bestWeight.value) {
             summary.bestWeight = {
               value: s.weightKg,
@@ -222,7 +225,7 @@ export function buildTrophyRoomSummary(
               };
             }
           }
-        } else if (s.reps > 0) {
+        } else if (values.reps > 0) {
           // Reps record for bodyweight
           if (!summary.bestReps || s.reps > summary.bestReps.value) {
             summary.bestReps = {

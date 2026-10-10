@@ -10,6 +10,7 @@ GitHub Release notes for tag `vX.Y.Z`.
 ### Added
 - Optional Android backups after each completed workout, saved to a chosen folder with a manual backup action, status display, and retention of the newest 10 copies.
 - Settings switch to turn off exercise photos downloaded from GitHub. When off, exercises show the built-in illustrations.
+- Optional time, distance and bodyweight tracking, off by default. When turned on in Settings, each exercise can log weight and reps, bodyweight reps, weighted or assisted bodyweight, time (planks, stretches) or distance and time (cardio), chosen from the exercise's menu in a workout. Records, history, backups and the Strong, Hevy and FitNotes CSV import keep these sets. With the setting off, nothing changes.
 
 ### Changed
 - Android builds no longer request the draw-over-other-apps or legacy storage permissions that the Expo template adds.
@@ -19,6 +20,7 @@ GitHub Release notes for tag `vX.Y.Z`.
 ### Fixed
 - The Android rest countdown buzz no longer depends on the app being on screen or on the system touch-vibration setting, which made it unreliable and silent on the lock screen.
 - Adding or subtracting time during a rest keeps the progress bar in place.
+- Hevy and FitNotes CSV imports no longer read a set's time as the workout's duration.
 
 ## [1.0.5]
 

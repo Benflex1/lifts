@@ -5,6 +5,7 @@ import { Exercise, ExerciseGymScope, Routine, Workout } from '../types';
 import { buildGymRestoreMapping, remapGymReferences } from './gym-restore';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { buildDefaultRoutines } from '../database/seedData';
+import { EXERCISE_TRACKING_TYPES_KEY, getTrackingType, mergeTrackingTypeOverrides } from '../workout/tracking';
 
 export interface RestorePreview {
   gymsCount: number;
@@ -90,7 +91,8 @@ function isIdenticalWorkout(a: Workout, b: Workout): boolean {
       aEx[i].exerciseId !== bEx[i].exerciseId ||
       (aEx[i].notes || '') !== (bEx[i].notes || '') ||
       (aEx[i].restTimerSeconds ?? 0) !== (bEx[i].restTimerSeconds ?? 0) ||
-      (aEx[i].targetReps || '') !== (bEx[i].targetReps || '')
+      (aEx[i].targetReps || '') !== (bEx[i].targetReps || '') ||
+      getTrackingType(aEx[i]) !== getTrackingType(bEx[i])
     ) {
       return false;
     }
@@ -103,6 +105,8 @@ function isIdenticalWorkout(a: Workout, b: Workout): boolean {
         aSets[j].type !== bSets[j].type ||
         aSets[j].weightKg !== bSets[j].weightKg ||
         aSets[j].reps !== bSets[j].reps ||
+        (aSets[j].durationSeconds ?? null) !== (bSets[j].durationSeconds ?? null) ||
+        (aSets[j].distanceM ?? null) !== (bSets[j].distanceM ?? null) ||
         (aSets[j].rpe ?? null) !== (bSets[j].rpe ?? null) ||
         Boolean(aSets[j].isCompleted) !== Boolean(bSets[j].isCompleted) ||
         (aSets[j].completedAt || '') !== (bSets[j].completedAt || '')
@@ -255,6 +259,13 @@ export async function computeRestorePlan(
     if (existing.settings[k] === undefined) {
       settingsToInsert[k] = v;
       newSettingsCount++;
+    } else if (k === EXERCISE_TRACKING_TYPES_KEY) {
+      // Per-exercise choices merge, with this device's choices winning.
+      const merged = mergeTrackingTypeOverrides(existing.settings[k], v);
+      if (merged !== existing.settings[k]) {
+        settingsToInsert[k] = merged;
+        newSettingsCount++;
+      }
     }
   }
 

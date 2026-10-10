@@ -18,6 +18,7 @@ import {
 } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
+import { EXERCISE_TRACKING_TYPES_KEY } from '../workout/tracking';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -1092,7 +1093,12 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             sets: selected?.sets
               .filter(set => set.isCompleted)
               .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
-              .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
+              .map(set => ({
+                weightKg: set.weightKg,
+                reps: set.reps,
+                ...(set.durationSeconds !== undefined ? { durationSeconds: set.durationSeconds } : {}),
+                ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+              })) || [],
           };
         });
         resolve(resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined));
@@ -1442,7 +1448,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         if (isDeviceLocalSetting(k)) continue;
         const getReq = sStore.get(k);
         getReq.onsuccess = () => {
-          if (!getReq.result) {
+          // Per-exercise tracking types arrive already merged with this device's choices.
+          if (!getReq.result || k === EXERCISE_TRACKING_TYPES_KEY) {
             sStore.put({ key: k, value: v });
           }
         };

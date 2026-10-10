@@ -15,11 +15,16 @@ import { WeightUnit } from '../utils/units';
 import { colors } from '../theme';
 import { PRMark, PR_RANK_COLORS } from './ui';
 import { formatWeight } from '../utils/units';
+import { formatTrackedSet } from '../workout/tracking';
+import type { TrackingType } from '../types';
 
 export interface PRCelebrationEvent {
   exerciseName: string;
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
+  trackingType?: TrackingType;
   achievement: PRAchievement;
   secondaryCount?: number;
 }
@@ -93,7 +98,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
 
   if (!event) return null;
 
-  const { achievement, exerciseName, weightKg, reps, secondaryCount = 0 } = event;
+  const { achievement, exerciseName, weightKg, reps, durationSeconds, distanceM, trackingType, secondaryCount = 0 } = event;
   const accent = PR_RANK_COLORS[achievement.rank];
   const rankTitle =
     achievement.rank === 1
@@ -103,7 +108,9 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
       : achievement.rank === 2
         ? 'Your 2nd best'
         : 'Your 3rd best';
-  const setText = weightKg > 0 ? `${formatWeight(weightKg, unit)} × ${reps}` : `${reps} reps`;
+  const setText = trackingType
+    ? formatTrackedSet({ weightKg, reps, durationSeconds, distanceM }, trackingType, unit)
+    : weightKg > 0 ? `${formatWeight(weightKg, unit)} × ${reps}` : `${reps} reps`;
   const desc = formatPRDescription(achievement, unit);
 
   return (
