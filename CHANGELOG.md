@@ -10,16 +10,15 @@ GitHub Release notes for tag `vX.Y.Z`.
 ### Added
 - Optional Android backups after each completed workout, saved to a chosen folder with a manual backup action, status display, and retention of the newest 10 copies.
 - Settings switch to turn off exercise photos downloaded from GitHub. When off, exercises show the built-in illustrations.
-- Android shows a rest countdown with the next exercise on the lock screen while the app is in the background.
 
 ### Changed
 - Android builds no longer request the draw-over-other-apps or legacy storage permissions that the Expo template adds.
-- The last three seconds of a rest give a double pulse on each count.
+- Android rests end with a vibration cue instead of a notification: a pulse at 3, 2 and 1 seconds left and a harder buzz at 0. It plays on time with the phone locked or the app closed. Lifts no longer asks for notification permission on Android.
+- On the first rest, Android 14 and later ask once to allow alarms, which keeps the cue on time.
 
 ### Fixed
-- Rest-end alerts on Android now arrive with the phone locked, even after you returned to the app during the rest. Previously returning to the app cancelled the alert.
-- A rest that ends while the app is open no longer also posts a system notification on top of the in-app buzz.
-- Adding or subtracting time during a rest keeps the progress bar in place, and the notification keeps the exercise name.
+- The Android rest countdown buzz no longer depends on the app being on screen or on the system touch-vibration setting, which made it unreliable and silent on the lock screen.
+- Adding or subtracting time during a rest keeps the progress bar in place.
 
 ## [1.0.4]
 

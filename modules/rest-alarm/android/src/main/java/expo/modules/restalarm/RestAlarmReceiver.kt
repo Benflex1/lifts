@@ -6,10 +6,8 @@ import android.content.Intent
 
 class RestAlarmReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
-    RestAlarm.showRestFinished(
-      context,
-      intent.getStringExtra(RestAlarm.EXTRA_TITLE) ?: "Rest Finished!",
-      intent.getStringExtra(RestAlarm.EXTRA_BODY) ?: "Time for your next set."
-    )
+    val endsAt = intent.getLongExtra(RestAlarm.EXTRA_ENDS_AT, -1L)
+    if (endsAt <= 0L) return
+    RestAlarm.playCue(context, endsAt)
   }
 }

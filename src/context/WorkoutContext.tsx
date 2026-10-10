@@ -3,7 +3,8 @@ import { Platform, AppState, AppStateStatus, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Gym, Routine, SetType, Workout, WorkoutSet } from '../types';
-import { getStore } from '../database/db';
+import { getSetting, getStore, setSetting } from '../database/db';
+import { getExactAlarmStatus, openExactAlarmSettings } from '../utils/exactAlarms';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
@@ -39,6 +40,7 @@ import {
   initRestNotifications,
   scheduleRestNotification,
   cancelRestNotification,
+  isRestCueNative,
 } from '../utils/restNotifications';
 import {
   linkExercisesInGroup,
@@ -48,6 +50,8 @@ import {
 import { enqueueCompletedWorkoutSync } from '../health';
 import { RestCountdown, restAlarmForAppState, shiftRestCountdown } from '../utils/restTimer';
 
+const EXACT_ALARM_PROMPTED_KEY = 'exact_alarm_prompted';
+
 interface RestTimerState {
   isActive: boolean;
   remainingSeconds: number;
@@ -56,9 +60,10 @@ interface RestTimerState {
   exerciseName?: string;
 }
 
-// Two taps 120ms apart, so each count reads as a pulse. Skipped off screen, where the rest alarm alerts instead.
+// Two taps 120ms apart, so each count reads as a pulse. Skipped off screen, where the rest alarm alerts instead,
+// and where the native rest cue plays the countdown itself.
 function pulseCountdown(style: Haptics.ImpactFeedbackStyle) {
-  if (Platform.OS === 'web' || AppState.currentState !== 'active') return;
+  if (Platform.OS === 'web' || AppState.currentState !== 'active' || isRestCueNative()) return;
   try {
     Haptics.impactAsync(style);
     setTimeout(() => {
@@ -332,6 +337,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (state === 'background' && controllerRef.current && sessionState.phase === 'active') {
         controllerRef.current.flush().catch(console.error);
       }
+      // The native rest cue is armed for the whole rest (see below), so it does not follow app visibility.
+      if (isRestCueNative()) return;
       const alarm = restAlarmForAppState(state, restCountdownRef.current, Date.now());
       if (alarm.kind === 'arm') {
         void scheduleRestNotification(alarm.endsAt, alarm.exerciseName);
@@ -365,7 +372,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           // Intense countdown finish buzzer (triple pulse)
           // Only buzz if timer reached 0 in foreground / just now (< 1.5s), avoiding false alarm on app resume.
           // In the background the OS rest alarm alerts instead.
-          if (lastBuzzedSecondRef.current !== 0 && expiredRecently && AppState.currentState === 'active') {
+          if (
+            lastBuzzedSecondRef.current !== 0 &&
+            expiredRecently &&
+            AppState.currentState === 'active' &&
+            !isRestCueNative()
+          ) {
             lastBuzzedSecondRef.current = 0;
             if (Platform.OS !== 'web') {
               try {
@@ -409,11 +421,40 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [restTimer.isActive, restTimer.endsAt, sessionState.phase]);
 
+  // Android: the native rest cue (3-2-1 pulses, then a harder buzz at the end) is armed for every rest
+  // start, adjustment and resumed draft, in and out of the app. It is only disarmed by stopRestTimer,
+  // never at expiry, which would cut off the end buzz while it plays.
+  useEffect(() => {
+    if (!isRestCueNative() || !restTimer.isActive || restTimer.endsAt === null) return;
+    void scheduleRestNotification(restTimer.endsAt, restTimer.exerciseName);
+  }, [restTimer.isActive, restTimer.endsAt]);
+
+  // Without exact alarms (denied by default from Android 14) the cue can fire seconds or minutes late,
+  // so ask once, on the first rest. Settings keeps a button for later.
+  const exactAlarmPromptedRef = useRef(false);
+  useEffect(() => {
+    if (!restTimer.isActive || exactAlarmPromptedRef.current || !isRestCueNative()) return;
+    if (getExactAlarmStatus() !== 'denied') return;
+    exactAlarmPromptedRef.current = true;
+    (async () => {
+      if ((await getSetting(EXACT_ALARM_PROMPTED_KEY)) === 'true') return;
+      await setSetting(EXACT_ALARM_PROMPTED_KEY, 'true');
+      const allow = await confirm({
+        title: 'On-time rest buzz',
+        message:
+          'To buzz 3, 2, 1 exactly when your rest ends, even with the phone locked, Lifts needs permission to set alarms. Android may delay the buzz without it.',
+        confirmLabel: 'Allow',
+        cancelLabel: 'Not now',
+      });
+      if (allow) openExactAlarmSettings();
+    })().catch(console.error);
+  }, [restTimer.isActive]);
+
   const startRestTimer = (seconds: number, exerciseName?: string) => {
     if (seconds <= 0) return;
     const endsAt = Date.now() + seconds * 1000;
     lastBuzzedSecondRef.current = null;
-    // The OS alarm is armed when the app leaves the screen (see the AppState handler), not here.
+    // The OS alarm is armed by the native cue effect above on Android, elsewhere when the app leaves the screen.
     setRestTimer({
       isActive: true,
       remainingSeconds: seconds,
