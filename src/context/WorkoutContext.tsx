@@ -1012,6 +1012,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isWeightEdited: false,
         previousWeightKg: ghostStats.previousWeightKg,
         previousReps: ghostStats.previousReps,
+        ...(ghostStats.previousDurationSeconds !== undefined
+          ? { previousDurationSeconds: ghostStats.previousDurationSeconds }
+          : {}),
+        ...(ghostStats.previousDistanceM !== undefined ? { previousDistanceM: ghostStats.previousDistanceM } : {}),
         ...copyPreviousSetProvenance(ghostStats.provenanceSet),
       };
       return { ...ex, sets: [...ex.sets, newSet] };
