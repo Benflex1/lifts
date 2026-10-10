@@ -36,3 +36,8 @@ export async function cancelRestNotification(): Promise<void> {
     lastWebTimer = null;
   }
 }
+
+// Only Android has a native rest cue (see restNotifications.android.ts); here the app buzzes.
+export function isRestCueNative(): boolean {
+  return false;
+}
