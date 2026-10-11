@@ -41,6 +41,7 @@ import {
   Layers,
   GripVertical,
   SlidersHorizontal,
+  TrendingUp,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -75,6 +76,7 @@ import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
+import { isOverloadFillTarget, OverloadSuggestion, suggestNextTarget } from '../workout/overload';
 import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
 import { isExcessiveDuration } from '../workout/duration';
 import { colors } from '../theme';
@@ -139,7 +141,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     setActiveGym,
   } = useWorkout();
   const isRestTimerActive = useIsRestTimerActive();
-  const { unit, gymTrackingEnabled, trackingTypesEnabled, setExerciseTrackingType: saveExerciseTrackingType } = useSettings();
+  const {
+    unit,
+    gymTrackingEnabled,
+    trackingTypesEnabled,
+    overloadEnabled,
+    setExerciseTrackingType: saveExerciseTrackingType,
+  } = useSettings();
   const [trackingTypeExercise, setTrackingTypeExercise] = useState<ActiveExercise | null>(null);
   const { confirm, notify } = useDialog();
 
@@ -384,6 +392,22 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       reps: applied.reps,
       isWeightEdited: true,
     });
+  };
+
+  const handleApplyOverload = (activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
+    if (Platform.OS !== 'web') {
+      try {
+        Haptics.selectionAsync();
+      } catch (_) {}
+    }
+    for (const set of activeEx.sets) {
+      if (!isOverloadFillTarget(set)) continue;
+      updateSet(activeEx.id, set.id, {
+        weightKg: suggestion.weightKg,
+        reps: suggestion.reps,
+        isWeightEdited: true,
+      });
+    }
   };
 
   // Handle hardware back press on Android to minimize instead of exiting
@@ -780,6 +804,18 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           const rowViewModel = activeEx.exercise ? getExerciseRowViewModel(activeEx.exercise) : null;
 
           const showNoteInput = editingNoteExId === activeEx.id || Boolean(activeEx.notes && activeEx.notes.length > 0);
+          const overload = overloadEnabled && activeEx.sets.some(isOverloadFillTarget)
+            ? suggestNextTarget({
+                sets: activeEx.sets,
+                targetReps: activeEx.targetReps,
+                trackingType,
+                equipment: activeEx.exercise?.equipment,
+                unit,
+              })
+            : null;
+          const overloadLabel = overload
+            ? `${trackingType === 'weighted_bodyweight' ? '+' : ''}${formatWeight(overload.weightKg, unit)} × ${overload.reps}`
+            : '';
 
           const cardElement = !isExpanded ? (
             // Collapsed Accordion Row - Lyfta Screenshot 1
@@ -948,6 +984,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     Rest {activeEx.restTimerSeconds ? formatDuration(activeEx.restTimerSeconds) : 'Off'}
                   </Text>
                 </TouchableOpacity>
+                {overload && (
+                  <TouchableOpacity
+                    style={styles.overloadPill}
+                    onPress={() => handleApplyOverload(activeEx, overload)}
+                    onLongPress={() => void notify({ title: `Next target: ${overloadLabel}`, message: overload.reason })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Next target ${overloadLabel}`}
+                    accessibilityHint={`${overload.reason} Tap to fill your remaining sets.`}
+                  >
+                    <TrendingUp size={13} color={colors.successLight} />
+                    <Text style={styles.overloadPillText}>{overloadLabel}</Text>
+                  </TouchableOpacity>
+                )}
                 {!showNoteInput && (
                   <TouchableOpacity
                     style={styles.addNotePrompt}
@@ -2356,6 +2405,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  overloadPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.successSoft,
+  },
+  overloadPillText: {
+    color: colors.successLight,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
   // Rest Timer Row (Lyfta style)
   restTimerRow: {
     flexDirection: 'row',
@@ -2980,6 +3044,7 @@ const styles = StyleSheet.create({
   exerciseMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 10,
     paddingHorizontal: 2,

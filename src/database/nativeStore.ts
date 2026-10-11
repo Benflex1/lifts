@@ -1054,7 +1054,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     const rows = await driver.getAllAsync<any>(
       `SELECT w.id AS workout_id, w.start_time, w.gym_id, g.name AS gym_name,
               we.id AS occurrence_id, we.order_index, s.weight_kg, s.reps, s.set_number,
-              s.duration_seconds AS set_duration_seconds, s.distance_m
+              s.duration_seconds AS set_duration_seconds, s.distance_m, s.set_type, s.rpe
        FROM workouts w
        JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ?
        LEFT JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
@@ -1093,6 +1093,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
           reps: row.reps,
           ...(row.set_duration_seconds === null ? {} : { durationSeconds: row.set_duration_seconds }),
           ...(row.distance_m === null ? {} : { distanceM: row.distance_m }),
+          ...(row.set_type ? { type: row.set_type } : {}),
+          ...(row.rpe === null || row.rpe === undefined ? {} : { rpe: row.rpe }),
         });
       }
     }

@@ -44,6 +44,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setRemoteImagesEnabled,
     trackingTypesEnabled,
     setTrackingTypesEnabled,
+    overloadEnabled,
+    setOverloadEnabled,
   } = useSettings();
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
@@ -123,6 +125,18 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setIsSaving(true);
     try {
       await setTrackingTypesEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleOverloadChange = async (enabled: boolean) => {
+    if (isSaving || enabled === overloadEnabled) return;
+    setIsSaving(true);
+    try {
+      await setOverloadEnabled(enabled);
     } catch {
       // Error handled by SettingsContext notification.
     } finally {
@@ -253,6 +267,27 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
             >
               <Text style={styles.manageButtonText}>Manage Gyms</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.settingHeaderRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.sectionTitle}>Next Targets</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Suggest the next weight and reps for each exercise from your last session. Tap the suggestion in a workout to fill your sets.
+                </Text>
+              </View>
+              <Switch
+                value={overloadEnabled}
+                onValueChange={handleOverloadChange}
+                disabled={isSaving}
+                trackColor={{ false: colors.control, true: colors.primary }}
+                thumbColor={overloadEnabled ? colors.text : colors.textSecondary}
+                accessibilityLabel="Next Targets"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: overloadEnabled, disabled: isSaving }}
+              />
+            </View>
           </View>
 
           <View style={styles.section}>

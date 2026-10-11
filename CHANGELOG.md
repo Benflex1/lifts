@@ -8,6 +8,7 @@ GitHub Release notes for tag `vX.Y.Z`.
 ## [Unreleased]
 
 ### Added
+- Next targets for each exercise, from your last session. Once every working set reaches the top of the routine's rep range, Lifts suggests the next weight step and the bottom of the range; until then it suggests the same weight with one more rep. Warmups and drop sets are ignored, and a set logged at RPE 9.5 or harder holds the weight. Tap the green target in a workout to fill your remaining sets, or hold it to see why. It can be turned off in Settings.
 - Optional Android backups after each completed workout, saved to a chosen folder with a manual backup action, status display, and retention of the newest 10 copies.
 - Settings switch to turn off exercise photos downloaded from GitHub. When off, exercises show the built-in illustrations.
 - Optional time, distance and bodyweight tracking, off by default. When turned on in Settings, each exercise can log weight and reps, bodyweight reps, weighted or assisted bodyweight, time (planks, stretches) or distance and time (cardio), chosen from the exercise's menu in a workout. Records, history, backups and the Strong, Hevy and FitNotes CSV import keep these sets. With the setting off, nothing changes.
@@ -21,6 +22,8 @@ GitHub Release notes for tag `vX.Y.Z`.
 - The Android rest countdown buzz no longer depends on the app being on screen or on the system touch-vibration setting, which made it unreliable and silent on the lock screen.
 - Adding or subtracting time during a rest keeps the progress bar in place.
 - Hevy and FitNotes CSV imports no longer read a set's time as the workout's duration.
+- Sets no longer show as new records while a workout's history is still loading, and a resumed workout is ranked against every other saved workout.
+- Importing a backup keeps its default gym name and color and its edited built-in routines instead of stopping with a routine conflict.
 
 ## [1.0.5]
 

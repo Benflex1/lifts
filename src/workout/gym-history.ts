@@ -1,4 +1,4 @@
-import { Exercise, ExerciseGymScope, PreviousSetSuggestion } from '../types';
+import { Exercise, ExerciseGymScope, PreviousSetSuggestion, SetType } from '../types';
 import { getAllowedGymIds } from './gym-scope';
 
 export interface CompletedExerciseOccurrence {
@@ -7,7 +7,7 @@ export interface CompletedExerciseOccurrence {
   gymId: string;
   gymName: string;
   occurrenceIndex: number;
-  sets: Array<{ weightKg: number; reps: number; durationSeconds?: number; distanceM?: number }>;
+  sets: Array<{ weightKg: number; reps: number; durationSeconds?: number; distanceM?: number; type?: SetType; rpe?: number }>;
 }
 
 export function resolvePreviousSetsForExercise(
@@ -26,11 +26,13 @@ export function resolvePreviousSetsForExercise(
   if (!fallback || fallback.sets.length === 0) return [];
 
   const isForeignFallback = selected === undefined && allowedGymIds !== null;
-  return fallback.sets.map(({ weightKg, reps, durationSeconds, distanceM }) => ({
+  return fallback.sets.map(({ weightKg, reps, durationSeconds, distanceM, type, rpe }) => ({
     weightKg,
     reps,
     ...(durationSeconds !== undefined ? { durationSeconds } : {}),
     ...(distanceM !== undefined ? { distanceM } : {}),
+    ...(type !== undefined ? { type } : {}),
+    ...(rpe !== undefined && rpe !== null ? { rpe } : {}),
     ...(isForeignFallback ? { sourceGymId: fallback.gymId, sourceGymName: fallback.gymName } : {}),
   }));
 }

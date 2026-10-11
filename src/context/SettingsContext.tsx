@@ -15,6 +15,7 @@ import {
   TRACKING_TYPES_ENABLED_KEY,
   TrackingTypeOverrides,
 } from '../workout/tracking';
+import { parseProgressiveOverloadEnabled, PROGRESSIVE_OVERLOAD_KEY } from '../workout/overload';
 
 export interface SettingsContextType {
   unit: WeightUnit;
@@ -29,6 +30,8 @@ export interface SettingsContextType {
   setTrackingTypesEnabled: (enabled: boolean) => Promise<void>;
   trackingTypeOverrides: TrackingTypeOverrides;
   setExerciseTrackingType: (exerciseId: string, type: TrackingType) => Promise<void>;
+  overloadEnabled: boolean;
+  setOverloadEnabled: (enabled: boolean) => Promise<void>;
   loading: boolean;
 }
 
@@ -45,6 +48,8 @@ const SettingsContext = createContext<SettingsContextType>({
   setTrackingTypesEnabled: async () => {},
   trackingTypeOverrides: {},
   setExerciseTrackingType: async () => {},
+  overloadEnabled: true,
+  setOverloadEnabled: async () => {},
   loading: true,
 });
 
@@ -56,6 +61,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [remoteImagesEnabled, setRemoteImagesEnabledState] = useState(false);
   const [trackingTypesEnabled, setTrackingTypesEnabledState] = useState(false);
   const [trackingTypeOverrides, setTrackingTypeOverridesState] = useState<TrackingTypeOverrides>({});
+  const [overloadEnabled, setOverloadEnabledState] = useState(true);
   const [loading, setLoading] = useState(true);
   const { notify } = useDialog();
 
@@ -69,6 +75,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           storedRemoteImages,
           storedTrackingTypes,
           storedTrackingTypeOverrides,
+          storedOverload,
         ] = await Promise.all([
           getSetting('unit'),
           getSetting('gym_tracking_enabled'),
@@ -76,6 +83,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           getSetting('remote_exercise_images'),
           getSetting(TRACKING_TYPES_ENABLED_KEY),
           getSetting(EXERCISE_TRACKING_TYPES_KEY),
+          getSetting(PROGRESSIVE_OVERLOAD_KEY),
         ]);
         if (storedUnit === 'kg' || storedUnit === 'lb') setUnitState(storedUnit);
         setGymTrackingEnabledState(parseGymTrackingEnabled(storedGymTracking));
@@ -84,6 +92,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setRemoteImagesEnabledState(parseRemoteExerciseImagesEnabled(storedRemoteImages));
         setTrackingTypesEnabledState(parseTrackingTypesEnabled(storedTrackingTypes));
         setTrackingTypeOverridesState(parseTrackingTypeOverrides(storedTrackingTypeOverrides));
+        setOverloadEnabledState(parseProgressiveOverloadEnabled(storedOverload));
         if (persistedHealthSync) {
           void retryPendingHealthSyncs().catch((error) => {
             console.error('Unable to retry pending health syncs', error);
@@ -157,6 +166,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [trackingTypesEnabled, notify]);
 
+  const setOverloadEnabled = useCallback(async (enabled: boolean) => {
+    const previous = overloadEnabled;
+    setOverloadEnabledState(enabled);
+    try {
+      await setSetting(PROGRESSIVE_OVERLOAD_KEY, enabled ? 'true' : 'false');
+    } catch (err: any) {
+      setOverloadEnabledState(previous);
+      await notify({
+        title: 'Settings Error',
+        message: err?.message || 'Failed to save next-target setting.',
+      });
+      throw err;
+    }
+  }, [overloadEnabled, notify]);
+
   const setExerciseTrackingType = useCallback(async (exerciseId: string, type: TrackingType) => {
     const previous = trackingTypeOverrides;
     // Start from what is stored, so choices a backup restore merged in since launch are kept.
@@ -206,6 +230,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setTrackingTypesEnabled,
         trackingTypeOverrides,
         setExerciseTrackingType,
+        overloadEnabled,
+        setOverloadEnabled,
         loading,
       }}
     >

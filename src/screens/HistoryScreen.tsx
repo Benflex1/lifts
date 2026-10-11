@@ -289,7 +289,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
             previousGymName: sourceGym?.name,
             ...(s.durationSeconds !== undefined ? { durationSeconds: s.durationSeconds } : {}),
             ...(s.distanceM !== undefined ? { distanceM: s.distanceM } : {}),
-          }, s)),
+          }, s.isCompleted ? s : { ...s, type: undefined, rpe: undefined })),
         };
       });
 

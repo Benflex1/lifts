@@ -130,6 +130,11 @@ export function validateWorkoutSetRecord(value: unknown, label: string): asserts
   requireOptionalFiniteNumber(value.distanceM, `${label}.distanceM`, 0);
   requireOptionalFiniteNumber(value.previousDurationSeconds, `${label}.previousDurationSeconds`, 0);
   requireOptionalFiniteNumber(value.previousDistanceM, `${label}.previousDistanceM`, 0);
+  if (value.previousType !== undefined && value.previousType !== null
+    && (typeof value.previousType !== 'string' || !SET_TYPES.has(value.previousType))) {
+    throw new Error(`Invalid ${label}.previousType: ${String(value.previousType)}`);
+  }
+  requireOptionalFiniteNumber(value.previousRpe, `${label}.previousRpe`, 0);
   requireOptionalString(value.previousGymId, `${label}.previousGymId`);
   requireOptionalString(value.previousGymName, `${label}.previousGymName`);
   if (value.isWeightEdited !== undefined && value.isWeightEdited !== null && typeof value.isWeightEdited !== 'boolean') {
