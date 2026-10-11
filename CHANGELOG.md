@@ -8,6 +8,7 @@ GitHub Release notes for tag `vX.Y.Z`.
 ## [Unreleased]
 
 ### Added
+- Rotations: turn a routine folder into a program like Push, Pull, Legs. The Workout tab shows what's up next with the cycle's progress, and finishing a workout moves the rotation on. You can skip a day or choose another workout, reorder the rotation, and add an optional deload week every few cycles, when next targets drop to about 90%. Folders without a rotation look the same as before.
 - Next targets for each exercise, from your last session. Once every working set reaches the top of the routine's rep range, Lifts suggests the next weight step and the bottom of the range; until then it suggests the same weight with one more rep. Warmups and drop sets are ignored, and a set logged at RPE 9.5 or harder holds the weight. Tap the green target in a workout to fill your remaining sets, or hold it to see why. It can be turned off in Settings.
 - Optional Android backups after each completed workout, saved to a chosen folder with a manual backup action, status display, and retention of the newest 10 copies.
 - Settings switch to turn off exercise photos downloaded from GitHub. When off, exercises show the built-in illustrations.

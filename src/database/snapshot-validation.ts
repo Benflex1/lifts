@@ -247,6 +247,9 @@ function validateWorkoutRecord(
   requireString(value.gymId, `${label}.gymId`);
   if (!knownGymIds.has(value.gymId)) throw new Error(`Invalid gym ID in ${label}: ${value.gymId}`);
   requireOptionalString(value.routineId, `${label}.routineId`);
+  if (value.isDeload !== undefined && value.isDeload !== null && typeof value.isDeload !== 'boolean') {
+    throw new Error(`Invalid ${label}.isDeload`);
+  }
   requireTimestamp(value.startTime, `${label}.startTime`);
   requireOptionalTimestamp(value.endTime, `${label}.endTime`);
   requireFiniteNumber(value.durationSeconds, `${label}.durationSeconds`, 0);

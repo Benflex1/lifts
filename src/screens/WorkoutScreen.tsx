@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,13 @@ import {
   ChevronRight,
   Check,
   Flame,
+  Repeat,
+  SkipForward,
+  ListOrdered,
+  XCircle,
 } from 'lucide-react-native';
 import { useWorkoutActions, useWorkoutGyms } from '../context/WorkoutContext';
-import { Routine } from '../types';
+import { Routine, WorkoutHistorySummary } from '../types';
 import { getRoutines, deleteRoutine, duplicateRoutine, getGyms, getWorkoutHistory } from '../database/db';
 import { buildWeekSnapshot, WeekSnapshot } from '../workout/week-summary';
 import { formatWeight } from '../utils/units';
@@ -35,13 +39,25 @@ import { useSettings } from '../context/SettingsContext';
 import { useDialog } from '../context/DialogContext';
 import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
 import { getSupersetMetadata } from '../workout/supersets';
+import {
+  findProgramForRoutine,
+  ProgramState,
+  removeProgramFolder,
+  renameProgramFolder,
+  resolveProgramState,
+  resolveProgramStates,
+  RoutineProgram,
+  withNextOverride,
+} from '../workout/programs';
+import { ProgramCard } from '../components/ProgramCard';
+import { ProgramEditorModal } from '../components/ProgramEditorModal';
 import { colors, radii } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader, SectionHeader } from '../components/ui';
 
 const WorkoutScreenInner: React.FC = () => {
   const { startWorkout, refreshGyms } = useWorkoutActions();
   const { gyms } = useWorkoutGyms();
-  const { gymTrackingEnabled, unit } = useSettings();
+  const { gymTrackingEnabled, unit, routinePrograms, updateRoutinePrograms } = useSettings();
   const { confirm, notify } = useDialog();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('All');
@@ -51,9 +67,14 @@ const WorkoutScreenInner: React.FC = () => {
   const [showFolderManage, setShowFolderManage] = useState(false);
   const [menuRoutine, setMenuRoutine] = useState<Routine | null>(null);
   const [week, setWeek] = useState<WeekSnapshot | null>(null);
+  const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
+  const [menuProgram, setMenuProgram] = useState<ProgramState | null>(null);
+  const [pickProgram, setPickProgram] = useState<ProgramState | null>(null);
+  const [editingProgramFolder, setEditingProgramFolder] = useState<string | null>(null);
   const [pendingStart, setPendingStart] = useState<{
     routine?: Routine;
     customName: string;
+    deload?: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -65,13 +86,28 @@ const WorkoutScreenInner: React.FC = () => {
   const loadRoutines = async () => {
     const [list, history] = await Promise.all([getRoutines(), getWorkoutHistory()]);
     setRoutines(list);
+    setHistory(history);
     setWeek(buildWeekSnapshot(history));
   };
 
+  const programStates = useMemo(
+    () => resolveProgramStates(routinePrograms, routines, history),
+    [routinePrograms, routines, history],
+  );
+  const hasPrograms = programStates.length > 0;
+
+  // Starting a rotation's routine from anywhere counts, and picks up its deload week.
+  const isDeloadStart = (routine?: Routine): boolean => {
+    const program = findProgramForRoutine(routinePrograms, routine);
+    if (!program) return false;
+    return resolveProgramState(program, routines, history)?.isDeload ?? false;
+  };
+
   const openStartModal = async (routine?: Routine, customName = 'Empty Workout') => {
+    const deload = isDeloadStart(routine);
     if (!gymTrackingEnabled) {
       try {
-        await startWorkout(routine, customName);
+        await startWorkout(routine, customName, undefined, deload ? { deload } : undefined);
       } catch (e) {
         await notify({
           title: 'Error',
@@ -85,10 +121,10 @@ const WorkoutScreenInner: React.FC = () => {
       const [gymList] = await Promise.all([getGyms(), refreshGyms()]);
       // With a single gym there is nothing to choose, so start straight away.
       if (gymList.length <= 1) {
-        await startWorkout(routine, customName, undefined, { gymId: resolveInitialStartGymId(gymList) });
+        await startWorkout(routine, customName, undefined, { gymId: resolveInitialStartGymId(gymList), deload });
         return;
       }
-      setPendingStart({ routine, customName });
+      setPendingStart({ routine, customName, deload });
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to start workout.' });
     }
@@ -110,7 +146,7 @@ const WorkoutScreenInner: React.FC = () => {
         pendingStart.routine,
         pendingStart.customName,
         undefined,
-        { gymId },
+        { gymId, deload: pendingStart.deload },
       );
       if (started) setPendingStart(null);
       return started;
@@ -151,6 +187,40 @@ const WorkoutScreenInner: React.FC = () => {
     }
   };
 
+  const saveProgram = async (program: RoutineProgram) => {
+    await updateRoutinePrograms((programs) => ({ ...programs, [program.folderName]: program }));
+  };
+
+  const stopProgram = async (folderName: string) => {
+    await updateRoutinePrograms((programs) => removeProgramFolder(programs, folderName));
+  };
+
+  const pointProgramAt = async (state: ProgramState, routineId: string) => {
+    try {
+      await updateRoutinePrograms((programs) => {
+        const stored = programs[state.program.folderName];
+        return stored ? { ...programs, [stored.folderName]: withNextOverride(stored, routineId) } : programs;
+      });
+    } catch {
+      // The settings context already told the user.
+    }
+  };
+
+  const handleStopProgram = async (state: ProgramState) => {
+    const shouldStop = await confirm({
+      title: 'Stop Rotation',
+      message: `"${state.program.folderName}" goes back to a normal folder. Your routines and history stay.`,
+      confirmLabel: 'Stop',
+      destructive: true,
+    });
+    if (!shouldStop) return;
+    try {
+      await stopProgram(state.program.folderName);
+    } catch {
+      // The settings context already told the user.
+    }
+  };
+
   // Collect unique folders
   const folders = [
     'All',
@@ -168,6 +238,9 @@ const WorkoutScreenInner: React.FC = () => {
     selectedFolder === 'All'
       ? routines
       : routines.filter(r => r.folderName === selectedFolder);
+
+  const canMakeRotation =
+    selectedFolder !== 'All' && filteredRoutines.length >= 2 && !routinePrograms[selectedFolder];
 
   const openEditor = (routine: Routine | null) => {
     setRoutineToEdit(routine);
@@ -200,6 +273,16 @@ const WorkoutScreenInner: React.FC = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Up next in each rotation */}
+        {programStates.map(state => (
+          <ProgramCard
+            key={state.program.folderName}
+            state={state}
+            onStart={() => handleStartRoutine(state.next)}
+            onMenu={() => setMenuProgram(state)}
+          />
+        ))}
+
         {/* This week */}
         {week && (
           <View style={styles.weekCard}>
@@ -252,21 +335,22 @@ const WorkoutScreenInner: React.FC = () => {
         )}
 
         {/* Quick Start */}
+        {/* With a rotation up next, the empty workout steps back so one start button leads. */}
         <TouchableOpacity
-          style={styles.quickStartCard}
+          style={[styles.quickStartCard, hasPrograms && styles.quickStartQuiet]}
           onPress={handleStartEmpty}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Start empty workout"
         >
-          <View style={styles.quickStartIcon}>
-            <Play size={20} color={colors.primary} fill={colors.primary} />
+          <View style={[styles.quickStartIcon, hasPrograms && styles.quickStartIconQuiet]}>
+            <Play size={hasPrograms ? 16 : 20} color={colors.primary} fill={colors.primary} />
           </View>
           <View style={styles.quickStartInfo}>
-            <Text style={styles.quickStartTitle}>Start Empty Workout</Text>
-            <Text style={styles.quickStartSubtitle}>Log exercises as you go</Text>
+            <Text style={[styles.quickStartTitle, hasPrograms && styles.quickStartTitleQuiet]}>Start Empty Workout</Text>
+            <Text style={[styles.quickStartSubtitle, hasPrograms && styles.quickStartSubtitleQuiet]}>Log exercises as you go</Text>
           </View>
-          <ChevronRight size={20} color={colors.onPrimary} />
+          <ChevronRight size={20} color={hasPrograms ? colors.textMuted : colors.onPrimary} />
         </TouchableOpacity>
 
         {/* Routines */}
@@ -308,6 +392,25 @@ const WorkoutScreenInner: React.FC = () => {
               accessibilityLabel="Manage folders"
             />
           </View>
+        )}
+
+        {canMakeRotation && (
+          <TouchableOpacity
+            style={styles.makeRotation}
+            onPress={() => setEditingProgramFolder(selectedFolder)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Make ${selectedFolder} a rotation`}
+          >
+            <View style={styles.makeRotationIcon}>
+              <Repeat size={16} color={colors.primaryLight} />
+            </View>
+            <View style={styles.makeRotationText}>
+              <Text style={styles.makeRotationTitle}>Make this folder a rotation</Text>
+              <Text style={styles.makeRotationSubtitle}>Always know which workout is next</Text>
+            </View>
+            <ChevronRight size={18} color={colors.textMuted} />
+          </TouchableOpacity>
         )}
 
         {filteredRoutines.map(routine => {
@@ -418,6 +521,69 @@ const WorkoutScreenInner: React.FC = () => {
         }
       />
 
+      <ActionSheet
+        visible={menuProgram !== null}
+        title={menuProgram ? `${menuProgram.program.folderName} rotation` : undefined}
+        subtitle={menuProgram ? `Up next: ${menuProgram.next.name}` : undefined}
+        onClose={() => setMenuProgram(null)}
+        actions={
+          menuProgram
+            ? [
+                {
+                  key: 'skip',
+                  label: `Skip to ${menuProgram.rotation[(menuProgram.nextIndex + 1) % menuProgram.rotation.length].name}`,
+                  icon: SkipForward,
+                  onPress: () => pointProgramAt(
+                    menuProgram,
+                    menuProgram.rotation[(menuProgram.nextIndex + 1) % menuProgram.rotation.length].id,
+                  ),
+                },
+                { key: 'pick', label: 'Choose next workout', icon: ListOrdered, onPress: () => setPickProgram(menuProgram) },
+                {
+                  key: 'edit',
+                  label: 'Edit rotation',
+                  icon: Edit2,
+                  onPress: () => setEditingProgramFolder(menuProgram.program.folderName),
+                },
+                {
+                  key: 'stop',
+                  label: 'Stop rotation',
+                  icon: XCircle,
+                  destructive: true,
+                  onPress: () => handleStopProgram(menuProgram),
+                },
+              ]
+            : []
+        }
+      />
+
+      <ActionSheet
+        visible={pickProgram !== null}
+        title="Choose next workout"
+        subtitle={pickProgram?.program.folderName}
+        onClose={() => setPickProgram(null)}
+        actions={
+          pickProgram
+            ? pickProgram.rotation.map((routine, index) => ({
+                key: routine.id,
+                label: index === pickProgram.nextIndex ? `${routine.name} (up next)` : routine.name,
+                icon: index === pickProgram.nextIndex ? Check : Play,
+                onPress: () => pointProgramAt(pickProgram, routine.id),
+              }))
+            : []
+        }
+      />
+
+      <ProgramEditorModal
+        visible={editingProgramFolder !== null}
+        folderName={editingProgramFolder}
+        routines={routines}
+        program={editingProgramFolder ? routinePrograms[editingProgramFolder] : undefined}
+        onSave={saveProgram}
+        onStop={() => (editingProgramFolder ? stopProgram(editingProgramFolder) : Promise.resolve())}
+        onClose={() => setEditingProgramFolder(null)}
+      />
+
       {/* Routine Editor Modal */}
       <RoutineEditorModal
         visible={showEditor}
@@ -435,6 +601,10 @@ const WorkoutScreenInner: React.FC = () => {
           setShowFolderManage(false);
           loadRoutines();
         }}
+        onFolderRenamed={(oldName, newName) =>
+          updateRoutinePrograms((programs) => renameProgramFolder(programs, oldName, newName))
+        }
+        onFolderDeleted={(name) => updateRoutinePrograms((programs) => removeProgramFolder(programs, name))}
       />
 
       <SettingsModal
@@ -476,6 +646,26 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     marginBottom: 28,
+  },
+  quickStartQuiet: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 12,
+  },
+  quickStartIconQuiet: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primarySoft,
+  },
+  quickStartTitleQuiet: {
+    color: colors.text,
+    fontSize: 15,
+  },
+  quickStartSubtitleQuiet: {
+    color: colors.textMuted,
+    opacity: 1,
   },
   quickStartIcon: {
     width: 44,
@@ -590,6 +780,40 @@ const styles = StyleSheet.create({
     color: colors.primaryLight,
     fontSize: 15,
     fontWeight: '700',
+  },
+  makeRotation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.primarySoft,
+    backgroundColor: colors.surfaceSunken,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  makeRotationIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  makeRotationText: {
+    flex: 1,
+  },
+  makeRotationTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  makeRotationSubtitle: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 1,
   },
   emptyRoutinesBox: {
     alignItems: 'center',

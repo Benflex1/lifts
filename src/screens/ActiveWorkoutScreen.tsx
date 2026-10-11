@@ -42,6 +42,7 @@ import {
   GripVertical,
   SlidersHorizontal,
   TrendingUp,
+  Feather,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -701,7 +702,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           <Text style={styles.topBarTitle} numberOfLines={1}>
             {activeWorkout.name}
           </Text>
-          {gymTrackingEnabled && displayedActiveGym ? (
+          {activeWorkout.isDeload ? (
+            <Text style={[styles.topBarSubtitle, styles.topBarDeload]} numberOfLines={1}>
+              Deload week{gymTrackingEnabled && displayedActiveGym ? ` · ${displayedActiveGym.name}` : ''}
+            </Text>
+          ) : gymTrackingEnabled && displayedActiveGym ? (
             <Text style={styles.topBarSubtitle} numberOfLines={1}>
               {displayedActiveGym.name}
             </Text>
@@ -804,15 +809,18 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           const rowViewModel = activeEx.exercise ? getExerciseRowViewModel(activeEx.exercise) : null;
 
           const showNoteInput = editingNoteExId === activeEx.id || Boolean(activeEx.notes && activeEx.notes.length > 0);
-          const overload = overloadEnabled && activeEx.sets.some(isOverloadFillTarget)
+          const isDeload = activeWorkout.isDeload === true;
+          const overload = (overloadEnabled || isDeload) && activeEx.sets.some(isOverloadFillTarget)
             ? suggestNextTarget({
                 sets: activeEx.sets,
                 targetReps: activeEx.targetReps,
                 trackingType,
                 equipment: activeEx.exercise?.equipment,
                 unit,
+                deload: isDeload,
               })
             : null;
+          const isDeloadTarget = overload?.kind === 'deload';
           const overloadLabel = overload
             ? `${trackingType === 'weighted_bodyweight' ? '+' : ''}${formatWeight(overload.weightKg, unit)} × ${overload.reps}`
             : '';
@@ -986,15 +994,17 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 </TouchableOpacity>
                 {overload && (
                   <TouchableOpacity
-                    style={styles.overloadPill}
+                    style={[styles.overloadPill, isDeloadTarget && styles.deloadPill]}
                     onPress={() => handleApplyOverload(activeEx, overload)}
                     onLongPress={() => void notify({ title: `Next target: ${overloadLabel}`, message: overload.reason })}
                     accessibilityRole="button"
                     accessibilityLabel={`Next target ${overloadLabel}`}
                     accessibilityHint={`${overload.reason} Tap to fill your remaining sets.`}
                   >
-                    <TrendingUp size={13} color={colors.successLight} />
-                    <Text style={styles.overloadPillText}>{overloadLabel}</Text>
+                    {isDeloadTarget
+                      ? <Feather size={13} color={colors.warning} />
+                      : <TrendingUp size={13} color={colors.successLight} />}
+                    <Text style={[styles.overloadPillText, isDeloadTarget && styles.deloadPillText]}>{overloadLabel}</Text>
                   </TouchableOpacity>
                 )}
                 {!showNoteInput && (
@@ -2418,6 +2428,15 @@ const styles = StyleSheet.create({
     color: colors.successLight,
     fontSize: 12,
     fontWeight: '700',
+  },
+  topBarDeload: {
+    color: colors.warning,
+  },
+  deloadPill: {
+    backgroundColor: colors.warningSoft,
+  },
+  deloadPillText: {
+    color: colors.warning,
   },
 
   // Rest Timer Row (Lyfta style)

@@ -618,6 +618,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       durationSeconds: 0,
       totalVolumeKg: 0,
       exercises,
+      ...(options?.deload ? { isDeload: true } : {}),
     };
 
     await ctrl.start(newWorkout);
