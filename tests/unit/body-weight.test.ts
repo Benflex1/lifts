@@ -29,6 +29,7 @@ describe('body weight log', () => {
       { date: '2026-10-02', weightKg: 820 },
       { date: 'yesterday', weightKg: 80 },
       { date: '2026-10-03', weightKg: '80' },
+      { date: '2026-02-31', weightKg: 80 },
       null,
     ]));
     assert.deepEqual(log, [

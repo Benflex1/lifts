@@ -351,6 +351,7 @@ const AnalyticsScreenInner: React.FC = () => {
       if (!proceed) return;
 
       await store.mergeSnapshot(snapshotToMerge);
+      void bodyWeight.reload();
       await notify({
         title: 'Restore Complete',
         message: 'Your backup data has been successfully merged.',

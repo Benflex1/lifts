@@ -40,12 +40,14 @@ export function BodyWeightModal({ visible, entries, unit, onSave, onDelete, onCl
   const [text, setText] = useState('');
   const [dayOffset, setDayOffset] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const entryFor = (offset: number) => entries.find((entry) => entry.date === dateKeyDaysAgo(offset));
 
   useEffect(() => {
     if (!visible) return;
     setDayOffset(0);
+    setPendingDelete(null);
     // Start from today's weigh-in if there is one, else the latest, so a small change is a tap or two.
     const start = entryFor(0) ?? entries[entries.length - 1];
     setText(start ? kgToDisplay(start.weightKg, unit).toFixed(1) : '');
@@ -53,7 +55,8 @@ export function BodyWeightModal({ visible, entries, unit, onSave, onDelete, onCl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const parsed = parseFloat(sanitizeWeightInput(text));
+  // Weigh-ins keep one decimal, the same as the field shows, so saving never shifts a value.
+  const parsed = Math.round(parseFloat(sanitizeWeightInput(text)) * 10) / 10;
   const weightKg = Number.isFinite(parsed) ? displayToKg(parsed, unit) : NaN;
   const isValid = isValidBodyWeightKg(weightKg);
   const replacing = entryFor(dayOffset);
@@ -148,15 +151,30 @@ export function BodyWeightModal({ visible, entries, unit, onSave, onDelete, onCl
                     <Text style={styles.recentValue}>
                       {kgToDisplay(entry.weightKg, unit).toFixed(1)} {unit}
                     </Text>
-                    <TouchableOpacity
-                      onPress={() => void onDelete(entry.date).catch(() => {})}
-                      style={styles.deleteBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Delete weigh-in from ${formatWeighInDate(entry.date)}`}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Trash2 size={15} color={colors.textMuted} />
-                    </TouchableOpacity>
+                    {pendingDelete === entry.date ? (
+                      // A second tap deletes, so a stray tap never loses a weigh-in.
+                      <TouchableOpacity
+                        onPress={() => {
+                          setPendingDelete(null);
+                          void onDelete(entry.date).catch(() => {});
+                        }}
+                        style={styles.confirmDelete}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Confirm delete weigh-in from ${formatWeighInDate(entry.date)}`}
+                      >
+                        <Text style={styles.confirmDeleteText}>Delete</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => setPendingDelete(entry.date)}
+                        style={styles.deleteBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete weigh-in from ${formatWeighInDate(entry.date)}`}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Trash2 size={15} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
               </>
@@ -248,6 +266,13 @@ const styles = StyleSheet.create({
   recentDate: { flex: 1, color: colors.textSoft, fontSize: 14, fontWeight: '600' },
   recentValue: { color: colors.text, fontSize: 14, fontWeight: '700', marginRight: 14 },
   deleteBtn: { padding: 2 },
+  confirmDelete: {
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  confirmDeleteText: { color: colors.danger, fontSize: 12, fontWeight: '800' },
   saveBtn: {
     backgroundColor: colors.primary,
     borderRadius: radii.md,

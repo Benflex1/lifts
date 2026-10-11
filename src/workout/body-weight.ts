@@ -64,7 +64,8 @@ export function parseBodyWeightLog(value: string | null | undefined): BodyWeight
   for (const item of raw) {
     if (typeof item !== 'object' || item === null) continue;
     const { date, weightKg } = item as Record<string, unknown>;
-    if (typeof date !== 'string' || !DATE_KEY.test(date) || Number.isNaN(fromDateKey(date).getTime())) continue;
+    // A real calendar day: 2026-02-31 would roll over to March.
+    if (typeof date !== 'string' || !DATE_KEY.test(date) || toDateKey(fromDateKey(date)) !== date) continue;
     if (typeof weightKg !== 'number' || !isValidBodyWeightKg(weightKg)) continue;
     byDate.set(date, { date, weightKg });
   }

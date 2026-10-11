@@ -60,10 +60,17 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
     const weights = visible.map((entry) => entry.weightKg);
     const low = Math.min(...weights);
     const high = Math.max(...weights);
+    // The line is the 7-day trend, drawn from the whole log so the range's first days are averaged too.
+    const trendByDate = new Map(bodyWeightTrend(entries).map((entry) => [entry.date, entry]));
+    const trendEntries = visible.map((entry) => trendByDate.get(entry.date) ?? entry);
+    // Scale to the trend as well, since days before the range can pull it outside the weigh-ins.
+    const trendWeights = trendEntries.map((entry) => entry.weightKg);
+    const scaleLow = Math.min(low, ...trendWeights);
+    const scaleHigh = Math.max(high, ...trendWeights);
     // Keep a little air above and below, and never zoom so far in that 0.2 kg looks like a cliff.
-    const pad = Math.max(0.5, (high - low) * 0.15);
-    const minY = low - pad;
-    const maxY = high + pad;
+    const pad = Math.max(0.5, (scaleHigh - scaleLow) * 0.15);
+    const minY = scaleLow - pad;
+    const maxY = scaleHigh + pad;
     const first = fromDateKey(visible[0].date).getTime();
     const last = fromDateKey(visible[visible.length - 1].date).getTime();
     const span = Math.max(1, last - first);
@@ -72,9 +79,7 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
       y: CHART_PAD_Y + (1 - (entry.weightKg - minY) / (maxY - minY)) * (CHART_HEIGHT - CHART_PAD_Y * 2),
     });
     const points = visible.map(place);
-    // The line is the 7-day trend, drawn from the whole log so the range's first days are averaged too.
-    const trendByDate = new Map(bodyWeightTrend(entries).map((entry) => [entry.date, entry]));
-    const trend = visible.map((entry) => place(trendByDate.get(entry.date) ?? entry));
+    const trend = trendEntries.map(place);
     const line = trend.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
     const area = trend.length > 1
       ? `${line} L${trend[trend.length - 1].x.toFixed(1)},${CHART_HEIGHT} L${trend[0].x.toFixed(1)},${CHART_HEIGHT} Z`
@@ -160,7 +165,7 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
                       {chart.area ? <Path d={chart.area} fill="url(#bodyWeightFill)" /> : null}
                       {chart.points.map((point, index) => (
                         <Circle
-                          key={index}
+                          key={visible[index].date}
                           cx={point.x}
                           cy={point.y}
                           r={chart.points.length > DOT_LIMIT ? 1.5 : 2.5}

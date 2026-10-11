@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSetting, setSetting } from '../database/db';
 import { useDialog } from '../context/DialogContext';
 import {
@@ -13,12 +13,19 @@ import {
 /** The body weight log, loaded while `enabled`. Changes read the stored log first, so restores in between are kept. */
 export function useBodyWeightLog(enabled: boolean) {
   const [entries, setEntries] = useState<BodyWeightEntry[]>([]);
+  // Bumped by every load and save, so a slow load never replaces a newer result.
+  const version = useRef(0);
   const { notify } = useDialog();
 
   const reload = useCallback(async () => {
-    if (!enabled) return;
+    const current = ++version.current;
+    if (!enabled) {
+      setEntries([]);
+      return;
+    }
     try {
-      setEntries(parseBodyWeightLog(await getSetting(BODY_WEIGHT_LOG_KEY)));
+      const loaded = parseBodyWeightLog(await getSetting(BODY_WEIGHT_LOG_KEY));
+      if (current === version.current) setEntries(loaded);
     } catch (error) {
       console.error('Unable to load the body weight log', error);
     }
@@ -32,6 +39,7 @@ export function useBodyWeightLog(enabled: boolean) {
     try {
       const next = change(parseBodyWeightLog(await getSetting(BODY_WEIGHT_LOG_KEY)));
       await setSetting(BODY_WEIGHT_LOG_KEY, serializeBodyWeightLog(next));
+      version.current += 1;
       setEntries(next);
     } catch (err: any) {
       await notify({
