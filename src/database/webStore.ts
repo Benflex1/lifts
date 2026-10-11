@@ -18,7 +18,8 @@ import {
 } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
-import { EXERCISE_TRACKING_TYPES_KEY } from '../workout/tracking';
+import { DELOAD_WORKOUTS_KEY, parseDeloadWorkoutIds } from '../workout/programs';
+import { isMergedOnRestore } from '../utils/settings';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -1062,10 +1063,11 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     currentGymId?: string,
   ): Promise<PreviousSetSuggestion[]> {
     const database = await openDb();
-    const [gyms, exerciseScope, exercise] = await Promise.all([
+    const [gyms, exerciseScope, exercise, storedDeloadIds] = await Promise.all([
       getGyms(),
       getExerciseGymScope(exerciseId),
       getExerciseById(exerciseId),
+      getSetting(DELOAD_WORKOUTS_KEY),
     ]);
     if (!exercise) return [];
     const gymNames = new Map(gyms.map(gym => [gym.id, gym.name]));
@@ -1103,7 +1105,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
               })) || [],
           };
         });
-        resolve(resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined));
+        resolve(resolvePreviousSetsForExercise(
+          exercise,
+          occurrences,
+          currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id,
+          exerciseScope || undefined,
+          new Set(parseDeloadWorkoutIds(storedDeloadIds)),
+        ));
       };
       req.onerror = () => reject(req.error);
     });
@@ -1450,8 +1458,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         if (isDeviceLocalSetting(k)) continue;
         const getReq = sStore.get(k);
         getReq.onsuccess = () => {
-          // Per-exercise tracking types arrive already merged with this device's choices.
-          if (!getReq.result || k === EXERCISE_TRACKING_TYPES_KEY) {
+          // Keyed settings (tracking types, rotations) arrive already merged with this device's.
+          if (!getReq.result || isMergedOnRestore(k)) {
             sStore.put({ key: k, value: v });
           }
         };

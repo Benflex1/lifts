@@ -111,21 +111,41 @@ export function resolveProgramState(
   const done = history
     .filter((workout) => workout.routineId !== undefined && indexById.has(workout.routineId))
     .filter((workout) => Date.parse(workout.startTime) >= startedAt)
-    .sort((a, b) => b.startTime.localeCompare(a.startTime) || b.id.localeCompare(a.id));
+    .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id));
 
-  const lastWorkout = done[0];
-  const lastIndex = lastWorkout ? indexById.get(lastWorkout.routineId!)! : -1;
+  // Walk the rotation in time order: a new cycle starts each time it comes back around, so skips,
+  // repeats and routines added later don't shift cycles (and deload weeks) after the fact.
+  let cycle = 1;
+  let previousIndex = -1;
+  let doneThisCycle: string[] = [];
+  for (const workout of done) {
+    const index = indexById.get(workout.routineId!)!;
+    if (previousIndex !== -1 && index <= previousIndex) {
+      cycle += 1;
+      doneThisCycle = [];
+    }
+    doneThisCycle.push(workout.routineId!);
+    previousIndex = index;
+  }
+
+  const lastWorkout = done[done.length - 1];
+  const lastIndex = previousIndex;
   let nextIndex = (lastIndex + 1) % rotation.length;
 
+  // A skip or pick holds until a rotation workout finishes after it was made.
   const override = program.nextOverride;
   const overrideIndex = override ? indexById.get(override.routineId) : undefined;
+  const lastFinishedAt = lastWorkout ? Date.parse(lastWorkout.endTime ?? lastWorkout.startTime) : undefined;
   const isOverridden = overrideIndex !== undefined
-    && (!lastWorkout || Date.parse(lastWorkout.startTime) < Date.parse(override!.setAt));
+    && (lastFinishedAt === undefined || lastFinishedAt < Date.parse(override!.setAt));
   if (isOverridden) nextIndex = overrideIndex!;
 
-  const count = done.length;
-  const cycle = Math.floor(count / rotation.length) + 1;
-  const doneInCycle = count % rotation.length;
+  // The next workout opens a new cycle when it comes back around.
+  if (lastIndex !== -1 && nextIndex <= lastIndex) {
+    cycle += 1;
+    doneThisCycle = [];
+  }
+  const doneInCycle = doneThisCycle.length;
   const isDeload = program.deloadEvery !== undefined && cycle % program.deloadEvery === 0;
 
   return {
@@ -135,7 +155,7 @@ export function resolveProgramState(
     nextIndex,
     cycle,
     doneInCycle,
-    doneThisCycleIds: Array.from(new Set(done.slice(0, doneInCycle).map((workout) => workout.routineId!))),
+    doneThisCycleIds: Array.from(new Set(doneThisCycle)),
     isDeload,
     lastWorkout,
     lastRoutine: lastWorkout ? rotation[lastIndex] : undefined,
@@ -153,6 +173,44 @@ export function resolveProgramStates(
     .sort((a, b) => a.folderName.localeCompare(b.folderName))
     .map((program) => resolveProgramState(program, routines, history))
     .filter((state): state is ProgramState => state !== null);
+}
+
+// --- Deload sessions ---------------------------------------------------------------------------
+
+/**
+ * Workouts finished in a deload week. Their lighter numbers never become "last time" for next
+ * targets, so a deload doesn't compound or reset progress.
+ */
+export const DELOAD_WORKOUTS_KEY = 'deload_workout_ids';
+const MAX_DELOAD_WORKOUTS = 200;
+
+export function parseDeloadWorkoutIds(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const raw = JSON.parse(value);
+    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string' && id.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addDeloadWorkoutId(value: string | null | undefined, workoutId: string): string {
+  const ids = parseDeloadWorkoutIds(value).filter((id) => id !== workoutId);
+  ids.push(workoutId);
+  return JSON.stringify(ids.slice(-MAX_DELOAD_WORKOUTS));
+}
+
+/** Restores union the lists; rotations merge per folder with this device's winning. */
+export function mergeDeloadWorkoutIds(existing: string | undefined, incoming: string): string {
+  const ids = Array.from(new Set([...parseDeloadWorkoutIds(incoming), ...parseDeloadWorkoutIds(existing)]));
+  return JSON.stringify(ids.slice(-MAX_DELOAD_WORKOUTS));
+}
+
+export function mergeRoutinePrograms(existing: string | undefined, incoming: string): string {
+  return serializeRoutinePrograms({
+    ...parseRoutinePrograms(incoming),
+    ...parseRoutinePrograms(existing ?? null),
+  });
 }
 
 /** Points the rotation at a routine until the next rotation workout finishes. */

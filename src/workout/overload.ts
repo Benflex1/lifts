@@ -113,7 +113,9 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
   if (input.deload) {
     const step = getOverloadIncrement(input.equipment, unit);
     const display = kgToDisplay(topWeightKg, unit);
-    const lighter = Math.max(step, Math.floor((display * DELOAD_FACTOR) / step) * step);
+    const lighter = Math.floor((display * DELOAD_FACTOR) / step) * step;
+    // Too light to step down a whole step, so there is no lighter target to give.
+    if (lighter <= 0 || lighter >= display) return null;
     return {
       kind: 'deload',
       weightKg: displayToKg(Math.round(lighter * 100) / 100, unit),

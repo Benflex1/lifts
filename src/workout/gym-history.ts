@@ -14,8 +14,12 @@ export function resolvePreviousSetsForExercise(
   exercise: Exercise,
   occurrences: CompletedExerciseOccurrence[],
   currentGymId: string,
-  scope?: ExerciseGymScope
+  scope?: ExerciseGymScope,
+  excludeWorkoutIds?: ReadonlySet<string>,
 ): PreviousSetSuggestion[] {
+  if (excludeWorkoutIds && excludeWorkoutIds.size > 0) {
+    occurrences = occurrences.filter((occurrence) => !excludeWorkoutIds.has(occurrence.workoutId));
+  }
   const allowedGymIds = getAllowedGymIds(exercise, scope, currentGymId);
   const selected = occurrences.find((occurrence) =>
     occurrence.sets.length > 0 && (allowedGymIds === null || allowedGymIds.has(occurrence.gymId))

@@ -1,3 +1,6 @@
+import { EXERCISE_TRACKING_TYPES_KEY } from '../workout/tracking';
+import { DELOAD_WORKOUTS_KEY, ROUTINE_PROGRAMS_KEY } from '../workout/programs';
+
 export function parseGymTrackingEnabled(value: string | null): boolean {
   return value !== 'false';
 }
@@ -26,4 +29,11 @@ export function isBackupExcludedSetting(key: string): boolean {
     key.startsWith('migration_') ||
     key.startsWith('automatic_backup_')
   );
+}
+
+// Settings holding per-item maps: a restore merges them (see restore.ts) and writes the merged value.
+const MERGED_ON_RESTORE_KEYS = new Set([EXERCISE_TRACKING_TYPES_KEY, ROUTINE_PROGRAMS_KEY, DELOAD_WORKOUTS_KEY]);
+
+export function isMergedOnRestore(key: string): boolean {
+  return MERGED_ON_RESTORE_KEYS.has(key);
 }

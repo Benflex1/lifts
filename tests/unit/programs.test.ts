@@ -195,9 +195,9 @@ describe('deload targets', () => {
     assert.equal(suggestion?.reps, 5);
   });
 
-  it('never drops below one step', () => {
-    const suggestion = suggestNextTarget({ sets: [ghost(2, 12)], trackingType: 'weight_reps', equipment: 'dumbbell', unit: 'kg', deload: true });
-    assert.equal(suggestion?.weightKg, 2);
+  it('gives no deload target when the weight is too light to step down', () => {
+    assert.equal(suggestNextTarget({ sets: [ghost(2, 12)], trackingType: 'weight_reps', equipment: 'dumbbell', unit: 'kg', deload: true }), null);
+    assert.equal(suggestNextTarget({ sets: [ghost(1.81, 12)], trackingType: 'weight_reps', unit: 'lb', deload: true }), null);
   });
 });
 
@@ -213,5 +213,74 @@ describe('cycle progress', () => {
     assert.equal(state.cycle, 2);
     assert.deepEqual(state.doneThisCycleIds, ['pull']);
     assert.equal(state.next.id, 'legs');
+  });
+});
+
+describe('review follow-ups', () => {
+  it('ends a pick when the workout finishes after it, even if its start was moved earlier', () => {
+    const picked = withNextOverride(program, 'legs', new Date('2026-10-03T18:05:00.000Z'));
+    const legs = { ...done('w1', 'legs', '2026-10-03T17:45:00.000Z'), endTime: '2026-10-03T19:00:00.000Z' };
+    const state = resolveProgramState(picked, routines, [legs])!;
+    assert.equal(state.isOverridden, false);
+    assert.equal(state.next.id, 'push');
+  });
+
+  it('keeps a skipped routine in the same cycle', () => {
+    const history = [
+      done('w1', 'push', '2026-10-02T10:00:00.000Z'),
+      done('w2', 'legs', '2026-10-03T10:00:00.000Z'),
+    ];
+    const state = resolveProgramState(program, routines, history)!;
+    assert.equal(state.next.id, 'push');
+    assert.equal(state.cycle, 2);
+    assert.equal(state.doneInCycle, 0);
+    const afterPush = resolveProgramState(program, routines, [...history, done('w3', 'push', '2026-10-04T10:00:00.000Z')])!;
+    assert.equal(afterPush.cycle, 2);
+    assert.deepEqual(afterPush.doneThisCycleIds, ['push']);
+  });
+
+  it('does not move past cycles or deloads when a routine is added to the folder', () => {
+    const withDeload = { ...program, deloadEvery: 4 };
+    const history = Array.from({ length: 9 }, (_, i) =>
+      done(`w${i}`, ['push', 'pull', 'legs'][i % 3], `2026-10-${String(i + 2).padStart(2, '0')}T10:00:00.000Z`),
+    );
+    assert.equal(resolveProgramState(withDeload, routines, history)!.cycle, 4);
+    assert.equal(resolveProgramState(withDeload, routines, history)!.isDeload, true);
+    const grown = [...routines, routine('core', 'PPL', '2026-10-20T00:00:00.000Z')];
+    const state = resolveProgramState(withDeload, grown, history)!;
+    assert.equal(state.next.id, 'core');
+    assert.equal(state.cycle, 3);
+  });
+
+  it('tracks deload workouts and merges lists and rotations on restore', async () => {
+    const { addDeloadWorkoutId, parseDeloadWorkoutIds, mergeDeloadWorkoutIds, mergeRoutinePrograms } = await import('../../src/workout/programs');
+    const once = addDeloadWorkoutId(null, 'w1');
+    assert.deepEqual(parseDeloadWorkoutIds(addDeloadWorkoutId(once, 'w1')), ['w1']);
+    assert.deepEqual(parseDeloadWorkoutIds('garbage'), []);
+    assert.deepEqual(parseDeloadWorkoutIds(mergeDeloadWorkoutIds(once, '["w0","w1"]')).sort(), ['w0', 'w1']);
+    const local = serializeRoutinePrograms({ PPL: { ...program, deloadEvery: 4 } });
+    const incoming = serializeRoutinePrograms({ PPL: program, Upper: { ...program, folderName: 'Upper' } });
+    const merged = parseRoutinePrograms(mergeRoutinePrograms(local, incoming));
+    assert.deepEqual(Object.keys(merged).sort(), ['PPL', 'Upper']);
+    assert.equal(merged.PPL.deloadEvery, 4, "this device's rotation wins");
+    assert.equal(parseRoutinePrograms(mergeRoutinePrograms('{}', incoming)).Upper.folderName, 'Upper');
+  });
+
+  it('leaves deload sessions out of last time', async () => {
+    const { resolvePreviousSetsForExercise } = await import('../../src/workout/gym-history');
+    const bench = { id: 'bench', name: 'Bench', category: 'strength', equipment: 'barbell', primaryMuscles: ['chest'] };
+    const occurrence = (workoutId: string, weightKg: number) => ({
+      workoutId, startTime: '2026-10-01T10:00:00.000Z', gymId: 'gym-default', gymName: 'Default Gym', occurrenceIndex: 0,
+      sets: [{ weightKg, reps: 8, type: 'normal' as const }],
+    });
+    const [last] = resolvePreviousSetsForExercise(bench, [occurrence('deload', 90), occurrence('normal', 100)], 'gym-default', undefined, new Set(['deload']));
+    assert.equal(last.weightKg, 100);
+  });
+
+  it('marks keyed settings as merged on restore', async () => {
+    const { isMergedOnRestore } = await import('../../src/utils/settings');
+    assert.equal(isMergedOnRestore('routine_programs'), true);
+    assert.equal(isMergedOnRestore('deload_workout_ids'), true);
+    assert.equal(isMergedOnRestore('unit'), false);
   });
 });

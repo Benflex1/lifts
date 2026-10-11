@@ -239,8 +239,13 @@ const WorkoutScreenInner: React.FC = () => {
       ? routines
       : routines.filter(r => r.folderName === selectedFolder);
 
+  const selectedProgram = selectedFolder !== 'All' ? routinePrograms[selectedFolder] : undefined;
+  // A rotation whose folder dropped below two routines has no card, so the row is how to edit or stop it.
+  const isDormantRotation = Boolean(
+    selectedProgram && !programStates.some(state => state.program.folderName === selectedFolder),
+  );
   const canMakeRotation =
-    selectedFolder !== 'All' && filteredRoutines.length >= 2 && !routinePrograms[selectedFolder];
+    selectedFolder !== 'All' && ((!selectedProgram && filteredRoutines.length >= 2) || isDormantRotation);
 
   const openEditor = (routine: Routine | null) => {
     setRoutineToEdit(routine);
@@ -400,14 +405,18 @@ const WorkoutScreenInner: React.FC = () => {
             onPress={() => setEditingProgramFolder(selectedFolder)}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={`Make ${selectedFolder} a rotation`}
+            accessibilityLabel={isDormantRotation ? `Edit ${selectedFolder} rotation` : `Make ${selectedFolder} a rotation`}
           >
             <View style={styles.makeRotationIcon}>
               <Repeat size={16} color={colors.primaryLight} />
             </View>
             <View style={styles.makeRotationText}>
-              <Text style={styles.makeRotationTitle}>Make this folder a rotation</Text>
-              <Text style={styles.makeRotationSubtitle}>Always know which workout is next</Text>
+              <Text style={styles.makeRotationTitle}>
+                {isDormantRotation ? 'Rotation paused' : 'Make this folder a rotation'}
+              </Text>
+              <Text style={styles.makeRotationSubtitle}>
+                {isDormantRotation ? 'Add a routine to resume it, or stop it' : 'Always know which workout is next'}
+              </Text>
             </View>
             <ChevronRight size={18} color={colors.textMuted} />
           </TouchableOpacity>
