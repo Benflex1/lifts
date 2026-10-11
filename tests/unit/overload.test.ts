@@ -225,3 +225,56 @@ describe('last session set type and RPE reach the active workout', () => {
     assert.throws(() => validateWorkoutSetRecord({ ...base, previousRpe: 'hard' }, 'set'));
   });
 });
+
+describe('review follow-ups', () => {
+  it('uses the back-off weight most sets used, not a heavy top single', async () => {
+    const { pickWorkingWeight } = await import('../../src/workout/overload');
+    const suggestion = suggestNextTarget({
+      sets: [ghost(120, 3), ghost(100, 8), ghost(100, 8), ghost(100, 8)],
+      targetReps: '8',
+      trackingType: 'weight_reps',
+      unit: 'kg',
+    });
+    assert.equal(suggestion?.kind, 'add_weight');
+    assert.equal(suggestion?.weightKg, 102.5);
+    assert.equal(pickWorkingWeight([60, 62.5, 65]), 65, 'pyramid ties go to the heavier weight');
+  });
+
+  it('rounds the next weight to a loadable step', async () => {
+    const { nextLoadableWeight } = await import('../../src/workout/overload');
+    assert.equal(nextLoadableWeight(220.5, 5), 225);
+    assert.equal(nextLoadableWeight(135, 5), 140);
+    assert.equal(nextLoadableWeight(61, 2.5), 62.5);
+    assert.equal(nextLoadableWeight(22.5, 2), 24);
+    const suggestion = suggestNextTarget({ sets: [ghost(100, 5)], targetReps: '5', trackingType: 'weight_reps', unit: 'lb' });
+    assert.equal(suggestion?.weightKg, 102.06); // 225 lb
+  });
+
+  it('does not fill rows that were warmups or drop sets last time', () => {
+    assert.equal(isOverloadFillTarget({ isCompleted: false, type: 'normal', previousType: 'warmup' }), false);
+    assert.equal(isOverloadFillTarget({ isCompleted: false, type: 'normal', previousType: 'drop' }), false);
+    assert.equal(isOverloadFillTarget({ isCompleted: false, type: 'normal', previousType: 'normal' }), true);
+  });
+
+  it('drops stale effort from completed sets on an exercise swap and gym switch', async () => {
+    const { replaceActiveExercise } = await import('../../src/workout/active-exercises');
+    const { rehydrateUntouchedSuggestions } = await import('../../src/workout/gym-session');
+    const bench = { id: 'bench', name: 'Bench', category: 'strength', equipment: 'barbell', primaryMuscles: ['chest'] };
+    const dbBench = { ...bench, id: 'db-bench', equipment: 'dumbbell' };
+    const done = { id: 's1', setNumber: 1, type: 'normal' as const, weightKg: 100, reps: 8, isCompleted: true, previousWeightKg: 100, previousReps: 8, previousType: 'normal' as const, previousRpe: 8 };
+    const todo = { ...done, id: 's2', setNumber: 2, isCompleted: false, weightKg: 0, reps: 0 };
+    const exercise = { id: 'ae1', exerciseId: 'bench', exercise: bench, restTimerSeconds: 90, sets: [done, todo] };
+
+    const [swapped] = replaceActiveExercise([exercise], 'ae1', dbBench, [{ weightKg: 30, reps: 10, type: 'normal' }]);
+    assert.equal(swapped.sets[0].previousType, undefined);
+    assert.equal(swapped.sets[0].previousRpe, undefined);
+    assert.equal(swapped.sets[1].previousType, 'normal');
+    const target = suggestNextTarget({ sets: swapped.sets, trackingType: 'weight_reps', equipment: 'dumbbell', unit: 'kg' });
+    assert.equal(target?.weightKg, 32);
+
+    const workout = { id: 'w', name: 'W', gymId: 'gym-b', startTime: '2026-10-11T10:00:00.000Z', durationSeconds: 0, totalVolumeKg: 0, exercises: [exercise] };
+    const rehydrated = rehydrateUntouchedSuggestions(workout, { bench: [{ weightKg: 80, reps: 8, type: 'normal' }] });
+    assert.equal(rehydrated.exercises[0].sets[0].previousType, undefined);
+    assert.equal(rehydrated.exercises[0].sets[0].previousWeightKg, 100, 'ghost numbers stay');
+  });
+});

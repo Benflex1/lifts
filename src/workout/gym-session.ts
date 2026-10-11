@@ -1,6 +1,7 @@
 import { Gym, PreviousSetSuggestion, Workout, WorkoutSet } from '../types';
 import type { Store } from '../database/contract';
 import { withPreviousTracked } from './tracking';
+import { withoutPreviousEffort } from './overload';
 
 export interface StartWorkoutOptions {
   gymId?: string;
@@ -204,7 +205,7 @@ export function rehydrateUntouchedSuggestions(
       return {
         ...exercise,
         sets: exercise.sets.map((set, index) => {
-          if (set.isCompleted || set.isWeightEdited) return set;
+          if (set.isCompleted || set.isWeightEdited) return withoutPreviousEffort(set);
 
           const suggestion = suggestions[index];
           return {

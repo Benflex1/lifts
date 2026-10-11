@@ -54,6 +54,28 @@ export function parseRepGoal(target: string | undefined): { min: number; max: nu
   return null;
 }
 
+/**
+ * The weight most working sets used, so one heavy top single before back-off sets doesn't set
+ * the target. Ties go to the heavier weight, which keeps pyramids aimed at their top set.
+ */
+export function pickWorkingWeight(weightsKg: number[]): number {
+  const counts = new Map<number, number>();
+  for (const weight of weightsKg) counts.set(weight, (counts.get(weight) ?? 0) + 1);
+  let best = weightsKg[0];
+  for (const [weight, count] of counts) {
+    const bestCount = counts.get(best) ?? 0;
+    if (count > bestCount || (count === bestCount && weight > best)) best = weight;
+  }
+  return best;
+}
+
+/** One step up, landing on a multiple of the step so the weight can be loaded (220.5 lb → 225 lb). */
+export function nextLoadableWeight(display: number, increment: number): number {
+  let next = Math.round((display + increment) / increment) * increment;
+  if (next <= display) next += increment;
+  return Math.round(next * 100) / 100;
+}
+
 export interface OverloadInput {
   sets: Pick<WorkoutSet, 'previousType' | 'previousWeightKg' | 'previousReps' | 'previousRpe'>[];
   targetReps?: string;
@@ -77,7 +99,7 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
   ) as Array<{ previousWeightKg: number; previousReps: number; previousRpe?: number }>;
   if (working.length === 0) return null;
 
-  const topWeightKg = Math.max(...working.map((set) => set.previousWeightKg));
+  const topWeightKg = pickWorkingWeight(working.map((set) => set.previousWeightKg));
   const topSets = working.filter((set) => set.previousWeightKg === topWeightKg);
   const topReps = topSets.map((set) => set.previousReps);
   const lowestReps = Math.min(...topReps);
@@ -99,10 +121,9 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
         reason: `Last time hit ${goal.max} reps at ${atWeight} but at RPE ${hardest}, so repeat it before adding weight.`,
       };
     }
-    const nextDisplay = Math.round((kgToDisplay(topWeightKg, unit) + getOverloadIncrement(input.equipment, unit)) * 100) / 100;
     return {
       kind: 'add_weight',
-      weightKg: displayToKg(nextDisplay, unit),
+      weightKg: displayToKg(nextLoadableWeight(kgToDisplay(topWeightKg, unit), getOverloadIncrement(input.equipment, unit)), unit),
       reps: goal.min,
       reason: `Every set hit ${goal.max} reps at ${atWeight} last time, so add weight.`,
     };
@@ -125,7 +146,22 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
   };
 }
 
-/** Sets the suggestion fills: working sets still to do. Completed sets and warmups stay as they are. */
-export function isOverloadFillTarget(set: Pick<WorkoutSet, 'isCompleted' | 'type'>): boolean {
-  return !set.isCompleted && isWorkingSetType(set.type);
+/**
+ * Sets the suggestion fills: working sets still to do. Completed sets, warmups, and rows that were
+ * warmups or drop sets last time stay as they are.
+ */
+export function isOverloadFillTarget(set: Pick<WorkoutSet, 'isCompleted' | 'type' | 'previousType'>): boolean {
+  return !set.isCompleted
+    && isWorkingSetType(set.type)
+    && (set.previousType === undefined || isWorkingSetType(set.previousType));
+}
+
+/**
+ * Drops last session's set type and RPE from a set whose ghost numbers will not be refreshed,
+ * so stale history (another exercise, another gym) never feeds the next target.
+ */
+export function withoutPreviousEffort<T extends Pick<WorkoutSet, 'previousType' | 'previousRpe'>>(set: T): T {
+  if (set.previousType === undefined && set.previousRpe === undefined) return set;
+  const { previousType: _type, previousRpe: _rpe, ...rest } = set;
+  return rest as T;
 }
