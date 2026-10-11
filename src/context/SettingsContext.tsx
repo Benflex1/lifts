@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Platform } from 'react-native';
 import { WeightUnit } from '../utils/units';
 import { getSetting, setSetting } from '../database/db';
+import { BODY_WEIGHT_ENABLED_KEY, parseBodyWeightEnabled } from '../workout/body-weight';
 import { useDialog } from './DialogContext';
 import { getPlatformHealthProvider, retryPendingHealthSyncs } from '../health';
 import { updateHealthSyncSetting } from '../health/settings';
@@ -36,6 +37,8 @@ export interface SettingsContextType {
   routinePrograms: RoutinePrograms;
   /** Applies a change to the stored programs (read fresh, so restores in between are kept). */
   updateRoutinePrograms: (change: (programs: RoutinePrograms) => RoutinePrograms) => Promise<void>;
+  bodyWeightEnabled: boolean;
+  setBodyWeightEnabled: (enabled: boolean) => Promise<void>;
   loading: boolean;
 }
 
@@ -56,6 +59,8 @@ const SettingsContext = createContext<SettingsContextType>({
   setOverloadEnabled: async () => {},
   routinePrograms: {},
   updateRoutinePrograms: async () => {},
+  bodyWeightEnabled: false,
+  setBodyWeightEnabled: async () => {},
   loading: true,
 });
 
@@ -69,6 +74,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [trackingTypeOverrides, setTrackingTypeOverridesState] = useState<TrackingTypeOverrides>({});
   const [overloadEnabled, setOverloadEnabledState] = useState(true);
   const [routinePrograms, setRoutineProgramsState] = useState<RoutinePrograms>({});
+  const [bodyWeightEnabled, setBodyWeightEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
   const { notify } = useDialog();
 
@@ -84,6 +90,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           storedTrackingTypeOverrides,
           storedOverload,
           storedPrograms,
+          storedBodyWeight,
         ] = await Promise.all([
           getSetting('unit'),
           getSetting('gym_tracking_enabled'),
@@ -93,6 +100,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           getSetting(EXERCISE_TRACKING_TYPES_KEY),
           getSetting(PROGRESSIVE_OVERLOAD_KEY),
           getSetting(ROUTINE_PROGRAMS_KEY),
+          getSetting(BODY_WEIGHT_ENABLED_KEY),
         ]);
         if (storedUnit === 'kg' || storedUnit === 'lb') setUnitState(storedUnit);
         setGymTrackingEnabledState(parseGymTrackingEnabled(storedGymTracking));
@@ -103,6 +111,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setTrackingTypeOverridesState(parseTrackingTypeOverrides(storedTrackingTypeOverrides));
         setOverloadEnabledState(parseProgressiveOverloadEnabled(storedOverload));
         setRoutineProgramsState(parseRoutinePrograms(storedPrograms));
+        setBodyWeightEnabledState(parseBodyWeightEnabled(storedBodyWeight));
         if (persistedHealthSync) {
           void retryPendingHealthSyncs().catch((error) => {
             console.error('Unable to retry pending health syncs', error);
@@ -191,6 +200,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [overloadEnabled, notify]);
 
+  const setBodyWeightEnabled = useCallback(async (enabled: boolean) => {
+    const previous = bodyWeightEnabled;
+    setBodyWeightEnabledState(enabled);
+    try {
+      await setSetting(BODY_WEIGHT_ENABLED_KEY, enabled ? 'true' : 'false');
+    } catch (err: any) {
+      setBodyWeightEnabledState(previous);
+      await notify({
+        title: 'Settings Error',
+        message: err?.message || 'Failed to save body weight setting.',
+      });
+      throw err;
+    }
+  }, [bodyWeightEnabled, notify]);
+
   const updateRoutinePrograms = useCallback(async (change: (programs: RoutinePrograms) => RoutinePrograms) => {
     const previous = routinePrograms;
     let stored = previous;
@@ -264,6 +288,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setOverloadEnabled,
         routinePrograms,
         updateRoutinePrograms,
+        bodyWeightEnabled,
+        setBodyWeightEnabled,
         loading,
       }}
     >

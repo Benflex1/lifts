@@ -46,6 +46,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setTrackingTypesEnabled,
     overloadEnabled,
     setOverloadEnabled,
+    bodyWeightEnabled,
+    setBodyWeightEnabled,
   } = useSettings();
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
@@ -125,6 +127,18 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setIsSaving(true);
     try {
       await setTrackingTypesEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleBodyWeightChange = async (enabled: boolean) => {
+    if (isSaving || enabled === bodyWeightEnabled) return;
+    setIsSaving(true);
+    try {
+      await setBodyWeightEnabled(enabled);
     } catch {
       // Error handled by SettingsContext notification.
     } finally {
@@ -307,6 +321,27 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 accessibilityLabel="Time, Distance and Bodyweight tracking"
                 accessibilityRole="switch"
                 accessibilityState={{ checked: trackingTypesEnabled, disabled: isSaving }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.settingHeaderRow}>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.sectionTitle}>Body Weight</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Log your weight and see the trend on the Progress tab.
+                </Text>
+              </View>
+              <Switch
+                value={bodyWeightEnabled}
+                onValueChange={handleBodyWeightChange}
+                disabled={isSaving}
+                trackColor={{ false: colors.control, true: colors.primary }}
+                thumbColor={bodyWeightEnabled ? colors.text : colors.textSecondary}
+                accessibilityLabel="Body Weight"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: bodyWeightEnabled, disabled: isSaving }}
               />
             </View>
           </View>
