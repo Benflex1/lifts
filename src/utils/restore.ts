@@ -1,4 +1,4 @@
-import { isBackupExcludedSetting } from './settings';
+import { isBackupExcludedSetting, isMergedOnRestore } from './settings';
 import { Store, DataSnapshot, WorkoutDraft } from '../database/contract';
 import { parseBackup, BackupV3 } from './backup';
 import { Exercise, ExerciseGymScope, Routine, Workout } from '../types';
@@ -6,7 +6,8 @@ import { buildGymRestoreMapping, remapGymReferences } from './gym-restore';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { buildDefaultRoutines } from '../database/seedData';
 import { EXERCISE_TRACKING_TYPES_KEY, getTrackingType, mergeTrackingTypeOverrides } from '../workout/tracking';
-import { DELOAD_WORKOUTS_KEY, mergeDeloadWorkoutIds, mergeRoutinePrograms, ROUTINE_PROGRAMS_KEY } from '../workout/programs';
+import { mergeDeloadWorkoutIds, mergeRoutinePrograms, ROUTINE_PROGRAMS_KEY } from '../workout/programs';
+import { BODY_WEIGHT_LOG_KEY, mergeBodyWeightLogs } from '../workout/body-weight';
 
 export interface RestorePreview {
   gymsCount: number;
@@ -260,13 +261,15 @@ export async function computeRestorePlan(
     if (existing.settings[k] === undefined) {
       settingsToInsert[k] = v;
       newSettingsCount++;
-    } else if (k === EXERCISE_TRACKING_TYPES_KEY || k === ROUTINE_PROGRAMS_KEY || k === DELOAD_WORKOUTS_KEY) {
-      // Per-exercise choices and per-folder rotations merge, with this device's winning.
+    } else if (isMergedOnRestore(k)) {
+      // Per-exercise choices, per-folder rotations and per-day weigh-ins merge, with this device's winning.
       const merged = k === EXERCISE_TRACKING_TYPES_KEY
         ? mergeTrackingTypeOverrides(existing.settings[k], v)
         : k === ROUTINE_PROGRAMS_KEY
           ? mergeRoutinePrograms(existing.settings[k], v)
-          : mergeDeloadWorkoutIds(existing.settings[k], v);
+          : k === BODY_WEIGHT_LOG_KEY
+            ? mergeBodyWeightLogs(existing.settings[k], v)
+            : mergeDeloadWorkoutIds(existing.settings[k], v);
       if (merged !== existing.settings[k]) {
         settingsToInsert[k] = merged;
         newSettingsCount++;

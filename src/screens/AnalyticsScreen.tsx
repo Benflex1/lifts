@@ -66,6 +66,9 @@ import { getAllowedGymIds } from '../workout/gym-scope';
 import { colors } from '../theme';
 import { ScreenHeader, SegmentedControl } from '../components/ui';
 import { RecordsView } from '../components/RecordsView';
+import { BodyWeightCard } from '../components/BodyWeightCard';
+import { BodyWeightModal } from '../components/BodyWeightModal';
+import { useBodyWeightLog } from '../hooks/useBodyWeightLog';
 
 type ProgressSection = 'overview' | 'records' | 'tools';
 
@@ -76,7 +79,9 @@ const PROGRESS_SECTIONS: { key: ProgressSection; label: string }[] = [
 ];
 
 const AnalyticsScreenInner: React.FC = () => {
-  const { unit, gymTrackingEnabled } = useSettings();
+  const { unit, gymTrackingEnabled, bodyWeightEnabled } = useSettings();
+  const bodyWeight = useBodyWeightLog(bodyWeightEnabled);
+  const [showBodyWeightLog, setShowBodyWeightLog] = useState(false);
   const isWorkingOut = useIsWorkingOut();
   const { confirm, notify } = useDialog();
 
@@ -182,7 +187,10 @@ const AnalyticsScreenInner: React.FC = () => {
     void loadAnalytics();
   }, [loadAnalytics]);
 
-  useReloadOnActivate(() => void loadAnalytics({ skipIfUnchanged: true }));
+  useReloadOnActivate(() => {
+    void loadAnalytics({ skipIfUnchanged: true });
+    void bodyWeight.reload();
+  });
 
   const progressionExercise = useMemo(() => {
     if (!selectedProgressionExerciseId) {
@@ -551,6 +559,10 @@ const AnalyticsScreenInner: React.FC = () => {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+        {bodyWeightEnabled && (
+          <BodyWeightCard entries={bodyWeight.entries} unit={unit} onLog={() => setShowBodyWeightLog(true)} />
+        )}
+
         {/* Progress Charts */}
         {analyticsLoading ? (
           <View style={styles.chartLoading}>
@@ -1281,6 +1293,15 @@ const AnalyticsScreenInner: React.FC = () => {
         </Text>
       </ScrollView>
       )}
+
+      <BodyWeightModal
+        visible={showBodyWeightLog}
+        entries={bodyWeight.entries}
+        unit={unit}
+        onSave={bodyWeight.logWeight}
+        onDelete={bodyWeight.deleteWeight}
+        onClose={() => setShowBodyWeightLog(false)}
+      />
 
       <PlateCalculatorModal
         visible={showPlateCalc}
