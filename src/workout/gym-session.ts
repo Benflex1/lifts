@@ -5,6 +5,7 @@ import { withoutPreviousEffort } from './overload';
 
 export interface StartWorkoutOptions {
   gymId?: string;
+  deload?: boolean;
 }
 
 export interface GymSessionControllerState {

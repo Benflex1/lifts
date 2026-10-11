@@ -95,6 +95,7 @@ export interface Workout {
   totalVolumeKg: number;
   exercises: ActiveExercise[];
   notes?: string;
+  isDeload?: boolean; // started in a program's deload week; only kept while the workout is active
 }
 
 export interface RoutineExercise {

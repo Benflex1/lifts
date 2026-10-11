@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Gym, Routine, SetType, TrackingType, Workout, WorkoutSet } from '../types';
 import { getSetting, getStore, setSetting } from '../database/db';
+import { addDeloadWorkoutId, DELOAD_WORKOUTS_KEY } from '../workout/programs';
 import { getExactAlarmStatus, openExactAlarmSettings } from '../utils/exactAlarms';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
@@ -618,6 +619,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       durationSeconds: 0,
       totalVolumeKg: 0,
       exercises,
+      ...(options?.deload ? { isDeload: true } : {}),
     };
 
     await ctrl.start(newWorkout);
@@ -785,6 +787,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     try {
       const finished = await ctrl.finish(durationSecondsOverride);
+      if (finished.isDeload) {
+        // Keep deload numbers out of "last time", so the next targets pick up where they left off.
+        void getSetting(DELOAD_WORKOUTS_KEY)
+          .then((stored) => setSetting(DELOAD_WORKOUTS_KEY, addDeloadWorkoutId(stored, finished.id)))
+          .catch((error) => console.warn('Unable to record the deload workout', error));
+      }
       void runAutomaticBackup().catch((error) => {
         console.warn('Automatic workout backup failed', error);
       });

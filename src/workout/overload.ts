@@ -7,7 +7,7 @@ export function parseProgressiveOverloadEnabled(value: string | null): boolean {
   return value !== 'false';
 }
 
-export type OverloadKind = 'add_weight' | 'add_reps' | 'repeat';
+export type OverloadKind = 'add_weight' | 'add_reps' | 'repeat' | 'deload';
 
 export interface OverloadSuggestion {
   kind: OverloadKind;
@@ -19,6 +19,9 @@ export interface OverloadSuggestion {
 
 // Warmups and drop sets never decide progression.
 const WORKING_SET_TYPES: ReadonlySet<SetType> = new Set(['normal', 'failure']);
+
+// Deload weeks drop to about this share of the working weight, rounded down to a loadable step.
+const DELOAD_FACTOR = 0.9;
 
 // RPE at or above this means the last set was at or near failure, so the weight holds.
 const HARD_RPE = 9.5;
@@ -82,6 +85,8 @@ export interface OverloadInput {
   trackingType: TrackingType;
   equipment?: string;
   unit: WeightUnit;
+  /** A program's deload week: lighter weight, same reps, to recover before the next cycle. */
+  deload?: boolean;
 }
 
 /**
@@ -105,6 +110,19 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
   const lowestReps = Math.min(...topReps);
 
   const parsedGoal = parseRepGoal(input.targetReps);
+  if (input.deload) {
+    const step = getOverloadIncrement(input.equipment, unit);
+    const display = kgToDisplay(topWeightKg, unit);
+    const lighter = Math.floor((display * DELOAD_FACTOR) / step) * step;
+    // Too light to step down a whole step, so there is no lighter target to give.
+    if (lighter <= 0 || lighter >= display) return null;
+    return {
+      kind: 'deload',
+      weightKg: displayToKg(Math.round(lighter * 100) / 100, unit),
+      reps: parsedGoal ? parsedGoal.min : topReps[0],
+      reason: `Deload week: about 90% of last time's ${formatWeight(topWeightKg, unit)}, so you recover before the next cycle.`,
+    };
+  }
   if (parsedGoal === null) return null;
   const goal = parsedGoal ?? { min: topReps[0], max: topReps[0] };
 
