@@ -53,6 +53,7 @@ import {
   TimeframeFilter,
 } from '../workout/analytics';
 import { ProgressionCurveView } from '../components/ProgressionCurveView';
+import { PROGRESSION_METRICS, progressionMetricsFor, resolveProgressionMetric } from '../workout/progression-metrics';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { pickCsvFile, computeCsvImportPlan, CsvImportPreview } from '../utils/importer';
@@ -209,6 +210,10 @@ const AnalyticsScreenInner: React.FC = () => {
       gymNamesMap: gymNames,
     });
   }, [progressionExercise, allWorkouts, progressionGymFilter, progressionTimeframe, allGyms]);
+
+  // Time and distance exercises chart their own metrics; the choice comes back for weight exercises.
+  const progressionTrackingType = progressionSeries?.trackingType ?? 'weight_reps';
+  const shownProgressionMetric = resolveProgressionMetric(progressionMetric, progressionTrackingType);
 
   const [dashboardTimeframe, setDashboardTimeframe] = useState<TimeframeFilter>('ALL');
   const [distMode, setDistMode] = useState<'volume' | 'sets'>('volume');
@@ -769,7 +774,7 @@ const AnalyticsScreenInner: React.FC = () => {
                 <Text style={styles.toolTitle}>Exercise Progression</Text>
               </View>
               <Text style={styles.toolSubtitle}>
-                Estimated 1RM, load, and volume trajectory over time.
+                Strength, reps, time or distance over time, depending on how the exercise is tracked.
               </Text>
 
               {/* Exercise Selector */}
@@ -823,9 +828,9 @@ const AnalyticsScreenInner: React.FC = () => {
                 </View>
 
                 <View style={styles.filterGroup}>
-                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => {
-                    const isSelected = progressionMetric === m;
-                    const label = m === 'e1rm' ? 'Estimated 1RM' : m === 'max_weight' ? 'Heaviest Weight' : m === 'max_reps' ? 'Max Reps' : 'Total Volume';
+                  {progressionMetricsFor(progressionTrackingType).map((m) => {
+                    const isSelected = shownProgressionMetric === m;
+                    const label = PROGRESSION_METRICS[m].label;
                     return (
                       <TouchableOpacity
                         key={m}
@@ -845,7 +850,7 @@ const AnalyticsScreenInner: React.FC = () => {
                             isSelected && styles.filterChipTextActive,
                           ]}
                         >
-                          {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
+                          {PROGRESSION_METRICS[m].chip}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -906,7 +911,7 @@ const AnalyticsScreenInner: React.FC = () => {
               {progressionSeries ? (
                 <ProgressionCurveView
                   series={progressionSeries}
-                  metric={progressionMetric}
+                  metric={shownProgressionMetric}
                   unit={unit}
                   height={190}
                   gymTrackingEnabled={gymTrackingEnabled}

@@ -1,6 +1,6 @@
-import { Exercise, Workout } from '../types';
+import { Exercise, TrackingType, Workout } from '../types';
 import { calculate1RM } from '../utils/calculator';
-import { countsLoad, getTrackingType, setVolumeKg } from './tracking';
+import { countsLoad, getTrackingType, setVolumeKg, usesDistance, usesDuration } from './tracking';
 
 export interface WeeklyVolumePoint {
   key: string;
@@ -31,6 +31,10 @@ function startOfWeek(date: Date): Date {
 
 function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function isPositive(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 function dateLabel(date: Date): string {
@@ -133,7 +137,15 @@ export function buildMuscleFrequency(
     .slice(0, Math.max(0, Math.floor(limit)));
 }
 
-export type ProgressionMetric = 'e1rm' | 'max_weight' | 'volume' | 'max_reps';
+export type ProgressionMetric =
+  | 'e1rm'
+  | 'max_weight'
+  | 'volume'
+  | 'max_reps'
+  | 'max_duration'
+  | 'total_duration'
+  | 'max_distance'
+  | 'best_pace';
 export type TimeframeFilter = '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
 export interface ProgressionDataPoint {
@@ -148,22 +160,37 @@ export interface ProgressionDataPoint {
   maxWeightKg: number;
   totalVolumeKg: number;
   maxReps: number;
+  /** Longest single set, for time and distance exercises. */
+  maxDurationSeconds: number;
+  totalDurationSeconds: number;
+  /** Longest single set's distance. */
+  maxDistanceM: number;
+  /** Fastest pace of any set with both distance and time, in seconds per km. 0 when none. */
+  bestPaceSecondsPerKm: number;
   isPr: boolean;
   prMetrics?: {
     e1rm?: boolean;
     maxWeight?: boolean;
     volume?: boolean;
     maxReps?: boolean;
+    maxDuration?: boolean;
+    totalDuration?: boolean;
+    maxDistance?: boolean;
+    bestPace?: boolean;
   };
   topSet: {
     weightKg: number;
     reps: number;
     rpe?: number;
+    durationSeconds?: number;
+    distanceM?: number;
   };
 }
 
 export interface ExerciseProgressionSeries {
   exerciseId: string;
+  /** How the exercise was logged most recently, which decides the metrics worth charting. */
+  trackingType: TrackingType;
   points: ProgressionDataPoint[];
   summary: {
     allTimeBest1RM: number;
@@ -213,6 +240,8 @@ export function extractExerciseProgression(
   const cutoffMs = getTimeframeCutoff(timeframe, now);
 
   const rawPoints: ProgressionDataPoint[] = [];
+  let trackingType: TrackingType = 'weight_reps';
+  let trackingTypeAt = -Infinity;
 
   for (const workout of workouts) {
     if (allowedGymIds) {
@@ -236,6 +265,13 @@ export function extractExerciseProgression(
     const unloadedSets = new Set(
       occurrences.filter((e) => !countsLoad(getTrackingType(e))).flatMap((e) => e.sets || [])
     );
+    const occurrenceType = getTrackingType(occurrences[occurrences.length - 1]);
+    if (timestamp >= trackingTypeAt) {
+      trackingType = occurrenceType;
+      trackingTypeAt = timestamp;
+    }
+    const tracksTime = occurrences.some((e) => usesDuration(getTrackingType(e)));
+    const tracksDistance = occurrences.some((e) => usesDistance(getTrackingType(e)));
 
     let maxWeightKg = 0;
     let maxReps = 0;
@@ -243,6 +279,12 @@ export function extractExerciseProgression(
     let best1RM = 0;
     let topSet = completedSets[0];
     let topSetScore = -1;
+    let maxDurationSeconds = 0;
+    let totalDurationSeconds = 0;
+    let maxDistanceM = 0;
+    let bestPaceSecondsPerKm = 0;
+    let trackedTopSet = completedSets[0];
+    let trackedTopScore = -1;
 
     for (const set of completedSets) {
       const weight = Number.isFinite(set.weightKg) && !unloadedSets.has(set) ? Math.max(0, set.weightKg) : 0;
@@ -263,7 +305,24 @@ export function extractExerciseProgression(
         topSetScore = score;
         topSet = set;
       }
+
+      const duration = tracksTime && isPositive(set.durationSeconds) ? set.durationSeconds : 0;
+      const distance = tracksDistance && isPositive(set.distanceM) ? set.distanceM : 0;
+      totalDurationSeconds += duration;
+      if (duration > maxDurationSeconds) maxDurationSeconds = duration;
+      if (distance > maxDistanceM) maxDistanceM = distance;
+      if (distance > 0 && duration > 0) {
+        const pace = duration / (distance / 1000);
+        if (bestPaceSecondsPerKm === 0 || pace < bestPaceSecondsPerKm) bestPaceSecondsPerKm = pace;
+      }
+      // For time and distance, the best set is the longest one: distance first, then time.
+      const trackedScore = distance * 100000 + duration;
+      if (trackedScore > trackedTopScore) {
+        trackedTopScore = trackedScore;
+        trackedTopSet = set;
+      }
     }
+    if (tracksTime || tracksDistance) topSet = trackedTopSet;
 
     const gymName = gymNamesMap
       ? (gymNamesMap instanceof Map ? gymNamesMap.get(workout.gymId) : (gymNamesMap as Record<string, string>)[workout.gymId])
@@ -281,11 +340,17 @@ export function extractExerciseProgression(
       maxWeightKg,
       totalVolumeKg,
       maxReps,
+      maxDurationSeconds,
+      totalDurationSeconds,
+      maxDistanceM,
+      bestPaceSecondsPerKm: Math.round(bestPaceSecondsPerKm * 10) / 10,
       isPr: false,
       topSet: {
         weightKg: topSet.weightKg,
         reps: topSet.reps,
         rpe: topSet.rpe,
+        ...(isPositive(topSet.durationSeconds) ? { durationSeconds: topSet.durationSeconds } : {}),
+        ...(isPositive(topSet.distanceM) ? { distanceM: topSet.distanceM } : {}),
       },
     });
   }
@@ -298,6 +363,11 @@ export function extractExerciseProgression(
   let runningBestWeight = 0;
   let runningBestVolume = 0;
   let runningBestReps = 0;
+  let runningBestDuration = 0;
+  let runningBestTotalDuration = 0;
+  let runningBestDistance = 0;
+  // Lower is better for pace, so 0 means no pace yet.
+  let runningBestPace = 0;
 
   for (let i = 0; i < rawPoints.length; i++) {
     const p = rawPoints[i];
@@ -311,6 +381,10 @@ export function extractExerciseProgression(
       maxWeight: isWeightPr,
       volume: isVolPr,
       maxReps: isRepsPr,
+      maxDuration: i > 0 && p.maxDurationSeconds > runningBestDuration && runningBestDuration > 0,
+      totalDuration: i > 0 && p.totalDurationSeconds > runningBestTotalDuration && runningBestTotalDuration > 0,
+      maxDistance: i > 0 && p.maxDistanceM > runningBestDistance && runningBestDistance > 0,
+      bestPace: p.bestPaceSecondsPerKm > 0 && runningBestPace > 0 && p.bestPaceSecondsPerKm < runningBestPace,
     };
     p.isPr = is1rmPr || isWeightPr || (runningBestWeight === 0 && isRepsPr);
 
@@ -318,6 +392,12 @@ export function extractExerciseProgression(
     if (p.maxWeightKg > runningBestWeight) runningBestWeight = p.maxWeightKg;
     if (p.totalVolumeKg > runningBestVolume) runningBestVolume = p.totalVolumeKg;
     if (p.maxReps > runningBestReps) runningBestReps = p.maxReps;
+    if (p.maxDurationSeconds > runningBestDuration) runningBestDuration = p.maxDurationSeconds;
+    if (p.totalDurationSeconds > runningBestTotalDuration) runningBestTotalDuration = p.totalDurationSeconds;
+    if (p.maxDistanceM > runningBestDistance) runningBestDistance = p.maxDistanceM;
+    if (p.bestPaceSecondsPerKm > 0 && (runningBestPace === 0 || p.bestPaceSecondsPerKm < runningBestPace)) {
+      runningBestPace = p.bestPaceSecondsPerKm;
+    }
   }
 
   // True all-time bests across full history
@@ -350,6 +430,7 @@ export function extractExerciseProgression(
 
   return {
     exerciseId,
+    trackingType,
     points: filteredPoints,
     summary: {
       allTimeBest1RM,
@@ -377,6 +458,14 @@ export function isPointPrForMetric(point: ProgressionDataPoint, metric: Progress
         return Boolean(point.prMetrics.volume);
       case 'max_reps':
         return Boolean(point.prMetrics.maxReps);
+      case 'max_duration':
+        return Boolean(point.prMetrics.maxDuration);
+      case 'total_duration':
+        return Boolean(point.prMetrics.totalDuration);
+      case 'max_distance':
+        return Boolean(point.prMetrics.maxDistance);
+      case 'best_pace':
+        return Boolean(point.prMetrics.bestPace);
     }
   }
   return point.isPr;

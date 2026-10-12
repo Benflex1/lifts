@@ -25,6 +25,7 @@ import { ExercisePodium, extractExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from './ExercisePodiumView';
 import { ProgressionCurveView } from './ProgressionCurveView';
 import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
+import { PROGRESSION_METRICS, progressionMetricsFor, resolveProgressionMetric } from '../workout/progression-metrics';
 import { calculate1RM } from '../utils/calculator';
 import { EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
@@ -430,16 +431,18 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
           {/* Progression Curve */}
           {progressionSeries &&
-            progressionSeries.points.some((point) => point.maxWeightKg > 0 || point.maxReps > 0) && (
+            progressionSeries.points.some(
+              (point) => point.maxWeightKg > 0 || point.maxReps > 0 || point.maxDurationSeconds > 0 || point.maxDistanceM > 0,
+            ) && (
             <View style={styles.progressionSection}>
               <View style={styles.progressionHeaderRow}>
                 <View style={styles.progressionTitleWrap}>
                   <Text style={styles.progressionTitleText}>Progress</Text>
                 </View>
                 <View style={styles.metricTabsRow}>
-                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => {
-                    const isSelected = selectedMetric === m;
-                    const label = m === 'e1rm' ? 'Estimated 1RM' : m === 'max_weight' ? 'Heaviest Weight' : m === 'max_reps' ? 'Max Reps' : 'Total Volume';
+                  {progressionMetricsFor(progressionSeries.trackingType).map((m) => {
+                    const isSelected = resolveProgressionMetric(selectedMetric, progressionSeries.trackingType) === m;
+                    const label = PROGRESSION_METRICS[m].label;
                     return (
                       <TouchableOpacity
                         key={m}
@@ -459,7 +462,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                             isSelected && styles.metricTabTextActive,
                           ]}
                         >
-                          {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
+                          {PROGRESSION_METRICS[m].chip}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -500,7 +503,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
               <ProgressionCurveView
                 series={progressionSeries}
-                metric={selectedMetric}
+                metric={resolveProgressionMetric(selectedMetric, progressionSeries.trackingType)}
                 unit={unit}
                 height={190}
                 gymTrackingEnabled={gymTrackingEnabled}
