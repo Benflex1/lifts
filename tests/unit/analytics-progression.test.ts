@@ -470,6 +470,10 @@ describe('isPointPrForMetric', () => {
       maxWeightKg: 100,
       totalVolumeKg: 500,
       maxReps: 10,
+      maxDurationSeconds: 0,
+      totalDurationSeconds: 0,
+      maxDistanceM: 0,
+      bestPaceSecondsPerKm: 0,
       isPr: true,
       prMetrics: {
         e1rm: true,
