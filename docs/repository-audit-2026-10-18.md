@@ -727,10 +727,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PROD-02 — Automatic backups and remote exercise photos are not merged
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `feat/android-automatic-backups` and `feat/remote-exercise-images-setting` contain commits not on `main`. `origin/feat/time-distance-charts` also exists.
 - **Impact:** Users still depend on manual exports for disaster recovery, and completed work sits idle on branches.
 - **Required change:** Review, test, and merge or explicitly defer each branch. Keep branch lifetimes short.
+- **Implementation (2026-10-18):** Branch triage. **Integrated:** automatic Android backups (`a3188f2`) plus its follow-up fixes (`27ef55b` restore only the settings that are exported, `0d1fcf1` canonical backup file names when pruning), adapted to the current architecture (the backup trigger runs after the controller finishes in `useWorkoutMutations`, the Data Transfer copy lives in `DataTransferSection`, and SettingsModal keeps the A11Y-04 focus hook) and covered by new tests (`tests/unit/automatic-backup.test.ts`, `tests/unit/automatic-backup-names.test.ts`, and an integration round-trip asserting export exclusion). **Deferred:** the remote exercise-photo switch from `feat/remote-exercise-images-setting` (a product and data-provenance decision; its automatic-backup parts are already integrated above), `fix/rest-timer-background-alarm` (a real native-module fix, but it needs device verification per REL-40–43 and should land as a focused PR), `origin/feat/time-distance-charts` (13-commit tracking-types stack that needs a product review and a rebase onto the current architecture), and `develop` (integration line whose distinct content is covered above; PRs already target `main`). **Superseded:** `feature/parity-pass` (its user-facing work — JSON backup export, repeat workout, draft persistence, dead-code/type cleanup — is already on main through later work); recommend closing it. Branch deletion is left to the maintainer once this phase merges.
 - **Done when:** Each branch is merged or closed with a documented decision.
 
 ### PROD-03 — Rich exercise media and watch companion remain unfinished
@@ -868,7 +869,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 ### Phase 4 — Product follow-through (target: after Phase 1-2)
 
 - [ ] `PROD-01` Complete F-Droid and iOS publishing.
-- [ ] `PROD-02` Merge or close automatic backups, remote photos, and time/distance charts.
+- [x] `PROD-02` Merge or close automatic backups, remote photos, and time/distance charts.
 - [ ] `PROD-03` Scope the next media/watch milestone.
 - [ ] `PROD-04` Add i18n scaffolding.
 - [x] `PROD-05` Decide and document deep-link scope.
