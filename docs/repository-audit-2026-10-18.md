@@ -884,6 +884,8 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `PROD-07` Localize the remaining screens (deferred residual from PROD-04).
 - [ ] `ARCH-14` Enable `noUncheckedIndexedAccess` (deferred residual: 261 reported reads).
 
+**Verification note (2026-10-18):** All Phase 4 findings are addressed except the logged residuals and the externally blocked publishing item. Lint, Prettier, version sync, the dependency audit policy, the dead-code scan, both typechecks, and the 798-test coverage run are green (91.85% lines / 84.16% branches / 90.32% functions); the web export ships the manifest, service worker, and injected shell; the automatic-backup integration and the Maestro emulator journey land on this branch. Residuals: `PROD-07` (remaining screens' localisation), `ARCH-14` (`noUncheckedIndexedAccess`, 261 indexed reads), and `PROD-01` (store publishing, blocked on external accounts).
+
 ---
 
 ## 12. Verification protocol
