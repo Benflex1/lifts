@@ -14,6 +14,12 @@ appId: com.benflex1.lifts
 - assertVisible: 'Routines'
 - assertVisible: 'Start Empty Workout'
 
+# The routine list loads after the first screen paint and may sit below the fold.
+- scrollUntilVisible:
+    element:
+      text: 'Start Push Day.*'
+    direction: DOWN
+    timeout: 30000
 - tapOn: 'Start Push Day.*'
 - assertVisible: 'Start Workout'
 - tapOn: 'Start workout at.*'
