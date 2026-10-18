@@ -615,10 +615,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-03 — No coverage measurement or threshold
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No `c8`, `nyc`, or experimental coverage flag is configured, and no workflow uploads or checks coverage.
 - **Impact:** Coverage can regress silently, and there is no signal for which new modules need tests.
 - **Required change:** Enable coverage for unit and integration runs, publish a report, and set an initial non-regression threshold.
+- **Implementation (2026-10-18):** `npm run test:coverage` runs the unit and integration suites in one Node test process with `--experimental-test-coverage`, excludes `tests/**` from the report, enforces non-regression thresholds (lines 90, branches 83, functions 89 against the measured 91.08 / 84.03 / 89.97), and writes an lcov report to `coverage/lcov.info`. CI runs this in place of the separate test steps and uploads the lcov file as a `coverage-lcov` artifact, so a coverage drop fails the run with the threshold message (verified locally: raising the line threshold to 99 exits 1). `coverage/` is gitignored and excluded from Prettier and ESLint.
 - **Done when:** CI reports coverage and fails on a configured drop.
 
 ### DX-04 — No end-to-end flow tests
@@ -808,7 +809,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 - [x] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
 - [ ] `DX-02` Add React Native Testing Library and critical-flow tests.
-- [ ] `DX-03` Add coverage reporting and a threshold.
+- [x] `DX-03` Add coverage reporting and a threshold.
 - [ ] `DX-04` Add one end-to-end smoke journey.
 - [ ] `DX-06` Add dependency automation and an audit policy.
 - [x] `DX-08` Fix version and documentation drift.

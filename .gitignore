@@ -56,3 +56,4 @@ build-artifacts/
 
 # Local feature worktrees
 .worktrees/
+coverage/

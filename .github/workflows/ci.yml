@@ -38,11 +38,14 @@ jobs:
       - name: TypeScript typecheck (tests)
         run: npm run typecheck:tests
 
-      - name: Unit test suite
-        run: npm test
+      - name: Tests and coverage (unit + integration)
+        run: npm run test:coverage
 
-      - name: Integration test suite
-        run: npm run test:integration
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
 
       - name: Android prebuild (applies config plugins)
         run: npx expo prebuild --platform android --clean --no-install
