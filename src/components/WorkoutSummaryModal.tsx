@@ -29,6 +29,7 @@ import { isExcessiveDuration, estimateWorkoutDuration } from '../workout/duratio
 import { colors } from '../theme';
 import { PRMark } from './ui';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
+import { errorMessage } from '../utils/invariant';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
@@ -62,10 +63,10 @@ export function WorkoutSummaryModal({
       });
       await onUpdate(updated);
       setShowDurationModal(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       await notify({
         title: 'Duration Error',
-        message: e?.message || 'Failed to update duration.',
+        message: errorMessage(e) || 'Failed to update duration.',
       });
     }
   };
@@ -115,10 +116,10 @@ export function WorkoutSummaryModal({
 
     try {
       await onUpdate(reassignWorkoutGym(workout, gymId));
-    } catch (error: any) {
+    } catch (error: unknown) {
       await notify({
         title: 'Gym Error',
-        message: error?.message || 'Failed to update the workout gym.',
+        message: errorMessage(error) || 'Failed to update the workout gym.',
       });
       throw error;
     }

@@ -472,10 +472,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-11 — Type-safety gaps at storage boundaries
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** There are 125 `any` occurrences in `src/`, concentrated in `nativeStore.ts` (42), `backup.ts` (17), and `readNativeFile.ts` (9). The native store is cast `as unknown as Store` at `nativeStore.ts:1521-1568`. Web wrappers use non-null assertions at `db.web.ts:149-158`, and `webStore.ts:1112` uses `(workout as any).inProgress` for a field that does not exist. `tsconfig.json` does not enable `noUncheckedIndexedAccess` or `exactOptionalPropertyTypes`.
 - **Impact:** Contract drift can pass typechecking, and the dead `inProgress` filter is a concrete example of a cast hiding a real bug.
 - **Required change:** Type SQL row shapes explicitly, replace `catch (err: any)` with `unknown` plus a normalizer, add `noUncheckedIndexedAccess`, and replace cluster non-null assertions with an `invariant`/`requireDefined` helper.
+- **Implementation (2026-10-18):** Added `src/utils/invariant.ts` (`requireDefined`, `errorMessage`, `toError`, with tests) and converted every `catch (…: any)` in `src/` (12 files, 17 sites) to `catch (…: unknown)` plus the normalizer. Typed the SQLite boundary with explicit `ExerciseRow`, `JoinedExerciseRow`, `SetRow`, `GymRow`, `ScopeRow`, and `HealthSyncRow` shapes, typed `SqliteDriver` bind parameters, and mapped enums at the edge (`SetType`, scope type, health provider/status) instead of `any`. `webStore` lost its `any` state handles, obtains the IndexedDB factory through `requireDefined`, and the store's non-null assertions (database handle, upgrade transaction, gym lookup, occurrence indexes) now use `requireDefined` or explicit undefined handling; `readNativeFile` uses typed legacy FS/fetch shims. The dead `(workout as any).inProgress` cast was already removed with `COR-01`. `no-explicit-any` warnings dropped from 124 to 91; the remainder are `nativeStore` query generics (29), the legacy v2 backup normalizer (20), and scattered UI callbacks. `noUncheckedIndexedAccess` was measured at 261 errors (chart and parser modules dominate) and logged as `ARCH-14` rather than forced through in this pass.
 - **Done when:** The store contract is checked structurally and the dead cast is removed.
 
 ### ARCH-12 — HistoryScreen is a 903-line component
@@ -770,6 +771,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Implementation (2026-10-18):** Added an installable shell for the web export: `public/manifest.webmanifest` (standalone display, theme colours, the 1024px app icon) and `public/sw.js` (runtime caching: network-first navigations with a cached `index.html` fallback, cache-first hashed `/_expo/static/` assets, same-origin GET only, versioned caches). Expo copies `public/` into every export; `scripts/postprocess-web-export.mjs` verifies the shell assets and idempotently injects the manifest link, theme colour, and service-worker registration into `index.html` (CI and the CONTRIBUTING verification flow run it). The README web section documents the installable shell and offline-reload behavior alongside the existing storage caveat. Tests: `tests/unit/web-export-postprocess.test.ts` (injection, idempotency, missing assets) plus a local export that produced `manifest.webmanifest`, `sw.js`, `icon-1024.png`, and the injected `index.html`.
 - **Done when:** The web behavior matches the documented promise.
 
+### ARCH-14 — `noUncheckedIndexedAccess` adoption
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `tsconfig.json` does not enable `noUncheckedIndexedAccess`. Enabling it reports 261 errors across `src/`, concentrated in `ProgressionCurveView` (39), `utils/restore.ts` (34), `workout/pr.ts` (28), `workout/analytics.ts` (28), the CSV importer parsers (50 across four files), and supersets/warmup helpers.
+- **Impact:** Indexed reads (`array[i]`, `record[key]`) are typed as always present, so guards are only written where the author remembers; parser and chart code is the most exposed.
+- **Required change:** Enable the flag (optionally together with `exactOptionalPropertyTypes`), fix the reported reads with local guards or `requireDefined`, and keep the flag on in CI.
+- **Done when:** `tsc --noEmit` is clean with `noUncheckedIndexedAccess` enabled and the tsconfig flag is committed.
+
 ---
 
 ## 11. Prioritized remediation plan
@@ -856,8 +866,9 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-08` Standardize platform dispatch.
 - [x] `ARCH-09` Decide and document the navigation model.
 - [x] `ARCH-10` Remove dead code.
-- [ ] `ARCH-11` Tighten storage-boundary types.
+- [x] `ARCH-11` Tighten storage-boundary types.
 - [x] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
+- [ ] `ARCH-14` Enable `noUncheckedIndexedAccess` (deferred residual: 261 reported reads).
 
 ---
 

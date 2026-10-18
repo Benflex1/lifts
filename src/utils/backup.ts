@@ -12,6 +12,7 @@ import {
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateSnapshotStructure } from '../database/snapshot-validation';
+import { errorMessage } from './invariant';
 
 export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 
@@ -199,8 +200,8 @@ export function parseBackup(json: string): BackupV3 {
   let parsed: any;
   try {
     parsed = JSON.parse(json);
-  } catch (e: any) {
-    throw new Error(`Invalid JSON in backup file: ${e.message}`, { cause: e });
+  } catch (e: unknown) {
+    throw new Error(`Invalid JSON in backup file: ${errorMessage(e)}`, { cause: e });
   }
 
   if (!parsed || typeof parsed !== 'object') {

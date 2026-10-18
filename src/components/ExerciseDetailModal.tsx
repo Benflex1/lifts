@@ -42,6 +42,7 @@ import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { colors } from '../theme';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
+import { errorMessage } from '../utils/invariant';
 
 // PERF-11: the chart stack (react-native-svg path rendering) is code-split so it stays out of the
 // initial bundle; it loads the first time a detail modal shows the progression curve.
@@ -126,10 +127,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         onHistoryTransferred();
       }
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       await notify({
         title: 'Transfer Failed',
-        message: err?.message || 'Failed to transfer exercise history.',
+        message: errorMessage(err) || 'Failed to transfer exercise history.',
       });
     } finally {
       setIsTransferring(false);

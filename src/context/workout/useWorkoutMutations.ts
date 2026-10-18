@@ -279,7 +279,7 @@ export function useWorkoutMutations({
       restTimerEngine.stopRestTimer();
       await drafts.refreshDrafts();
       return finished;
-    } catch (e: any) {
+    } catch (e: unknown) {
       reportError(e, { scope: 'workout.finish' });
       notify({
         title: 'Save Error',

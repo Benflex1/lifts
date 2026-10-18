@@ -16,6 +16,7 @@ import {
   buildDefaultRoutines,
 } from './seedData';
 import { smartSearchExercises } from '../utils/search';
+import { requireDefined } from '../utils/invariant';
 import {
   CompletedExerciseOccurrence,
   resolvePreviousSetsForExercise,
@@ -76,11 +77,10 @@ export async function createWebStore(
   name: string = 'lifts_web_db',
   options?: WebStoreOptions,
 ): Promise<WebStore> {
-  const idb: IDBFactory =
-    options?.idbFactory || (typeof indexedDB !== 'undefined' ? indexedDB : (undefined as any));
-  if (!idb) {
-    throw new Error('IndexedDB is not available in this environment');
-  }
+  const idb = requireDefined(
+    options?.idbFactory ?? (typeof indexedDB !== 'undefined' ? indexedDB : undefined),
+    'an IndexedDB factory',
+  );
 
   const getNow = options?.now || (() => Date.now());
   const leaseDurationMs = options?.leaseDurationMs || 10000;
@@ -88,7 +88,7 @@ export async function createWebStore(
   let readOnlyMode = false;
   let db: IDBDatabase | null = null;
   let cachedExercises: Exercise[] | null = null;
-  let heartbeatTimer: any = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   const readOnlyListeners = new Set<(isReadOnly: boolean) => void>();
 
   function setReadOnly(val: boolean): void {
@@ -128,8 +128,9 @@ export async function createWebStore(
         // Best-effort heartbeat; lease loss is surfaced through onReadOnlyChange listeners.
       }
     }, intervalMs);
-    if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
-      heartbeatTimer.unref();
+    const handle = heartbeatTimer as unknown as { unref?: () => void };
+    if (typeof handle.unref === 'function') {
+      handle.unref();
     }
   }
 
@@ -137,7 +138,7 @@ export async function createWebStore(
     if (!db || readOnlyMode) return;
     return new Promise(resolve => {
       try {
-        const tx = db!.transaction('metadata', 'readwrite');
+        const tx = requireDefined(db, 'open database').transaction('metadata', 'readwrite');
         const store = tx.objectStore('metadata');
         const getReq = store.get('writer_lease');
         getReq.onsuccess = () => {
@@ -211,7 +212,9 @@ export async function createWebStore(
         // instead of reading and sorting the whole store in memory. The index
         // is added for stores created above and for databases upgraded from
         // earlier versions.
-        const workoutStore = req.transaction!.objectStore('workouts');
+        const workoutStore = requireDefined(req.transaction, 'upgrade transaction').objectStore(
+          'workouts',
+        );
         if (!workoutStore.indexNames.contains('startTime')) {
           workoutStore.createIndex('startTime', 'startTime', { unique: false });
         }
@@ -313,8 +316,8 @@ export async function createWebStore(
     if (readOnlyMode) return;
 
     await new Promise<void>((resolve, reject) => {
-      let lease: any;
-      let catalogVersion: any;
+      let lease: { ownerId?: string } | null | undefined;
+      let catalogVersion: { value?: string } | null | undefined;
       let exercises: Exercise[];
       let leaseReady = false;
       let catalogVersionReady = false;
@@ -362,7 +365,7 @@ export async function createWebStore(
 
       const leaseRequest = metadataStore.get('writer_lease');
       leaseRequest.onsuccess = () => {
-        lease = leaseRequest.result;
+        lease = leaseRequest.result as { ownerId?: string } | null;
         leaseReady = true;
         maybeSynchronize();
       };
@@ -370,7 +373,7 @@ export async function createWebStore(
 
       const catalogVersionRequest = metadataStore.get('exercise_catalog_version');
       catalogVersionRequest.onsuccess = () => {
-        catalogVersion = catalogVersionRequest.result;
+        catalogVersion = catalogVersionRequest.result as { value?: string } | null;
         catalogVersionReady = true;
         maybeSynchronize();
       };
@@ -529,7 +532,15 @@ export async function createWebStore(
           ...(color === undefined ? {} : { color }),
         });
       };
-      tx.oncomplete = async () => resolve((await getGyms()).find(g => g.id === id)!);
+      tx.oncomplete = async () => {
+        const gyms = await getGyms();
+        resolve(
+          requireDefined(
+            gyms.find(g => g.id === id),
+            `gym ${id}`,
+          ),
+        );
+      };
       tx.onerror = () => reject(tx.error);
     });
   }
@@ -688,7 +699,7 @@ export async function createWebStore(
 
     const custom = normalizeExerciseRecord({
       ...exercise,
-      id: (exercise as any).id || createScopedId('custom'),
+      id: (exercise as { id?: string }).id || createScopedId('custom'),
       isCustom: true,
     });
 
@@ -1204,7 +1215,9 @@ export async function createWebStore(
         gymName: gymNames.get(workout.gymId) || 'Default Gym',
         occurrenceIndex: requested?.sets.some(set => set.isCompleted)
           ? occurrenceIndex
-          : Math.max(0, matching.indexOf(selected!)),
+          : selected
+            ? Math.max(0, matching.indexOf(selected))
+            : 0,
         sets:
           selected?.sets
             .filter(set => set.isCompleted)
@@ -1564,7 +1577,7 @@ export async function createWebStore(
     if (!db || readOnlyMode) return;
     try {
       await new Promise<void>((resolve, reject) => {
-        const tx = db!.transaction('metadata', 'readwrite');
+        const tx = requireDefined(db, 'open database').transaction('metadata', 'readwrite');
         const store = tx.objectStore('metadata');
         const getReq = store.get('writer_lease');
         getReq.onsuccess = () => {
