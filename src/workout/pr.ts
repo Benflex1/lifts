@@ -1,6 +1,7 @@
 import { Exercise, ExerciseGymScope, Gym, Workout, WorkoutSet } from '../types';
 import { calculate1RM } from '../utils/calculator';
 import { formatWeight, WeightUnit } from '../utils/units';
+import { ExerciseHistoryEntry, collectExerciseHistory } from './exercise-history';
 import { getAllowedGymIds, resolveExerciseScope } from './gym-scope';
 
 export type PRRank = 1 | 2 | 3; // 1 = Gold, 2 = Silver, 3 = Bronze
@@ -49,6 +50,33 @@ export interface WorkoutPRSummary {
   silverCount: number;
   bronzeCount: number;
   totalCount: number;
+}
+
+/**
+ * Structural comparison of two achievements. PR evaluation rebuilds result
+ * objects on every pass, so memoized rows compare by value instead of identity.
+ */
+export function isSamePRAchievement(a?: PRAchievement | null, b?: PRAchievement | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.rank === b.rank &&
+    a.metric === b.metric &&
+    a.scope === b.scope &&
+    a.value === b.value &&
+    a.previousRecord === b.previousRecord &&
+    a.isTie === b.isTie &&
+    a.gymId === b.gymId &&
+    a.gymName === b.gymName
+  );
+}
+
+/** Structural comparison of two set PR results, for memoization guards. */
+export function isSameSetPRResult(a?: SetPRResult, b?: SetPRResult): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.achievements.length !== b.achievements.length) return false;
+  return isSamePRAchievement(a.primary, b.primary);
 }
 
 /**
@@ -580,6 +608,19 @@ export function extractExercisePodium(
   gyms: Gym[],
   allowedGymIds: Set<string> | null
 ): ExercisePodium {
+  const entries = collectExerciseHistory(workouts, exerciseId);
+  return buildExercisePodium(entries, gyms, allowedGymIds);
+}
+
+/**
+ * Builds the podium from an already-collected history pass, so callers that
+ * also compute statistics do not walk the workout history twice.
+ */
+export function buildExercisePodium(
+  entries: ExerciseHistoryEntry[],
+  gyms: Gym[],
+  allowedGymIds: Set<string> | null
+): ExercisePodium {
   const gymMap = new Map(gyms.map((g) => [g.id, g.name]));
 
   interface CandidateSet {
@@ -598,34 +639,31 @@ export function extractExercisePodium(
 
   const candidates: CandidateSet[] = [];
 
-  for (const w of workouts) {
-    if (allowedGymIds !== null && !allowedGymIds.has(w.gymId)) continue;
-    const currentGymName = gymMap.get(w.gymId);
+  for (const entry of entries) {
+    if (allowedGymIds !== null && !allowedGymIds.has(entry.gymId)) continue;
+    const currentGymName = gymMap.get(entry.gymId);
 
-    for (const ex of w.exercises) {
-      if (ex.exerciseId !== exerciseId) continue;
-      for (const s of ex.sets) {
-        if (!s.isCompleted || s.type === 'warmup') continue;
+    for (const set of entry.sets) {
+      if (set.isWarmup) continue;
 
-        const weight = s.weightKg > 0 ? s.weightKg : 0;
-        const oneRM = s.weightKg > 0 && s.reps > 0 ? calculate1RM(s.weightKg, s.reps).average : 0;
-        const volume = s.weightKg > 0 && s.reps > 0 ? s.weightKg * s.reps : 0;
-        const repsMetric = s.weightKg === 0 && s.reps > 0 ? s.reps : 0;
+      const weight = set.weightKg > 0 ? set.weightKg : 0;
+      const oneRM = set.weightKg > 0 && set.reps > 0 ? calculate1RM(set.weightKg, set.reps).average : 0;
+      const volume = set.weightKg > 0 && set.reps > 0 ? set.weightKg * set.reps : 0;
+      const repsMetric = set.weightKg === 0 && set.reps > 0 ? set.reps : 0;
 
-        candidates.push({
-          weightKg: s.weightKg,
-          reps: s.reps,
-          date: w.startTime,
-          gymId: w.gymId,
-          gymName: currentGymName,
-          workoutId: w.id,
-          workoutName: w.name,
-          weight,
-          '1rm': oneRM,
-          volume,
-          repsMetric,
-        });
-      }
+      candidates.push({
+        weightKg: set.weightKg,
+        reps: set.reps,
+        date: entry.startedAt,
+        gymId: entry.gymId,
+        gymName: currentGymName,
+        workoutId: entry.workoutId,
+        workoutName: entry.workoutName,
+        weight,
+        '1rm': oneRM,
+        volume,
+        repsMetric,
+      });
     }
   }
 

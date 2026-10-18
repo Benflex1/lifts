@@ -183,37 +183,41 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-01 — Active logger re-renders on every state change
 
 - **Severity:** Critical
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `ActiveWorkoutScreen.tsx:91-123` destructures 32 fields from `useWorkout()`. `WorkoutContext.tsx:1328-1353` includes `sessionState.workout` in the default context value. Every mutation calls `controller.update()`, which calls `notify()` synchronously at `src/workout/session.ts:145`, creating a new workout object and context value. The screen renders all exercise cards and set rows with `.map()` at `ActiveWorkoutScreen.tsx:751` and `:971`.
 - **Impact:** Every set toggle, RPE change, weight commit, and note keystroke rebuilds the 2,904-line screen and all nested rows. This is the core gym-floor interaction and the highest-impact performance issue in the app.
 - **Required change:** Move `activeWorkout` into its own context or expose a selector-style subscription. Extract and memoize `ExerciseCard` and `SetRow`, pass primitive props and stable callbacks, and split state from actions.
+- **Implementation (2026-10-18):** The card and row were extracted into memoized components (`src/components/ActiveExerciseCard.tsx`, `src/components/ActiveSetRow.tsx`; the shared style block moved to `src/screens/activeWorkoutStyles.ts`). Their comparators compare PR badges structurally through `isSameSetPRResult` (`src/workout/pr.ts`) because PR evaluation rebuilds result objects on every pass. All callbacks handed to cards are stable: `WorkoutContext` exposes permanent action-proxy identities (`stableActions`) and the screen wraps `handleToggleSetWithHaptics`, `handleApplyPreviousStats`, `openSetOptions`, and `handleInputFocus`/`ensureInputVisible` in `useCallback` with refs to the latest workout data. `activeWorkout` was deliberately not moved into a separate context: the screen still re-renders when the workout changes (it owns the header and list state), but every card and row now skips unless its own data changed. Coverage: `tests/unit/active-workout-memoization.test.ts` — six render-counter tests driving the production `React.memo` comparators; toggling a set re-renders only its card and only that row, identical parent renders skip everything, and rebuilt PR summaries skip cards whose badges are unchanged.
 - **Done when:**
-  - [ ] Toggling one set re-renders only the affected row and its card, verified with React DevTools Profiler or a render counter.
-  - [ ] Typing in a note does not re-render every exercise card.
-  - [ ] A regression test or documented profiling scenario exists for set toggling.
+  - [x] Toggling one set re-renders only the affected row and its card, verified with React DevTools Profiler or a render counter. (`tests/unit/active-workout-memoization.test.ts` uses a render counter.)
+  - [x] Typing in a note does not re-render every exercise card.
+  - [x] A regression test or documented profiling scenario exists for set toggling.
 
 ### PERF-02 — Exercise notes commit on every keystroke
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `ActiveWorkoutScreen.tsx:944-949` calls `updateExerciseNotes(activeEx.id, txt)` from `onChangeText`. That reaches `WorkoutContext.tsx:1138-1149`, then `session.ts:128-167`, marking the draft dirty and triggering a full autosave serialization.
 - **Impact:** Typing is coupled to a full context update and a `JSON.stringify` of the entire workout on the autosave path (`nativeStore.ts:1248-1257`). On lower-end devices this is the classic typing-lag pattern.
 - **Required change:** Keep note text in local component state, debounce the session commit by roughly 250 ms, and flush on blur or unmount. Reuse the pattern already implemented in `WeightInput`/`RepsInput`.
+- **Implementation (2026-10-18):** `src/components/ExerciseNoteInput.tsx` holds the text in local state and commits through `createDebouncer` (`NOTE_COMMIT_DEBOUNCE_MS = 250`), flushing on blur, exercise change, and unmount; the session is only reached from the flush path. Coverage: `tests/unit/exercise-note-input.test.ts` (keystrokes commit only after the debounce fires; blur and unmount flush the pending value; external updates are adopted without re-committing) and `tests/unit/debounce.test.ts` for the debouncer itself.
 - **Done when:**
-  - [ ] Keystrokes do not increment the session revision until the debounce fires.
-  - [ ] Blur and unmount always flush the latest value.
-  - [ ] Note persistence is covered by a test.
+  - [x] Keystrokes do not increment the session revision until the debounce fires.
+  - [x] Blur and unmount always flush the latest value.
+  - [x] Note persistence is covered by a test.
 
 ### PERF-03 — Trophy Room search recomputes all history on every keystroke
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `RecordsView.tsx:199-209` feeds `setTrophySearch` directly at `AnalyticsScreen.tsx:542-543`. The `trophySummary` memo at `AnalyticsScreen.tsx:228-252` includes `trophySearch` in its dependencies and calls `buildTrophyRoomSummary`, which walks every workout, exercise, and set at `src/workout/trophy-room.ts:152-188`.
 - **Impact:** Each typed character re-aggregates the entire training history and re-renders the records subtree.
 - **Required change:** Debounce the search input (150-250 ms) and compute the aggregate once. Filter the precomputed record list by query instead of re-running aggregation.
+- **Implementation (2026-10-18):** `RecordsView` keeps the input text in local state and commits through a 200 ms `createDebouncer` (`SEARCH_DEBOUNCE_MS`). `AnalyticsScreen.recordsOverview` no longer depends on the query — `buildTrophyRoomSummary` runs only when history, catalog, gyms, scopes, or the gym filter change — and `trophySummary` narrows the precomputed records with the order-preserving `filterTrophyRecords` (`src/workout/trophy-room.ts`). Coverage: `tests/unit/debounce.test.ts`, a filter-equivalence test in `tests/unit/trophy-room.test.ts`, and `tests/unit/records-row-memoization.test.ts`.
+- **Deferred:** A renderer-level spy proving the screen itself never re-runs the aggregate per keystroke requires the RNTL harness tracked under `DX-02` (Phase 3); the dependency list and the equivalence test are the current evidence.
 - **Done when:**
-  - [ ] Typing only filters an existing record list.
-  - [ ] `buildTrophyRoomSummary` is not called per keystroke, verified with a spy or render-count test.
+  - [x] Typing only filters an existing record list.
+  - [ ] `buildTrophyRoomSummary` is not called per keystroke, verified with a spy or render-count test. — deferred to `DX-02`; verified structurally today (`recordsOverview` deps exclude `trophySearch`).
 
 ### PERF-04 — Missing indexes on hot database columns
 
@@ -256,44 +260,49 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-07 — Analytics hydrates the full snapshot before checking for changes
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `AnalyticsScreen.tsx:126-142` calls `store.readSnapshot()` at line 129, then builds a signature and returns early at line 142 if it is unchanged. `AnalyticsScreen.tsx:133` also calls `getAllExercises()` even though the snapshot already contains exercises. `useReloadOnActivate` triggers this on every return to the tab at line 185.
 - **Impact:** The optimization skips recomputation but not the expensive full hydration, so returning to Progress is never cheap.
 - **Required change:** Fetch a cheap revision/count first, or add a store revision counter. Reuse `snapshot.exercises` and share a snapshot cache across tabs.
+- **Implementation (2026-10-18):** `Store` gained an optional `getDataRevision()` (`src/database/contract.ts`): the native store returns `SELECT total_changes()` and the web store keeps a monotonic counter incremented inside `verifyAndRenewLease` — the funnel every one of its 21 write paths passes through — so lease heartbeats do not count. `loadAnalytics` checks the revision before `readSnapshot()` and returns early when it matches the previous load, and it reuses `snapshot.exercises` instead of calling `getAllExercises()`. The old JSON signature survives only as the fallback for stores without a counter. Coverage: `tests/integration/store-revision.test.ts` asserts on both platforms that reads keep the revision stable and that a write advances it.
 - **Done when:**
-  - [ ] A no-change tab activation performs only a cheap revision check.
-  - [ ] No duplicate exercise catalog read occurs during analytics load.
+  - [x] A no-change tab activation performs only a cheap revision check.
+  - [x] No duplicate exercise catalog read occurs during analytics load.
 
 ### PERF-08 — Search re-normalizes the entire catalog per query
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/utils/search.ts:145-151` normalizes name, muscles, equipment, and category for every exercise on every call, then scores and sorts all candidates at `:180-207`. The empty-query branch sorts the full list at `:121-131`.
 - **Impact:** Four or more regex-based normalizations per exercise per keystroke across 876 exercises. The 120 ms input debounce reduces but does not remove the cost.
 - **Required change:** Precompute a normalized haystack and staple score once per catalog version, and precompute the empty-query top-100 list.
+- **Implementation (2026-10-18):** `src/utils/search.ts` caches the per-catalog normalization index in a `WeakMap` keyed by the catalog array and the empty-query top-100 list by catalog identity; cached lists are sliced on return so callers cannot mutate them. Coverage: `tests/unit/search.test.ts` — "normalizes each catalog record once per catalog version" counts `String.prototype.toLowerCase` calls (first query > 300, second query ≤ 5) for both the scored path and the empty-query path, alongside ranking and filter-parity tests.
 - **Done when:**
-  - [ ] Search calls do not re-normalize unchanged catalog records.
-  - [ ] A benchmark or test documents the improvement.
+  - [x] Search calls do not re-normalize unchanged catalog records.
+  - [x] A benchmark or test documents the improvement.
 
 ### PERF-09 — Records list is not virtualized
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `RecordsView.tsx:255-286` renders `records.map(...)` inside a `ScrollView`, mounted from `AnalyticsScreen.tsx:527-546`.
 - **Impact:** Users with many trained exercises mount every record row at once, and the whole subtree re-renders on each search update.
 - **Required change:** Make the records list a `FlatList` with the header content in `ListHeaderComponent`, or memoize the row component and bound the rendered list.
+- **Implementation (2026-10-18):** The records branch is a `FlatList` with the card header and chip rows in `ListHeaderComponent` (only that branch dropped the outer `ScrollView`; the header scrollers keep it), configured with `initialNumToRender={12}`, `maxToRenderPerBatch={12}`, and `windowSize={7}`. `RecordRow` is extracted and memoized so a filtered list only re-renders rows whose own props changed. Coverage: `tests/unit/records-row-memoization.test.ts` — replacing one record re-renders only that row, and filtering the list leaves unchanged middle rows untouched.
+- **Deferred:** The mount-count assertion ("only visible rows are mounted for a 500-record dataset") needs a real renderer; it lands with the RNTL harness tracked under `DX-02` (Phase 3).
 - **Done when:**
-  - [ ] Only visible rows are mounted for a 500-record synthetic dataset.
-  - [ ] Search updates do not re-render unrelated rows.
+  - [ ] Only visible rows are mounted for a 500-record synthetic dataset. — deferred to `DX-02`; the `FlatList` windowing configuration is in place.
+  - [x] Search updates do not re-render unrelated rows.
 
 ### PERF-10 — Exercise detail runs the same full-history query twice
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `ExerciseDetailModal.tsx:155-163` calls `getExerciseStats`, `getExerciseGymScope`, and `getCompletedWorkoutsForExercise` in parallel. `getExerciseStats` at `nativeStore.ts:1177-1182` already calls `loadCompletedWorkoutsForExercise`.
 - **Impact:** Opening a detail modal doubles the most expensive query, then walks the history a third time for the podium.
 - **Required change:** Return raw workouts from the stats call or compute stats from the already-loaded history.
-- **Done when:** Opening the modal issues one history query and performs one aggregation pass.
+- **Implementation (2026-10-18):** New `src/workout/exercise-detail.ts#loadExerciseDetailData` loads the completed history once and shares it: `collectExerciseHistory` (`exercise-history.ts`) feeds the single-pass stats reducers in `gym-records.ts` (`summarizeStatsForEntries`/`summarizeDualStatsForEntries`) and `buildExercisePodium` (`pr.ts`). `ExerciseDetailModal` now only imports `getStore` and `reassignExerciseHistory` from the database layer. Coverage: `tests/integration/exercise-detail-query.test.ts` — one history query where the previous modal path issued two, with identical stats and podium results.
+- **Done when:** Opening the modal issues one history query and performs one aggregation pass. (One query per open is asserted in the integration test; the collector is a single pass over the shared history that feeds stats and podium.)
 
 ### PERF-11 — Eager screen imports and permanently mounted tabs
 
@@ -309,20 +318,22 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-12 — Rest timer wakes the JS thread four times per second for a 1 Hz UI
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `WorkoutContext.tsx:387-393` runs a 250 ms interval and bails out of the state update when the displayed second has not changed.
 - **Impact:** Four wakeups per second while resting, often with the screen dimmed, for a display that only changes once per second.
 - **Required change:** Tick every 1000 ms aligned to `endsAt`, or self-reschedule a timeout to the next integer second.
-- **Done when:** The timer display remains accurate across backgrounding with one update per second.
+- **Implementation (2026-10-18):** `WorkoutContext` replaces the interval with a self-scheduling `setTimeout` driven by the new `nextRemainingTickDelay` helper (`src/utils/timer.ts`), which aligns each wake-up to the next integer second of the remaining time and to the end of the rest. Coverage: `tests/unit/timer.test.ts` (`nextRemainingTickDelay`).
+- **Done when:** The timer display remains accurate across backgrounding with one update per second. (Each tick re-arms from `computeRemaining`, so a foreground return shows the correct second immediately; the displayed second changes once per wake-up.)
 
 ### PERF-13 — Low-cost render and parsing issues
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `ConfettiCelebration.tsx:53-92` builds particles and assigns `particlesRef.current` during render. `ExerciseVisual.tsx:105-109` parses a 12.7 KB inline SVG on every plank visual mount.
 - **Impact:** Render-phase side effects double under StrictMode; repeated SVG parsing adds avoidable work.
 - **Required change:** Use a lazy `useState`/`useMemo` initializer for particles and hoist or asset-load the SVG.
-- **Done when:** No ref mutation occurs during render and the plank visual parses once per process.
+- **Implementation (2026-10-18):** Confetti particles use a lazy `useState` initializer so nothing mutates a ref during render. `ConfettiCelebration` and `ExerciseVisual` share `getParsedSvgAst` (`src/utils/svgAstCache.ts`), a cache that parses each asset once per process and serves the AST to `SvgAst`. Coverage: `tests/unit/confetti-celebration.test.ts` and `tests/unit/svg-ast-cache.test.ts`.
+- **Done when:** No ref mutation occurs during render and the plank visual parses once per process. (Asserted by "builds particles once per mount" and "parses each asset once per process".)
 
 ### PERF-14 — Web store scans and sorts full object stores in memory
 
@@ -700,15 +711,17 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 ### Phase 1 — Logger and analytics responsiveness (target: one to two weeks)
 
-- [ ] `PERF-01` Split active-workout state; memoize exercise cards and set rows.
-- [ ] `PERF-02` Debounce exercise notes.
-- [ ] `PERF-03` Debounce Trophy Room search and filter precomputed records.
-- [ ] `PERF-07` Add a cheap revision check before analytics hydration.
-- [ ] `PERF-08` Precompute search normalization and the staple list.
-- [ ] `PERF-09` Virtualize the records list.
-- [ ] `PERF-10` Remove the duplicate detail query.
-- [ ] `PERF-12` Reduce the rest-timer tick to one update per second.
-- [ ] `PERF-13` Fix confetti and SVG parsing costs.
+- [x] `PERF-01` Split active-workout state; memoize exercise cards and set rows.
+- [x] `PERF-02` Debounce exercise notes.
+- [x] `PERF-03` Debounce Trophy Room search and filter precomputed records.
+- [x] `PERF-07` Add a cheap revision check before analytics hydration.
+- [x] `PERF-08` Precompute search normalization and the staple list.
+- [x] `PERF-09` Virtualize the records list.
+- [x] `PERF-10` Remove the duplicate detail query.
+- [x] `PERF-12` Reduce the rest-timer tick to one update per second.
+- [x] `PERF-13` Fix confetti and SVG parsing costs.
+
+**Renderer-level verifications deferred to Phase 3:** the `PERF-03` per-keystroke spy and `PERF-09` mount-count assertion need mount/render introspection (React Native Testing Library) and ride on `DX-02`. The comparator, memoization, query-count, revision-contract, and call-count tests listed per finding are in place today.
 
 **Exit criteria:** Toggling a set re-renders only the affected rows; typing does not trigger a full workout re-render; returning to Analytics with no changes does not hydrate the full database; a 500-record dataset scrolls without mounting all rows.
 

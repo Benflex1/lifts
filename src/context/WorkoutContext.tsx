@@ -5,7 +5,7 @@ import * as Crypto from 'expo-crypto';
 import { ActiveExercise, Exercise, Gym, Routine, SetType, Workout, WorkoutSet } from '../types';
 import { getStore } from '../database/db';
 import { WorkoutDraft } from '../database/contract';
-import { computeElapsedSeconds, computeRemaining } from '../utils/timer';
+import { computeElapsedSeconds, computeRemaining, nextRemainingTickDelay } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
 import { initialReps, moveWorkoutSet, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
 import {
@@ -184,7 +184,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     endsAt: null,
   });
 
-  const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gymSwitchRequestRef = useRef(0);
   const lastBuzzedSecondRef = useRef<number | null>(null);
@@ -328,94 +328,106 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => sub.remove();
   }, [sessionState.phase]);
 
-  // Rest countdown ticker
+  // Rest countdown ticker: one wakeup per second, aligned to the second boundary.
   useEffect(() => {
-    if (restTimer.isActive && restTimer.endsAt !== null) {
-      const tick = () => {
-        const now = Date.now();
-        const remaining = computeRemaining(restTimer.endsAt!, now);
-        if (remaining <= 0) {
-          const expiredRecently = restTimer.endsAt !== null && Math.abs(now - restTimer.endsAt) < 1500;
-          setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
-          const ctrl = controllerRef.current;
-          if (ctrl) {
-            const state = ctrl.getState();
-            if (state.phase === 'active' && state.workout) {
-              ctrl.update(state.workout, null);
-            }
-          }
-          void cancelRestNotification();
+    const clearScheduledTick = () => {
+      if (restTimerRef.current) {
+        clearTimeout(restTimerRef.current);
+        restTimerRef.current = null;
+      }
+    };
 
-          // Intense countdown finish buzzer (triple pulse)
-          // Only buzz if timer reached 0 in foreground / just now (< 1.5s), avoiding false alarm on app resume
-          if (lastBuzzedSecondRef.current !== 0 && expiredRecently) {
-            lastBuzzedSecondRef.current = 0;
-            if (Platform.OS !== 'web') {
-              try {
-                Vibration.vibrate([0, 800, 400, 800, 400, 800]);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                setTimeout(() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                }, 160);
-                setTimeout(() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                }, 320);
-              } catch {
-                // Best-effort countdown haptics; failure must not interrupt the workout.
-              }
-            }
-          } else {
-            lastBuzzedSecondRef.current = 0;
-          }
-        } else {
-          // Intense 3-2-1 countdown haptics
-          if (remaining === 3 && lastBuzzedSecondRef.current !== 3) {
-            lastBuzzedSecondRef.current = 3;
-            if (Platform.OS !== 'web') {
-              try {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              } catch {
-                // Best-effort countdown haptics; failure must not interrupt the workout.
-              }
-            }
-          } else if (remaining === 2 && lastBuzzedSecondRef.current !== 2) {
-            lastBuzzedSecondRef.current = 2;
-            if (Platform.OS !== 'web') {
-              try {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              } catch {
-                // Best-effort countdown haptics; failure must not interrupt the workout.
-              }
-            }
-          } else if (remaining === 1 && lastBuzzedSecondRef.current !== 1) {
-            lastBuzzedSecondRef.current = 1;
-            if (Platform.OS !== 'web') {
-              try {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              } catch {
-                // Best-effort countdown haptics; failure must not interrupt the workout.
-              }
-            }
-          } else if (remaining > 3) {
-            lastBuzzedSecondRef.current = null;
-          }
-
-          setRestTimer((prev) => {
-            if (prev.remainingSeconds === remaining) return prev;
-            return { ...prev, remainingSeconds: remaining };
-          });
-        }
-      };
-      restTimerRef.current = setInterval(tick, 250);
-      tick();
-    } else {
+    if (!restTimer.isActive || restTimer.endsAt === null) {
       lastBuzzedSecondRef.current = null;
-      if (restTimerRef.current) clearInterval(restTimerRef.current);
+      clearScheduledTick();
+      return clearScheduledTick;
     }
 
-    return () => {
-      if (restTimerRef.current) clearInterval(restTimerRef.current);
+    const endsAt = restTimer.endsAt;
+    const tick = () => {
+      const now = Date.now();
+      const remaining = computeRemaining(endsAt, now);
+      if (remaining <= 0) {
+        const expiredRecently = Math.abs(now - endsAt) < 1500;
+        setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
+        const ctrl = controllerRef.current;
+        if (ctrl) {
+          const state = ctrl.getState();
+          if (state.phase === 'active' && state.workout) {
+            ctrl.update(state.workout, null);
+          }
+        }
+        void cancelRestNotification();
+
+        // Intense countdown finish buzzer (triple pulse)
+        // Only buzz if timer reached 0 in foreground / just now (< 1.5s), avoiding false alarm on app resume
+        if (lastBuzzedSecondRef.current !== 0 && expiredRecently) {
+          lastBuzzedSecondRef.current = 0;
+          if (Platform.OS !== 'web') {
+            try {
+              Vibration.vibrate([0, 800, 400, 800, 400, 800]);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setTimeout(() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              }, 160);
+              setTimeout(() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              }, 320);
+            } catch {
+              // Best-effort countdown haptics; failure must not interrupt the workout.
+            }
+          }
+        } else {
+          lastBuzzedSecondRef.current = 0;
+        }
+      } else {
+        // Intense 3-2-1 countdown haptics
+        if (remaining === 3 && lastBuzzedSecondRef.current !== 3) {
+          lastBuzzedSecondRef.current = 3;
+          if (Platform.OS !== 'web') {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } catch {
+              // Best-effort countdown haptics; failure must not interrupt the workout.
+            }
+          }
+        } else if (remaining === 2 && lastBuzzedSecondRef.current !== 2) {
+          lastBuzzedSecondRef.current = 2;
+          if (Platform.OS !== 'web') {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } catch {
+              // Best-effort countdown haptics; failure must not interrupt the workout.
+            }
+          }
+        } else if (remaining === 1 && lastBuzzedSecondRef.current !== 1) {
+          lastBuzzedSecondRef.current = 1;
+          if (Platform.OS !== 'web') {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            } catch {
+              // Best-effort countdown haptics; failure must not interrupt the workout.
+            }
+          }
+        } else if (remaining > 3) {
+          lastBuzzedSecondRef.current = null;
+        }
+
+        setRestTimer((prev) => {
+          if (prev.remainingSeconds === remaining) return prev;
+          return { ...prev, remainingSeconds: remaining };
+        });
+
+        // Wake again exactly when the displayed second changes.
+        restTimerRef.current = setTimeout(
+          tick,
+          Math.max(50, nextRemainingTickDelay(endsAt, Date.now()) + 10),
+        );
+      }
     };
+
+    tick();
+    return clearScheduledTick;
   }, [restTimer.isActive, restTimer.endsAt, sessionState.phase]);
 
   const startRestTimer = (seconds: number, exerciseName?: string) => {

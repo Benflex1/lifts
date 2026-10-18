@@ -30,6 +30,11 @@ export interface DataSnapshot {
 
 export interface Store {
   init(): Promise<void>;
+  /**
+   * Cheap monotonic counter that advances on every write attempt. Callers use
+   * it to skip expensive reads when nothing has changed since their last load.
+   */
+  getDataRevision?(): Promise<number>;
   isReadOnly?(): boolean;
   tryAcquireLease?(): Promise<boolean>;
   onReadOnlyChange?(listener: (isReadOnly: boolean) => void): () => void;

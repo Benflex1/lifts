@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Dimensions, Animated, Easing, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -45,10 +45,11 @@ export const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  const particlesRef = useRef<Particle[]>([]);
-
-  if (particlesRef.current.length === 0) {
-    const particles: Particle[] = [];
+  // Built once per mount via a lazy initializer. Building particles during
+  // render and storing them in a ref would repeat under StrictMode and could
+  // leak particles from abandoned concurrent renders.
+  const [particles] = useState<Particle[]>(() => {
+    const built: Particle[] = [];
     for (let i = 0; i < count; i++) {
       const startX = Math.random() * screenWidth;
       const driftX = (Math.random() - 0.5) * 80;
@@ -74,7 +75,7 @@ export const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({
       const width = isRound ? Math.random() * 6 + 6 : Math.random() * 8 + 6;
       const height = isRound ? width : Math.random() * 12 + 8;
 
-      particles.push({
+      built.push({
         id: i,
         x: startX,
         size: { width, height },
@@ -85,8 +86,8 @@ export const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({
         translateY,
       });
     }
-    particlesRef.current = particles;
-  }
+    return built;
+  });
 
   useEffect(() => {
     Animated.timing(animValue, {
@@ -106,7 +107,7 @@ export const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({
 
   return (
     <Animated.View style={[styles.container, { opacity }]} pointerEvents="none">
-      {particlesRef.current.map((p) => (
+      {particles.map((p) => (
         <Animated.View
           key={p.id}
           style={[

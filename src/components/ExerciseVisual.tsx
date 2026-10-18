@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { Circle, G, Line, Path, Rect, Svg, SvgXml } from 'react-native-svg';
+import { Circle, G, Line, Path, Rect, Svg, SvgAst, parse } from 'react-native-svg';
 import { Exercise } from '../types';
 import { ExerciseVisualDescriptor, ExerciseVisualTemplate, getExerciseVisual } from '../utils/exercise-media';
 import { WORKOUT_GUIDE_PLANK_FRAME_1 } from './exercise-assets';
 import { ExerciseVisualErrorBoundary } from './ExerciseVisualErrorBoundary';
 import { colors } from '../theme';
+import { reportError } from '../utils/errorReporting';
+import { getParsedSvgAst } from '../utils/svgAstCache';
 
 export { ExerciseVisualErrorBoundary } from './ExerciseVisualErrorBoundary';
 
@@ -102,10 +104,19 @@ const GeneratedExerciseSvg: React.FC<{ exercise: Exercise; template: ExerciseVis
   );
 };
 
+type ParsedSvgAst = ReturnType<typeof parse>;
+
 const renderAsset = (descriptor: Extract<ExerciseVisualDescriptor, { kind: 'open-asset' }>, dimension: number) => {
   const xml = ASSET_XML[descriptor.assetKey];
   if (!xml) return null;
-  return <SvgXml xml={xml} width={dimension} height={dimension} accessibilityRole="image" />;
+  const ast = getParsedSvgAst(descriptor.assetKey, xml);
+  if (!ast) return null;
+  return (
+    <SvgAst
+      ast={ast}
+      override={{ width: dimension, height: dimension, accessibilityRole: 'image' }}
+    />
+  );
 };
 
 const AnimatedRemoteExerciseImage: React.FC<{

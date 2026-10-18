@@ -120,6 +120,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   let readOnlyMode = false;
   let db: IDBDatabase | null = null;
   let cachedExercises: Exercise[] | null = null;
+  // Cheap monotonic counter of write attempts; see getDataRevision below.
+  let dataRevision = 0;
   let heartbeatTimer: any = null;
   const readOnlyListeners = new Set<(isReadOnly: boolean) => void>();
 
@@ -293,6 +295,10 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (readOnlyMode) {
       throw new Error('Cannot write: store is in read-only mode');
     }
+
+    // Every mutating operation funnels through here, so the data revision
+    // advances exactly when a write is attempted.
+    dataRevision += 1;
 
     return new Promise((resolve, reject) => {
       const tx = database.transaction('metadata', 'readwrite');
@@ -1488,6 +1494,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
   return {
     isReadOnly: () => readOnlyMode,
+    getDataRevision: async () => dataRevision,
     tryAcquireLease,
     onReadOnlyChange: (listener: (isReadOnly: boolean) => void) => {
       readOnlyListeners.add(listener);

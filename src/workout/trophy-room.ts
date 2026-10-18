@@ -133,6 +133,29 @@ export interface TrophyRoomOptions {
 }
 
 /**
+ * Applies the category and search filters to an already-aggregated record list.
+ * Order-preserving, so filtering a summary that was sorted by value keeps the
+ * same ranking as aggregating with the filters applied.
+ */
+export function filterTrophyRecords(
+  records: ExerciseRecordSummary[],
+  options?: Pick<TrophyRoomOptions, 'categoryFilter' | 'searchQuery'>
+): ExerciseRecordSummary[] {
+  let filtered = records;
+
+  if (options?.categoryFilter && options.categoryFilter !== 'all') {
+    filtered = filtered.filter((r) => matchesCategory(r, options.categoryFilter!));
+  }
+
+  if (options?.searchQuery && options.searchQuery.trim().length > 0) {
+    const q = options.searchQuery.trim().toLowerCase();
+    filtered = filtered.filter((r) => r.exerciseName.toLowerCase().includes(q));
+  }
+
+  return filtered;
+}
+
+/**
  * Builds all-time PR leaderboard data, medal counts, and SBD totals from workout history.
  */
 export function buildTrophyRoomSummary(
@@ -286,16 +309,7 @@ export function buildTrophyRoomSummary(
   const sbdTotalKg = (bestSquat?.oneRMKg || 0) + (bestBench?.oneRMKg || 0) + (bestDeadlift?.oneRMKg || 0);
 
   // 3. Apply category, search, and presence filters
-  let filteredRecords = Array.from(recordsByExerciseId.values());
-
-  if (options?.categoryFilter && options.categoryFilter !== 'all') {
-    filteredRecords = filteredRecords.filter((r) => matchesCategory(r, options.categoryFilter!));
-  }
-
-  if (options?.searchQuery && options.searchQuery.trim().length > 0) {
-    const q = options.searchQuery.trim().toLowerCase();
-    filteredRecords = filteredRecords.filter((r) => r.exerciseName.toLowerCase().includes(q));
-  }
+  const filteredRecords = filterTrophyRecords(Array.from(recordsByExerciseId.values()), options);
 
   // Sort by highest estimated 1RM / weight descending
   filteredRecords.sort((a, b) => {
