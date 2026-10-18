@@ -32,6 +32,9 @@ jobs:
       - name: Version sync check
         run: npm run version:check
 
+      - name: Dependency audit policy
+        run: npm run audit:policy
+
       - name: TypeScript typecheck
         run: npm run typecheck
 

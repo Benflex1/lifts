@@ -45,6 +45,9 @@ This document details the environment requirements, build procedures, and device
 
 ## 2. Dependency Vulnerability Triage
 
+`npm run audit:policy` runs in CI (`npm audit --omit=dev`): any high or critical advisory in the production tree fails the build unless it is listed in `scripts/audit-policy.mjs`. Record the triage here before adding an advisory to that list, and never take an insecure `--force` downgrade.
+
+- **Accepted build/dev-tooling advisories (CI policy)**: `shell-quote` (critical, via `react-devtools-core`; dev-menu tooling that is not present in release builds), `brace-expansion`, `braces`, `micromatch`, and `source-map-js` (denial-of-service in Metro's glob and source-map tooling), and `node-forge` (via `@expo/code-signing-certificates`, CLI code-signing tooling). None of these paths execute in the shipped app; Dependabot tracks upstream fixes.
 - **Reported Advisory**: `GHSA-w5hq-g745-h8pq` (`uuid` < 11.1.1)
   - **Path**: `xcode` -> `uuid` and `@expo/ngrok` -> `uuid`
   - **Severity**: Moderate

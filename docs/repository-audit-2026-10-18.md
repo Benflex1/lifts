@@ -659,10 +659,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-06 — No dependency automation or security gate
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No Dependabot, Renovate, CodeQL, or `npm audit` step exists. Local audit: 29 vulnerabilities, including a critical `shell-quote` advisory reached through `react-devtools-core` and several high-severity build-tool transitive issues.
 - **Impact:** Security and compatibility drift accumulate silently. Most findings are build-time, but they still affect contributor and CI environments.
 - **Required change:** Add Dependabot/Renovate with grouped Expo updates, run `npm audit --omit=dev` in CI with an agreed policy, and document triage for accepted advisories.
+- **Implementation (2026-10-18):** `.github/dependabot.yml` adds weekly npm and GitHub Actions updates with grouped Expo, React Native, and dev-tooling PRs; majors of `expo`, `react-native`, `react`, and `react-dom` are left to `npx expo install --fix` during SDK upgrades rather than individual Dependabot bumps. `scripts/audit-policy.mjs` runs `npm audit --omit=dev`, fails on high/critical advisories unless they are explicitly accepted with a reason, and prints the production-tree counts; `npm run audit:policy` runs in CI on every push and pull request. Six build/dev-tooling advisories (including the critical `shell-quote` reached through `react-devtools-core`) are accepted with triage notes in `docs/release-checklist.md` section 2, so dependency updates and any new advisory are visible and actionable.
 - **Done when:** Dependency updates and audit results are visible and actionable on every relevant PR.
 
 ### DX-07 — No Node/toolchain pinning and incorrect prerequisites
@@ -826,7 +827,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `DX-02` Add React Native Testing Library and critical-flow tests.
 - [x] `DX-03` Add coverage reporting and a threshold.
 - [ ] `DX-04` Add one end-to-end smoke journey.
-- [ ] `DX-06` Add dependency automation and an audit policy.
+- [x] `DX-06` Add dependency automation and an audit policy.
 - [x] `DX-08` Fix version and documentation drift.
 - [ ] `DX-09` Add collaboration and security templates.
 - [x] `A11Y-01` Label the core logger controls.

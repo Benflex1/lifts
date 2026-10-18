@@ -1,0 +1,56 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      expo:
+        patterns:
+          - 'expo'
+          - 'expo-*'
+          - '@expo/*'
+          - '@expo-*'
+      react-native:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - 'react-native'
+          - 'react-native-*'
+          - '@react-native/*'
+          - '@react-native-*'
+      dev-tooling:
+        patterns:
+          - '@eslint/*'
+          - '@testing-library/*'
+          - '@types/*'
+          - 'eslint*'
+          - 'globals'
+          - 'jsdom'
+          - 'prettier'
+          - 'react-test-renderer'
+          - 'test-renderer'
+          - 'tsx'
+          - 'typescript'
+          - 'typescript-eslint'
+    # Expo SDK packages must move together; individual majors are handled by
+    # `npx expo install --fix` as part of an SDK upgrade, not by Dependabot.
+    ignore:
+      - dependency-name: 'expo'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-native'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
