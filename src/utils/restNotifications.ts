@@ -79,3 +79,8 @@ export async function cancelRestNotification(): Promise<void> {
   const { cancelRestNotification } = await import('./restNotifications.ios');
   return cancelRestNotification();
 }
+
+// Only Android has a native rest cue (see restNotifications.android.ts); elsewhere the app buzzes.
+export function isRestCueNative(): boolean {
+  return false;
+}

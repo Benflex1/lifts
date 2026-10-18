@@ -1,13 +1,11 @@
 package expo.modules.restalarm
 
-import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -18,22 +16,6 @@ class RestAlarmModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("RestAlarm")
-
-    Function("areNotificationsEnabled") {
-      RestAlarm.areNotificationsEnabled(context)
-    }
-
-    AsyncFunction("requestNotificationPermission") { promise: Promise ->
-      val permissions = appContext.permissions
-      if (Build.VERSION.SDK_INT < 33 || context.applicationInfo.targetSdkVersion < 33 || permissions == null) {
-        promise.resolve(RestAlarm.areNotificationsEnabled(context))
-        return@AsyncFunction
-      }
-      permissions.askForPermissions(
-        { promise.resolve(RestAlarm.areNotificationsEnabled(context)) },
-        Manifest.permission.POST_NOTIFICATIONS
-      )
-    }
 
     Function("canScheduleExactAlarms") {
       RestAlarm.canScheduleExactAlarms(context)
@@ -55,8 +37,8 @@ class RestAlarmModule : Module() {
       true
     }
 
-    AsyncFunction("schedule") { triggerAtMillis: Double, title: String, body: String ->
-      RestAlarm.schedule(context, triggerAtMillis.toLong(), title, body)
+    AsyncFunction("schedule") { endsAtMillis: Double ->
+      RestAlarm.schedule(context, endsAtMillis.toLong())
     }
 
     AsyncFunction("cancel") {

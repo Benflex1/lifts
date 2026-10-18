@@ -52,6 +52,58 @@ export function parseReps(rawReps?: string): number {
   return Number.isNaN(num) || num < 0 ? 0 : num;
 }
 
+const METERS_PER_UNIT: Record<string, number> = {
+  m: 1,
+  meter: 1,
+  meters: 1,
+  metre: 1,
+  metres: 1,
+  km: 1000,
+  kilometer: 1000,
+  kilometers: 1000,
+  kilometre: 1000,
+  kilometres: 1000,
+  mi: 1609.344,
+  mile: 1609.344,
+  miles: 1609.344,
+  ft: 0.3048,
+  feet: 0.3048,
+  yd: 0.9144,
+  yard: 0.9144,
+  yards: 0.9144,
+};
+
+/** Parses a set distance into metres. Unknown or missing units fall back to km (kg users) or miles. */
+export function parseDistanceToMeters(
+  rawDistance?: string,
+  unit?: string,
+  fallbackUnit: 'kg' | 'lb' = 'kg',
+): number | undefined {
+  if (!rawDistance || !rawDistance.trim()) return undefined;
+  const num = parseFloat(rawDistance.trim().replace(',', '.'));
+  if (Number.isNaN(num) || num <= 0) return undefined;
+  const factor =
+    METERS_PER_UNIT[(unit || '').trim().toLowerCase()] ?? (fallbackUnit === 'lb' ? 1609.344 : 1000);
+  return Math.round(num * factor * 10) / 10;
+}
+
+/** Parses a set time: plain seconds ("90") or a clock ("1:30", "0:01:30"). */
+export function parseSetSeconds(rawTime?: string): number | undefined {
+  if (!rawTime || !rawTime.trim()) return undefined;
+  const clean = rawTime.trim().replace(',', '.');
+  if (/^\d+(\.\d+)?$/.test(clean)) {
+    const seconds = Math.round(parseFloat(clean));
+    return seconds > 0 ? seconds : undefined;
+  }
+  if (/^\d+(:\d{1,2}){1,2}(\.\d+)?$/.test(clean)) {
+    const seconds = Math.round(
+      clean.split(':').reduce((total, part) => total * 60 + parseFloat(part), 0),
+    );
+    return seconds > 0 ? seconds : undefined;
+  }
+  return undefined;
+}
+
 export function parseRpe(rawRpe?: string): number | undefined {
   if (!rawRpe || !rawRpe.trim()) return undefined;
   const num = parseFloat(rawRpe.trim().replace(',', '.'));
@@ -75,11 +127,23 @@ interface ColumnIndices {
   headerWeightUnit?: 'kg' | 'lb';
   reps: number;
   rpe: number;
+  setSeconds: number;
+  distance: number;
+  distanceUnit: number;
+  headerDistanceUnit?: string;
   exerciseNotes: number;
   workoutNotes: number;
 }
 
-function resolveColumnIndices(headerRow: string[]): ColumnIndices {
+// Per-set time columns: Strong's "Seconds", Hevy's "duration_seconds" and FitNotes' "Time".
+function isSetTimeHeader(h: string, format: DetectedTrackerFormat): boolean {
+  if (h === 'seconds') return true;
+  if (format === 'hevy' && h === 'duration seconds') return true;
+  if (format === 'fitnotes' && h === 'time') return true;
+  return false;
+}
+
+function resolveColumnIndices(headerRow: string[], format: DetectedTrackerFormat): ColumnIndices {
   const norm = headerRow.map(normalizeHeader);
 
   const indices: ColumnIndices = {
@@ -96,6 +160,9 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
     weightUnit: -1,
     reps: -1,
     rpe: -1,
+    setSeconds: -1,
+    distance: -1,
+    distanceUnit: -1,
     exerciseNotes: -1,
     workoutNotes: -1,
   };
@@ -119,9 +186,29 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
     if (h === 'end time' || h === 'endtime') {
       indices.endTime = idx;
     }
+    // Set time and distance
+    if (isSetTimeHeader(h, format)) {
+      if (indices.setSeconds === -1) indices.setSeconds = idx;
+    } else if (
+      indices.distance === -1 &&
+      (h === 'distance' || h.startsWith('distance ') || h.startsWith('distance('))
+    ) {
+      if (h === 'distance unit') {
+        indices.distanceUnit = idx;
+      } else {
+        indices.distance = idx;
+        const unitMatch = h.match(
+          /^distance\s*\(?\s*(km|kilometers|m|meters|mi|miles|ft|feet|yd|yards)\s*\)?$/,
+        );
+        if (unitMatch) indices.headerDistanceUnit = unitMatch[1];
+      }
+    } else if (h === 'distance unit') {
+      indices.distanceUnit = idx;
+    }
     // Duration
     if (
       indices.duration === -1 &&
+      !isSetTimeHeader(h, format) &&
       (h.includes('duration') || h === 'workout duration' || h === 'total time' || h === 'time')
     ) {
       indices.duration = idx;
@@ -224,7 +311,7 @@ export function parseWorkoutCsv(
 
   const headerRow = rows[0];
   const { format: detectedFormat, label: formatLabel } = detectTrackerFormat(headerRow);
-  const indices = resolveColumnIndices(headerRow);
+  const indices = resolveColumnIndices(headerRow, detectedFormat);
   const warnings: string[] = [];
 
   if (indices.exerciseName === -1) {
@@ -252,6 +339,9 @@ export function parseWorkoutCsv(
       weightUnit?: string;
       repsStr?: string;
       rpeStr?: string;
+      secondsStr?: string;
+      distanceStr?: string;
+      distanceUnit?: string;
       exerciseNotes?: string;
     }>;
   }
@@ -308,6 +398,9 @@ export function parseWorkoutCsv(
       weightUnit,
       repsStr: getCol(indices.reps) || '0',
       rpeStr: getCol(indices.rpe) || undefined,
+      secondsStr: getCol(indices.setSeconds) || undefined,
+      distanceStr: getCol(indices.distance) || undefined,
+      distanceUnit: indices.headerDistanceUnit || getCol(indices.distanceUnit) || undefined,
       exerciseNotes: getCol(indices.exerciseNotes) || undefined,
     });
   }
@@ -337,11 +430,15 @@ export function parseWorkoutCsv(
       mapper.recordUsage(r.exerciseName, key);
       const { exercise: matchedEx } = mapper.getOrCreateExercise(r.exerciseName, r.category);
 
+      const setSeconds = parseSetSeconds(r.secondsStr);
+      const distanceM = parseDistanceToMeters(r.distanceStr, r.distanceUnit, defaultUnit);
       const parsedSet: ParsedSet = {
         setNumber: r.setIndex || (currentExerciseGroup ? currentExerciseGroup.sets.length + 1 : 1),
         type: normalizeSetType(r.setType, r.exerciseNotes),
         weightKg: parseWeightToKg(r.weightStr, r.weightUnit, defaultUnit),
         reps: parseReps(r.repsStr),
+        ...(setSeconds !== undefined ? { durationSeconds: setSeconds } : {}),
+        ...(distanceM !== undefined ? { distanceM } : {}),
         rpe: parseRpe(r.rpeStr),
         isCompleted: true,
         notes: r.exerciseNotes,

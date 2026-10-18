@@ -7,6 +7,7 @@ import {
   PreviousSetSuggestion,
   Routine,
   Workout,
+  TrackingType,
   WorkoutHistorySummary,
   WorkoutSet,
 } from '../types';
@@ -22,6 +23,8 @@ import {
 } from './seedData';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
+import { DEFAULT_TRACKING_TYPE, isTrackingType } from '../workout/tracking';
+import { DELOAD_WORKOUTS_KEY, parseDeloadWorkoutIds } from '../workout/programs';
 import {
   DEFAULT_GYM_COLOR,
   validateGymColor,
@@ -105,10 +108,18 @@ function mapSetRow(s: any): WorkoutSet {
     type: s.set_type as any,
     weightKg: s.weight_kg,
     reps: s.reps,
+    ...(s.duration_seconds === null || s.duration_seconds === undefined
+      ? {}
+      : { durationSeconds: s.duration_seconds }),
+    ...(s.distance_m === null || s.distance_m === undefined ? {} : { distanceM: s.distance_m }),
     rpe: s.rpe,
     isCompleted: Boolean(s.is_completed),
     completedAt: s.completed_at,
   };
+}
+
+function trackingTypeFromRow(value: unknown): { trackingType?: TrackingType } {
+  return isTrackingType(value) && value !== DEFAULT_TRACKING_TYPE ? { trackingType: value } : {};
 }
 
 function mapGymRow(r: any): Gym {
@@ -896,8 +907,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
         for (const ex of workout.exercises) {
           const weId = ex.id || `we-${workout.id}-${exOrder}`;
           await driver.runAsync(
-            `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps, superset_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps, superset_id, tracking_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             weId,
             workout.id,
             ex.exerciseId,
@@ -906,19 +917,22 @@ export function createNativeStore(driver: SqliteDriver): Store {
             ex.restTimerSeconds ?? 0,
             ex.targetReps || null,
             ex.supersetId || null,
+            ex.trackingType && ex.trackingType !== DEFAULT_TRACKING_TYPE ? ex.trackingType : null,
           );
 
           for (const s of ex.sets) {
             if (s.isCompleted) {
               await driver.runAsync(
-                `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, rpe, is_completed, completed_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+                `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, duration_seconds, distance_m, rpe, is_completed, completed_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
                 s.id || `set-${weId}-${s.setNumber}`,
                 weId,
                 s.setNumber,
                 s.type,
                 s.weightKg,
                 s.reps,
+                s.durationSeconds ?? null,
+                s.distanceM ?? null,
                 s.rpe || null,
                 s.completedAt || new Date().toISOString(),
               );
@@ -1047,6 +1061,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         targetReps: we.target_reps || undefined,
         restTimerSeconds: we.rest_timer_seconds ?? 0,
         supersetId: we.superset_id || undefined,
+        ...trackingTypeFromRow(we.tracking_type),
         exercise: mapJoinedExerciseRow(
           { ...we, exercise_id: we.exercise_id, ex_category: we.ex_cat, ex_equipment: we.ex_equip },
           {
@@ -1143,7 +1158,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
   ): Promise<CompletedExerciseOccurrence[]> {
     const rows = await driver.getAllAsync<any>(
       `SELECT w.id AS workout_id, w.start_time, w.gym_id, g.name AS gym_name,
-              we.id AS occurrence_id, we.order_index, s.weight_kg, s.reps, s.set_number
+              we.id AS occurrence_id, we.order_index, s.weight_kg, s.reps, s.set_number,
+              s.duration_seconds AS set_duration_seconds, s.distance_m, s.set_type, s.rpe
        FROM workouts w
        JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ?
        LEFT JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
@@ -1159,7 +1175,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         startTime: string;
         gymId: string;
         gymName: string;
-        occurrences: Array<{ id: string; sets: Array<{ weightKg: number; reps: number }> }>;
+        occurrences: Array<{ id: string; sets: CompletedExerciseOccurrence['sets'] }>;
       }
     >();
     for (const row of rows) {
@@ -1179,8 +1195,18 @@ export function createNativeStore(driver: SqliteDriver): Store {
         occurrence = { id: row.occurrence_id, sets: [] };
         workout.occurrences.push(occurrence);
       }
-      if (row.weight_kg !== null && row.reps !== null)
-        occurrence.sets.push({ weightKg: row.weight_kg, reps: row.reps });
+      if (row.weight_kg !== null && row.reps !== null) {
+        occurrence.sets.push({
+          weightKg: row.weight_kg,
+          reps: row.reps,
+          ...(row.set_duration_seconds === null
+            ? {}
+            : { durationSeconds: row.set_duration_seconds }),
+          ...(row.distance_m === null ? {} : { distanceM: row.distance_m }),
+          ...(row.set_type ? { type: row.set_type } : {}),
+          ...(row.rpe === null || row.rpe === undefined ? {} : { rpe: row.rpe }),
+        });
+      }
     }
 
     return Array.from(byWorkout.entries()).map(([workoutId, workout]) => {
@@ -1211,7 +1237,14 @@ export function createNativeStore(driver: SqliteDriver): Store {
     const gymId = currentGymId || (await getDefaultGym()).id;
     const occurrences = await loadCompletedExerciseOccurrences(exerciseId, occurrenceIndex);
     const scope = await getExerciseGymScope(exerciseId);
-    return resolvePreviousSetsForExercise(exercise, occurrences, gymId, scope || undefined);
+    const deloadIds = new Set(parseDeloadWorkoutIds(await getSetting(DELOAD_WORKOUTS_KEY)));
+    return resolvePreviousSetsForExercise(
+      exercise,
+      occurrences,
+      gymId,
+      scope || undefined,
+      deloadIds,
+    );
   }
 
   /**
@@ -1241,8 +1274,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
               w.id, w.name, w.routine_id, w.start_time, w.end_time, w.duration_seconds,
               w.total_volume_kg, w.notes, w.gym_id,
               we.id AS occurrence_id, we.order_index, we.notes AS occurrence_notes,
-              we.rest_timer_seconds, we.target_reps, s.id AS set_id, s.set_number,
-              s.set_type, s.weight_kg, s.reps, s.rpe, s.completed_at
+              we.rest_timer_seconds, we.target_reps, we.tracking_type, s.id AS set_id, s.set_number,
+              s.set_type, s.weight_kg, s.reps, s.duration_seconds AS set_duration_seconds, s.distance_m,
+              s.rpe, s.completed_at
        FROM workouts w
        JOIN workout_exercises we ON we.workout_id = w.id
        JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
@@ -1289,6 +1323,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           restTimerSeconds: row.rest_timer_seconds ?? 0,
           notes: row.occurrence_notes || undefined,
           targetReps: row.target_reps || undefined,
+          ...trackingTypeFromRow(row.tracking_type),
           sets: [],
         };
         workout.exercises.push(occurrence);
@@ -1300,6 +1335,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
         type: row.set_type,
         weightKg: row.weight_kg,
         reps: row.reps,
+        ...(row.set_duration_seconds === null ? {} : { durationSeconds: row.set_duration_seconds }),
+        ...(row.distance_m === null ? {} : { distanceM: row.distance_m }),
         rpe: row.rpe,
         isCompleted: true,
         completedAt: row.completed_at,
@@ -1538,6 +1575,14 @@ export function createNativeStore(driver: SqliteDriver): Store {
       const existing = await readSnapshot();
       const plan = planSnapshotMerge(snapshot, existing);
       await driver.withTransactionAsync(async () => {
+        for (const gym of plan.gymsToUpdate) {
+          await driver.runAsync(
+            'UPDATE gyms SET name = ?, color = ? WHERE id = ?',
+            gym.name,
+            gym.color,
+            gym.id,
+          );
+        }
         for (const gym of plan.gymsToInsert) {
           await driver.runAsync(
             `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)`,
@@ -1630,8 +1675,8 @@ export function createNativeStore(driver: SqliteDriver): Store {
           for (const we of w.exercises) {
             const weId = we.id || `we-${w.id}-${ord}`;
             await driver.runAsync(
-              `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps, superset_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps, superset_id, tracking_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               weId,
               w.id,
               we.exerciseId,
@@ -1640,17 +1685,20 @@ export function createNativeStore(driver: SqliteDriver): Store {
               we.restTimerSeconds ?? 0,
               we.targetReps || null,
               we.supersetId || null,
+              we.trackingType && we.trackingType !== DEFAULT_TRACKING_TYPE ? we.trackingType : null,
             );
             for (const s of we.sets) {
               await driver.runAsync(
-                `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, rpe, is_completed, completed_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, duration_seconds, distance_m, rpe, is_completed, completed_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 s.id || `set-${weId}-${s.setNumber}`,
                 weId,
                 s.setNumber,
                 s.type,
                 s.weightKg,
                 s.reps,
+                s.durationSeconds ?? null,
+                s.distanceM ?? null,
                 s.rpe || null,
                 s.isCompleted ? 1 : 0,
                 s.completedAt || null,
@@ -1674,9 +1722,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
           );
         }
 
-        for (const { key, value } of plan.settingsToInsert) {
+        for (const { key, value, replace } of plan.settingsToInsert) {
           await driver.runAsync(
-            'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
+            replace
+              ? 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
+              : 'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
             key,
             value,
           );

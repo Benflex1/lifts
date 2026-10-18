@@ -42,6 +42,7 @@ import {
   planSnapshotMerge,
 } from './storeCore';
 import { asCompletedRecord, isInProgressRecord } from './workoutRecord';
+import { DELOAD_WORKOUTS_KEY, parseDeloadWorkoutIds } from '../workout/programs';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -1181,10 +1182,11 @@ export async function createWebStore(
     occurrenceIndex: number = 0,
     currentGymId?: string,
   ): Promise<PreviousSetSuggestion[]> {
-    const [gyms, exerciseScope, exercise] = await Promise.all([
+    const [gyms, exerciseScope, exercise, storedDeloadIds] = await Promise.all([
       getGyms(),
       getExerciseGymScope(exerciseId),
       getExerciseById(exerciseId),
+      getSetting(DELOAD_WORKOUTS_KEY),
     ]);
     if (!exercise) return [];
     const gymNames = new Map(gyms.map(gym => [gym.id, gym.name]));
@@ -1204,12 +1206,23 @@ export async function createWebStore(
         gymName: gymNames.get(workout.gymId) || 'Default Gym',
         occurrenceIndex: requested?.sets.some(set => set.isCompleted)
           ? occurrenceIndex
-          : Math.max(0, matching.indexOf(selected!)),
+          : selected
+            ? Math.max(0, matching.indexOf(selected))
+            : 0,
         sets:
           selected?.sets
             .filter(set => set.isCompleted)
             .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
-            .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
+            .map(set => ({
+              weightKg: set.weightKg,
+              reps: set.reps,
+              ...(set.durationSeconds !== undefined
+                ? { durationSeconds: set.durationSeconds }
+                : {}),
+              ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+              type: set.type,
+              ...(set.rpe !== undefined && set.rpe !== null ? { rpe: set.rpe } : {}),
+            })) || [],
       };
     });
     return resolvePreviousSetsForExercise(
@@ -1217,9 +1230,9 @@ export async function createWebStore(
       occurrences,
       currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id,
       exerciseScope || undefined,
+      new Set(parseDeloadWorkoutIds(storedDeloadIds)),
     );
   }
-
   async function getCompletedWorkoutsForExercises(
     exerciseIds: string[],
   ): Promise<Record<string, Workout[]>> {
@@ -1531,8 +1544,8 @@ export async function createWebStore(
       );
 
       const gymStore = tx.objectStore('gyms');
+      for (const gym of plan.gymsToUpdate) gymStore.put(gym);
       for (const gym of plan.gymsToInsert) gymStore.put(gym);
-
       const scopeStore = tx.objectStore('exercise_gym_scopes');
       for (const scope of plan.scopesToInsert) scopeStore.put(scope);
 

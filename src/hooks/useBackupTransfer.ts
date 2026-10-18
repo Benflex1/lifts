@@ -20,7 +20,9 @@ export interface BackupTransfer {
   restoreBackup: () => Promise<void>;
 }
 
-export function useBackupTransfer(): BackupTransfer {
+export function useBackupTransfer({
+  onRestored,
+}: { onRestored?: () => void } = {}): BackupTransfer {
   const { confirm, notify } = useDialog();
   const isWorkingOut = useIsWorkingOut();
 
@@ -77,6 +79,7 @@ export function useBackupTransfer(): BackupTransfer {
       const message =
         `Backup Summary:\n` +
         `• ${preview.gymsCount} gyms to import\n` +
+        (preview.defaultGymUpdated ? `• Default gym name and color restored\n` : '') +
         `• ${preview.scopeOverridesCount} exercise scope overrides to import\n` +
         `• ${preview.workoutsCount} workouts to import (${preview.skippedWorkoutsCount} identical skipped)\n` +
         `• ${preview.routinesCount} routines to import (${preview.skippedRoutinesCount} identical skipped)\n` +
@@ -95,6 +98,7 @@ export function useBackupTransfer(): BackupTransfer {
       if (!proceed) return;
 
       await store.mergeSnapshot(snapshotToMerge);
+      onRestored?.();
       await notify({
         title: 'Restore Complete',
         message: 'Your backup data has been successfully merged.',

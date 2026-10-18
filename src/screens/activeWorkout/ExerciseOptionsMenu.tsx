@@ -11,6 +11,7 @@ import {
   Info,
   Layers,
   Repeat,
+  SlidersHorizontal,
   Timer,
   Trash2,
   X,
@@ -26,6 +27,9 @@ export interface ExerciseOptionsMenuProps {
   exerciseIndex: number;
   exerciseCount: number;
   bottomInset: number;
+  trackingTypesEnabled: boolean;
+  trackingTypeLabel: string;
+  hasLoad: boolean;
   onClose: () => void;
   onViewDetails: () => void;
   onMoveUp: () => void;
@@ -33,6 +37,7 @@ export interface ExerciseOptionsMenuProps {
   onReorderAll: () => void;
   onSwap: () => void;
   onSetRestTimer: () => void;
+  onChangeTrackingType: () => void;
   onOpenPlateCalculator: () => void;
   onQuickWarmup: () => void;
   onWarmupCalculator: () => void;
@@ -47,6 +52,9 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
   exerciseIndex,
   exerciseCount,
   bottomInset,
+  trackingTypesEnabled,
+  trackingTypeLabel,
+  hasLoad,
   onClose,
   onViewDetails,
   onMoveUp,
@@ -54,6 +62,7 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
   onReorderAll,
   onSwap,
   onSetRestTimer,
+  onChangeTrackingType,
   onOpenPlateCalculator,
   onQuickWarmup,
   onWarmupCalculator,
@@ -167,35 +176,53 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
             <Text style={styles.menuItemText}>Set Rest Timer</Text>
           </AppTouchable>
 
-          <AppTouchable
-            style={styles.menuItem}
-            onPress={onOpenPlateCalculator}
-            accessibilityRole="button"
-            accessibilityLabel="Open plate calculator"
-          >
-            <Calculator size={18} color={colors.textSecondary} />
-            <Text style={styles.menuItemText}>Plate Calculator</Text>
-          </AppTouchable>
+          {trackingTypesEnabled && (
+            <AppTouchable
+              style={styles.menuItem}
+              onPress={onChangeTrackingType}
+              accessibilityRole="button"
+              accessibilityLabel="Change how sets are tracked"
+            >
+              <SlidersHorizontal size={18} color={colors.textSecondary} />
+              <Text style={styles.menuItemText} numberOfLines={1}>
+                Track As: {trackingTypeLabel}
+              </Text>
+            </AppTouchable>
+          )}
 
-          <AppTouchable
-            style={styles.menuItem}
-            onPress={onQuickWarmup}
-            accessibilityRole="button"
-            accessibilityLabel="Add warm-up set"
-          >
-            <Flame size={18} color="#F97316" />
-            <Text style={styles.menuItemText}>Add Warm-up Set</Text>
-          </AppTouchable>
+          {hasLoad && (
+            <>
+              <AppTouchable
+                style={styles.menuItem}
+                onPress={onOpenPlateCalculator}
+                accessibilityRole="button"
+                accessibilityLabel="Open plate calculator"
+              >
+                <Calculator size={18} color={colors.textSecondary} />
+                <Text style={styles.menuItemText}>Plate Calculator</Text>
+              </AppTouchable>
 
-          <AppTouchable
-            style={styles.menuItem}
-            onPress={onWarmupCalculator}
-            accessibilityRole="button"
-            accessibilityLabel="Open warm-up calculator"
-          >
-            <Calculator size={18} color="#F97316" />
-            <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
-          </AppTouchable>
+              <AppTouchable
+                style={styles.menuItem}
+                onPress={onQuickWarmup}
+                accessibilityRole="button"
+                accessibilityLabel="Add warm-up set"
+              >
+                <Flame size={18} color="#F97316" />
+                <Text style={styles.menuItemText}>Add Warm-up Set</Text>
+              </AppTouchable>
+
+              <AppTouchable
+                style={styles.menuItem}
+                onPress={onWarmupCalculator}
+                accessibilityRole="button"
+                accessibilityLabel="Open warm-up calculator"
+              >
+                <Calculator size={18} color="#F97316" />
+                <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
+              </AppTouchable>
+            </>
+          )}
 
           <AppTouchable
             style={styles.menuItem}

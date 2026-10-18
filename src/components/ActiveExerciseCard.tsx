@@ -6,18 +6,29 @@ import {
   ChevronDown,
   ChevronUp,
   Dumbbell,
+  Feather,
   FileText,
   MoreHorizontal,
   Plus,
   Timer,
+  TrendingUp,
 } from 'lucide-react-native';
 import { ActiveExercise, Exercise, SetType, WorkoutSet } from '../types';
-import { WeightUnit } from '../utils/units';
+import { WeightUnit, formatWeight } from '../utils/units';
 import { colors } from '../theme';
 import { formatDuration } from '../utils/calculator';
 import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { ExerciseSupersetMeta } from '../workout/supersets';
 import { isSameSetPRResult, WorkoutPRSummary } from '../workout/pr';
+import { isOverloadFillTarget, OverloadSuggestion, suggestNextTarget } from '../workout/overload';
+import {
+  distanceUnitFor,
+  getTrackingType,
+  usesDistance,
+  usesDuration,
+  usesReps,
+  usesWeight,
+} from '../workout/tracking';
 import { styles } from '../screens/activeWorkoutStyles';
 import { ActiveSetRow } from './ActiveSetRow';
 import { ExerciseNoteInput } from './ExerciseNoteInput';
@@ -32,6 +43,10 @@ export interface ActiveExerciseCardProps {
   showRpeColumn: boolean;
   gymTrackingEnabled: boolean;
   prSummary: WorkoutPRSummary | null;
+  overloadEnabled: boolean;
+  isDeload: boolean;
+  onApplyOverload: (exercise: ActiveExercise, suggestion: OverloadSuggestion) => void;
+  onExplainOverload: (label: string, suggestion: OverloadSuggestion) => void;
   onToggleExpanded: (exerciseId: string) => void;
   onCommitNotes: (exerciseId: string, notes: string) => void;
   onOpenDetail: (exercise: Exercise | null) => void;
@@ -90,6 +105,10 @@ export function areCardPropsEqual(
   if (prev.unit !== next.unit) return false;
   if (prev.showRpeColumn !== next.showRpeColumn) return false;
   if (prev.gymTrackingEnabled !== next.gymTrackingEnabled) return false;
+  if (prev.overloadEnabled !== next.overloadEnabled) return false;
+  if (prev.isDeload !== next.isDeload) return false;
+  if (prev.onApplyOverload !== next.onApplyOverload) return false;
+  if (prev.onExplainOverload !== next.onExplainOverload) return false;
   if (!sameSupersetMeta(prev.supersetMeta, next.supersetMeta)) return false;
   if (!sameCardSetPRs(prev.prSummary, next.prSummary, next.exercise.sets)) return false;
   if (prev.onToggleExpanded !== next.onToggleExpanded) return false;
@@ -117,6 +136,10 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
   showRpeColumn,
   gymTrackingEnabled,
   prSummary,
+  overloadEnabled,
+  isDeload,
+  onApplyOverload,
+  onExplainOverload,
   onToggleExpanded,
   onCommitNotes,
   onOpenDetail,
@@ -136,6 +159,31 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
   const isAllCompleted = totalCount > 0 && completedCount === totalCount;
   const rowViewModel = exercise.exercise ? getExerciseRowViewModel(exercise.exercise) : null;
   const showNoteInput = isNoteEditing || Boolean(exercise.notes && exercise.notes.length > 0);
+
+  const trackingType = getTrackingType(exercise);
+  const showWeightInput = usesWeight(trackingType);
+  const showRepsInput = usesReps(trackingType);
+  const weightHeader =
+    trackingType === 'weighted_bodyweight'
+      ? `+${unit.toUpperCase()}`
+      : trackingType === 'assisted_bodyweight'
+        ? `−${unit.toUpperCase()}`
+        : unit.toUpperCase();
+  const overload =
+    (overloadEnabled || isDeload) && exercise.sets.some(isOverloadFillTarget)
+      ? suggestNextTarget({
+          sets: exercise.sets,
+          targetReps: exercise.targetReps,
+          trackingType,
+          equipment: exercise.exercise?.equipment,
+          unit,
+          deload: isDeload,
+        })
+      : null;
+  const isDeloadTarget = overload?.kind === 'deload';
+  const overloadLabel = overload
+    ? `${trackingType === 'weighted_bodyweight' ? '+' : ''}${formatWeight(overload.weightKg, unit)} × ${overload.reps}`
+    : '';
 
   const cardElement = !isExpanded ? (
     // Collapsed Accordion Row - Lyfta Screenshot 1
@@ -260,7 +308,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
                 .filter(Boolean)
                 .join(' · ')}
             </Text>
-            {exercise.targetReps ? (
+            {exercise.targetReps && showRepsInput ? (
               <Text style={styles.targetBadge}>{exercise.targetReps} reps</Text>
             ) : null}
             {supersetMeta && (
@@ -308,6 +356,25 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
             Rest {exercise.restTimerSeconds ? formatDuration(exercise.restTimerSeconds) : 'Off'}
           </Text>
         </AppTouchable>
+        {overload && (
+          <AppTouchable
+            style={[styles.overloadPill, isDeloadTarget && styles.deloadPill]}
+            onPress={() => onApplyOverload(exercise, overload)}
+            onLongPress={() => onExplainOverload(overloadLabel, overload)}
+            accessibilityRole="button"
+            accessibilityLabel={`Next target ${overloadLabel}`}
+            accessibilityHint={`${overload.reason} Tap to fill your remaining sets.`}
+          >
+            {isDeloadTarget ? (
+              <Feather size={13} color={colors.warning} />
+            ) : (
+              <TrendingUp size={13} color={colors.successLight} />
+            )}
+            <Text style={[styles.overloadPillText, isDeloadTarget && styles.deloadPillText]}>
+              {overloadLabel}
+            </Text>
+          </AppTouchable>
+        )}
         {!showNoteInput && (
           <AppTouchable
             style={styles.addNotePrompt}
@@ -342,10 +409,20 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
       <View style={styles.tableHeader}>
         <Text style={[styles.colHeader, { width: 38, textAlign: 'center' }]}>SET</Text>
         <Text style={[styles.colHeader, { flex: 1, paddingLeft: 8 }]}>PREVIOUS</Text>
-        <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>
-          {unit.toUpperCase()}
-        </Text>
-        <Text style={[styles.colHeader, { width: 70, textAlign: 'center' }]}>REPS</Text>
+        {showWeightInput && (
+          <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>{weightHeader}</Text>
+        )}
+        {showRepsInput && (
+          <Text style={[styles.colHeader, { width: 70, textAlign: 'center' }]}>REPS</Text>
+        )}
+        {usesDistance(trackingType) && (
+          <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>
+            {distanceUnitFor(unit).toUpperCase()}
+          </Text>
+        )}
+        {usesDuration(trackingType) && (
+          <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>TIME</Text>
+        )}
         {showRpeColumn && (
           <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>RPE</Text>
         )}
@@ -360,6 +437,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
           exerciseId={exercise.id}
           exerciseName={exercise.exercise?.name || 'Exercise'}
           targetReps={exercise.targetReps}
+          trackingType={trackingType}
           unit={unit}
           showRpeColumn={showRpeColumn}
           gymTrackingEnabled={gymTrackingEnabled}

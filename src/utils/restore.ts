@@ -1,11 +1,25 @@
+import { isBackupExcludedSetting, isMergedOnRestore } from './settings';
 import { Store, DataSnapshot, WorkoutDraft } from '../database/contract';
 import { parseBackup, BackupV3 } from './backup';
 import { Exercise, ExerciseGymScope, Routine, Workout } from '../types';
 import { buildGymRestoreMapping, remapGymReferences } from './gym-restore';
 import { validateExerciseGymScope } from '../workout/gym-scope';
+import { buildDefaultRoutines } from '../database/seedData';
+import {
+  EXERCISE_TRACKING_TYPES_KEY,
+  getTrackingType,
+  mergeTrackingTypeOverrides,
+} from '../workout/tracking';
+import {
+  mergeDeloadWorkoutIds,
+  mergeRoutinePrograms,
+  ROUTINE_PROGRAMS_KEY,
+} from '../workout/programs';
+import { BODY_WEIGHT_LOG_KEY, mergeBodyWeightLogs } from '../workout/body-weight';
 
 export interface RestorePreview {
   gymsCount: number;
+  defaultGymUpdated: boolean;
   scopeOverridesCount: number;
   workoutsCount: number;
   routinesCount: number;
@@ -88,7 +102,8 @@ function isIdenticalWorkout(a: Workout, b: Workout): boolean {
       aEx[i].exerciseId !== bEx[i].exerciseId ||
       (aEx[i].notes || '') !== (bEx[i].notes || '') ||
       (aEx[i].restTimerSeconds ?? 0) !== (bEx[i].restTimerSeconds ?? 0) ||
-      (aEx[i].targetReps || '') !== (bEx[i].targetReps || '')
+      (aEx[i].targetReps || '') !== (bEx[i].targetReps || '') ||
+      getTrackingType(aEx[i]) !== getTrackingType(bEx[i])
     ) {
       return false;
     }
@@ -101,6 +116,8 @@ function isIdenticalWorkout(a: Workout, b: Workout): boolean {
         aSets[j].type !== bSets[j].type ||
         aSets[j].weightKg !== bSets[j].weightKg ||
         aSets[j].reps !== bSets[j].reps ||
+        (aSets[j].durationSeconds ?? null) !== (bSets[j].durationSeconds ?? null) ||
+        (aSets[j].distanceM ?? null) !== (bSets[j].distanceM ?? null) ||
         (aSets[j].rpe ?? null) !== (bSets[j].rpe ?? null) ||
         Boolean(aSets[j].isCompleted) !== Boolean(bSets[j].isCompleted) ||
         (aSets[j].completedAt || '') !== (bSets[j].completedAt || '')
@@ -130,6 +147,13 @@ function isIdenticalDraft(a: WorkoutDraft, b: WorkoutDraft): boolean {
     }
   }
   return true;
+}
+
+// Built-in routines the user never edited on this device are replaced by the
+// backup's version instead of being treated as a conflict.
+function isUntouchedSeedRoutine(routine: Routine): boolean {
+  const seed = buildDefaultRoutines().find(candidate => candidate.id === routine.id);
+  return Boolean(seed && isIdenticalRoutine(seed, routine));
 }
 
 export async function computeRestorePlan(
@@ -200,6 +224,8 @@ export async function computeRestorePlan(
     if (exR) {
       if (isIdenticalRoutine(r, exR)) {
         skippedRoutinesCount++;
+      } else if (isUntouchedSeedRoutine(exR)) {
+        routinesToInsert.push(r);
       } else {
         throw new Error(
           `Conflicting routine ID: ${r.id} ("${r.name}") already exists with different data`,
@@ -242,10 +268,24 @@ export async function computeRestorePlan(
   const settingsToInsert: Record<string, string> = {};
   let newSettingsCount = 0;
   for (const [k, v] of Object.entries(remappedBackup.settings || {})) {
-    if (k === 'health_sync_enabled') continue;
+    if (isBackupExcludedSetting(k)) continue;
     if (existing.settings[k] === undefined) {
       settingsToInsert[k] = v;
       newSettingsCount++;
+    } else if (isMergedOnRestore(k)) {
+      // Per-exercise choices, per-folder rotations and per-day weigh-ins merge, with this device's winning.
+      const merged =
+        k === EXERCISE_TRACKING_TYPES_KEY
+          ? mergeTrackingTypeOverrides(existing.settings[k], v)
+          : k === ROUTINE_PROGRAMS_KEY
+            ? mergeRoutinePrograms(existing.settings[k], v)
+            : k === BODY_WEIGHT_LOG_KEY
+              ? mergeBodyWeightLogs(existing.settings[k], v)
+              : mergeDeloadWorkoutIds(existing.settings[k], v);
+      if (merged !== existing.settings[k]) {
+        settingsToInsert[k] = merged;
+        newSettingsCount++;
+      }
     }
   }
 
@@ -255,12 +295,15 @@ export async function computeRestorePlan(
     workouts: workoutsToInsert,
     drafts: draftsToInsert,
     settings: settingsToInsert,
-    gyms: gymMapping.gymsToInsert,
+    gyms: gymMapping.defaultGymUpdate
+      ? [gymMapping.defaultGymUpdate, ...gymMapping.gymsToInsert]
+      : gymMapping.gymsToInsert,
     exerciseGymScopes: scopesToInsert,
   };
 
   const preview: RestorePreview = {
     gymsCount: gymMapping.gymsToInsert.length,
+    defaultGymUpdated: Boolean(gymMapping.defaultGymUpdate),
     scopeOverridesCount: scopesToInsert.length,
     workoutsCount: workoutsToInsert.length,
     routinesCount: routinesToInsert.length,

@@ -20,6 +20,8 @@ import {
 import { formatWeight } from '../../utils/units';
 import { colors } from '../../theme';
 import { ProgressionMetric, TimeframeFilter } from '../../workout/analytics';
+import { BodyWeightEntry } from '../../workout/body-weight';
+import { BodyWeightCard } from '../../components/BodyWeightCard';
 import { ExercisePickerModal } from '../../components/ExercisePickerModal';
 import { ProgressionCurveView } from '../../components/ProgressionCurveView';
 import type { AnalyticsData } from '../../hooks/useAnalyticsData';
@@ -28,7 +30,13 @@ import type { AnalyticsData } from '../../hooks/useAnalyticsData';
  * ARCH-02: the Progress tab's overview charts. Receives the analytics data model and renders the
  * lifetime summary plus the volume, muscle, consistency, progression, and breakdown charts.
  */
-export function ProgressCharts({ analytics }: { analytics: AnalyticsData }) {
+export function ProgressCharts({
+  analytics,
+  bodyWeight,
+}: {
+  analytics: AnalyticsData;
+  bodyWeight?: { entries: BodyWeightEntry[]; onLog: () => void };
+}) {
   const {
     loading: analyticsLoading,
     hasWorkoutData,
@@ -65,6 +73,10 @@ export function ProgressCharts({ analytics }: { analytics: AnalyticsData }) {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {bodyWeight && (
+          <BodyWeightCard entries={bodyWeight.entries} unit={unit} onLog={bodyWeight.onLog} />
+        )}
+
         {/* Progress Charts */}
         {analyticsLoading ? (
           <View style={styles.chartLoading}>

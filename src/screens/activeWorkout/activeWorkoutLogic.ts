@@ -1,6 +1,7 @@
 import { ActiveExercise, Gym, Workout, WorkoutSet } from '../../types';
 import { WeightUnit, displayToKg, kgToDisplay } from '../../utils/units';
 import { getDefaultIncrement, roundToIncrement } from '../../workout/warmup';
+import { getTrackingType, setVolumeKg } from '../../workout/tracking';
 import { PRHistoryIndex } from '../../workout/pr';
 
 /**
@@ -20,10 +21,11 @@ export function computeLiveSetStats(exercises: ActiveExercise[]): LiveSetStats {
   let total = 0;
 
   for (const ex of exercises) {
+    const trackingType = getTrackingType(ex);
     for (const s of ex.sets) {
       total++;
       if (s.isCompleted) {
-        volume += s.weightKg * s.reps;
+        volume += setVolumeKg(s, trackingType);
         completed++;
       }
     }

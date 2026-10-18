@@ -2,6 +2,7 @@ import { DualExerciseStats, Exercise, ExerciseGymScope, ExerciseStats, Workout }
 import { calculate1RM } from '../utils/calculator';
 import { ExerciseHistoryEntry, collectExerciseHistory } from './exercise-history';
 import { getAllowedGymIds } from './gym-scope';
+import { countsLoad } from './tracking';
 
 function emptyStats(): ExerciseStats {
   return {
@@ -23,16 +24,19 @@ export function summarizeStatsForEntries(
   for (const entry of entries) {
     if (gymFilter !== null && !gymFilter.has(entry.gymId)) continue;
 
+    let hasCompletedSet = false;
     for (const set of entry.sets) {
+      hasCompletedSet = true;
+      stats.maxReps = Math.max(stats.maxReps, set.reps);
+      if (!countsLoad(set.trackingType)) continue;
       stats.maxWeightKg = Math.max(stats.maxWeightKg, set.weightKg);
       stats.maxSetVolumeKg = Math.max(stats.maxSetVolumeKg, set.weightKg * set.reps);
-      stats.maxReps = Math.max(stats.maxReps, set.reps);
       stats.estimated1RM = Math.max(
         stats.estimated1RM,
         calculate1RM(set.weightKg, set.reps).average,
       );
     }
-    stats.sessionCount += 1;
+    if (hasCompletedSet) stats.sessionCount += 1;
   }
 
   return stats;
