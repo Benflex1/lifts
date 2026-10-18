@@ -54,9 +54,6 @@ const TABS: { key: Tab; label: string; icon: typeof Dumbbell }[] = [
   { key: 'analytics', label: 'Progress', icon: TrendingUp },
 ];
 
-/** PERF-11: heavy tabs are released after a retention window once hidden; the rest stay warm. */
-const EVICTABLE_TABS: ReadonlySet<Tab> = new Set<Tab>(['history', 'analytics']);
-
 /** Delay before the code-split tabs are warmed in the background, keeping the first switch fast. */
 const TAB_PREFETCH_DELAY_MS = 1_500;
 
@@ -76,12 +73,9 @@ function MainAppContent() {
   const showLogger = isWorkingOut && !isMinimized;
   const visibleTab: Tab | null = showLogger ? null : currentTab;
 
-  // Tabs are mounted on first visit and kept alive (hidden) so switching back is instant; the
-  // heavy ones are released again once they have been hidden for the retention window (PERF-11).
+  // Mount on first visit and preserve UI state across tabs and the logger.
   const { mountedTabs, mountTab } = useTabRetention<Tab>({
     initialTab: 'workout',
-    visibleTab,
-    evictableTabs: EVICTABLE_TABS,
   });
 
   const selectTab = (tab: Tab) => {

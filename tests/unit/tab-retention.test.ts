@@ -8,46 +8,35 @@ import { TabRetention, useTabRetention } from '../../src/hooks/useTabRetention';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
-const EVICTABLE_TABS: ReadonlySet<Tab> = new Set<Tab>(['history', 'analytics']);
-const RETENTION_MS = 1_000;
-const SWEEP_MS = 100;
+const LONG_WORKOUT_MS = 10 * 60 * 1000;
 
 interface HarnessProps {
   visibleTab: Tab | null;
-  now: () => number;
   onState: (state: TabRetention<Tab>) => void;
 }
 
-function Harness({ visibleTab, now, onState }: HarnessProps) {
+function Harness({ onState }: HarnessProps) {
   onState(
     useTabRetention<Tab>({
       initialTab: 'workout',
-      visibleTab,
-      evictableTabs: EVICTABLE_TABS,
-      retentionMs: RETENTION_MS,
-      sweepMs: SWEEP_MS,
-      now,
     }),
   );
   return null;
 }
 
 function setup(t: TestContext) {
-  t.mock.timers.enable({ apis: ['setInterval'] });
-  const clock = { current: 0 };
+  t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: 0 });
   let latest!: TabRetention<Tab>;
   const onState = (state: TabRetention<Tab>) => {
     latest = state;
   };
-  const element = (visibleTab: Tab | null) =>
-    React.createElement(Harness, { visibleTab, now: () => clock.current, onState });
+  const element = (visibleTab: Tab | null) => React.createElement(Harness, { visibleTab, onState });
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(element('workout'));
   });
 
   return {
-    clock,
     state: () => latest,
     update: (visibleTab: Tab | null) => {
       act(() => {
@@ -59,7 +48,7 @@ function setup(t: TestContext) {
         latest.mountTab(tab);
       });
     },
-    tick: (milliseconds = SWEEP_MS) => {
+    tick: (milliseconds = LONG_WORKOUT_MS) => {
       act(() => {
         t.mock.timers.tick(milliseconds);
       });
@@ -72,7 +61,7 @@ function setup(t: TestContext) {
   };
 }
 
-test('useTabRetention mounts tabs on first visit and never releases the visible one', (t) => {
+test('useTabRetention mounts tabs on first visit and preserves visited tabs on repeated selection', t => {
   const harness = setup(t);
 
   assert.deepEqual([...harness.state().mountedTabs], ['workout']);
@@ -84,79 +73,25 @@ test('useTabRetention mounts tabs on first visit and never releases the visible 
   harness.update('history');
   assert.deepEqual([...harness.state().mountedTabs].sort(), ['history', 'workout']);
 
-  harness.clock.current += 10 * RETENTION_MS;
   harness.tick();
   assert.ok(harness.state().mountedTabs.has('history'), 'visible tabs are never evicted');
   harness.unmount();
 });
 
-test('useTabRetention releases a hidden evictable tab once the window has passed', (t) => {
+test('returning from a long logger session preserves the selected tab and its state', t => {
   const harness = setup(t);
-
-  harness.mount('history');
-  harness.update('history');
-  harness.update('workout'); // history is hidden from here on
-
-  harness.clock.current = RETENTION_MS - 1;
+  harness.mount('analytics');
+  harness.update('analytics');
+  harness.update(null);
   harness.tick();
-  assert.ok(harness.state().mountedTabs.has('history'), 'kept inside the retention window');
-
-  harness.clock.current = RETENTION_MS;
-  harness.tick();
-  assert.ok(!harness.state().mountedTabs.has('history'), 'released at the retention boundary');
-  assert.ok(harness.state().mountedTabs.has('workout'));
-
-  // The next visit mounts it again with a fresh retention clock.
-  harness.mount('history');
-  assert.ok(harness.state().mountedTabs.has('history'));
-  harness.unmount();
-});
-
-test('useTabRetention keeps non-evictable tabs mounted however long they stay hidden', (t) => {
-  const harness = setup(t);
-
-  harness.mount('history');
-  harness.update('history'); // workout is hidden but not evictable
-
-  harness.clock.current = 60 * RETENTION_MS;
-  harness.tick();
-  harness.tick();
-  assert.deepEqual([...harness.state().mountedTabs].sort(), ['history', 'workout']);
-
-  harness.update('workout');
-  harness.clock.current = 120 * RETENTION_MS;
-  harness.tick();
-  assert.ok(!harness.state().mountedTabs.has('history'), 'evictable tabs still age out');
-  assert.ok(harness.state().mountedTabs.has('workout'));
-  harness.unmount();
-});
-
-test('useTabRetention cancels the release when the tab is revisited in time', (t) => {
-  const harness = setup(t);
-
-  harness.mount('history');
-  harness.update('history');
-  harness.update('workout');
-
-  harness.clock.current = RETENTION_MS - 1;
-  harness.update('history'); // back before the deadline resets the clock
-
-  harness.clock.current = 10 * RETENTION_MS;
-  harness.tick();
-  harness.tick();
-  assert.ok(harness.state().mountedTabs.has('history'), 'the pending release was cancelled');
-  harness.unmount();
-});
-
-test('useTabRetention also ages out a tab hidden behind the workout logger', (t) => {
-  const harness = setup(t);
-
-  harness.mount('history');
-  harness.update('history');
-  harness.update(null); // the logger takes over the screen
-
-  harness.clock.current = RETENTION_MS;
-  harness.tick();
-  assert.ok(!harness.state().mountedTabs.has('history'), 'released while the logger was open');
+  assert.ok(
+    harness.state().mountedTabs.has('analytics'),
+    'visited tab stays mounted behind logger',
+  );
+  harness.update('analytics');
+  assert.ok(
+    harness.state().mountedTabs.has('analytics'),
+    'selected pane must be available on minimize',
+  );
   harness.unmount();
 });

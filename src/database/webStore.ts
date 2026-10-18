@@ -219,6 +219,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         const now = getNow();
 
         if (!lease || now - lease.heartbeat > lease.leaseDurationMs || lease.ownerId === tabOwnerId) {
+          const revisionRequest = store.get('data_revision');
+          revisionRequest.onsuccess = () => {
+            store.put({
+              key: 'data_revision',
+              value: Math.max(revisionRequest.result?.value ?? 0, lease?.dataRevision ?? 0),
+            });
+          };
           store.put({
             key: 'writer_lease',
             ownerId: tabOwnerId,
@@ -227,7 +234,6 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             leaseDurationMs,
             // Preserve the persisted write revision across lease handovers so
             // readers never observe it moving backwards.
-            dataRevision: typeof lease?.dataRevision === 'number' ? lease.dataRevision : 0,
           });
           tx.oncomplete = () => {
             setReadOnly(false);
@@ -263,10 +269,6 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
           store.put({
             ...lease,
             heartbeat: now,
-            // Every mutating operation funnels through here; bumping the
-            // persisted revision in this same single write makes data changes
-            // visible to every tab, not just the writer.
-            dataRevision: (typeof lease.dataRevision === 'number' ? lease.dataRevision : 0) + 1,
           });
           tx.oncomplete = () => resolve();
         } else {
@@ -279,6 +281,18 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(new Error('Cannot write: lease has expired or was acquired by another tab'));
     });
+  }
+
+  /** Commit the revision with the data, so readers cannot cache uncommitted data. */
+  function dataWriteTransaction(database: IDBDatabase, stores: string | string[]): IDBTransaction {
+    const names = typeof stores === 'string' ? [stores] : stores;
+    const tx = database.transaction([...new Set([...names, 'metadata'])], 'readwrite');
+    const metadata = tx.objectStore('metadata');
+    const revisionRequest = metadata.get('data_revision');
+    revisionRequest.onsuccess = () => {
+      metadata.put({ key: 'data_revision', value: (revisionRequest.result?.value ?? 0) + 1 });
+    };
+    return tx;
   }
 
   async function synchronizeDefaultExercises(database: IDBDatabase): Promise<void> {
@@ -463,7 +477,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
     const gym: Gym = { id: createScopedId('gym'), name: validateGymName(name), color: validateGymColor(color), isDefault: false, createdAt: new Date(getNow()).toISOString() };
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('gyms', 'readwrite'); tx.objectStore('gyms').add(gym);
+      const tx = dataWriteTransaction(database, 'gyms'); tx.objectStore('gyms').add(gym);
       tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error);
     });
     return gym;
@@ -474,7 +488,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const name = updates.name === undefined ? undefined : validateGymName(updates.name);
     const color = updates.color === undefined ? undefined : validateGymColor(updates.color);
     return new Promise((resolve, reject) => {
-      const tx = database.transaction('gyms', 'readwrite'); const store = tx.objectStore('gyms'); const req = store.get(id);
+      const tx = dataWriteTransaction(database, 'gyms'); const store = tx.objectStore('gyms'); const req = store.get(id);
       req.onsuccess = () => {
         const current = req.result as Gym | undefined;
         if (!current) return reject(new Error('Gym not found'));
@@ -488,7 +502,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   async function setDefaultGym(id: string): Promise<void> {
     const database = await openDb(); await verifyAndRenewLease(database);
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('gyms', 'readwrite'); const store = tx.objectStore('gyms'); const all = store.getAll();
+      const tx = dataWriteTransaction(database, 'gyms'); const store = tx.objectStore('gyms'); const all = store.getAll();
       all.onsuccess = () => {
         const gyms = all.result as Gym[]; if (!gyms.some(g => g.id === id)) return reject(new Error('Gym not found'));
         gyms.forEach(g => store.put({ ...g, isDefault: g.id === id }));
@@ -526,7 +540,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(['gyms', 'workouts', 'workout_drafts', 'exercise_gym_scopes'], 'readwrite');
+      const tx = dataWriteTransaction(database, ['gyms', 'workouts', 'workout_drafts', 'exercise_gym_scopes']);
       const gymsStore = tx.objectStore('gyms');
       const workoutsStore = tx.objectStore('workouts');
       const draftsStore = tx.objectStore('workout_drafts');
@@ -561,9 +575,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (!(await getExerciseById(scope.exerciseId))) throw new Error('Exercise not found');
     const gyms = await getGyms(); const ids = scope.linkedGymIds || [];
     validateExerciseGymScope(scope, new Set(gyms.map(gym => gym.id)));
-    const database2 = await openDb(); await new Promise<void>((resolve, reject) => { const tx = database2.transaction('exercise_gym_scopes', 'readwrite'); tx.objectStore('exercise_gym_scopes').put(scope); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
+    const database2 = await openDb(); await new Promise<void>((resolve, reject) => { const tx = dataWriteTransaction(database2, 'exercise_gym_scopes'); tx.objectStore('exercise_gym_scopes').put(scope); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
   }
-  async function deleteExerciseGymScope(exerciseId: string): Promise<void> { const database = await openDb(); await verifyAndRenewLease(database); await new Promise<void>((resolve, reject) => { const tx = database.transaction('exercise_gym_scopes', 'readwrite'); tx.objectStore('exercise_gym_scopes').delete(exerciseId); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); }
+  async function deleteExerciseGymScope(exerciseId: string): Promise<void> { const database = await openDb(); await verifyAndRenewLease(database); await new Promise<void>((resolve, reject) => { const tx = dataWriteTransaction(database, 'exercise_gym_scopes'); tx.objectStore('exercise_gym_scopes').delete(exerciseId); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); }
 
   async function searchExercises(query: string = '', muscle: string = 'All', equipment: string = 'All'): Promise<Exercise[]> {
     const all = await getAllExercises();
@@ -595,7 +609,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('exercises', 'readwrite');
+      const tx = dataWriteTransaction(database, 'exercises');
       tx.objectStore('exercises').put(custom);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -651,7 +665,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     // 1. Update exercises table
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('exercises', 'readwrite');
+      const tx = dataWriteTransaction(database, 'exercises');
       tx.objectStore('exercises').put(updated);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -659,7 +673,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     // 2. Update embedded exercise in routines
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('routines', 'readwrite');
+      const tx = dataWriteTransaction(database, 'routines');
       const store = tx.objectStore('routines');
       const getAllReq = store.getAll();
       getAllReq.onsuccess = () => {
@@ -685,7 +699,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     // 3. Update embedded exercise in workouts
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('workouts', 'readwrite');
+      const tx = dataWriteTransaction(database, 'workouts');
       const store = tx.objectStore('workouts');
       const getAllReq = store.getAll();
       getAllReq.onsuccess = () => {
@@ -711,7 +725,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     // 4. Update embedded exercise in workout_drafts
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('workout_drafts', 'readwrite');
+      const tx = dataWriteTransaction(database, 'workout_drafts');
       const store = tx.objectStore('workout_drafts');
       const getAllReq = store.getAll();
       getAllReq.onsuccess = () => {
@@ -804,7 +818,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     };
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('routines', 'readwrite');
+      const tx = dataWriteTransaction(database, 'routines');
       tx.objectStore('routines').put(routine);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -818,7 +832,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('routines', 'readwrite');
+      const tx = dataWriteTransaction(database, 'routines');
       tx.objectStore('routines').delete(id);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -856,7 +870,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('routines', 'readwrite');
+      const tx = dataWriteTransaction(database, 'routines');
       tx.objectStore('routines').put(copy);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -870,7 +884,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(['gyms', 'workouts', 'routines', 'workout_drafts'], 'readwrite');
+      const tx = dataWriteTransaction(database, ['gyms', 'workouts', 'routines', 'workout_drafts']);
       let validationError: unknown = null;
       let settled = false;
       const rejectOnce = (error: unknown) => {
@@ -884,7 +898,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         settled = true;
         resolve();
       };
-      tx.onerror = () => rejectOnce(tx.error);
+      tx.onerror = () => rejectOnce(validationError || tx.error || new Error('Workout save aborted'));
       tx.onabort = () => rejectOnce(validationError || tx.error || new Error('Workout save aborted'));
 
       const gymRequest = tx.objectStore('gyms').getAll();
@@ -1012,7 +1026,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(['workouts', 'health_sync_records'], 'readwrite');
+      const tx = dataWriteTransaction(database, ['workouts', 'health_sync_records']);
       tx.objectStore('workouts').delete(workoutId);
       const healthStore = tx.objectStore('health_sync_records');
       const healthRows = healthStore.getAll();
@@ -1055,7 +1069,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const database = await openDb();
     await verifyAndRenewLease(database);
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('health_sync_records', 'readwrite');
+      const tx = dataWriteTransaction(database, 'health_sync_records');
       tx.objectStore('health_sync_records').put(record);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -1157,7 +1171,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     }
 
     return new Promise((resolve, reject) => {
-      const tx = database.transaction(['workouts', 'routines'], 'readwrite');
+      const tx = dataWriteTransaction(database, ['workouts', 'routines']);
       const workoutStore = tx.objectStore('workouts');
       const routineStore = tx.objectStore('routines');
 
@@ -1235,7 +1249,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('workout_drafts', 'readwrite');
+      const tx = dataWriteTransaction(database, 'workout_drafts');
       tx.objectStore('workout_drafts').put({
         ...draft,
         id: draft.workout.id,
@@ -1279,7 +1293,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('workout_drafts', 'readwrite');
+      const tx = dataWriteTransaction(database, 'workout_drafts');
       tx.objectStore('workout_drafts').delete(id);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -1301,7 +1315,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     await verifyAndRenewLease(database);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('settings', 'readwrite');
+      const tx = dataWriteTransaction(database, 'settings');
       tx.objectStore('settings').put({ key, value });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -1314,7 +1328,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     const routines = await getRoutines();
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('routines', 'readwrite');
+      const tx = dataWriteTransaction(database, 'routines');
       const store = tx.objectStore('routines');
       for (const r of routines) {
         if (r.folderName === oldName) {
@@ -1332,7 +1346,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
     const routines = await getRoutines();
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction('routines', 'readwrite');
+      const tx = dataWriteTransaction(database, 'routines');
       const store = tx.objectStore('routines');
       for (const r of routines) {
         if (r.folderName === name) {
@@ -1344,21 +1358,19 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
-  /**
-   * Persisted monotonic write revision, bumped inside the lease transaction by
-   * every mutating operation. Because it lives in IndexedDB, a tab that was
-   * read-only while another tab wrote sees the change immediately.
-   */
+  /** Persisted write revision, committed atomically with data and retained after lease release. */
   async function getDataRevision(): Promise<number> {
     const database = await openDb();
     return new Promise((resolve, reject) => {
       const tx = database.transaction('metadata', 'readonly');
-      const req = tx.objectStore('metadata').get('writer_lease');
-      req.onsuccess = () => {
-        const lease = req.result;
-        resolve(typeof lease?.dataRevision === 'number' ? lease.dataRevision : 0);
-      };
-      req.onerror = () => reject(req.error);
+      const metadata = tx.objectStore('metadata');
+      const revisionRequest = metadata.get('data_revision');
+      const leaseRequest = metadata.get('writer_lease');
+      tx.oncomplete = () =>
+        resolve(
+          Math.max(revisionRequest.result?.value ?? 0, leaseRequest.result?.dataRevision ?? 0),
+        );
+      tx.onerror = () => reject(tx.error);
     });
   }
 
@@ -1405,7 +1417,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const plan = planSnapshotMerge(snapshot, existing);
 
     await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(['exercises', 'routines', 'workouts', 'workout_drafts', 'settings', 'gyms', 'exercise_gym_scopes'], 'readwrite');
+      const tx = dataWriteTransaction(database, ['exercises', 'routines', 'workouts', 'workout_drafts', 'settings', 'gyms', 'exercise_gym_scopes']);
 
       const gymStore = tx.objectStore('gyms');
       for (const gym of plan.gymsToUpdate) gymStore.put(gym);
