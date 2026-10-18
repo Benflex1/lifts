@@ -718,10 +718,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PROD-01 — App Store and F-Droid submissions are pending
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Blocked (external accounts)`
 - **Evidence:** ROADMAP Phase 4 marks F-Droid and App Store publishing as incomplete. The F-Droid recipe and release pipeline exist, but submission to fdroiddata and iOS device acceptance remain.
 - **Impact:** Distribution is limited to GitHub APK releases, and iOS users cannot install through the App Store.
 - **Required change:** Complete the release checklist, submit to fdroiddata, and finish the iOS custom-build acceptance path.
+- **Implementation (2026-10-18):** Code-side readiness is complete and documented: the signed release pipeline, the CI-validated F-Droid recipe, and the release checklist are in place. The remaining steps are account- and hardware-gated and cannot be executed from this repository. F-Droid: fork fdroiddata and open the inclusion merge request per `docs/release-checklist.md` section 8 (requires a GitLab account). iOS: App Store Connect setup plus the REL-34 HealthKit device acceptance run (requires an Apple Developer account and a physical device). The Phase 4 checklist item stays open until one public store per platform is live.
 - **Done when:** The app is installable from at least one public store per platform.
 
 ### PROD-02 — Automatic backups and remote exercise photos are not merged
@@ -737,10 +738,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PROD-03 — Rich exercise media and watch companion remain unfinished
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** ROADMAP Phase 4 lists rich media and Wear OS/Apple Watch as incomplete.
 - **Impact:** These are differentiators against paid competitors but not blockers for the core tracker.
 - **Required change:** Keep them behind the reliability and performance work; scope a small media increment before a full animation system.
+- **Implementation (2026-10-18):** Scoped and tracked in `ROADMAP.md` as a two-increment milestone: increment 1 animates the 20 highest-traffic exercises from the existing local SVG pose pairs (no remote assets, reduced-motion opt-out), and increment 2 completes the set and then evaluates video/GIF loops. The watch companion stays deferred behind the lock-screen rest timer and home-screen widget, which deliver the wrist-visible value first. Implementation waits for the remaining reliability and performance items, per the finding.
 - **Done when:** A scoped milestone is agreed and tracked.
 
 ### PROD-04 — No localization or i18n infrastructure
@@ -868,10 +870,10 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 ### Phase 4 — Product follow-through (target: after Phase 1-2)
 
-- [ ] `PROD-01` Complete F-Droid and iOS publishing.
+- [ ] `PROD-01` Complete F-Droid and iOS publishing (blocked on external accounts; see the finding).
 - [x] `PROD-02` Merge or close automatic backups, remote photos, and time/distance charts.
-- [ ] `PROD-03` Scope the next media/watch milestone.
-- [ ] `PROD-04` Add i18n scaffolding.
+- [x] `PROD-03` Scope the next media/watch milestone.
+- [x] `PROD-04` Add i18n scaffolding.
 - [x] `PROD-05` Decide and document deep-link scope.
 - [x] `PROD-06` Add the web manifest/service worker or document the limitation.
 - [x] `ARCH-08` Standardize platform dispatch.
@@ -879,7 +881,6 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-10` Remove dead code.
 - [x] `ARCH-11` Tighten storage-boundary types.
 - [x] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
-- [x] `PROD-04` Add i18n scaffolding.
 - [ ] `PROD-07` Localize the remaining screens (deferred residual from PROD-04).
 - [ ] `ARCH-14` Enable `noUncheckedIndexedAccess` (deferred residual: 261 reported reads).
 
