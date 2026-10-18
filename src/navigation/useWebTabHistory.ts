@@ -15,6 +15,7 @@ interface WebTabHistoryOptions {
 export function useWebTabHistory({ tab, onSelectTab }: WebTabHistoryOptions): void {
   const onSelectRef = useRef(onSelectTab);
   onSelectRef.current = onSelectTab;
+  const initialTabRef = useRef<TabKey | null>(null);
   const tabRef = useRef(tab);
   tabRef.current = tab;
 
@@ -30,6 +31,7 @@ export function useWebTabHistory({ tab, onSelectTab }: WebTabHistoryOptions): vo
     // Deep link on load: select the requested tab, or normalise the URL to the
     // current tab without adding a history entry.
     const initial = tabFromHash(window.location.hash);
+    initialTabRef.current = initial;
     if (!initial)
       window.history.replaceState({ tab: tabRef.current }, '', hashForTab(tabRef.current));
     else if (initial !== tabRef.current) onSelectRef.current(initial);
@@ -40,8 +42,14 @@ export function useWebTabHistory({ tab, onSelectTab }: WebTabHistoryOptions): vo
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    // The mount effect may have scheduled a deep-link state update. Do not
+    // write the stale render tab while that update is still pending.
+    if (initialTabRef.current && initialTabRef.current !== tab) return;
+    const completingInitialLink = initialTabRef.current !== null;
+    initialTabRef.current = null;
     const nextHash = hashForTab(tab);
     if (window.location.hash === nextHash) return;
-    window.history.pushState({ tab }, '', nextHash);
+    if (completingInitialLink) window.history.replaceState({ tab }, '', nextHash);
+    else window.history.pushState({ tab }, '', nextHash);
   }, [tab]);
 }

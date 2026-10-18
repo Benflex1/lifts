@@ -78,3 +78,107 @@ describe('store.getDataRevision contract', () => {
     }
   });
 });
+
+describe('web revision lifecycle', () => {
+  it('survives writer close, follower acquisition, and subsequent writes', async () => {
+    const { IDBFactory } = await import('fake-indexeddb');
+    const { createWebStore } = await import('../../src/database/webStore');
+    const idbFactory = new IDBFactory();
+    const writer = await createWebStore('revision-lifecycle', { idbFactory });
+    await writer.init();
+    const follower = await createWebStore('revision-lifecycle', { idbFactory });
+    await follower.init();
+    try {
+      await writer.createGym('Before close');
+      const revision = await follower.getDataRevision!();
+      await writer.close();
+      assert.equal(await follower.getDataRevision!(), revision, 'closing preserves revision');
+      assert.equal(await follower.tryAcquireLease(), true);
+      assert.equal(await follower.getDataRevision!(), revision, 'acquiring preserves revision');
+      await follower.createGym('After close');
+      assert.ok((await follower.getDataRevision!()) > revision);
+    } finally {
+      await writer.close();
+      await follower.close();
+    }
+  });
+
+  it('does not publish a revision for a rejected write', async () => {
+    const { IDBFactory } = await import('fake-indexeddb');
+    const { createWebStore } = await import('../../src/database/webStore');
+    const store = await createWebStore('revision-rejected', { idbFactory: new IDBFactory() });
+    await store.init();
+    try {
+      const revision = await store.getDataRevision!();
+      await assert.rejects(store.createGym(''), /name/i);
+      assert.equal(await store.getDataRevision!(), revision);
+    } finally {
+      await store.close();
+    }
+  });
+
+  it('migrates legacy lease revisions before releasing the lease', async () => {
+    const { IDBFactory } = await import('fake-indexeddb');
+    const { createWebStore } = await import('../../src/database/webStore');
+    const idbFactory = new IDBFactory();
+    const store = await createWebStore('revision-legacy', { idbFactory });
+    await store.init();
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = idbFactory.open('revision-legacy');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = database.transaction('metadata', 'readwrite');
+        const metadata = tx.objectStore('metadata');
+        metadata.delete('data_revision');
+        const request = metadata.get('writer_lease');
+        request.onsuccess = () => metadata.put({ ...request.result, dataRevision: 42 });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      assert.equal(await store.getDataRevision!(), 42, 'legacy revisions remain readable');
+      await store.tryAcquireLease();
+      await store.close();
+      const reopened = await createWebStore('revision-legacy', { idbFactory });
+      try {
+        await reopened.init();
+        assert.equal(await reopened.getDataRevision!(), 42);
+        await reopened.createGym('Migrated');
+        assert.ok((await reopened.getDataRevision!()) > 42);
+      } finally {
+        await reopened.close();
+      }
+    } finally {
+      database.close();
+      await store.close();
+    }
+  });
+
+  it('rolls back the revision when a workout transaction aborts', async () => {
+    const { IDBFactory } = await import('fake-indexeddb');
+    const { createWebStore } = await import('../../src/database/webStore');
+    const store = await createWebStore('revision-abort', { idbFactory: new IDBFactory() });
+    await store.init();
+    try {
+      const revision = await store.getDataRevision!();
+      await assert.rejects(
+        store.finishWorkout({
+          id: 'invalid-gym-workout',
+          name: 'Invalid gym',
+          gymId: 'missing',
+          startTime: new Date().toISOString(),
+          durationSeconds: 0,
+          totalVolumeKg: 0,
+          exercises: [],
+        }),
+        /gym/i,
+      );
+      assert.equal(await store.getDataRevision!(), revision);
+      assert.equal(await store.getWorkoutDetail('invalid-gym-workout'), null);
+    } finally {
+      await store.close();
+    }
+  });
+});

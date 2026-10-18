@@ -51,3 +51,19 @@ test('web export postprocess fails when the shell assets are missing (PROD-06)',
   }
   assert.equal(failed, true);
 });
+
+test('precache release changes with export contents and is stable across repeated postprocessing', () => {
+  const dir = makeExport();
+  execFileSync(process.execPath, [SCRIPT, dir]);
+  const initial = readFileSync(join(dir, 'sw.js'), 'utf8');
+  writeFileSync(join(dir, 'lazy-chunk.js'), 'export const lazy = 1;');
+  execFileSync(process.execPath, [SCRIPT, dir]);
+  const changed = readFileSync(join(dir, 'sw.js'), 'utf8');
+  assert.notEqual(changed, initial, 'new assets must be included even after HTML was injected');
+  writeFileSync(join(dir, 'lazy-chunk.js'), 'export const lazy = 2;');
+  execFileSync(process.execPath, [SCRIPT, dir]);
+  const updated = readFileSync(join(dir, 'sw.js'), 'utf8');
+  assert.notEqual(updated, changed, 'changed asset bytes must create a new cache generation');
+  execFileSync(process.execPath, [SCRIPT, dir]);
+  assert.equal(readFileSync(join(dir, 'sw.js'), 'utf8'), updated);
+});

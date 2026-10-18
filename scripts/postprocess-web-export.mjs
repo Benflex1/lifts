@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // PROD-06: completes a web export with the installable-app metadata.
 //
-// Expo copies `public/` into the export automatically, so this only verifies the
-// shell assets are present and injects the manifest link, theme colour, and the
-// service-worker registration into index.html. Idempotent.
+// Expo copies `public/` into the export automatically. Verify the shell assets,
+// inject app metadata and registration, and version a complete precache snapshot.
+// Repeated runs preserve HTML and rebuild the snapshot from current export bytes.
 //
 // Usage: node scripts/postprocess-web-export.mjs <export-dir>
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,7 +32,7 @@ export function postprocessWebExport(outputDir) {
   }
 
   let html = readFileSync(indexPath, 'utf8');
-  if (html.includes(MARKER)) return { injected: false };
+  const injected = !html.includes(MARKER);
 
   const injection = [
     `<!-- ${MARKER}: manifest link and offline shell registration -->`,
@@ -46,9 +47,46 @@ export function postprocessWebExport(outputDir) {
     '</script>',
   ].join('\n    ');
 
-  html = html.replace('</head>', `  ${injection}\n  </head>`);
-  writeFileSync(indexPath, html);
-  return { injected: true };
+  if (injected) {
+    html = html.replace('</head>', `  ${injection}\n  </head>`);
+    writeFileSync(indexPath, html);
+  }
+
+  // Build from the actual export, including chunks not loaded on the first
+  // visit. Ignore source maps and hidden files; never discover runtime URLs.
+  const files = [];
+  const collect = (directory, prefix = '') => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue;
+      const relative = prefix + entry.name;
+      if (entry.isDirectory()) collect(join(directory, entry.name), relative + '/');
+      else if (entry.isFile() && relative !== 'sw.js' && !relative.endsWith('.map'))
+        files.push(relative);
+    }
+  };
+  collect(outputDir);
+  files.sort();
+  const template = readFileSync(serviceWorkerPath, 'utf8')
+    .replace(/^const CACHE_VERSION = .*;$/m, "const CACHE_VERSION = 'lifts-shell-unbuilt';")
+    .replace(/^const PRECACHE_URLS = .*;$/m, 'const PRECACHE_URLS = [];');
+  const digest = createHash('sha256').update(template);
+  for (const file of files) {
+    const bytes = readFileSync(join(outputDir, file));
+    digest.update(JSON.stringify([file, bytes.length])).update(bytes);
+  }
+  const version = 'lifts-shell-' + digest.digest('hex');
+  const urls = files.map(file => '/' + file.split('/').map(encodeURIComponent).join('/'));
+  const worker = template
+    .replace(
+      /^const CACHE_VERSION = .*;$/m,
+      () => `const CACHE_VERSION = ${JSON.stringify(version)};`,
+    )
+    .replace(
+      /^const PRECACHE_URLS = .*;$/m,
+      () => `const PRECACHE_URLS = ${JSON.stringify(urls)};`,
+    );
+  writeFileSync(serviceWorkerPath, worker);
+  return { injected };
 }
 
 const invokedDirectly =

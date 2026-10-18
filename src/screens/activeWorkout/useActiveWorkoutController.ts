@@ -667,19 +667,28 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     setTrackingTypeExercise(ex);
   };
 
-  const handleApplyOverload = (activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
-    if (Platform.OS !== 'web') {
-      bestEffortHaptic(() => Haptics.selectionAsync());
-    }
-    for (const set of activeEx.sets) {
-      if (!isOverloadFillTarget(set)) continue;
-      updateSet(activeEx.id, set.id, {
-        weightKg: suggestion.weightKg,
-        reps: suggestion.reps,
-        isWeightEdited: true,
-      });
-    }
-  };
+  const handleApplyOverload = useCallback(
+    (activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
+      if (Platform.OS !== 'web') {
+        bestEffortHaptic(() => Haptics.selectionAsync());
+      }
+      for (const set of activeEx.sets) {
+        if (!isOverloadFillTarget(set)) continue;
+        updateSet(activeEx.id, set.id, {
+          weightKg: suggestion.weightKg,
+          reps: suggestion.reps,
+          isWeightEdited: true,
+        });
+      }
+    },
+    [updateSet],
+  );
+
+  const handleExplainOverload = useCallback(
+    (label: string, suggestion: OverloadSuggestion) =>
+      void notify({ title: `Next target: ${label}`, message: suggestion.reason }),
+    [notify],
+  );
 
   const handleMenuPlateCalculator = () => {
     if (!menuActiveExercise) return;
@@ -777,8 +786,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
       overloadEnabled,
       isDeload: activeWorkout?.isDeload === true,
       onApplyOverload: handleApplyOverload,
-      onExplainOverload: (label: string, suggestion: OverloadSuggestion) =>
-        void notify({ title: `Next target: ${label}`, message: suggestion.reason }),
+      onExplainOverload: handleExplainOverload,
       onScroll: (event: any) => {
         currentScrollY.current = event.nativeEvent.contentOffset.y;
       },

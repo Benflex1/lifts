@@ -21,16 +21,21 @@ export function useRoutines(): RoutinesQuery {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
   const [week, setWeek] = useState<WeekSnapshot | null>(null);
+  const historyRef = useRef<WorkoutHistorySummary[]>([]);
   const revisionRef = useRef<number | null>(null);
 
   const reload = async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
     try {
       const store = await getStore();
       const revision = (await store.getDataRevision?.()) ?? null;
-      if (skipIfUnchanged && revision !== null && revision === revisionRef.current) return;
-      revisionRef.current = revision;
+      if (skipIfUnchanged && revision !== null && revision === revisionRef.current) {
+        setWeek(buildWeekSnapshot(historyRef.current));
+        return;
+      }
 
       const [list, historyList] = await Promise.all([getRoutines(), getWorkoutHistory()]);
+      revisionRef.current = revision;
+      historyRef.current = historyList;
       setRoutines(list);
       setHistory(historyList);
       setWeek(buildWeekSnapshot(historyList));

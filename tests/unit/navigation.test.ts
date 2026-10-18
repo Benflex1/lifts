@@ -213,3 +213,40 @@ test('iOS does not register Android back handling (ARCH-09)', async () => {
   });
   assert.equal(backHandler, null);
 });
+
+for (const initialHash of ['#/analytics', '#analytics']) {
+  test(`initial deep link ${initialHash} updates real tab state without adding browser history`, async () => {
+    const { useWebTabHistory } = await import('../../src/navigation/useWebTabHistory');
+    platform.OS = 'web';
+    const env = createFakeWindow(initialHash);
+    let selected = '';
+    let selectTab!: React.Dispatch<React.SetStateAction<'workout' | 'analytics' | 'history'>>;
+    const Probe: React.FC = () => {
+      const [tab, setTab] = React.useState<'workout' | 'analytics' | 'history'>('workout');
+      selectTab = setTab;
+      selected = tab;
+      useWebTabHistory({ tab, onSelectTab: next => setTab(next as typeof tab) });
+      return null;
+    };
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(React.createElement(Probe));
+    });
+    assert.equal(selected, 'analytics');
+    assert.equal(env.fake.location.hash, '#/analytics');
+    assert.deepEqual(env.pushed, [], 'mount must not introduce a phantom Workout entry');
+    act(() => {
+      selectTab('history');
+    });
+    assert.deepEqual(env.pushed, ['#/history']);
+    env.fake.location.hash = '#/analytics';
+    act(() => {
+      env.firePopState();
+    });
+    assert.equal(selected, 'analytics');
+    assert.deepEqual(env.pushed, ['#/history']);
+    act(() => {
+      renderer.unmount();
+    });
+  });
+}

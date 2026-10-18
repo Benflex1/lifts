@@ -69,9 +69,15 @@ node scripts/postprocess-web-export.mjs dist-audit-web
 
 Run `npm run format` before committing to apply the shared Prettier configuration.
 
+### Coverage scope
+
+`npm run test:coverage` enforces thresholds over modules executed by the Node test suite. It does not measure all application source files: an unimported screen or app shell is absent from the denominator. The generated LCOV report is ignored by Git and uploaded as a CI artifact. Use component regressions and the emulator journey to verify wiring; these percentages do not establish complete UI, accessibility, or device-performance coverage.
+
 ### End-to-end smoke journey
 
-The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). With a device or emulator connected and the app installed, run it locally:
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). It runs for relevant pull requests into `main` or `develop`, and relevant pushes to those branches and the phase branches. Branch protection must require `emulator-journey` to make it a merge gate.
+
+With a device or emulator connected and the app installed, run it locally:
 
 ```bash
 maestro test .maestro/smoke-journey.yml

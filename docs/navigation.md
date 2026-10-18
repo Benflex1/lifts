@@ -10,7 +10,7 @@ overlay at the app root. There are no nested stacks.
 ## Why
 
 - The product has exactly four top-level surfaces and no parameterised screens.
-- Screens are mounted once and kept warm (PERF-11), so tab switching is instant;
+- Screens mount on first visit and remain mounted for the app session (PERF-11), preserving filters and scroll state;
   a router would need explicit handling to preserve that.
 - The active logger must survive tab changes and minimize into the mini bar; an
   overlay owned by `App.tsx` does that without route state.

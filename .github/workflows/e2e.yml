@@ -5,7 +5,22 @@ name: End-to-end smoke journey
 on:
   workflow_dispatch:
   push:
-    branches: [main, 'phase-*']
+    branches: [main, develop, 'phase-*']
+    paths:
+      - 'src/**'
+      - 'App.tsx'
+      - 'app.json'
+      - 'eas.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'plugins/**'
+      - 'modules/**'
+      - 'scripts/android-smoke-test.sh'
+      - '.maestro/**'
+      - '.github/workflows/e2e.yml'
+
+  pull_request:
+    branches: [main, develop]
     paths:
       - 'src/**'
       - 'App.tsx'
