@@ -478,13 +478,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-12 — HistoryScreen is a 903-line component
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/screens/HistoryScreen.tsx` is 903 lines: the component spans lines 57-601 (five `useState` calls, two effects, seven handlers) and the style sheet spans 603-902. The history card markup, including the expanded set-detail tree and PR badges, is inlined into the `FlatList` `renderItem` at lines 297-538.
 - **Impact:** The last remaining oversized screen after Phase 2 requires touching a single 545-line component for any history change, and the card tree cannot be rendered or tested in isolation.
 - **Required change:** Extract a controller hook for screen state, a `HistoryCard` component for the list row, and the pure helpers (repeat-draft building, date formatting, totals, PR notification payloads). Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Implementation (2026-10-18):** `HistoryScreen.tsx` dropped from 903 to 121 lines and is now composition (`ScreenHeader`, gym filter chips, `FlatList` of `HistoryCard`, action sheet, edit/start modals). New `src/screens/history/` module: `useHistoryController.ts` (248 lines) owns the five state variables, both effects (gym-tracking reset, `workoutUpdate` cache sync), the handlers (expand, delete, perform-again, start-repeat, save-edit, PR-details notify), and the derived data (gym-scoped history, gym map, totals); `HistoryCard.tsx` (275 lines) owns the row including the expanded superset-aware set detail and PR badges; `historyLogic.ts` (102 lines) holds the pure helpers (`formatHistoryDate`, `filterHistoryByGym`, `computeHistoryTotals`, `buildRepeatExercises` with an injected UUID source, `buildPRDetailsNotification`). The style sheet moved to `src/screens/historyStyles.ts` so the screen and the card share it.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 569 unit (10 new focused tests in `tests/unit/history-logic.test.ts` and `tests/unit/history-card.test.ts`) / 173 integration tests green.
 - **Done when:**
-  - [ ] The screen is under 600 lines and the extracted modules have focused tests.
-  - [ ] No behavior regressions in the history, repeat, and edit integration tests.
+  - [x] The screen is under 600 lines and the extracted modules have focused tests.
+  - [x] No behavior regressions in the history, repeat, and edit integration tests.
 
 ### ARCH-13 — WorkoutScreen is a 703-line component
 
@@ -785,7 +787,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-05` Deduplicate custom-exercise UI.
 - [x] `ARCH-06` Add repository/domain hooks.
 - [x] `ARCH-07` Add a store revision counter and invalidation.
-- [ ] `ARCH-12` Decompose `HistoryScreen`.
+- [x] `ARCH-12` Decompose `HistoryScreen`.
 - [ ] `ARCH-13` Decompose `WorkoutScreen`.
 - [x] `PERF-06` Lazy-load the exercise catalog.
 - [x] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
