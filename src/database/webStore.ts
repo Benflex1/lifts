@@ -624,7 +624,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (!(await getExerciseById(scope.exerciseId))) throw new Error('Exercise not found');
     const gyms = await getGyms(); const ids = scope.linkedGymIds || [];
     validateExerciseGymScope(scope, new Set(gyms.map(gym => gym.id)));
-    const database2 = await openDb(); await new Promise<void>((resolve, reject) => { const tx = database2.transaction('exercise_gym_scopes', 'readwrite'); tx.objectStore('exercise_gym_scopes').put(scope); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
+    const database2 = await openDb(); await new Promise<void>((resolve, reject) => { const tx = dataWriteTransaction(database2, 'exercise_gym_scopes'); tx.objectStore('exercise_gym_scopes').put(scope); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
   }
   async function deleteExerciseGymScope(exerciseId: string): Promise<void> { const database = await openDb(); await verifyAndRenewLease(database); await new Promise<void>((resolve, reject) => { const tx = dataWriteTransaction(database, 'exercise_gym_scopes'); tx.objectStore('exercise_gym_scopes').delete(exerciseId); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); }
 
