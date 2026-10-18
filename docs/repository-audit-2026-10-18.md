@@ -226,7 +226,7 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Evidence:** `src/database/migrations.ts` creates only two indexes: `gyms_one_default` at line 287 and `health_sync_records_status_idx` at line 357. Queries that scan full tables include `nativeStore.ts:1338-1339` (`workouts` ordered by start time), `nativeStore.ts:1109-1120` (join by `exercise_id`), and `nativeStore.ts:927-943` (bulk detail reads).
 - **Impact:** History, PR, and analytics queries degrade as workout history grows. The cost is paid on tab activation and on every exercise-add flow.
 - **Required change:** Add one numbered migration with indexes for `workouts(in_progress, start_time DESC)`, `workout_exercises(workout_id)`, `workout_exercises(exercise_id)`, and `exercise_sets(workout_exercise_id)`. Add equivalent IndexedDB indexes on web where the access pattern warrants it.
-- **Implementation (2026-10-18):** Migration 9 adds `idx_workouts_in_progress_start`, `idx_workout_exercises_workout`, `idx_workout_exercises_exercise`, and `idx_exercise_sets_workout_exercise`. Coverage: rollback-injection test in `tests/integration/native-store.test.ts` and `EXPLAIN QUERY PLAN` assertions in `tests/integration/native-query-performance.test.ts`. Web IndexedDB indexes are deferred to `PERF-14`: current web reads are `getAll`-based, and the `PERF-05` batching already removed the per-workout reads that IndexedDB indexes would accelerate.
+- **Implementation (2026-10-18):** Migration 9 adds `idx_workouts_in_progress_start`, `idx_workout_exercises_workout`, `idx_workout_exercises_exercise`, and `idx_exercise_sets_workout_exercise`. Coverage: rollback-injection test in `tests/integration/native-store.test.ts` and `EXPLAIN QUERY PLAN` assertions in `tests/integration/native-query-performance.test.ts`. Web IndexedDB indexes are deferred to `PERF-14` (delivered there: `startTime` index plus cursor-based history reads): current web reads are `getAll`-based, and the `PERF-05` batching already removed the per-workout reads that IndexedDB indexes would accelerate.
 - **Done when:**
   - [x] The migration applies cleanly and idempotently on both fresh and existing databases.
   - [x] `EXPLAIN QUERY PLAN` confirms the hot queries use the new indexes.
@@ -340,11 +340,14 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-14 — Web store scans and sorts full object stores in memory
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `webStore.ts:964-971` calls `getAll()` and sorts workouts in memory; the same pattern appears at `:1072-1113` and in `readSnapshot` at `:1345-1351`. There are no IndexedDB indexes on `startTime` or completion state.
 - **Impact:** Large histories pay a full-store read and sort on web, and the N+1 detail loop compounds it.
 - **Required change:** Add IDB indexes and use cursors or key ranges for history queries; align behavior with the native store.
-- **Done when:** History reads use an index and do not materialize the entire store when only a page is needed.
+- **Implementation (2026-10-18):** IndexedDB schema v5 adds a `startTime` index on `workouts` (created with new stores and added during the upgrade transaction for existing databases). `getAllWorkoutsSorted` — shared by `getWorkoutHistory` and `readSnapshot` — now walks that index with a backwards cursor instead of `getAll()` plus an in-memory sort, and `getCompletedWorkoutsForExercises`, `getPreviousSetsForExercise`, and `getExerciseStats` stream through the same reader. In-progress records are skipped per record while the cursor arrives (legacy rows may lack the marker, so an index on the flag could not be used safely), and equal-timestamp runs are re-sorted with `compareBinaryStrings` so the ID tie-break matches native's `id DESC` (SQLite BINARY) rather than IndexedDB's code-unit key order. Ordering by timestamp now also matches native's `start_time DESC` instead of the previous `localeCompare` sort.
+- **Verification:** New contract scenario "orders completed history by newest start time, then descending workout ID" runs against both stores; `web-store.test.ts` asserts the v5 upgrade adds the index and that `getWorkoutHistory` succeeds with `IDBObjectStore.getAll` patched to throw; `web-snapshot-bulk.test.ts` now asserts the snapshot path opens exactly one `startTime` cursor and issues zero per-workout `get`/`getAll` calls. Full suites: 173 integration / 538 unit.
+- **Done when:**
+  - [x] History reads use an index and do not materialize the entire store when only a page is needed.
 
 ---
 
@@ -754,7 +757,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-07` Add a store revision counter and invalidation.
 - [x] `PERF-06` Lazy-load the exercise catalog.
 - [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
-- [ ] `PERF-14` Add IndexedDB indexes and indexed history reads.
+- [x] `PERF-14` Add IndexedDB indexes and indexed history reads.
 - [x] `COR-01` Fix the web completion filter.
 - [x] `COR-02` Unify gym deletion policy.
 - [x] `COR-03` Replace partial signatures with the revision counter.

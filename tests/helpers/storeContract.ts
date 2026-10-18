@@ -21,13 +21,13 @@ function buildWorkout(
   id: string,
   gymId: string,
   exercise: Exercise,
-  options: { endTime?: string; setWeightKg?: number } = {},
+  options: { endTime?: string; startTime?: string; setWeightKg?: number } = {},
 ): Workout {
   return {
     id,
     name: `Contract ${id}`,
     gymId,
-    startTime: '2026-10-01T08:00:00.000Z',
+    startTime: options.startTime ?? '2026-10-01T08:00:00.000Z',
     endTime: options.endTime,
     durationSeconds: 3600,
     totalVolumeKg: (options.setWeightKg ?? 100) * 5,
@@ -137,6 +137,19 @@ export function registerStoreContract(platform: 'native' | 'web'): void {
         await store.deleteWorkout(workout.id);
         assert.equal(await store.getWorkoutDetail(workout.id), null);
         assert.deepEqual((await store.getWorkoutHistory()).map((row) => row.id), []);
+      });
+    });
+
+    it('orders completed history by newest start time, then descending workout ID', async () => {
+      await withFixture(platform, async (_fixture, store) => {
+        await store.finishWorkout(buildWorkout('order-b', 'gym-default', BUNDLED_EXERCISE, { startTime: '2026-09-01T08:00:00.000Z' }));
+        await store.finishWorkout(buildWorkout('order-a', 'gym-default', BUNDLED_EXERCISE, { startTime: '2026-09-02T08:00:00.000Z' }));
+        await store.finishWorkout(buildWorkout('order-c', 'gym-default', BUNDLED_EXERCISE, { startTime: '2026-09-02T08:00:00.000Z' }));
+
+        assert.deepEqual(
+          (await store.getWorkoutHistory()).map((row) => row.id),
+          ['order-c', 'order-a', 'order-b'],
+        );
       });
     });
 

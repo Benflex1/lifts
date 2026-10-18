@@ -144,7 +144,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     if (db) return db;
 
     return new Promise((resolve, reject) => {
-      const req = idb.open(name, 4);
+      const req = idb.open(name, 5);
 
       req.onupgradeneeded = () => {
         const d = req.result;
@@ -181,6 +181,14 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             keyPath: ['workoutId', 'provider'],
           });
           health.createIndex('status', 'status', { unique: false });
+        }
+        // v5 (PERF-14): history reads walk a `startTime` index newest-first
+        // instead of reading and sorting the whole store in memory. The index
+        // is added for stores created above and for databases upgraded from
+        // earlier versions.
+        const workoutStore = req.transaction!.objectStore('workouts');
+        if (!workoutStore.indexNames.contains('startTime')) {
+          workoutStore.createIndex('startTime', 'startTime', { unique: false });
         }
       };
 
@@ -917,20 +925,51 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return finishWorkout(workout);
   }
 
-  /** Reads every stored workout once, newest first. Shared by history and snapshot reads. */
+  /**
+   * Streams every completed workout newest-first through the `startTime` index
+   * (PERF-14) — no `getAll()` and no in-memory sort. The backwards cursor walk
+   * matches native's `ORDER BY start_time DESC` for the timestamp itself
+   * (SQLite BINARY compares like IndexedDB key order), and equal-timestamp runs
+   * are re-sorted by descending code-point ID so the tie-break matches native's
+   * `id DESC` instead of IndexedDB's code-unit key order.
+   */
   async function getAllWorkoutsSorted(): Promise<Workout[]> {
     const database = await openDb();
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
-      const req = tx.objectStore('workouts').getAll();
-      req.onsuccess = () => {
-        const workouts = (req.result as Workout[])
-          .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkoutRecord);
-        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
-        resolve(workouts);
+      const index = tx.objectStore('workouts').index('startTime');
+      const workouts: Workout[] = [];
+      let run: Workout[] = [];
+      let runStartTime: string | null = null;
+
+      const flushRun = () => {
+        if (run.length > 1) {
+          run.sort((a, b) => compareBinaryStrings(b.id, a.id));
+        }
+        workouts.push(...run);
+        run = [];
       };
-      req.onerror = () => reject(req.error);
+
+      const request = index.openCursor(null, 'prev');
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          flushRun();
+          resolve(workouts);
+          return;
+        }
+        const record = cursor.value as Workout;
+        if (!isInProgressRecord(record)) {
+          const workout = normalizeWorkoutRecord(record);
+          if (runStartTime !== null && workout.startTime !== runStartTime) {
+            flushRun();
+          }
+          runStartTime = workout.startTime;
+          run.push(workout);
+        }
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error);
     });
   }
 
@@ -1027,7 +1066,6 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     occurrenceIndex: number = 0,
     currentGymId?: string,
   ): Promise<PreviousSetSuggestion[]> {
-    const database = await openDb();
     const [gyms, exerciseScope, exercise] = await Promise.all([
       getGyms(),
       getExerciseGymScope(exerciseId),
@@ -1035,60 +1073,39 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     ]);
     if (!exercise) return [];
     const gymNames = new Map(gyms.map(gym => [gym.id, gym.name]));
-    return new Promise((resolve, reject) => {
-      const tx = database.transaction('workouts', 'readonly');
-      const req = tx.objectStore('workouts').getAll();
-      req.onsuccess = () => {
-        const workouts = (req.result as Workout[])
-          .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkoutRecord)
-          .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
-        workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
-        const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
-          const matching = workout.exercises.filter(item => item.exerciseId === exerciseId);
-          const requested = matching[occurrenceIndex];
-          const selected = requested?.sets.some(set => set.isCompleted)
-            ? requested
-            : matching.find(item => item.sets.some(set => set.isCompleted));
-          return {
-            workoutId: workout.id,
-            startTime: workout.startTime,
-            gymId: workout.gymId,
-            gymName: gymNames.get(workout.gymId) || 'Default Gym',
-            occurrenceIndex: requested?.sets.some(set => set.isCompleted)
-              ? occurrenceIndex
-              : Math.max(0, matching.indexOf(selected!)),
-            sets: selected?.sets
-              .filter(set => set.isCompleted)
-              .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
-              .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
-          };
-        });
-        resolve(resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined));
+    const workouts = (await getAllWorkoutsSorted())
+      .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
+    const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
+      const matching = workout.exercises.filter(item => item.exerciseId === exerciseId);
+      const requested = matching[occurrenceIndex];
+      const selected = requested?.sets.some(set => set.isCompleted)
+        ? requested
+        : matching.find(item => item.sets.some(set => set.isCompleted));
+      return {
+        workoutId: workout.id,
+        startTime: workout.startTime,
+        gymId: workout.gymId,
+        gymName: gymNames.get(workout.gymId) || 'Default Gym',
+        occurrenceIndex: requested?.sets.some(set => set.isCompleted)
+          ? occurrenceIndex
+          : Math.max(0, matching.indexOf(selected!)),
+        sets: selected?.sets
+          .filter(set => set.isCompleted)
+          .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
+          .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
       };
-      req.onerror = () => reject(req.error);
     });
+    return resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined);
   }
 
   async function getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
-    const database = await openDb();
     const idSet = new Set(exerciseIds);
-    return new Promise((resolve, reject) => {
-      const tx = database.transaction('workouts', 'readonly');
-      const req = tx.objectStore('workouts').getAll();
-      req.onsuccess = () => {
-        const allWorkouts = (req.result as Workout[])
-          .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkoutRecord);
-        allWorkouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
-        const result: Record<string, Workout[]> = {};
-        for (const id of idSet) {
-          result[id] = allWorkouts.filter(workout => workout.exercises.some(item => item.exerciseId === id));
-        }
-        resolve(result);
-      };
-      req.onerror = () => reject(req.error);
-    });
+    const allWorkouts = await getAllWorkoutsSorted();
+    const result: Record<string, Workout[]> = {};
+    for (const id of idSet) {
+      result[id] = allWorkouts.filter(workout => workout.exercises.some(item => item.exerciseId === id));
+    }
+    return result;
   }
 
   async function getCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]> {
@@ -1097,21 +1114,11 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
-    const database = await openDb();
     const [scope] = await Promise.all([getExerciseGymScope(exerciseId)]);
     const gymId = currentGymId || (await getDefaultGym()).id;
-    return new Promise((resolve, reject) => {
-      const tx = database.transaction('workouts', 'readonly');
-      const req = tx.objectStore('workouts').getAll();
-      req.onsuccess = () => {
-        const workouts = (req.result as Workout[])
-          .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkoutRecord)
-          .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
-        resolve(calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined));
-      };
-      req.onerror = () => reject(req.error);
-    });
+    const workouts = (await getAllWorkoutsSorted())
+      .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
+    return calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined);
   }
 
   async function reassignExerciseHistory(
