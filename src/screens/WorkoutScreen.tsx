@@ -6,6 +6,7 @@ import {
   FolderCog,
   Play,
   Plus,
+  Repeat,
   Settings2,
 } from 'lucide-react-native';
 import { colors } from '../theme';
@@ -14,6 +15,8 @@ import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { WorkoutStartModal } from '../components/WorkoutStartModal';
+import { ProgramCard } from '../components/ProgramCard';
+import { ProgramEditorModal } from '../components/ProgramEditorModal';
 import { RoutineCard } from './workout/RoutineCard';
 import { WeekSummaryCard } from './workout/WeekSummaryCard';
 import { useWorkoutScreenController } from './workout/useWorkoutScreenController';
@@ -28,9 +31,13 @@ const WorkoutScreenInner: React.FC = () => {
   const {
     header,
     weekCard,
+    programs,
     quickStart,
     routines,
     actionSheet,
+    programMenuSheet,
+    programPickSheet,
+    programEditorModal,
     editorModal,
     folderModal,
     settingsModal,
@@ -57,25 +64,54 @@ const WorkoutScreenInner: React.FC = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Up next in each rotation */}
+        {programs.states.map((state) => (
+          <ProgramCard
+            key={state.program.folderName}
+            state={state}
+            onStart={() => programs.onStart(state.next)}
+            onMenu={() => programs.onMenu(state)}
+          />
+        ))}
+
         {/* This week */}
         {weekCard && <WeekSummaryCard week={weekCard.week} unit={weekCard.unit} />}
 
         {/* Quick Start */}
+        {/* With a rotation up next, the empty workout steps back so one start button leads. */}
         <TouchableOpacity
-          style={styles.quickStartCard}
+          style={[styles.quickStartCard, quickStart.hasPrograms && styles.quickStartQuiet]}
           onPress={quickStart.onStartEmpty}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Start empty workout"
         >
-          <View style={styles.quickStartIcon}>
-            <Play size={20} color={colors.primary} fill={colors.primary} />
+          <View style={[styles.quickStartIcon, quickStart.hasPrograms && styles.quickStartIconQuiet]}>
+            <Play
+              size={quickStart.hasPrograms ? 16 : 20}
+              color={colors.primary}
+              fill={colors.primary}
+            />
           </View>
           <View style={styles.quickStartInfo}>
-            <Text style={styles.quickStartTitle}>Start Empty Workout</Text>
-            <Text style={styles.quickStartSubtitle}>Log exercises as you go</Text>
+            <Text
+              style={[styles.quickStartTitle, quickStart.hasPrograms && styles.quickStartTitleQuiet]}
+            >
+              Start Empty Workout
+            </Text>
+            <Text
+              style={[
+                styles.quickStartSubtitle,
+                quickStart.hasPrograms && styles.quickStartSubtitleQuiet,
+              ]}
+            >
+              Log exercises as you go
+            </Text>
           </View>
-          <ChevronRight size={20} color={colors.onPrimary} />
+          <ChevronRight
+            size={20}
+            color={quickStart.hasPrograms ? colors.textMuted : colors.onPrimary}
+          />
         </TouchableOpacity>
 
         {/* Routines */}
@@ -132,6 +168,35 @@ const WorkoutScreenInner: React.FC = () => {
           />
         ))}
 
+        {routines.canMakeRotation && (
+          <TouchableOpacity
+            style={styles.makeRotation}
+            onPress={routines.onOpenProgramEditor}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={
+              routines.isDormantRotation
+                ? `Edit ${routines.selectedFolder} rotation`
+                : `Make ${routines.selectedFolder} a rotation`
+            }
+          >
+            <View style={styles.makeRotationIcon}>
+              <Repeat size={16} color={colors.primaryLight} />
+            </View>
+            <View style={styles.makeRotationText}>
+              <Text style={styles.makeRotationTitle}>
+                {routines.isDormantRotation ? 'Rotation paused' : 'Make this folder a rotation'}
+              </Text>
+              <Text style={styles.makeRotationSubtitle}>
+                {routines.isDormantRotation
+                  ? 'Add a routine to resume it, or stop it'
+                  : 'Always know which workout is next'}
+              </Text>
+            </View>
+            <ChevronRight size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+
         {routines.count === 0 ? (
           <TouchableOpacity
             style={styles.emptyRoutinesBox}
@@ -153,6 +218,12 @@ const WorkoutScreenInner: React.FC = () => {
       </ScrollView>
 
       <ActionSheet {...actionSheet} />
+
+      <ActionSheet {...programMenuSheet} />
+
+      <ActionSheet {...programPickSheet} />
+
+      <ProgramEditorModal {...programEditorModal} />
 
       {/* Routine Editor Modal */}
       <RoutineEditorModal {...editorModal} />

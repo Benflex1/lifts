@@ -1,3 +1,4 @@
+import { isDeviceLocalSetting } from '../utils/settings';
 import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
@@ -26,6 +27,7 @@ import {
   planSnapshotMerge,
 } from './storeCore';
 import { asCompletedRecord, isInProgressRecord } from './workoutRecord';
+import { DELOAD_WORKOUTS_KEY, parseDeloadWorkoutIds } from '../workout/programs';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -1066,15 +1068,17 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     occurrenceIndex: number = 0,
     currentGymId?: string,
   ): Promise<PreviousSetSuggestion[]> {
-    const [gyms, exerciseScope, exercise] = await Promise.all([
+    const [gyms, exerciseScope, exercise, storedDeloadIds] = await Promise.all([
       getGyms(),
       getExerciseGymScope(exerciseId),
       getExerciseById(exerciseId),
+      getSetting(DELOAD_WORKOUTS_KEY),
     ]);
     if (!exercise) return [];
     const gymNames = new Map(gyms.map(gym => [gym.id, gym.name]));
-    const workouts = (await getAllWorkoutsSorted())
-      .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
+    const workouts = (await getAllWorkoutsSorted()).filter(workout =>
+      workout.exercises.some(item => item.exerciseId === exerciseId),
+    );
     const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
       const matching = workout.exercises.filter(item => item.exerciseId === exerciseId);
       const requested = matching[occurrenceIndex];
@@ -1088,16 +1092,31 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         gymName: gymNames.get(workout.gymId) || 'Default Gym',
         occurrenceIndex: requested?.sets.some(set => set.isCompleted)
           ? occurrenceIndex
-          : Math.max(0, matching.indexOf(selected!)),
-        sets: selected?.sets
-          .filter(set => set.isCompleted)
-          .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
-          .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
+          : selected
+            ? Math.max(0, matching.indexOf(selected))
+            : 0,
+        sets:
+          selected?.sets
+            .filter(set => set.isCompleted)
+            .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
+            .map(set => ({
+              weightKg: set.weightKg,
+              reps: set.reps,
+              ...(set.durationSeconds !== undefined ? { durationSeconds: set.durationSeconds } : {}),
+              ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+              type: set.type,
+              ...(set.rpe !== undefined && set.rpe !== null ? { rpe: set.rpe } : {}),
+            })) || [],
       };
     });
-    return resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined);
+    return resolvePreviousSetsForExercise(
+      exercise,
+      occurrences,
+      currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id,
+      exerciseScope || undefined,
+      new Set(parseDeloadWorkoutIds(storedDeloadIds)),
+    );
   }
-
   async function getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
     const idSet = new Set(exerciseIds);
     const allWorkouts = await getAllWorkoutsSorted();
@@ -1389,8 +1408,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const tx = database.transaction(['exercises', 'routines', 'workouts', 'workout_drafts', 'settings', 'gyms', 'exercise_gym_scopes'], 'readwrite');
 
       const gymStore = tx.objectStore('gyms');
+      for (const gym of plan.gymsToUpdate) gymStore.put(gym);
       for (const gym of plan.gymsToInsert) gymStore.put(gym);
-
       const scopeStore = tx.objectStore('exercise_gym_scopes');
       for (const scope of plan.scopesToInsert) scopeStore.put(scope);
 

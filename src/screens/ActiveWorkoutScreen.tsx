@@ -10,6 +10,7 @@ import { PRCelebrationToast } from '../components/PRCelebrationToast';
 import { RestTimeWheelModal } from '../components/RestTimeWheelModal';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { SupersetModal } from '../components/SupersetModal';
+import { TrackingTypeModal } from '../components/TrackingTypeModal';
 import { WarmupModal } from '../components/WarmupModal';
 import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
 import { Workout } from '../types';
@@ -95,6 +96,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
       {/* Rest Time Wheel Modal */}
       <RestTimeWheelModal {...modals.restWheel} />
+
+      {/* Tracking Type Modal */}
+      <TrackingTypeModal {...modals.trackingType} />
 
       {/* Set Options & Fast 1-Tap RPE Modal */}
       <SetOptionsModal {...modals.setOptions} />

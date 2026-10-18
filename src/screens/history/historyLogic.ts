@@ -1,6 +1,7 @@
-import { ActiveExercise, Gym, Workout, WorkoutHistorySummary } from '../../types';
+import { ActiveExercise, Gym, Workout, WorkoutHistorySummary, WorkoutSet } from '../../types';
 import { SetPRResult, formatPRDescription } from '../../workout/pr';
 import { resolveHistoricalTargetReps } from '../../workout/sets';
+import { withPreviousTracked } from '../../workout/tracking';
 import { WeightUnit } from '../../utils/units';
 
 /**
@@ -61,20 +62,28 @@ export function buildRepeatExercises(
       targetReps: resolveHistoricalTargetReps(ex.targetReps, ex.sets[0]?.targetReps),
       restTimerSeconds: ex.restTimerSeconds ?? 90,
       supersetId: ex.supersetId,
-      sets: ex.sets.map((s, sIdx) => ({
-        id: `set-${activeExId}-${sIdx + 1}-${randomUUID().slice(0, 6)}`,
-        setNumber: sIdx + 1,
-        type: s.type || 'normal',
-        weightKg: s.weightKg,
-        reps: s.reps,
-        targetReps: resolveHistoricalTargetReps(ex.targetReps, s.targetReps),
-        rpe: s.rpe,
-        isCompleted: false,
-        previousWeightKg: s.weightKg,
-        previousReps: s.reps,
-        previousGymId: sourceGym?.id,
-        previousGymName: sourceGym?.name,
-      })),
+      ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
+      sets: ex.sets.map((s, sIdx) =>
+        withPreviousTracked<WorkoutSet>(
+          {
+            id: `set-${activeExId}-${sIdx + 1}-${randomUUID().slice(0, 6)}`,
+            setNumber: sIdx + 1,
+            type: s.type || 'normal',
+            weightKg: s.weightKg,
+            reps: s.reps,
+            targetReps: resolveHistoricalTargetReps(ex.targetReps, s.targetReps),
+            rpe: s.rpe,
+            isCompleted: false,
+            previousWeightKg: s.weightKg,
+            previousReps: s.reps,
+            previousGymId: sourceGym?.id,
+            previousGymName: sourceGym?.name,
+            ...(s.durationSeconds !== undefined ? { durationSeconds: s.durationSeconds } : {}),
+            ...(s.distanceM !== undefined ? { distanceM: s.distanceM } : {}),
+          },
+          s.isCompleted ? s : { ...s, type: undefined, rpe: undefined },
+        ),
+      ),
     };
   });
 }

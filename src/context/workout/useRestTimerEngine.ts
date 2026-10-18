@@ -2,26 +2,58 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform, Vibration } from 'react-native';
 import type { RefObject } from 'react';
 import * as Haptics from 'expo-haptics';
+import { useDialog } from '../DialogContext';
+import { getSetting, setSetting } from '../../database/db';
 import { computeRemaining, nextRemainingTickDelay } from '../../utils/timer';
+import { getExactAlarmStatus, openExactAlarmSettings } from '../../utils/exactAlarms';
+import { reportError } from '../../utils/errorReporting';
+import {
+  RestCountdown,
+  restAlarmForAppState,
+  shiftRestCountdown,
+} from '../../utils/restTimer';
 import {
   initRestNotifications,
   scheduleRestNotification,
   cancelRestNotification,
+  isRestCueNative,
 } from '../../utils/restNotifications';
 import type { SessionController, SessionState } from '../../workout/session';
+
+const EXACT_ALARM_PROMPTED_KEY = 'exact_alarm_prompted';
 
 export interface RestTimerState {
   isActive: boolean;
   remainingSeconds: number;
   totalSeconds: number;
   endsAt: number | null;
+  exerciseName?: string;
 }
 
-export const IDLE_REST_TIMER: RestTimerState = { isActive: false, remainingSeconds: 0, totalSeconds: 0, endsAt: null };
+export const IDLE_REST_TIMER: RestTimerState = {
+  isActive: false,
+  remainingSeconds: 0,
+  totalSeconds: 0,
+  endsAt: null,
+};
+
+// Two taps 120ms apart, so each count reads as a pulse. Skipped off screen, where the rest alarm alerts instead,
+// and where the native rest cue plays the countdown itself.
+function pulseCountdown(style: Haptics.ImpactFeedbackStyle) {
+  if (Platform.OS === 'web' || AppState.currentState !== 'active' || isRestCueNative()) return;
+  try {
+    Haptics.impactAsync(style);
+    setTimeout(() => {
+      Haptics.impactAsync(style);
+    }, 120);
+  } catch {
+    // Best-effort countdown haptics; failure must not interrupt the workout.
+  }
+}
 
 /**
  * ARCH-03: the rest countdown engine — countdown state, the second-aligned ticker, the 3-2-1
- * and finish haptics, and the background notification handoff.
+ * and finish haptics, the exact-alarm prompt, and the background notification handoff.
  */
 export interface RestTimerEngine {
   restTimer: RestTimerState;
@@ -36,24 +68,45 @@ export function useRestTimerEngine(
   controllerRef: RefObject<SessionController | null>,
   sessionPhase: SessionState['phase'],
 ): RestTimerEngine {
+  const { confirm } = useDialog();
   const [restTimer, setRestTimer] = useState<RestTimerState>(IDLE_REST_TIMER);
   const restTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBuzzedSecondRef = useRef<number | null>(null);
+  // Read by AppState and adjust handlers, which must see the latest countdown without re-subscribing.
+  const restCountdownRef = useRef<RestCountdown | null>(null);
+  restCountdownRef.current =
+    restTimer.isActive && restTimer.endsAt !== null
+      ? {
+          endsAt: restTimer.endsAt,
+          totalSeconds: restTimer.totalSeconds,
+          exerciseName: restTimer.exerciseName,
+        }
+      : null;
 
   useEffect(() => {
     void initRestNotifications();
   }, []);
 
-  // Foreground cleanup of the scheduled background notification.
+  // AppState background flush, and the OS rest alarm: armed when the app leaves the screen, cancelled on return.
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
-      if (state === 'active') {
+      if (state === 'background' && controllerRef.current && sessionPhase === 'active') {
+        controllerRef.current.flush().catch((error) => {
+          reportError(error, { scope: 'workout.autosave.background' });
+        });
+      }
+      // The native rest cue is armed for the whole rest (see below), so it does not follow app visibility.
+      if (isRestCueNative()) return;
+      const alarm = restAlarmForAppState(state, restCountdownRef.current, Date.now());
+      if (alarm.kind === 'arm') {
+        void scheduleRestNotification(alarm.endsAt, alarm.exerciseName);
+      } else if (alarm.kind === 'cancel') {
         void cancelRestNotification();
       }
     };
     const sub = AppState.addEventListener('change', handler);
     return () => sub.remove();
-  }, []);
+  }, [sessionPhase, controllerRef]);
 
   // Rest countdown ticker: one wakeup per second, aligned to the second boundary.
   useEffect(() => {
@@ -84,11 +137,18 @@ export function useRestTimerEngine(
             ctrl.update(state.workout, null);
           }
         }
-        void cancelRestNotification();
+        // No cancel here: a running OS alarm is only armed while the app is backgrounded, and cancelling
+        // at expiry could dismiss the notification the alarm has just posted.
 
         // Intense countdown finish buzzer (triple pulse)
-        // Only buzz if timer reached 0 in foreground / just now (< 1.5s), avoiding false alarm on app resume
-        if (lastBuzzedSecondRef.current !== 0 && expiredRecently) {
+        // Only buzz if the timer reached 0 in the foreground / just now (< 1.5s), avoiding a false alarm on resume.
+        // In the background the OS rest alarm alerts instead.
+        if (
+          lastBuzzedSecondRef.current !== 0 &&
+          expiredRecently &&
+          AppState.currentState === 'active' &&
+          !isRestCueNative()
+        ) {
           lastBuzzedSecondRef.current = 0;
           if (Platform.OS !== 'web') {
             try {
@@ -108,34 +168,14 @@ export function useRestTimerEngine(
           lastBuzzedSecondRef.current = 0;
         }
       } else {
-        // Intense 3-2-1 countdown haptics
-        if (remaining === 3 && lastBuzzedSecondRef.current !== 3) {
-          lastBuzzedSecondRef.current = 3;
-          if (Platform.OS !== 'web') {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch {
-              // Best-effort countdown haptics; failure must not interrupt the workout.
-            }
-          }
-        } else if (remaining === 2 && lastBuzzedSecondRef.current !== 2) {
-          lastBuzzedSecondRef.current = 2;
-          if (Platform.OS !== 'web') {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch {
-              // Best-effort countdown haptics; failure must not interrupt the workout.
-            }
-          }
-        } else if (remaining === 1 && lastBuzzedSecondRef.current !== 1) {
-          lastBuzzedSecondRef.current = 1;
-          if (Platform.OS !== 'web') {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            } catch {
-              // Best-effort countdown haptics; failure must not interrupt the workout.
-            }
-          }
+        // Intense 3-2-1 countdown haptics: a double pulse on each of the last three seconds.
+        if (remaining <= 3 && lastBuzzedSecondRef.current !== remaining) {
+          lastBuzzedSecondRef.current = remaining;
+          pulseCountdown(
+            remaining === 1
+              ? Haptics.ImpactFeedbackStyle.Heavy
+              : Haptics.ImpactFeedbackStyle.Medium,
+          );
         } else if (remaining > 3) {
           lastBuzzedSecondRef.current = null;
         }
@@ -157,16 +197,48 @@ export function useRestTimerEngine(
     return clearScheduledTick;
   }, [restTimer.isActive, restTimer.endsAt, sessionPhase, controllerRef]);
 
+  // Android: the native rest cue (3-2-1 pulses, then a harder buzz at the end) is armed for every rest
+  // start, adjustment and resumed draft, in and out of the app. It is only disarmed by stopRestTimer,
+  // never at expiry, which would cut off the end buzz while it plays.
+  useEffect(() => {
+    if (!isRestCueNative() || !restTimer.isActive || restTimer.endsAt === null) return;
+    void scheduleRestNotification(restTimer.endsAt, restTimer.exerciseName);
+  }, [restTimer.isActive, restTimer.endsAt]);
+
+  // Without exact alarms (denied by default from Android 14) the cue can fire seconds or minutes late,
+  // so ask once, on the first rest. Settings keeps a button for later.
+  const exactAlarmPromptedRef = useRef(false);
+  useEffect(() => {
+    if (!restTimer.isActive || exactAlarmPromptedRef.current || !isRestCueNative()) return;
+    if (getExactAlarmStatus() !== 'denied') return;
+    exactAlarmPromptedRef.current = true;
+    (async () => {
+      if ((await getSetting(EXACT_ALARM_PROMPTED_KEY)) === 'true') return;
+      await setSetting(EXACT_ALARM_PROMPTED_KEY, 'true');
+      const allow = await confirm({
+        title: 'On-time rest buzz',
+        message:
+          'To buzz 3, 2, 1 exactly when your rest ends, even with the phone locked, Lifts needs permission to set alarms. Android may delay the buzz without it.',
+        confirmLabel: 'Allow',
+        cancelLabel: 'Not now',
+      });
+      if (allow) openExactAlarmSettings();
+    })().catch((error) => {
+      reportError(error, { scope: 'workout.rest.exact-alarm-prompt' });
+    });
+  }, [restTimer.isActive, confirm]);
+
   const startRestTimer = (seconds: number, exerciseName?: string) => {
     if (seconds <= 0) return;
     const endsAt = Date.now() + seconds * 1000;
     lastBuzzedSecondRef.current = null;
-    void scheduleRestNotification(endsAt, exerciseName);
+    // The OS alarm is armed by the native cue effect above on Android, elsewhere when the app leaves the screen.
     setRestTimer({
       isActive: true,
       remainingSeconds: seconds,
       totalSeconds: seconds,
       endsAt,
+      exerciseName,
     });
     const ctrl = controllerRef.current;
     if (ctrl) {
@@ -178,33 +250,30 @@ export function useRestTimerEngine(
   };
 
   const adjustRestTimer = (deltaSeconds: number) => {
-    setRestTimer((prev) => {
-      if (!prev.endsAt) return prev;
-      const newEndsAt = prev.endsAt + deltaSeconds * 1000;
-      const remaining = computeRemaining(newEndsAt, Date.now());
-      if (remaining > 0) {
-        void scheduleRestNotification(newEndsAt);
-      } else {
-        void cancelRestNotification();
-      }
-      const updatedTimer = {
-        ...prev,
-        endsAt: newEndsAt,
-        remainingSeconds: remaining,
-        isActive: remaining > 0,
-      };
-      const ctrl = controllerRef.current;
-      if (ctrl) {
-        const state = ctrl.getState();
-        if (state.phase === 'active' && state.workout) {
-          ctrl.update(
-            state.workout,
-            remaining > 0 ? { endsAt: newEndsAt, totalSeconds: prev.totalSeconds } : null
-          );
-        }
-      }
-      return updatedTimer;
+    const countdown = restCountdownRef.current;
+    if (!countdown) return;
+    const shifted = shiftRestCountdown(countdown, deltaSeconds, Date.now());
+    if (!shifted) {
+      stopRestTimer();
+      return;
+    }
+    setRestTimer({
+      isActive: true,
+      remainingSeconds: computeRemaining(shifted.endsAt, Date.now()),
+      totalSeconds: shifted.totalSeconds,
+      endsAt: shifted.endsAt,
+      exerciseName: shifted.exerciseName,
     });
+    const ctrl = controllerRef.current;
+    if (ctrl) {
+      const state = ctrl.getState();
+      if (state.phase === 'active' && state.workout) {
+        ctrl.update(state.workout, {
+          endsAt: shifted.endsAt,
+          totalSeconds: shifted.totalSeconds,
+        });
+      }
+    }
   };
 
   const stopRestTimer = () => {

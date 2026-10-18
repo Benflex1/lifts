@@ -17,6 +17,7 @@ export interface WorkoutHeaderProps {
   workoutName: string;
   gymName: string | null;
   showGym: boolean;
+  isDeload: boolean;
   isFinishing: boolean;
   unit: WeightUnit;
   liveVolume: number;
@@ -33,6 +34,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
   workoutName,
   gymName,
   showGym,
+  isDeload,
   isFinishing,
   unit,
   liveVolume,
@@ -62,7 +64,12 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
           <Text style={styles.topBarTitle} numberOfLines={1}>
             {workoutName}
           </Text>
-          {showGym && gymName ? (
+          {isDeload ? (
+            <Text style={[styles.topBarSubtitle, styles.topBarDeload]} numberOfLines={1}>
+              Deload week
+              {showGym && gymName ? ` · ${gymName}` : ''}
+            </Text>
+          ) : showGym && gymName ? (
             <Text style={styles.topBarSubtitle} numberOfLines={1}>
               {gymName}
             </Text>

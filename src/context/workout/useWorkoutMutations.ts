@@ -1,11 +1,24 @@
 import { Platform } from 'react-native';
+import { useRef } from 'react';
 import type { RefObject } from 'react';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
 import { useDialog } from '../DialogContext';
-import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../../types';
-import { getStore } from '../../database/db';
-import { initialReps, moveWorkoutSet, resolveRestTimerSeconds, validateCompletedSet } from '../../workout/sets';
+import { useSettings } from '../SettingsContext';
+import { ActiveExercise, Exercise, Routine, SetType, TrackingType, Workout, WorkoutSet } from '../../types';
+import { getSetting, getStore, setSetting } from '../../database/db';
+import { runAutomaticBackup } from '../../utils/automaticBackup';
+import { addDeloadWorkoutId, DELOAD_WORKOUTS_KEY } from '../../workout/programs';
+import {
+  fillTrackedSetFromPrevious,
+  getTrackingType,
+  resolveTrackingTypeForExercise,
+  usesWeight,
+  validateTrackedSet,
+  withTrackingType,
+  workoutVolumeKg,
+} from '../../workout/tracking';
+import { initialReps, moveWorkoutSet, resolveRestTimerSeconds } from '../../workout/sets';
 import {
   moveActiveExercise,
   moveActiveExerciseToIndex,
@@ -71,6 +84,8 @@ export interface WorkoutMutations {
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
   updateExerciseRestTimer: (activeExerciseId: string, seconds: number) => void;
+  /** Switches an active exercise's tracking type, un-completing sets that no longer validate. */
+  setExerciseTrackingType: (activeExerciseId: string, type: TrackingType) => void;
   updateWorkoutDuration: (seconds: number) => void;
   toggleSetComplete: (activeExerciseId: string, setId: string) => void;
   finishWorkout: (durationSecondsOverride?: number) => Promise<Workout | null>;
@@ -80,14 +95,7 @@ export interface WorkoutMutations {
 }
 
 function calculateTotalVolume(exercises: ActiveExercise[]): number {
-  return exercises.reduce((sum, ex) => {
-    return (
-      sum +
-      ex.sets
-        .filter((s) => s.isCompleted)
-        .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0)
-    );
-  }, 0);
+  return workoutVolumeKg(exercises);
 }
 
 export function useWorkoutMutations({
@@ -111,6 +119,24 @@ export function useWorkoutMutations({
 }): WorkoutMutations {
   const { confirm, notify } = useDialog();
   const { restTimer, startRestTimer } = restTimerEngine;
+  const {
+    trackingTypesEnabled,
+    trackingTypeOverrides,
+  } = useSettings();
+  const trackingSettingsRef = useRef({
+    enabled: trackingTypesEnabled,
+    overrides: trackingTypeOverrides,
+  });
+  trackingSettingsRef.current = {
+    enabled: trackingTypesEnabled,
+    overrides: trackingTypeOverrides,
+  };
+  const trackingTypeFor = (exercise: Exercise): TrackingType =>
+    resolveTrackingTypeForExercise(
+      exercise,
+      trackingSettingsRef.current.enabled,
+      trackingSettingsRef.current.overrides,
+    );
 
   const executeStartWorkout = async (
     routine?: Routine,
@@ -169,16 +195,21 @@ export function useWorkoutMutations({
           idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
         });
 
-        exercises.push({
-          id: activeExId,
-          exerciseId: item.exerciseId,
-          exercise: item.exercise,
-          sets,
-          notes: '',
-          targetReps: item.targetReps,
-          restTimerSeconds: resolveRestTimerSeconds(item.restTimerSeconds),
-          supersetId: item.supersetId,
-        });
+        exercises.push(
+          withTrackingType<ActiveExercise>(
+            {
+              id: activeExId,
+              exerciseId: item.exerciseId,
+              exercise: item.exercise,
+              sets,
+              notes: '',
+              targetReps: item.targetReps,
+              restTimerSeconds: resolveRestTimerSeconds(item.restTimerSeconds),
+              supersetId: item.supersetId,
+            },
+            trackingTypeFor(item.exercise),
+          ),
+        );
       }
     }
 
@@ -274,13 +305,24 @@ export function useWorkoutMutations({
 
     try {
       const finished = await ctrl.finish(durationSecondsOverride);
+      if (finished.isDeload) {
+        // Keep deload numbers out of "last time", so the next targets pick up where they left off.
+        void getSetting(DELOAD_WORKOUTS_KEY)
+          .then((stored) => setSetting(DELOAD_WORKOUTS_KEY, addDeloadWorkoutId(stored, finished.id)))
+          .catch((error) => {
+            reportError(error, { scope: 'workout.finish.deload-record' });
+          });
+      }
+      void runAutomaticBackup().catch((error) => {
+        reportError(error, { scope: 'workout.finish.automatic-backup' });
+      });
       health.enqueueCompleted(finished);
       setMinimized(false);
       accordion.reset();
       restTimerEngine.stopRestTimer();
       await drafts.refreshDrafts();
       return finished;
-    } catch (e: any) {
+    } catch (e: unknown) {
       reportError(e, { scope: 'workout.finish' });
       notify({
         title: 'Save Error',
@@ -328,15 +370,20 @@ export function useWorkoutMutations({
       });
 
 
-      newActiveExercises.push({
-        id: activeExId,
-        exerciseId: exercise.id,
-        exercise,
-        sets: initialSets,
-        notes: '',
-        targetReps: '10',
-        restTimerSeconds: 0,
-      });
+      newActiveExercises.push(
+        withTrackingType<ActiveExercise>(
+          {
+            id: activeExId,
+            exerciseId: exercise.id,
+            exercise,
+            sets: initialSets,
+            notes: '',
+            targetReps: '10',
+            restTimerSeconds: 0,
+          },
+          trackingTypeFor(exercise),
+        ),
+      );
     }
 
     appendExercisesToCurrentWorkout(ctrl, expectedVersion, newActiveExercises);
@@ -701,6 +748,42 @@ export function useWorkoutMutations({
     ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
   };
 
+  const setExerciseTrackingType = (activeExerciseId: string, type: TrackingType) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    // Completed sets that don't hold the new type's values go back to unchecked, so the
+    // workout never stores a completed set that later edits would reject.
+    const updatedExercises = state.workout.exercises.map((ex) =>
+      ex.id === activeExerciseId
+        ? withTrackingType(
+            {
+              ...ex,
+              sets: ex.sets.map((s) =>
+                s.isCompleted && validateTrackedSet(s, type)
+                  ? { ...s, isCompleted: false, completedAt: undefined }
+                  : s
+              ),
+            },
+            type
+          )
+        : ex
+    );
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: calculateTotalVolume(updatedExercises),
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null
+    );
+  };
+
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
@@ -711,12 +794,19 @@ export function useWorkoutMutations({
     const targetSet = targetEx?.sets.find((s) => s.id === setId);
     if (!targetSet || !targetEx) return;
 
+    const trackingType = getTrackingType(targetEx);
     let effectiveSet = targetSet;
     if (!targetSet.isCompleted) {
       const isWeightEdited = targetSet.isWeightEdited ?? (targetSet.weightKg > 0);
       const needsReps = targetSet.reps <= 0;
-      const needsWeight = !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
-      if (needsReps || needsWeight) {
+      const needsWeight =
+        usesWeight(trackingType) &&
+        !isWeightEdited &&
+        targetSet.weightKg <= 0 &&
+        (targetSet.previousWeightKg ?? 0) > 0;
+      if (trackingType === 'duration' || trackingType === 'distance_duration') {
+        effectiveSet = fillTrackedSetFromPrevious(targetSet, trackingType);
+      } else if (needsReps || needsWeight) {
         const setIdx = targetEx.sets.findIndex((s) => s.id === setId);
         const fallbackReps = needsReps
           ? initialReps(targetEx.targetReps, setIdx >= 0 ? setIdx : 0, targetSet.previousReps)
@@ -732,7 +822,7 @@ export function useWorkoutMutations({
         };
       }
 
-      const validationError = validateCompletedSet(effectiveSet);
+      const validationError = validateTrackedSet(effectiveSet, trackingType);
       if (validationError) {
         notify({
           title: 'Invalid Set',
@@ -830,6 +920,7 @@ export function useWorkoutMutations({
     updateSet,
     updateExerciseNotes,
     updateExerciseRestTimer,
+    setExerciseTrackingType,
     updateWorkoutDuration,
     toggleSetComplete,
     finishWorkout,
