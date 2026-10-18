@@ -8,6 +8,8 @@ export interface ParsedSet {
   type: SetType;
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
   rpe?: number;
   isCompleted: boolean;
   notes?: string;

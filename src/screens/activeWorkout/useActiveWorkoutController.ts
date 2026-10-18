@@ -12,6 +12,7 @@ import {
   Exercise,
   ExerciseGymScope,
   SetType,
+  TrackingType,
   Workout,
   WorkoutSet,
 } from '../../types';
@@ -20,6 +21,8 @@ import { bestEffortHaptic } from '../../utils/haptics';
 import { displayToKg, kgToDisplay } from '../../utils/units';
 import { isExcessiveDuration } from '../../workout/duration';
 import { applyPreviousSetStats } from '../../workout/gym-session';
+import { isOverloadFillTarget, OverloadSuggestion } from '../../workout/overload';
+import { countsLoad, getTrackingType, trackingTypeLabel } from '../../workout/tracking';
 import { getCompletedWorkoutsForExercises, getExerciseGymScope } from '../../database/db';
 import { evaluateWorkoutPRsWithSource } from '../../workout/pr';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../../workout/supersets';
@@ -60,6 +63,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     updateSet,
     updateExerciseNotes,
     updateExerciseRestTimer,
+    setExerciseTrackingType,
     updateWorkoutDuration,
     toggleSetComplete,
     finishWorkout,
@@ -74,7 +78,13 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     setActiveGym,
   } = useWorkout();
   const isRestTimerActive = useIsRestTimerActive();
-  const { unit, gymTrackingEnabled } = useSettings();
+  const {
+    unit,
+    gymTrackingEnabled,
+    trackingTypesEnabled,
+    overloadEnabled,
+    setExerciseTrackingType: saveExerciseTrackingType,
+  } = useSettings();
   const { confirm, notify } = useDialog();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
@@ -83,6 +93,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
   const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(
     null,
   );
+  const [trackingTypeExercise, setTrackingTypeExercise] = useState<ActiveExercise | null>(null);
   const [plateCalcWeight, setPlateCalcWeight] = useState<number | null>(null);
   const [activeSetForPlateCalc, setActiveSetForPlateCalc] = useState<{
     exerciseId: string;
@@ -649,6 +660,27 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     setRestWheelActiveExercise(ex);
   };
 
+  const handleMenuChangeTrackingType = () => {
+    if (!menuActiveExercise) return;
+    const ex = menuActiveExercise;
+    setMenuActiveExercise(null);
+    setTrackingTypeExercise(ex);
+  };
+
+  const handleApplyOverload = (activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
+    if (Platform.OS !== 'web') {
+      bestEffortHaptic(() => Haptics.selectionAsync());
+    }
+    for (const set of activeEx.sets) {
+      if (!isOverloadFillTarget(set)) continue;
+      updateSet(activeEx.id, set.id, {
+        weightKg: suggestion.weightKg,
+        reps: suggestion.reps,
+        isWeightEdited: true,
+      });
+    }
+  };
+
   const handleMenuPlateCalculator = () => {
     if (!menuActiveExercise) return;
     const firstSet = menuActiveExercise.sets[0];
@@ -716,6 +748,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
       workoutName: activeWorkout?.name ?? '',
       gymName: displayedActiveGym?.name ?? null,
       showGym: gymTrackingEnabled && !!displayedActiveGym,
+      isDeload: activeWorkout?.isDeload === true,
       isFinishing,
       unit,
       liveVolume,
@@ -741,6 +774,11 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
       prSummary,
       keyboardHeight,
       scrollRef,
+      overloadEnabled,
+      isDeload: activeWorkout?.isDeload === true,
+      onApplyOverload: handleApplyOverload,
+      onExplainOverload: (label: string, suggestion: OverloadSuggestion) =>
+        void notify({ title: `Next target: ${label}`, message: suggestion.reason }),
       onScroll: (event: any) => {
         currentScrollY.current = event.nativeEvent.contentOffset.y;
       },
@@ -869,6 +907,17 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
           }
         },
       },
+      trackingType: {
+        visible: trackingTypeExercise !== null,
+        exerciseName: trackingTypeExercise?.exercise?.name,
+        selectedType: getTrackingType(trackingTypeExercise ?? undefined),
+        onSelect: (type: TrackingType) => {
+          if (!trackingTypeExercise) return;
+          setExerciseTrackingType(trackingTypeExercise.id, type);
+          saveExerciseTrackingType(trackingTypeExercise.exerciseId, type).catch(() => {});
+        },
+        onClose: () => setTrackingTypeExercise(null),
+      },
       setOptions: {
         target: setOptionsModal,
         exercises: activeWorkout?.exercises ?? [],
@@ -888,6 +937,9 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
         exerciseIndex: menuExerciseIndex,
         exerciseCount: activeWorkout?.exercises.length ?? 0,
         bottomInset: insets.bottom,
+        trackingTypesEnabled,
+        trackingTypeLabel: trackingTypeLabel(getTrackingType(menuActiveExercise ?? undefined)),
+        hasLoad: countsLoad(getTrackingType(menuActiveExercise ?? undefined)),
         onClose: () => setMenuActiveExercise(null),
         onViewDetails: handleMenuViewDetails,
         onMoveUp: handleMenuMoveUp,
@@ -895,6 +947,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
         onReorderAll: handleMenuReorderAll,
         onSwap: handleMenuSwap,
         onSetRestTimer: handleMenuSetRestTimer,
+        onChangeTrackingType: handleMenuChangeTrackingType,
         onOpenPlateCalculator: handleMenuPlateCalculator,
         onQuickWarmup: handleMenuQuickWarmup,
         onWarmupCalculator: handleMenuWarmupCalculator,

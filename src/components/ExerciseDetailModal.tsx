@@ -37,12 +37,18 @@ import { EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { openExerciseInstructionLink } from '../utils/exercise-links';
 import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
-import { getExerciseVisual } from '../utils/exercise-media';
+import { getExerciseVisual, resolveExerciseVisual } from '../utils/exercise-media';
 import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { colors } from '../theme';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 import { errorMessage } from '../utils/invariant';
+import {
+  countsLoad,
+  DEFAULT_TRACKING_TYPE,
+  formatTrackedSet,
+  getTrackingType,
+} from '../workout/tracking';
 
 // PERF-11: the chart stack (react-native-svg path rendering) is code-split so it stays out of the
 // initial bundle; it loads the first time a detail modal shows the progression curve.
@@ -74,7 +80,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
   const modalA11yRef = useModalAccessibility(visible);
   const insets = useSafeAreaInsets();
-  const { unit, gymTrackingEnabled } = useSettings();
+  const { unit, gymTrackingEnabled, remoteImagesEnabled } = useSettings();
   const { notify, confirm } = useDialog();
 
   const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
@@ -199,7 +205,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     return null;
   }
 
-  const visualDescriptor = getExerciseVisual(exercise);
+  const visualDescriptor = resolveExerciseVisual(getExerciseVisual(exercise), remoteImagesEnabled);
   const hasTwoFrames =
     visualDescriptor.kind === 'remote-image' &&
     Array.isArray(visualDescriptor.imageUrls) &&
@@ -425,104 +431,110 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           )}
 
           {/* Progression Curve */}
-          {progressionSeries && progressionSeries.points.length > 0 && (
-            <View style={styles.progressionSection}>
-              <View style={styles.progressionHeaderRow}>
-                <View style={styles.progressionTitleWrap}>
-                  <Text style={styles.progressionTitleText}>Progress</Text>
+          {progressionSeries &&
+            progressionSeries.points.some(point => point.maxWeightKg > 0 || point.maxReps > 0) && (
+              <View style={styles.progressionSection}>
+                <View style={styles.progressionHeaderRow}>
+                  <View style={styles.progressionTitleWrap}>
+                    <Text style={styles.progressionTitleText}>Progress</Text>
+                  </View>
+                  <View style={styles.metricTabsRow}>
+                    {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map(
+                      m => {
+                        const isSelected = selectedMetric === m;
+                        const label =
+                          m === 'e1rm'
+                            ? 'Estimated 1RM'
+                            : m === 'max_weight'
+                              ? 'Heaviest Weight'
+                              : m === 'max_reps'
+                                ? 'Max Reps'
+                                : 'Total Volume';
+                        return (
+                          <TouchableOpacity
+                            key={m}
+                            style={[styles.metricTab, isSelected && styles.metricTabActive]}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={label}
+                            accessibilityState={{ selected: isSelected }}
+                            onPress={() => setSelectedMetric(m)}
+                          >
+                            <Text
+                              style={[
+                                styles.metricTabText,
+                                isSelected && styles.metricTabTextActive,
+                              ]}
+                            >
+                              {m === 'e1rm'
+                                ? '1RM'
+                                : m === 'max_weight'
+                                  ? 'Weight'
+                                  : m === 'max_reps'
+                                    ? 'Reps'
+                                    : 'Vol'}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      },
+                    )}
+                  </View>
                 </View>
-                <View style={styles.metricTabsRow}>
-                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map(m => {
-                    const isSelected = selectedMetric === m;
-                    const label =
-                      m === 'e1rm'
-                        ? 'Estimated 1RM'
-                        : m === 'max_weight'
-                          ? 'Heaviest Weight'
-                          : m === 'max_reps'
-                            ? 'Max Reps'
-                            : 'Total Volume';
+
+                {/* Timeframe selector row */}
+                <View style={styles.timeframeTabsRow}>
+                  {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map(tf => {
+                    const isSelected = selectedTimeframe === tf;
+                    const label = tf === 'ALL' ? 'All time' : `Past ${tf}`;
                     return (
                       <TouchableOpacity
-                        key={m}
-                        style={[styles.metricTab, isSelected && styles.metricTabActive]}
+                        key={tf}
+                        style={[styles.timeframeChip, isSelected && styles.timeframeChipActive]}
                         hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                         accessibilityRole="button"
-                        accessibilityLabel={label}
+                        accessibilityLabel={`Timeframe: ${label}`}
                         accessibilityState={{ selected: isSelected }}
-                        onPress={() => setSelectedMetric(m)}
+                        onPress={() => setSelectedTimeframe(tf)}
                       >
                         <Text
-                          style={[styles.metricTabText, isSelected && styles.metricTabTextActive]}
+                          style={[
+                            styles.timeframeChipText,
+                            isSelected && styles.timeframeChipTextActive,
+                          ]}
                         >
-                          {m === 'e1rm'
-                            ? '1RM'
-                            : m === 'max_weight'
-                              ? 'Weight'
-                              : m === 'max_reps'
-                                ? 'Reps'
-                                : 'Vol'}
+                          {tf}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
-              </View>
 
-              {/* Timeframe selector row */}
-              <View style={styles.timeframeTabsRow}>
-                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map(tf => {
-                  const isSelected = selectedTimeframe === tf;
-                  const label = tf === 'ALL' ? 'All time' : `Past ${tf}`;
-                  return (
-                    <TouchableOpacity
-                      key={tf}
-                      style={[styles.timeframeChip, isSelected && styles.timeframeChipActive]}
-                      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Timeframe: ${label}`}
-                      accessibilityState={{ selected: isSelected }}
-                      onPress={() => setSelectedTimeframe(tf)}
-                    >
-                      <Text
-                        style={[
-                          styles.timeframeChipText,
-                          isSelected && styles.timeframeChipTextActive,
-                        ]}
-                      >
-                        {tf}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                <Suspense
+                  fallback={
+                    <View style={styles.chartFallback}>
+                      <ActivityIndicator size="small" color={colors.textMuted} />
+                    </View>
+                  }
+                >
+                  <ProgressionCurveView
+                    series={progressionSeries}
+                    metric={selectedMetric}
+                    unit={unit}
+                    height={190}
+                    gymTrackingEnabled={gymTrackingEnabled}
+                    onPointPress={p => {
+                      setHighlightedWorkoutId(p.workoutId);
+                      const isOutsideTop5 = filteredHistoryWorkouts
+                        .slice(0, 5)
+                        .every(w => w.id !== p.workoutId);
+                      if (isOutsideTop5) {
+                        setShowAllHistory(true);
+                      }
+                    }}
+                  />
+                </Suspense>
               </View>
-
-              <Suspense
-                fallback={
-                  <View style={styles.chartFallback}>
-                    <ActivityIndicator size="small" color={colors.textMuted} />
-                  </View>
-                }
-              >
-                <ProgressionCurveView
-                  series={progressionSeries}
-                  metric={selectedMetric}
-                  unit={unit}
-                  height={190}
-                  gymTrackingEnabled={gymTrackingEnabled}
-                  onPointPress={p => {
-                    setHighlightedWorkoutId(p.workoutId);
-                    const isOutsideTop5 = filteredHistoryWorkouts
-                      .slice(0, 5)
-                      .every(w => w.id !== p.workoutId);
-                    if (isOutsideTop5) {
-                      setShowAllHistory(true);
-                    }
-                  }}
-                />
-              </Suspense>
-            </View>
-          )}
+            )}
 
           {/* Chronological Workout History */}
           <View style={styles.historySection}>
@@ -598,6 +610,14 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                     .flatMap(e => e.sets)
                     .filter(s => s.isCompleted);
                   if (allSets.length === 0) return null;
+                  const setTypes = new Map(
+                    exerciseOccurrences.flatMap(o =>
+                      o.sets.map(set => [set, getTrackingType(o)] as const),
+                    ),
+                  );
+                  const loadedSets = allSets.filter(set =>
+                    countsLoad(setTypes.get(set) ?? DEFAULT_TRACKING_TYPE),
+                  );
 
                   const dateStr = new Date(w.startTime).toLocaleDateString(undefined, {
                     month: 'short',
@@ -609,11 +629,11 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                     Boolean(o.notes),
                   )?.notes;
 
-                  const session1RM = allSets.reduce((max, s) => {
+                  const session1RM = loadedSets.reduce((max, s) => {
                     const calc = calculate1RM(s.weightKg, s.reps);
                     return calc.average > max ? calc.average : max;
                   }, 0);
-                  const sessionVolume = allSets.reduce(
+                  const sessionVolume = loadedSets.reduce(
                     (sum, s) => sum + (s.weightKg || 0) * (s.reps || 0),
                     0,
                   );
@@ -674,7 +694,9 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               <Text style={styles.historySetNum}>{sIdx + 1}</Text>
                             )}
                             <Text style={styles.historySetMetric}>
-                              {s.weightKg > 0 ? formatWeight(s.weightKg, unit) : 'BW'} × {s.reps}
+                              {(setTypes.get(s) ?? DEFAULT_TRACKING_TYPE) === DEFAULT_TRACKING_TYPE
+                                ? `${s.weightKg > 0 ? formatWeight(s.weightKg, unit) : 'BW'} × ${s.reps}`
+                                : formatTrackedSet(s, setTypes.get(s)!, unit)}
                             </Text>
                             {s.rpe !== undefined && s.rpe !== null && (
                               <Text style={styles.historySetRpe}>@{s.rpe}</Text>

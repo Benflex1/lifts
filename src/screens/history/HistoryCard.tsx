@@ -16,6 +16,7 @@ import { SetPRResult, WorkoutPRSummary } from '../../workout/pr';
 import { getSupersetMetadata } from '../../workout/supersets';
 import { formatDuration } from '../../utils/calculator';
 import { WeightUnit, formatWeight } from '../../utils/units';
+import { formatTrackedSet, getTrackingType } from '../../workout/tracking';
 import { PRBadge } from '../../components/PRBadge';
 import { IconButton } from '../../components/ui';
 import { colors } from '../../theme';
@@ -195,7 +196,7 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
                             <View key={sIdx} style={styles.detailSetPill}>
                               <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
                               <Text style={styles.detailSetWeight}>
-                                {formatWeight(s.weightKg, unit)} × {s.reps}
+                                {formatTrackedSet(s, getTrackingType(ex), unit)}
                               </Text>
                               {setPR?.primary && (
                                 <PRBadge

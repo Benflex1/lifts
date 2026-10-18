@@ -61,3 +61,8 @@ export async function scheduleRestNotification(
 export async function cancelRestNotification(): Promise<void> {
   // No-op on Node and unsupported platforms.
 }
+
+// Only Android has a native rest cue (see restNotifications.android.ts); elsewhere the app buzzes.
+export function isRestCueNative(): boolean {
+  return false;
+}

@@ -28,6 +28,12 @@ import { WorkoutDurationModal } from './WorkoutDurationModal';
 import { isExcessiveDuration, estimateWorkoutDuration } from '../workout/duration';
 import { colors } from '../theme';
 import { PRMark } from './ui';
+import {
+  countsLoad,
+  formatBestTrackedSet,
+  formatTrackedSet,
+  getTrackingType,
+} from '../workout/tracking';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
 import { errorMessage } from '../utils/invariant';
 
@@ -105,9 +111,7 @@ export function WorkoutSummaryModal({
     return () => {
       mounted = false;
     };
-    // Deliberately keyed to the id/gym only: other field changes must not re-run the PR evaluation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workout?.id, workout?.gymId, gyms, gymTrackingEnabled]);
+  }, [workout, gyms, gymTrackingEnabled]);
 
   const currentGym = workout ? gyms.find(gym => gym.id === workout.gymId) : null;
 
@@ -272,9 +276,11 @@ export function WorkoutSummaryModal({
                       <View style={styles.prCardContent}>
                         <Text style={styles.prCardExercise}>{item.exerciseName}</Text>
                         <Text style={styles.prCardMetric}>
-                          {item.weightKg > 0
-                            ? `${formatWeight(item.weightKg, unit)} × ${item.reps} · `
-                            : `${item.reps} reps · `}
+                          {item.trackingType
+                            ? `${formatTrackedSet(item, item.trackingType, unit)} · `
+                            : item.weightKg > 0
+                              ? `${formatWeight(item.weightKg, unit)} × ${item.reps} · `
+                              : `${item.reps} reps · `}
                           {formatPRDescription(item.achievement, unit)}
                         </Text>
                       </View>
@@ -290,10 +296,11 @@ export function WorkoutSummaryModal({
               {workout.exercises.map((ex, idx) => {
                 const completedSets = ex.sets.filter(s => s.isCompleted);
                 if (completedSets.length === 0) return null;
-                const maxWeight = completedSets.reduce(
-                  (max, s) => (s.weightKg > max ? s.weightKg : max),
-                  0,
-                );
+                const trackingType = getTrackingType(ex);
+                const maxWeight = countsLoad(trackingType)
+                  ? completedSets.reduce((max, s) => (s.weightKg > max ? s.weightKg : max), 0)
+                  : 0;
+                const bestTracked = formatBestTrackedSet(completedSets, trackingType, unit);
                 const exercisePRs = prSummary?.achievements.filter(
                   a => a.exerciseId === ex.exerciseId,
                 );
@@ -317,6 +324,7 @@ export function WorkoutSummaryModal({
                       <Text style={styles.exerciseMetaText}>
                         {completedSets.length} {completedSets.length === 1 ? 'set' : 'sets'}
                         {maxWeight > 0 ? ` · Top: ${formatWeight(maxWeight, unit)}` : ''}
+                        {bestTracked ? ` · Top: ${bestTracked}` : ''}
                       </Text>
                     </View>
                     {completedSets.length > 0 && (

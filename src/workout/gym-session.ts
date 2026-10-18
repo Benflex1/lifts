@@ -1,8 +1,11 @@
 import { Gym, PreviousSetSuggestion, Workout, WorkoutSet } from '../types';
 import type { Store } from '../database/contract';
+import { withPreviousTracked } from './tracking';
+import { withoutPreviousEffort } from './overload';
 
 export interface StartWorkoutOptions {
   gymId?: string;
+  deload?: boolean;
 }
 
 export interface GymSessionControllerState {
@@ -201,11 +204,11 @@ export function rehydrateUntouchedSuggestions(
       return {
         ...exercise,
         sets: exercise.sets.map((set, index) => {
-          if (set.isCompleted || set.isWeightEdited) return set;
+          if (set.isCompleted || set.isWeightEdited) return withoutPreviousEffort(set);
 
           const suggestion = suggestions[index];
           return {
-            ...set,
+            ...withPreviousTracked(set, suggestion),
             previousWeightKg: suggestion?.weightKg,
             previousReps: suggestion?.reps,
             ...clearSameGymProvenance(
@@ -247,6 +250,10 @@ export function applyPreviousSetStats<
     isCompleted: boolean;
     previousWeightKg?: number;
     previousReps?: number;
+    durationSeconds?: number;
+    distanceM?: number;
+    previousDurationSeconds?: number;
+    previousDistanceM?: number;
   },
 >(set: T, fallbackReps: number = 10): T {
   if (set.isCompleted) return set;
@@ -255,6 +262,10 @@ export function applyPreviousSetStats<
     ...set,
     weightKg: set.previousWeightKg !== undefined ? set.previousWeightKg : set.weightKg,
     reps: set.previousReps !== undefined ? set.previousReps : fallbackReps,
+    ...(set.previousDurationSeconds !== undefined
+      ? { durationSeconds: set.previousDurationSeconds }
+      : {}),
+    ...(set.previousDistanceM !== undefined ? { distanceM: set.previousDistanceM } : {}),
     isWeightEdited: true,
   };
 }
@@ -262,6 +273,8 @@ export function applyPreviousSetStats<
 export interface AddedSetGhostStats {
   previousWeightKg?: number;
   previousReps?: number;
+  previousDurationSeconds?: number;
+  previousDistanceM?: number;
   provenanceSet?: Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>;
 }
 
@@ -269,7 +282,15 @@ export function resolveAddedSetGhostStats(existingSets: WorkoutSet[]): AddedSetG
   // 1. Look for the most recent completed or edited set in reverse
   const lastCompletedOrEditedSet = [...existingSets]
     .reverse()
-    .find(s => s.isCompleted || s.isWeightEdited || s.weightKg > 0 || s.reps > 0);
+    .find(
+      s =>
+        s.isCompleted ||
+        s.isWeightEdited ||
+        s.weightKg > 0 ||
+        s.reps > 0 ||
+        (s.durationSeconds ?? 0) > 0 ||
+        (s.distanceM ?? 0) > 0,
+    );
 
   if (lastCompletedOrEditedSet) {
     const isEdited =
@@ -282,9 +303,19 @@ export function resolveAddedSetGhostStats(existingSets: WorkoutSet[]): AddedSetG
       lastCompletedOrEditedSet.reps > 0
         ? lastCompletedOrEditedSet.reps
         : lastCompletedOrEditedSet.previousReps;
+    const ghostDuration =
+      (lastCompletedOrEditedSet.durationSeconds ?? 0) > 0
+        ? lastCompletedOrEditedSet.durationSeconds
+        : lastCompletedOrEditedSet.previousDurationSeconds;
+    const ghostDistance =
+      (lastCompletedOrEditedSet.distanceM ?? 0) > 0
+        ? lastCompletedOrEditedSet.distanceM
+        : lastCompletedOrEditedSet.previousDistanceM;
     return {
       previousWeightKg: ghostWeight,
       previousReps: ghostReps,
+      ...(ghostDuration !== undefined ? { previousDurationSeconds: ghostDuration } : {}),
+      ...(ghostDistance !== undefined ? { previousDistanceM: ghostDistance } : {}),
       provenanceSet: lastCompletedOrEditedSet.isCompleted ? undefined : lastCompletedOrEditedSet,
     };
   }
@@ -298,6 +329,12 @@ export function resolveAddedSetGhostStats(existingSets: WorkoutSet[]): AddedSetG
     return {
       previousWeightKg: lastGhostSet.previousWeightKg,
       previousReps: lastGhostSet.previousReps,
+      ...(lastGhostSet.previousDurationSeconds !== undefined
+        ? { previousDurationSeconds: lastGhostSet.previousDurationSeconds }
+        : {}),
+      ...(lastGhostSet.previousDistanceM !== undefined
+        ? { previousDistanceM: lastGhostSet.previousDistanceM }
+        : {}),
       provenanceSet: lastGhostSet,
     };
   }
@@ -332,21 +369,26 @@ export function createWorkoutSetsFromSuggestions(options: CreateWorkoutSetsOptio
     const isSameGym = Boolean(currentGymId && ghost?.sourceGymId === currentGymId);
     const setId = idGenerator ? idGenerator(i) : `set-${activeExerciseId}-${i}`;
 
-    sets.push({
-      id: setId,
-      setNumber: i,
-      type: 'normal',
-      weightKg: 0,
-      reps: 0,
-      targetReps,
-      rpe: undefined,
-      isCompleted: false,
-      isWeightEdited: false,
-      previousWeightKg: ghost ? ghost.weightKg : undefined,
-      previousReps: ghost ? ghost.reps : undefined,
-      previousGymId: isSameGym ? undefined : ghost?.sourceGymId,
-      previousGymName: isSameGym ? undefined : ghost?.sourceGymName,
-    });
+    sets.push(
+      withPreviousTracked<WorkoutSet>(
+        {
+          id: setId,
+          setNumber: i,
+          type: 'normal',
+          weightKg: 0,
+          reps: 0,
+          targetReps,
+          rpe: undefined,
+          isCompleted: false,
+          isWeightEdited: false,
+          previousWeightKg: ghost ? ghost.weightKg : undefined,
+          previousReps: ghost ? ghost.reps : undefined,
+          previousGymId: isSameGym ? undefined : ghost?.sourceGymId,
+          previousGymName: isSameGym ? undefined : ghost?.sourceGymName,
+        },
+        ghost,
+      ),
+    );
   }
 
   return sets;

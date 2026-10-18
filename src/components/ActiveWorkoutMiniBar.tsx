@@ -7,6 +7,7 @@ import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { formatTimer } from '../utils/calculator';
 import { colors } from '../theme';
+import { workoutVolumeKg } from '../workout/tracking';
 
 export const ActiveWorkoutMiniBar: React.FC = () => {
   const { isWorkingOut, isMinimized, activeWorkout, maximizeWorkout } = useWorkout();
@@ -19,14 +20,7 @@ export const ActiveWorkoutMiniBar: React.FC = () => {
   }
 
   // Calculate completed volume
-  let volume = 0;
-  for (const ex of activeWorkout.exercises) {
-    for (const s of ex.sets) {
-      if (s.isCompleted) {
-        volume += s.weightKg * s.reps;
-      }
-    }
-  }
+  const volume = workoutVolumeKg(activeWorkout.exercises);
 
   return (
     <AppTouchable

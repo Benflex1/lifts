@@ -4,9 +4,13 @@ import { AppTouchable } from '../components/ui';
 import { Award, Calculator, Dumbbell } from 'lucide-react-native';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ScreenHeader, SegmentedControl } from '../components/ui';
+import { useSettings } from '../context/SettingsContext';
 import { useAnalyticsData } from '../hooks/useAnalyticsData';
 import { useBackupTransfer } from '../hooks/useBackupTransfer';
+import { useBodyWeightLog } from '../hooks/useBodyWeightLog';
 import { useCsvImportFlow } from '../hooks/useCsvImportFlow';
+import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { BodyWeightModal } from '../components/BodyWeightModal';
 import { colors } from '../theme';
 import { calculate1RM } from '../utils/calculator';
 import { displayToKg, formatWeight, kgToDisplay } from '../utils/units';
@@ -29,11 +33,22 @@ const PROGRESS_SECTIONS: { key: ProgressSection; label: string }[] = [
  */
 const AnalyticsScreenInner: React.FC = () => {
   const analytics = useAnalyticsData();
-  const backup = useBackupTransfer();
+  const { bodyWeightEnabled } = useSettings();
+  const bodyWeight = useBodyWeightLog(bodyWeightEnabled);
+  const [showBodyWeightLog, setShowBodyWeightLog] = useState(false);
+  const backup = useBackupTransfer({
+    onRestored: () => {
+      void analytics.reload();
+      void bodyWeight.reload();
+    },
+  });
   const csv = useCsvImportFlow({
     defaultUnit: analytics.unit,
     onImported: () => analytics.reload(),
   });
+
+  // Weigh-ins imported by a restore or written on another tab show up when Progress regains focus.
+  useReloadOnActivate(() => void bodyWeight.reload());
 
   // Navigation section: Analytics charts vs Trophy Room
   const [activeSection, setActiveSection] = useState<ProgressSection>('overview');
@@ -71,7 +86,14 @@ const AnalyticsScreenInner: React.FC = () => {
       {activeSection === 'records' ? (
         <RecordsSection analytics={analytics} />
       ) : activeSection === 'overview' ? (
-        <ProgressCharts analytics={analytics} />
+        <ProgressCharts
+          analytics={analytics}
+          bodyWeight={
+            bodyWeightEnabled
+              ? { entries: bodyWeight.entries, onLog: () => setShowBodyWeightLog(true) }
+              : undefined
+          }
+        />
       ) : (
         <ScrollView
           style={styles.scrollArea}
@@ -205,6 +227,15 @@ const AnalyticsScreenInner: React.FC = () => {
         visible={showPlateCalc}
         initialWeight={numWeight || 100}
         onClose={() => setShowPlateCalc(false)}
+      />
+
+      <BodyWeightModal
+        visible={showBodyWeightLog}
+        entries={bodyWeight.entries}
+        unit={unit}
+        onSave={bodyWeight.logWeight}
+        onDelete={bodyWeight.deleteWeight}
+        onClose={() => setShowBodyWeightLog(false)}
       />
     </View>
   );

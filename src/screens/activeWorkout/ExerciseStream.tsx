@@ -8,6 +8,7 @@ import { ExerciseSupersetMeta } from '../../workout/supersets';
 import { WorkoutPRSummary } from '../../workout/pr';
 import { ActiveExercise, Exercise, SetType, WorkoutSet } from '../../types';
 import { WeightUnit } from '../../utils/units';
+import { OverloadSuggestion } from '../../workout/overload';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 
@@ -38,6 +39,10 @@ export interface ExerciseStreamProps {
   prSummary: WorkoutPRSummary | null;
   keyboardHeight: number;
   scrollRef: React.RefObject<ScrollView | null>;
+  overloadEnabled: boolean;
+  isDeload: boolean;
+  onApplyOverload: (exercise: ActiveExercise, suggestion: OverloadSuggestion) => void;
+  onExplainOverload: (label: string, suggestion: OverloadSuggestion) => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   onAddExercise: () => void;
   onOpenSupersetEditor: (activeExerciseId: string) => void;
@@ -55,6 +60,10 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
   prSummary,
   keyboardHeight,
   scrollRef,
+  overloadEnabled,
+  isDeload,
+  onApplyOverload,
+  onExplainOverload,
   onScroll,
   onAddExercise,
   onOpenSupersetEditor,
@@ -112,6 +121,10 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
               showRpeColumn={showRpeColumn}
               gymTrackingEnabled={gymTrackingEnabled}
               prSummary={prSummary}
+              overloadEnabled={overloadEnabled}
+              isDeload={isDeload}
+              onApplyOverload={onApplyOverload}
+              onExplainOverload={onExplainOverload}
               onToggleExpanded={cardHandlers.onToggleExpanded}
               onCommitNotes={cardHandlers.onCommitNotes}
               onOpenDetail={cardHandlers.onOpenDetail}

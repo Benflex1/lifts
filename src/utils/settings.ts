@@ -1,3 +1,7 @@
+import { EXERCISE_TRACKING_TYPES_KEY } from '../workout/tracking';
+import { DELOAD_WORKOUTS_KEY, ROUTINE_PROGRAMS_KEY } from '../workout/programs';
+import { BODY_WEIGHT_LOG_KEY } from '../workout/body-weight';
+
 export function parseGymTrackingEnabled(value: string | null): boolean {
   return value !== 'false';
 }
@@ -6,8 +10,12 @@ export function parseHealthSyncEnabled(value: string | null, platform: string = 
   return platform !== 'web' && value === 'true';
 }
 
+export function parseRemoteExerciseImagesEnabled(value: string | null): boolean {
+  return value !== 'false';
+}
+
 // Per-device preferences: never exported in backups and never overwritten by a restore.
-const DEVICE_LOCAL_SETTING_KEYS = new Set(['health_sync_enabled']);
+const DEVICE_LOCAL_SETTING_KEYS = new Set(['health_sync_enabled', 'remote_exercise_images']);
 
 export function isDeviceLocalSetting(key: string): boolean {
   return DEVICE_LOCAL_SETTING_KEYS.has(key);
@@ -22,4 +30,16 @@ export function isBackupExcludedSetting(key: string): boolean {
     key.startsWith('migration_') ||
     key.startsWith('automatic_backup_')
   );
+}
+
+// Settings holding per-item maps: a restore merges them (see restore.ts) and writes the merged value.
+const MERGED_ON_RESTORE_KEYS = new Set([
+  EXERCISE_TRACKING_TYPES_KEY,
+  ROUTINE_PROGRAMS_KEY,
+  DELOAD_WORKOUTS_KEY,
+  BODY_WEIGHT_LOG_KEY,
+]);
+
+export function isMergedOnRestore(key: string): boolean {
+  return MERGED_ON_RESTORE_KEYS.has(key);
 }

@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ActiveExercise, Exercise, Gym, Routine, SetType, Workout, WorkoutSet } from '../types';
+import {
+  ActiveExercise,
+  Exercise,
+  Gym,
+  Routine,
+  SetType,
+  TrackingType,
+  Workout,
+  WorkoutSet,
+} from '../types';
 import { WorkoutDraft } from '../database/contract';
 import { StartWorkoutOptions } from '../workout/gym-session';
 import { enqueueCompletedWorkoutSync } from '../health';
@@ -55,6 +64,8 @@ interface WorkoutContextType {
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
   updateExerciseRestTimer: (activeExerciseId: string, seconds: number) => void;
+  /** Switches an active exercise's tracking type, un-completing sets that no longer validate. */
+  setExerciseTrackingType: (activeExerciseId: string, type: TrackingType) => void;
   updateWorkoutDuration: (seconds: number) => void;
   toggleSetComplete: (activeExerciseId: string, setId: string) => void;
   startRestTimer: (seconds: number, exerciseName?: string) => void;

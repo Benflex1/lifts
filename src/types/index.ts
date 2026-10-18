@@ -1,5 +1,14 @@
 export type SetType = 'normal' | 'warmup' | 'drop' | 'failure';
 
+// What a set records. Weight × reps unless the user turns on tracking types in Settings.
+export type TrackingType =
+  | 'weight_reps'
+  | 'bodyweight_reps'
+  | 'weighted_bodyweight' // weightKg is the added load
+  | 'assisted_bodyweight' // weightKg is the assistance
+  | 'duration'
+  | 'distance_duration';
+
 export interface Exercise {
   id: string;
   name: string;
@@ -32,6 +41,10 @@ export interface ExerciseGymScope {
 export interface PreviousSetSuggestion {
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
+  type?: SetType;
+  rpe?: number;
   sourceGymId?: string;
   sourceGymName?: string;
 }
@@ -42,12 +55,18 @@ export interface WorkoutSet {
   type: SetType;
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
   targetReps?: string;
   rpe?: number;
   isCompleted: boolean;
   completedAt?: string;
   previousWeightKg?: number;
   previousReps?: number;
+  previousDurationSeconds?: number;
+  previousDistanceM?: number;
+  previousType?: SetType; // last session's set type, used for overload suggestions
+  previousRpe?: number;
   previousGymId?: string;
   previousGymName?: string;
   isWeightEdited?: boolean;
@@ -62,6 +81,7 @@ export interface ActiveExercise {
   targetReps?: string;
   restTimerSeconds: number;
   supersetId?: string;
+  trackingType?: TrackingType; // absent means weight_reps
 }
 
 export interface Workout {
@@ -75,6 +95,7 @@ export interface Workout {
   totalVolumeKg: number;
   exercises: ActiveExercise[];
   notes?: string;
+  isDeload?: boolean; // started in a program's deload week; only kept while the workout is active
 }
 
 export interface RoutineExercise {

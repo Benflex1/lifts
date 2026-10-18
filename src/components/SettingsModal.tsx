@@ -22,7 +22,6 @@ import {
   getExactAlarmStatus,
   openExactAlarmSettings,
 } from '../utils/exactAlarms';
-import { useModalAccessibility } from '../hooks/useModalAccessibility';
 import {
   AutomaticBackupState,
   chooseAutomaticBackupFolder,
@@ -31,6 +30,7 @@ import {
   setAutomaticBackupEnabled,
 } from '../utils/automaticBackup';
 import { useDialog } from '../context/DialogContext';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -47,6 +47,14 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setGymTrackingEnabled,
     healthSyncEnabled,
     setHealthSyncEnabled,
+    remoteImagesEnabled,
+    setRemoteImagesEnabled,
+    trackingTypesEnabled,
+    setTrackingTypesEnabled,
+    overloadEnabled,
+    setOverloadEnabled,
+    bodyWeightEnabled,
+    setBodyWeightEnabled,
   } = useSettings();
   const { activeWorkout, refreshGyms } = useWorkout();
   const [isSaving, setIsSaving] = useState(false);
@@ -102,6 +110,54 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     setIsSaving(true);
     try {
       await setGymTrackingEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoteImagesChange = async (enabled: boolean) => {
+    if (isSaving || enabled === remoteImagesEnabled) return;
+    setIsSaving(true);
+    try {
+      await setRemoteImagesEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTrackingTypesChange = async (enabled: boolean) => {
+    if (isSaving || enabled === trackingTypesEnabled) return;
+    setIsSaving(true);
+    try {
+      await setTrackingTypesEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleBodyWeightChange = async (enabled: boolean) => {
+    if (isSaving || enabled === bodyWeightEnabled) return;
+    setIsSaving(true);
+    try {
+      await setBodyWeightEnabled(enabled);
+    } catch {
+      // Error handled by SettingsContext notification.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleOverloadChange = async (enabled: boolean) => {
+    if (isSaving || enabled === overloadEnabled) return;
+    setIsSaving(true);
+    try {
+      await setOverloadEnabled(enabled);
     } catch {
       // Error handled by SettingsContext notification.
     } finally {
@@ -234,6 +290,93 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 </TouchableOpacity>
               </View>
 
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Next Targets</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Suggest the next weight and reps for each exercise from your last session. Tap
+                      the suggestion in a workout to fill your sets.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={overloadEnabled}
+                    onValueChange={handleOverloadChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={overloadEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Next Targets"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: overloadEnabled, disabled: isSaving }}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Time, Distance & Bodyweight</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Log planks and stretches by time, cardio by distance and time, and bodyweight
+                      moves by reps. Change how an exercise is tracked from its menu in a workout.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={trackingTypesEnabled}
+                    onValueChange={handleTrackingTypesChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={trackingTypesEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Time, Distance and Bodyweight tracking"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: trackingTypesEnabled, disabled: isSaving }}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Body Weight</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Log your weight and see the trend on the Progress tab.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={bodyWeightEnabled}
+                    onValueChange={handleBodyWeightChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={bodyWeightEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Body Weight"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: bodyWeightEnabled, disabled: isSaving }}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Exercise Photos</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Load exercise photos from GitHub. Off shows the built-in illustrations and
+                      stops those requests.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={remoteImagesEnabled}
+                    onValueChange={handleRemoteImagesChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={remoteImagesEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Exercise Photos"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: remoteImagesEnabled, disabled: isSaving }}
+                  />
+                </View>
+              </View>
+
               {Platform.OS === 'android' && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Automatic Backups</Text>
@@ -334,8 +477,8 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>On-time rest alerts</Text>
                   <Text style={styles.sectionSubtitle}>
-                    Android can delay rest-timer alerts while your phone is locked. Allow Lifts to
-                    set alarms and reminders so they arrive on time.
+                    Android can delay the end-of-rest buzz while your phone is locked. Allow Lifts
+                    to set alarms and reminders so it buzzes on time.
                   </Text>
                   <TouchableOpacity
                     style={styles.manageButton}

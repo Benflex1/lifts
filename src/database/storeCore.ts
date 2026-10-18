@@ -7,6 +7,7 @@
  * stay responsible only for reading and writing their own storage.
  */
 import { Exercise, ExerciseGymScope, Gym, Routine, Workout } from '../types';
+import { isDeviceLocalSetting, isMergedOnRestore } from '../utils/settings';
 import {
   DEFAULT_GYM_ID,
   isActiveWorkoutForGym,
@@ -149,6 +150,8 @@ export function validateSnapshotMergeConflicts(
 // ---------------------------------------------------------------------------
 
 export interface SnapshotMergePlan {
+  /** Existing default gym whose name/colour the backup overrides. */
+  gymsToUpdate: Gym[];
   /** Gyms that do not exist yet; imported gyms are never default. */
   gymsToInsert: Gym[];
   exercisesToUpsert: Exercise[];
@@ -158,7 +161,8 @@ export interface SnapshotMergePlan {
   workoutsToUpsert: Workout[];
   /** Persisted by `workout.id` as the storage key. */
   draftsToUpsert: Array<{ id: string; draft: WorkoutDraft }>;
-  settingsToInsert: Array<{ key: string; value: string }>;
+  /** `replace` marks per-item maps that `restore.ts` already merged with local values. */
+  settingsToInsert: Array<{ key: string; value: string; replace: boolean }>;
 }
 
 /**
@@ -174,13 +178,24 @@ export function planSnapshotMerge(
   validateSnapshotMergeConflicts(snapshot, existing);
 
   const destinationGymIds = new Set(existing.gyms.map(gym => gym.id));
+  const existingDefaultGym = existing.gyms.find(gym => gym.isDefault);
   const existingScopes = new Map(
     existing.exerciseGymScopes.map(scope => [scope.exerciseId, scope]),
   );
 
+  // A backup may rename/recolour the current default gym; keep its identity and
+  // the device's default flag, but adopt the backup's name and colour.
+  const gymsToUpdate = existingDefaultGym
+    ? (snapshot.gyms || [])
+        .filter(gym => gym.isDefault && gym.id === existingDefaultGym.id)
+        .map(gym => ({ ...existingDefaultGym, name: gym.name, color: gym.color }))
+    : [];
+  const updatedGymIds = new Set(gymsToUpdate.map(gym => gym.id));
+
   return {
+    gymsToUpdate,
     gymsToInsert: (snapshot.gyms || [])
-      .filter(gym => !destinationGymIds.has(gym.id))
+      .filter(gym => !destinationGymIds.has(gym.id) && !updatedGymIds.has(gym.id))
       .map(gym => ({ ...gym, isDefault: false })),
     exercisesToUpsert: snapshot.exercises.map(normalizeExerciseRecord),
     scopesToInsert: (snapshot.exerciseGymScopes || []).filter(
@@ -195,8 +210,11 @@ export function planSnapshotMerge(
       draft: normalizeDraftRecord(draft),
     })),
     settingsToInsert: Object.entries(snapshot.settings)
-      .filter(([key]) => key !== 'health_sync_enabled' && !(key in existing.settings))
-      .map(([key, value]) => ({ key, value })),
+      .filter(
+        ([key]) =>
+          !isDeviceLocalSetting(key) && (isMergedOnRestore(key) || !(key in existing.settings)),
+      )
+      .map(([key, value]) => ({ key, value, replace: isMergedOnRestore(key) })),
   };
 }
 

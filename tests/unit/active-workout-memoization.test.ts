@@ -31,6 +31,11 @@ mockModule('../../src/components/RepsInput', { RepsInput: 'RepsInput' });
 mockModule('../../src/components/PRBadge', { PRBadge: 'PRBadge' });
 mockModule('../../src/components/ExerciseNoteInput', { ExerciseNoteInput: 'ExerciseNoteInput' });
 mockModule('../../src/components/MemoizedExerciseVisual', { ExerciseVisual: 'ExerciseVisual' });
+mockModule('../../src/context/SettingsContext', { useSettings: () => ({ unit: 'kg' }) });
+mockModule('../../src/components/TrackedValueInput', {
+  DistanceInput: 'DistanceInput',
+  DurationInput: 'DurationInput',
+});
 
 const noop = () => {};
 

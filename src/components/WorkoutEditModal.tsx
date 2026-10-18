@@ -22,6 +22,22 @@ import {
 import { sanitizeWeightInput, sanitizeRepsInput } from '../workout/sets';
 import { colors } from '../theme';
 import { useModalAccessibility } from '../hooks/useModalAccessibility';
+import { useSettings } from '../context/SettingsContext';
+import {
+  displayToMeters,
+  distanceUnitFor,
+  formatSetDuration,
+  getTrackingType,
+  metersToDisplay,
+  parseSetDuration,
+  resolveTrackingTypeForExercise,
+  sanitizeDurationInput,
+  usesDistance,
+  usesDuration,
+  usesReps,
+  usesWeight,
+  withTrackingType,
+} from '../workout/tracking';
 
 interface Props {
   visible: boolean;
@@ -36,6 +52,22 @@ interface Props {
 interface SetDraftValues {
   weight: string;
   reps: string;
+  duration?: string;
+  distance?: string;
+}
+
+function trackedDrafts(
+  set: WorkoutSet,
+  unit: WeightUnit,
+): Pick<SetDraftValues, 'duration' | 'distance'> {
+  return {
+    ...(set.durationSeconds !== undefined
+      ? { duration: formatSetDuration(set.durationSeconds) }
+      : {}),
+    ...(set.distanceM !== undefined
+      ? { distance: String(metersToDisplay(set.distanceM, distanceUnitFor(unit))) }
+      : {}),
+  };
 }
 
 const draftKey = (activeExerciseId: string, setId: string) => `${activeExerciseId}:${setId}`;
@@ -58,6 +90,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
   const [minutes, setMinutes] = useState('');
   const [exercises, setExercises] = useState<ActiveExercise[]>([]);
   const [draftValues, setDraftValues] = useState<Record<string, SetDraftValues>>({});
+  const { trackingTypesEnabled, trackingTypeOverrides } = useSettings();
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +119,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
         nextDrafts[draftKey(ex.id, set.id)] = {
           weight: String(kgToDisplay(set.weightKg, unit)),
           reps: String(set.reps),
+          ...trackedDrafts(set, unit),
         };
       }
     }
@@ -96,11 +130,16 @@ export const WorkoutEditModal: React.FC<Props> = ({
   const updateDraft = (
     activeExerciseId: string,
     setId: string,
-    field: 'weight' | 'reps',
+    field: keyof SetDraftValues,
     val: string,
   ) => {
     const key = draftKey(activeExerciseId, setId);
-    const sanitized = field === 'weight' ? sanitizeWeightInput(val) : sanitizeRepsInput(val);
+    const sanitized =
+      field === 'reps'
+        ? sanitizeRepsInput(val)
+        : field === 'duration'
+          ? sanitizeDurationInput(val)
+          : sanitizeWeightInput(val);
     setDraftValues(prev => ({
       ...prev,
       [key]: {
@@ -115,29 +154,37 @@ export const WorkoutEditModal: React.FC<Props> = ({
     const newActiveId = `we-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newSetId = `set-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-1`;
 
+    const trackingType = resolveTrackingTypeForExercise(
+      newExercise,
+      trackingTypesEnabled,
+      trackingTypeOverrides,
+    );
     const newSet: WorkoutSet = {
       id: newSetId,
       setNumber: 1,
       type: 'normal',
       weightKg: 0,
-      reps: 10,
+      reps: usesReps(trackingType) ? 10 : 0,
       isCompleted: true,
     };
 
-    const newActiveExercise: ActiveExercise = {
-      id: newActiveId,
-      exerciseId: newExercise.id,
-      exercise: newExercise,
-      sets: [newSet],
-      restTimerSeconds: 90,
-    };
+    const newActiveExercise: ActiveExercise = withTrackingType<ActiveExercise>(
+      {
+        id: newActiveId,
+        exerciseId: newExercise.id,
+        exercise: newExercise,
+        sets: [newSet],
+        restTimerSeconds: 90,
+      },
+      trackingType,
+    );
 
     setExercises(prev => [...prev, newActiveExercise]);
     setDraftValues(prev => ({
       ...prev,
       [draftKey(newActiveId, newSetId)]: {
         weight: '0',
-        reps: '10',
+        reps: String(newSet.reps),
       },
     }));
   };
@@ -158,7 +205,11 @@ export const WorkoutEditModal: React.FC<Props> = ({
           setNumber: ex.sets.length + 1,
           type: lastSet?.type || 'normal',
           weightKg: lastSet?.weightKg || 0,
-          reps: lastSet?.reps || 10,
+          reps: lastSet ? lastSet.reps : 10,
+          ...(lastSet?.durationSeconds !== undefined
+            ? { durationSeconds: lastSet.durationSeconds }
+            : {}),
+          ...(lastSet?.distanceM !== undefined ? { distanceM: lastSet.distanceM } : {}),
           isCompleted: true,
         };
 
@@ -167,6 +218,8 @@ export const WorkoutEditModal: React.FC<Props> = ({
           [draftKey(activeExerciseId, newSetId)]: {
             weight: lastDraft?.weight || String(kgToDisplay(newSet.weightKg, unit)),
             reps: lastDraft?.reps || String(newSet.reps),
+            ...(lastDraft?.duration !== undefined ? { duration: lastDraft.duration } : {}),
+            ...(lastDraft?.distance !== undefined ? { distance: lastDraft.distance } : {}),
           },
         }));
 
@@ -279,10 +332,30 @@ export const WorkoutEditModal: React.FC<Props> = ({
             }
           }
 
+          const trackingType = getTrackingType(ex);
+          if (!usesReps(trackingType) && (rawReps === undefined || rawReps === '')) repsNum = 0;
+          if (!usesWeight(trackingType) && (rawWeight === undefined || rawWeight === ''))
+            weightNum = 0;
+          const durationSeconds =
+            draft?.duration !== undefined ? parseSetDuration(draft.duration) : s.durationSeconds;
+          const parsedDistance =
+            draft?.distance !== undefined && draft.distance.trim() !== ''
+              ? Number(draft.distance)
+              : undefined;
+          const distanceM =
+            draft?.distance === undefined
+              ? s.distanceM
+              : parsedDistance !== undefined && Number.isFinite(parsedDistance)
+                ? displayToMeters(parsedDistance, distanceUnitFor(unit))
+                : undefined;
+          const { durationSeconds: _duration, distanceM: _distance, ...rest } = s;
+
           return {
-            ...s,
+            ...rest,
             weightKg: displayToKg(weightNum, unit),
             reps: repsNum,
+            ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+            ...(distanceM !== undefined ? { distanceM } : {}),
             isWeightEdited: true,
           };
         }),
@@ -497,12 +570,30 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   <View style={styles.setsTableHeader}>
                     <Text style={[styles.setsTableCol, { width: 34 }]}>SET</Text>
                     <Text style={[styles.setsTableCol, { width: 50 }]}>TYPE</Text>
-                    <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
-                      WEIGHT ({unit})
-                    </Text>
-                    <Text style={[styles.setsTableCol, { width: 64, textAlign: 'center' }]}>
-                      REPS
-                    </Text>
+                    {usesWeight(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
+                        {getTrackingType(exercise) === 'weighted_bodyweight'
+                          ? `ADDED (${unit})`
+                          : getTrackingType(exercise) === 'assisted_bodyweight'
+                            ? `ASSIST (${unit})`
+                            : `WEIGHT (${unit})`}
+                      </Text>
+                    )}
+                    {usesReps(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { width: 64, textAlign: 'center' }]}>
+                        REPS
+                      </Text>
+                    )}
+                    {usesDistance(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
+                        DISTANCE ({distanceUnitFor(unit)})
+                      </Text>
+                    )}
+                    {usesDuration(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
+                        TIME
+                      </Text>
+                    )}
                     <View style={{ width: 30 }} />
                     <Text style={[styles.setsTableCol, { width: 24 }]} />
                   </View>
@@ -540,30 +631,68 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         </AppTouchable>
 
                         {/* Weight input */}
-                        <TextInput
-                          style={styles.setInput}
-                          value={draft.weight}
-                          onChangeText={value => updateDraft(exercise.id, set.id, 'weight', value)}
-                          keyboardType="decimal-pad"
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          spellCheck={false}
-                          editable={!saving}
-                        />
+                        {usesWeight(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.setInput}
+                            value={draft.weight}
+                            onChangeText={value =>
+                              updateDraft(exercise.id, set.id, 'weight', value)
+                            }
+                            keyboardType="decimal-pad"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            spellCheck={false}
+                            editable={!saving}
+                          />
+                        )}
 
-                        <Text style={styles.timesText}>×</Text>
+                        {usesWeight(getTrackingType(exercise)) && (
+                          <Text style={styles.timesText}>×</Text>
+                        )}
 
                         {/* Reps input */}
-                        <TextInput
-                          style={styles.repsInput}
-                          value={draft.reps}
-                          onChangeText={value => updateDraft(exercise.id, set.id, 'reps', value)}
-                          keyboardType="number-pad"
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          spellCheck={false}
-                          editable={!saving}
-                        />
+                        {usesReps(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.repsInput}
+                            value={draft.reps}
+                            onChangeText={value => updateDraft(exercise.id, set.id, 'reps', value)}
+                            keyboardType="number-pad"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            spellCheck={false}
+                            editable={!saving}
+                          />
+                        )}
+
+                        {usesDistance(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.setInput}
+                            value={draft.distance ?? ''}
+                            onChangeText={value =>
+                              updateDraft(exercise.id, set.id, 'distance', value)
+                            }
+                            keyboardType="decimal-pad"
+                            placeholder="-"
+                            placeholderTextColor={colors.textMuted}
+                            accessibilityLabel={`Set ${set.setNumber} distance`}
+                            editable={!saving}
+                          />
+                        )}
+
+                        {usesDuration(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.setInput}
+                            value={draft.duration ?? ''}
+                            onChangeText={value =>
+                              updateDraft(exercise.id, set.id, 'duration', value)
+                            }
+                            keyboardType="numbers-and-punctuation"
+                            placeholder="0:00"
+                            placeholderTextColor={colors.textMuted}
+                            accessibilityLabel={`Set ${set.setNumber} time`}
+                            editable={!saving}
+                          />
+                        )}
 
                         {/* Completed Toggle */}
                         <AppTouchable

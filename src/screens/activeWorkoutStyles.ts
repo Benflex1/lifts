@@ -888,4 +888,27 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  overloadPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.successSoft,
+  },
+  overloadPillText: {
+    color: colors.successLight,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  topBarDeload: {
+    color: colors.warning,
+  },
+  deloadPill: {
+    backgroundColor: colors.warningSoft,
+  },
+  deloadPillText: {
+    color: colors.warning,
+  },
 });

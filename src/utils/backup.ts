@@ -21,7 +21,9 @@ export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 // snapshots); only the current export shape stays declared here.
 
 export interface BackupV3 extends DataSnapshot {
-  version: 3;
+  // Version 4 is version 3 plus time, distance and tracking types. It is written only when a
+  // backup contains such sets, so older app versions refuse it instead of dropping that data.
+  version: 3 | 4;
   exportedAt: string;
 }
 
@@ -215,7 +217,7 @@ export function parseBackup(json: string): BackupV3 {
     );
   }
 
-  if (parsed.version !== 2 && parsed.version !== 3) {
+  if (parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4) {
     throw new Error(`Unsupported backup version: ${parsed.version}`);
   }
 
@@ -737,6 +739,17 @@ export function parseBackup(json: string): BackupV3 {
   return parsed as BackupV3;
 }
 
+function hasTrackedData(snapshot: DataSnapshot): boolean {
+  const workouts = [...snapshot.workouts, ...snapshot.drafts.map(draft => draft.workout)];
+  return workouts.some(workout =>
+    workout.exercises.some(
+      exercise =>
+        exercise.trackingType !== undefined ||
+        exercise.sets.some(set => set.durationSeconds !== undefined || set.distanceM !== undefined),
+    ),
+  );
+}
+
 export async function buildBackupJson(store?: Store): Promise<string> {
   let targetStore = store;
   if (!targetStore) {
@@ -753,7 +766,7 @@ export async function buildBackupJson(store?: Store): Promise<string> {
   }
 
   const backup = {
-    version: 3,
+    version: hasTrackedData(snapshot) ? 4 : 3,
     exportedAt: new Date().toISOString(),
     workouts: snapshot.workouts.map(serializeWorkout),
     routines: snapshot.routines.map(serializeRoutine),
