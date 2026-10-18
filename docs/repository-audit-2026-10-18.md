@@ -394,11 +394,14 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-05 — Exercise picker and Exercises screen duplicate roughly 200 lines
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/components/ExercisePickerModal.tsx:32-240` and `src/screens/ExercisesScreen.tsx:33-248` duplicate filter constants, custom-exercise state, and save/edit handlers. Minor differences are limited to the row press behavior.
 - **Impact:** Validation and alias fixes must be made twice and can drift.
 - **Required change:** Extract `CustomExerciseModal` and shared filter options; keep the picker and screen as thin compositions.
-- **Done when:** Custom-exercise behavior is implemented once and covered by shared tests.
+- **Implementation (2026-10-18):** New `CustomExerciseModal` (`src/components/CustomExerciseModal.tsx`) owns the create/edit form: state seeding, alias-aware prefill, validation, persistence, and error reporting through one code path. New `src/workout/exercise-options.ts` owns the filter lists (`MUSCLE_GROUPS`, `EQUIPMENT_LIST`, custom pill options) and the normalization helpers (`resolveCustomMuscle`, `resolveCustomEquipment`, `customExerciseDefaults`). `ExercisePickerModal` and `ExercisesScreen` now mount the same modal and keep only their post-save behavior (the picker updates its selection or returns the created exercise; the screen reloads the catalog and refreshes the open detail), deleting ~190 duplicated lines.
+- **Verification:** `tests/unit/custom-exercise.test.ts` covers resolver mapping, prefill defaults, and the create/edit/empty-name save flows through the shared modal (5 tests). Full suites: 170 integration / 537 unit.
+- **Done when:**
+  - [x] Custom-exercise behavior is implemented once and covered by shared tests.
 
 ### ARCH-06 — No repository/query layer; screens fetch directly
 
@@ -744,7 +747,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `ARCH-02` Decompose `AnalyticsScreen`.
 - [ ] `ARCH-03` Split `WorkoutProvider` into focused hooks.
 - [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
-- [ ] `ARCH-05` Deduplicate custom-exercise UI.
+- [x] `ARCH-05` Deduplicate custom-exercise UI.
 - [x] `ARCH-06` Add repository/domain hooks.
 - [x] `ARCH-07` Add a store revision counter and invalidation.
 - [ ] `PERF-06` Lazy-load the exercise catalog.
