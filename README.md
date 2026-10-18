@@ -71,6 +71,7 @@ Lifts employs a dual-engine local storage architecture:
 - **Native (Android & iOS)**: Stored in a durable SQLite database via `expo-sqlite` with write queue serialization and transactional schema migrations (`src/database/nativeStore.ts`).
 - **Web**: Stored in client-side IndexedDB with single-writer lease protection (`src/database/webStore.ts`).
   - *Note on Web Limitations*: Data stored in the browser depends on local browser storage policies. Clearing browsing history, using incognito/private mode, or browser storage eviction can remove local data. For permanent and offline training, use the native Android or iOS builds.
+  - *Installable shell*: web exports ship a manifest (`public/manifest.webmanifest`) and a small runtime service worker (`public/sw.js`), wired into `index.html` by `scripts/postprocess-web-export.mjs`. Previously loaded bundle assets and the app shell are cached, so the app can reload offline after the first visit; a new deploy is picked up on the next online load. Workout data still follows the storage caveat above.
 
 ---
 

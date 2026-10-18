@@ -62,8 +62,9 @@ npm test
 # 6. Cross-platform integration tests (Native SQLite + Web IndexedDB)
 npm run test:integration
 
-# 7. Web production export smoke test
+# 7. Web production export smoke test (with the manifest and service worker)
 npx expo export --platform web --output-dir dist-audit-web
+node scripts/postprocess-web-export.mjs dist-audit-web
 ```
 
 Run `npm run format` before committing to apply the shared Prettier configuration.

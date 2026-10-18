@@ -763,10 +763,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PROD-06 — Web installability and offline shell are not configured
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `app.json` has no web manifest configuration, and the current export contains no manifest or service worker.
 - **Impact:** The data layer is local-first, but the web shell is not installable and may not reload offline.
 - **Required change:** Add a web manifest and service worker strategy if web is a supported target, or state the limitation in the README.
+- **Implementation (2026-10-18):** Added an installable shell for the web export: `public/manifest.webmanifest` (standalone display, theme colours, the 1024px app icon) and `public/sw.js` (runtime caching: network-first navigations with a cached `index.html` fallback, cache-first hashed `/_expo/static/` assets, same-origin GET only, versioned caches). Expo copies `public/` into every export; `scripts/postprocess-web-export.mjs` verifies the shell assets and idempotently injects the manifest link, theme colour, and service-worker registration into `index.html` (CI and the CONTRIBUTING verification flow run it). The README web section documents the installable shell and offline-reload behavior alongside the existing storage caveat. Tests: `tests/unit/web-export-postprocess.test.ts` (injection, idempotency, missing assets) plus a local export that produced `manifest.webmanifest`, `sw.js`, `icon-1024.png`, and the injected `index.html`.
 - **Done when:** The web behavior matches the documented promise.
 
 ---
@@ -851,7 +852,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `PROD-03` Scope the next media/watch milestone.
 - [ ] `PROD-04` Add i18n scaffolding.
 - [x] `PROD-05` Decide and document deep-link scope.
-- [ ] `PROD-06` Add the web manifest/service worker or document the limitation.
+- [x] `PROD-06` Add the web manifest/service worker or document the limitation.
 - [x] `ARCH-08` Standardize platform dispatch.
 - [x] `ARCH-09` Decide and document the navigation model.
 - [x] `ARCH-10` Remove dead code.
