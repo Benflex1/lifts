@@ -63,8 +63,6 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   let readOnlyMode = false;
   let db: IDBDatabase | null = null;
   let cachedExercises: Exercise[] | null = null;
-  // Cheap monotonic counter of write attempts; see getDataRevision below.
-  let dataRevision = 0;
   let heartbeatTimer: any = null;
   const readOnlyListeners = new Set<(isReadOnly: boolean) => void>();
 
@@ -217,6 +215,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             acquiredAt: lease?.ownerId === tabOwnerId ? lease.acquiredAt : now,
             heartbeat: now,
             leaseDurationMs,
+            // Preserve the persisted write revision across lease handovers so
+            // readers never observe it moving backwards.
+            dataRevision: typeof lease?.dataRevision === 'number' ? lease.dataRevision : 0,
           });
           tx.oncomplete = () => {
             setReadOnly(false);
@@ -239,10 +240,6 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       throw new Error('Cannot write: store is in read-only mode');
     }
 
-    // Every mutating operation funnels through here, so the data revision
-    // advances exactly when a write is attempted.
-    dataRevision += 1;
-
     return new Promise((resolve, reject) => {
       const tx = database.transaction('metadata', 'readwrite');
       const store = tx.objectStore('metadata');
@@ -256,6 +253,10 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
           store.put({
             ...lease,
             heartbeat: now,
+            // Every mutating operation funnels through here; bumping the
+            // persisted revision in this same single write makes data changes
+            // visible to every tab, not just the writer.
+            dataRevision: (typeof lease.dataRevision === 'number' ? lease.dataRevision : 0) + 1,
           });
           tx.oncomplete = () => resolve();
         } else {
@@ -1315,6 +1316,24 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     });
   }
 
+  /**
+   * Persisted monotonic write revision, bumped inside the lease transaction by
+   * every mutating operation. Because it lives in IndexedDB, a tab that was
+   * read-only while another tab wrote sees the change immediately.
+   */
+  async function getDataRevision(): Promise<number> {
+    const database = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = database.transaction('metadata', 'readonly');
+      const req = tx.objectStore('metadata').get('writer_lease');
+      req.onsuccess = () => {
+        const lease = req.result;
+        resolve(typeof lease?.dataRevision === 'number' ? lease.dataRevision : 0);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
   async function readSnapshot(): Promise<DataSnapshot> {
     // Full workout objects live in the `workouts` store, so one read replaces the former
     // per-history-row detail lookups (N+1 IndexedDB round trips).
@@ -1422,7 +1441,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
   return {
     isReadOnly: () => readOnlyMode,
-    getDataRevision: async () => dataRevision,
+    getDataRevision,
     tryAcquireLease,
     onReadOnlyChange: (listener: (isReadOnly: boolean) => void) => {
       readOnlyListeners.add(listener);

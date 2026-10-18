@@ -122,7 +122,6 @@ const AnalyticsScreenInner: React.FC = () => {
   const [isCsvImporting, setIsCsvImporting] = useState(false);
   const [allGyms, setAllGyms] = useState<Gym[]>([]);
 
-  const analyticsSignatureRef = React.useRef<string | null>(null);
   const analyticsRevisionRef = React.useRef<number | null>(null);
 
   const loadAnalytics = React.useCallback(async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
@@ -130,11 +129,13 @@ const AnalyticsScreenInner: React.FC = () => {
       const store = await getStore();
 
       // Cheap revision check first: with no writes since the last load there is
-      // nothing to recompute, so return before hydrating the snapshot.
+      // nothing to recompute, so return before hydrating the snapshot. Stores
+      // without a revision counter always reload.
       const revision = (await store.getDataRevision?.()) ?? null;
       if (skipIfUnchanged && revision !== null && revision === analyticsRevisionRef.current) {
         return;
       }
+      analyticsRevisionRef.current = revision;
 
       const snapshot = await store.readSnapshot();
 
@@ -142,23 +143,6 @@ const AnalyticsScreenInner: React.FC = () => {
       const gymsList: Gym[] = snapshot.gyms || [];
       // The snapshot already carries the exercise catalog; no second full read.
       const allExercisesList = snapshot.exercises;
-
-      // Fallback for stores without a revision counter: rebuild the signature
-      // after hydrating (the old behaviour).
-      const signature =
-        revision === null
-          ? JSON.stringify([
-              workouts.map(w => [w.id, w.startTime, w.endTime, w.gymId, w.totalVolumeKg, w.exercises?.length, w.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0)]),
-              gymsList.map(g => [g.id, g.name, g.color]),
-              (snapshot.exerciseGymScopes || []).length,
-              allExercisesList.length,
-            ])
-          : null;
-      if (skipIfUnchanged && signature !== null && signature === analyticsSignatureRef.current) {
-        return;
-      }
-      analyticsRevisionRef.current = revision;
-      analyticsSignatureRef.current = signature;
 
       setAllWorkouts(workouts);
       setAllGyms(gymsList);

@@ -412,10 +412,12 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-07 — No store revision or reliable cache invalidation
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `useReloadOnActivate` fires a per-tab emitter at `App.tsx:73-83`. Analytics and History use hand-built JSON signatures (`AnalyticsScreen.tsx:136-143`, `HistoryScreen.tsx:142-156`) that omit exercise names and scope contents.
 - **Impact:** Renaming a custom exercise or changing a scope can leave charts and PR badges stale until another data change or a full reload.
 - **Required change:** Add a monotonic `dataVersion` incremented on successful writes, expose it through the store, and invalidate domain queries against it.
+- **Implementation (2026-10-18):** `Store.getDataRevision()` is now the single invalidation signal. Native keeps `SELECT total_changes()`; the web store's counter moved from tab-local memory onto the persisted writer-lease record in the `metadata` store — bumped by the same single write that renews the lease in every mutating operation — so a read-only tab observes writes made by the lease holder, and lease handovers preserve the count. `HistoryScreen` and `AnalyticsScreen` replaced their hand-built JSON signatures with a revision check performed before any hydration; stores without a counter always reload instead of trusting a partial signature.
+- **Verification:** `store-revision.test.ts` asserts reads keep the revision stable, writes advance it, and a second tab on the same database sees the writer's revision; the store contract suite adds "advances the data revision for scope and catalog writes" on both platforms, covering the two writes named in COR-03.
 - **Done when:** Any write that affects analytics or PRs increments the version and refreshes dependent views.
 
 ### ARCH-08 — Three platform-dispatch mechanisms coexist
@@ -485,10 +487,12 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### COR-03 — Refresh signatures omit relevant fields
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The Analytics signature at `AnalyticsScreen.tsx:136-143` includes workout IDs/times/gym/volume/counts, gym fields, scope count, and exercise count, but not exercise names or scope contents. The History signature at `HistoryScreen.tsx:142-156` omits `exerciseGymScopes` even though PR evaluation consumes them at `:169-176`.
 - **Impact:** Renames and scope changes can leave analytics and PR displays stale.
 - **Required change:** Replace hand-built signatures with a store revision counter or hash the full relevant inputs.
+- **Implementation (2026-10-18):** Both screens deleted their partial JSON signatures. `AnalyticsScreen` checks `getDataRevision()` before hydrating the snapshot (removing the old signature fallback), and `HistoryScreen` checks the revision before loading history, gyms, and the PR snapshot. Renaming a custom exercise or changing a scope advances the revision (asserted in the store contract suite), so activating either tab reloads; no partial-signature false negatives remain, and views no longer need a second data change or a full reload to refresh.
+- **Verification:** Store contract scenario "advances the data revision for scope and catalog writes" (both platforms) plus the existing revision contract and screen integration suites.
 - **Done when:** Renaming an exercise and changing a scope both refresh the affected views immediately.
 
 ---
@@ -739,13 +743,13 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
 - [ ] `ARCH-05` Deduplicate custom-exercise UI.
 - [ ] `ARCH-06` Add repository/domain hooks.
-- [ ] `ARCH-07` Add a store revision counter and invalidation.
+- [x] `ARCH-07` Add a store revision counter and invalidation.
 - [ ] `PERF-06` Lazy-load the exercise catalog.
 - [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
 - [ ] `PERF-14` Add IndexedDB indexes and indexed history reads.
 - [x] `COR-01` Fix the web completion filter.
 - [x] `COR-02` Unify gym deletion policy.
-- [ ] `COR-03` Replace partial signatures with the revision counter.
+- [x] `COR-03` Replace partial signatures with the revision counter.
 
 **Exit criteria:** No screen exceeds roughly 600 lines; shared domain rules live in one module; both stores pass the same contract suite; cold-start catalog work is eliminated once seeded.
 

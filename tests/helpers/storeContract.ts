@@ -207,6 +207,29 @@ export function registerStoreContract(platform: 'native' | 'web'): void {
       });
     });
 
+    it('advances the data revision for scope and catalog writes', async () => {
+      await withFixture(platform, async (_fixture, store) => {
+        const initial = await store.getDataRevision!();
+
+        // A scope change feeds PR evaluation and analytics.
+        await store.saveExerciseGymScope({ exerciseId: BUNDLED_EXERCISE.id, scopeType: 'global' });
+        const afterScope = await store.getDataRevision!();
+        assert.ok(afterScope > initial, 'scope write advances the revision');
+
+        // An exercise rename feeds analytics charts and catalog views.
+        const custom = await store.createCustomExercise({
+          name: 'Revision Custom',
+          category: 'strength',
+          equipment: 'barbell',
+          primaryMuscles: ['chest'],
+        });
+        const beforeRename = await store.getDataRevision!();
+        await store.updateCustomExercise(custom.id, { name: 'Revision Custom Renamed' });
+        const afterRename = await store.getDataRevision!();
+        assert.ok(afterRename > beforeRename, 'catalog rename advances the revision');
+      });
+    });
+
     it('merges a snapshot and rejects conflicting scopes', async () => {
       await withFixture(platform, async (_fixture, store) => {
         const gym = { id: 'contract-merge-gym', name: 'Merge Gym', isDefault: false, color: '#8B5CF6', createdAt: '2026-10-01T00:00:00.000Z' };

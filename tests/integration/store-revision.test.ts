@@ -38,4 +38,35 @@ describe('store.getDataRevision contract', () => {
       }
     });
   }
+
+  it('web: another tab on the same database observes the persisted revision', async () => {
+    const { indexedDB } = require('fake-indexeddb');
+    const { createWebStore } = require('../../src/database/webStore');
+    const dbName = `lifts-revision-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const writer = await createWebStore(dbName, { idbFactory: indexedDB });
+    await writer.init();
+    const reader = await createWebStore(dbName, { idbFactory: indexedDB });
+    await reader.init();
+    try {
+      assert.equal(reader.isReadOnly?.(), true, 'second tab is the read-only follower');
+
+      const before = await writer.getDataRevision();
+      await writer.createGym('Cross Tab Gym', '#10B981');
+      const afterWrite = await writer.getDataRevision();
+      assert.ok(afterWrite > before, 'the writing tab advances the revision');
+
+      // The follower must read the persisted value rather than a tab-local counter.
+      assert.equal(await reader.getDataRevision(), afterWrite, 'follower tab observes the writer revision');
+    } finally {
+      await writer.close?.();
+      await reader.close?.();
+      await new Promise<void>((resolve) => {
+        const req = indexedDB.deleteDatabase(dbName);
+        req.onsuccess = () => resolve();
+        req.onblocked = () => resolve();
+        req.onerror = () => resolve();
+      });
+    }
+  });
 });

@@ -80,7 +80,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
   const [pendingRepeat, setPendingRepeat] = useState<PendingRepeatWorkout | null>(null);
   const historyLoadRequestRef = useRef(0);
   const hasLoadedHistoryRef = useRef(false);
-  const historySignatureRef = useRef<string | null>(null);
+  const historyRevisionRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadHistory();
@@ -135,35 +135,24 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
     // Only show the spinner on the first load; later refreshes keep the current list on screen.
     if (!hasLoadedHistoryRef.current) setLoading(true);
     try {
+      const store = await getStore();
+
+      // Cheap revision check first: any write that affects history, PR badges,
+      // or analytics advances the revision, so an unchanged revision means the
+      // expensive reload (list + snapshot + PR pass) can be skipped entirely.
+      // Stores without a revision counter always reload.
+      const revision = (await store.getDataRevision?.()) ?? null;
+      if (skipIfUnchanged && revision !== null && revision === historyRevisionRef.current) return;
+
       const [list, gymList] = await Promise.all([getWorkoutHistory(), getGyms()]);
       if (requestId !== historyLoadRequestRef.current) return;
-
-      // Evaluating PRs across every logged workout is the expensive part, so a background refresh
-      // skips it when nothing that feeds it has changed since the last load.
-      const signature = JSON.stringify([
-        gymTrackingEnabled,
-        gymList.map(gym => [gym.id, gym.name, gym.color]),
-        list.map(item => [
-          item.id,
-          item.name,
-          item.startTime,
-          item.endTime,
-          item.gymId,
-          item.totalSets,
-          item.totalVolumeKg,
-          item.durationSeconds,
-          item.exerciseNames,
-        ]),
-      ]);
-      if (skipIfUnchanged && signature === historySignatureRef.current) return;
-      historySignatureRef.current = signature;
+      historyRevisionRef.current = revision;
 
       hasLoadedHistoryRef.current = true;
       setHistory(list);
       setGyms(gymList);
 
       // Eagerly compute PRs for all historical workouts so PR badges always show
-      const store = await getStore();
       const snapshot = await store.readSnapshot();
       if (requestId !== historyLoadRequestRef.current) return;
 
