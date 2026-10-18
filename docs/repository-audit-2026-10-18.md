@@ -309,13 +309,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-11 — Eager screen imports and permanently mounted tabs
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `App.tsx:15-19` statically imports all screens. `App.tsx:48-54` mounts a tab on first visit, and `App.tsx:127-138` keeps visited tabs mounted under `display: none`.
 - **Impact:** Analytics and its chart stack are in the initial bundle. Hidden tabs retain state and subscriptions, and memory grows with each visited tab.
 - **Required change:** Use `React.lazy` plus `Suspense` for Analytics and History, and consider unmounting or freezing heavy tabs after a timeout. Keep the fast first-switch behavior where it matters.
+- **Implementation (2026-10-18):** `App.tsx` now loads `HistoryScreen` and `AnalyticsScreen` through `React.lazy` with a shared `Suspense` fallback, and warms both modules 1.5 s after startup so the first visit does not wait on the network while the initial bundle still excludes them. Because `ExerciseDetailModal` (reachable from eager screens) also renders the progression chart, `ProgressionCurveView` is `React.lazy`-loaded inside the detail modal as well. Hidden-tab retention moved to `src/hooks/useTabRetention.ts`: `workout` and `exercises` stay mounted for instant switching, while `history` and `analytics` are unmounted once they have been hidden for five minutes (30 s sweep, clock runs while the workout logger covers the tabs); revisiting a released tab mounts it fresh.
+- **Verification:** `npx expo export --platform web` main JS 3,914,358 B → 3,736,947 B (−177,411 B); new async chunks `AnalyticsScreen-*.js` (129,981 B), `HistoryScreen-*.js` (35,098 B), `__common-*.js` (10,951 B). Analytics-only markers (`No progression data yet`, `RecordsView`, `Trophy room`, `Import workout data`) are absent from the initial bundle and present in the chunks. `tests/unit/tab-retention.test.ts` covers mount-on-visit, release at the retention boundary, cancel-on-return, non-evictable tabs, and eviction while the logger is open. Full suites: 173 integration / 543 unit.
 - **Done when:**
-  - [ ] The initial web bundle excludes the Analytics chart module.
-  - [ ] Hidden-tab memory does not grow without bound during a long session.
+  - [x] The initial web bundle excludes the Analytics chart module.
+  - [x] Hidden-tab memory does not grow without bound during a long session.
 
 ### PERF-12 — Rest timer wakes the JS thread four times per second for a 1 Hz UI
 
@@ -756,7 +758,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-06` Add repository/domain hooks.
 - [x] `ARCH-07` Add a store revision counter and invalidation.
 - [x] `PERF-06` Lazy-load the exercise catalog.
-- [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
+- [x] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
 - [x] `PERF-14` Add IndexedDB indexes and indexed history reads.
 - [x] `COR-01` Fix the web completion filter.
 - [x] `COR-02` Unify gym deletion policy.
