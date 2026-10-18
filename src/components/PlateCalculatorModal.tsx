@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
+import { Modal, View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
+import { AppTouchable } from './ui';
 import { X, Check } from 'lucide-react-native';
 import { calculatePlates, KG_PLATES, LB_PLATES } from '../utils/calculator';
 import { useSettings } from '../context/SettingsContext';
@@ -107,12 +100,14 @@ export const PlateCalculatorModal: React.FC<Props> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Plate Calculator</Text>
-            <TouchableOpacity
+            <AppTouchable
               onPress={onClose}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close plate calculator"
             >
               <X color={colors.textSecondary} size={24} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -121,7 +116,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
               <View style={styles.inputHeaderRow}>
                 <Text style={styles.label}>Target Weight (Total Barbell Load)</Text>
                 <View style={styles.unitToggleGroup}>
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[styles.unitToggleBtn, modalUnit === 'kg' && styles.unitToggleBtnActive]}
                     onPress={() => handleUnitToggle('kg')}
                     accessibilityRole="button"
@@ -136,8 +131,8 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                     >
                       KG
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </AppTouchable>
+                  <AppTouchable
                     style={[styles.unitToggleBtn, modalUnit === 'lb' && styles.unitToggleBtnActive]}
                     onPress={() => handleUnitToggle('lb')}
                     accessibilityRole="button"
@@ -152,7 +147,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                     >
                       LB
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 </View>
               </View>
               <View style={styles.inputRow}>
@@ -174,10 +169,13 @@ export const PlateCalculatorModal: React.FC<Props> = ({
               <Text style={styles.label}>Barbell Weight</Text>
               <View style={styles.pillRow}>
                 {bars.map(w => (
-                  <TouchableOpacity
+                  <AppTouchable
                     key={w}
                     style={[styles.pill, barWeight === w && styles.pillActive]}
                     onPress={() => setBarWeight(w)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${w} ${modalUnit} bar`}
+                    accessibilityState={{ selected: barWeight === w }}
                   >
                     <Text style={[styles.pillText, barWeight === w && styles.pillTextActive]}>
                       {w} {modalUnit}{' '}
@@ -187,7 +185,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                           ? '(Olympic)'
                           : ''}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 ))}
               </View>
             </View>
@@ -242,16 +240,18 @@ export const PlateCalculatorModal: React.FC<Props> = ({
 
           {/* Action Button */}
           {onApply && (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.applyButton}
               onPress={() => {
                 onApply(displayToKg(numWeight, modalUnit));
                 onClose();
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Apply calculated weight"
             >
               <Check color={colors.black} size={20} />
               <Text style={styles.applyButtonText}>Set as Workout Weight</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           )}
         </View>
       </View>

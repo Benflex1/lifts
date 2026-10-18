@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Platform,
-} from 'react-native';
+import { Modal, View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import { AppTouchable } from './ui';
 import { X, Flame, Check, Layers, Plus, Minus, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -214,7 +207,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
               <Flame size={20} color={colors.warning} />
               <Text style={styles.headerTitle}>Warmup Calculator</Text>
             </View>
-            <TouchableOpacity
+            <AppTouchable
               onPress={onClose}
               style={styles.closeButton}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -222,7 +215,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
               accessibilityLabel="Close warmup calculator"
             >
               <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
           <Text style={styles.exerciseSubtitle} numberOfLines={1}>
             {exerciseName}
@@ -247,12 +240,17 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
               <View style={styles.inputGroup}>
                 <Text style={styles.fieldLabel}>Bar Baseline</Text>
                 <View style={styles.barChipsRow}>
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[
                       styles.chip,
                       barWeightDisplay === (unit === 'lb' ? 45 : 20) && styles.chipActive,
                     ]}
                     onPress={() => setBarWeightDisplay(unit === 'lb' ? 45 : 20)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Bar ${unit === 'lb' ? 45 : 20} ${unit}`}
+                    accessibilityState={{
+                      selected: barWeightDisplay === (unit === 'lb' ? 45 : 20),
+                    }}
                   >
                     <Text
                       style={[
@@ -262,14 +260,19 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                     >
                       {unit === 'lb' ? '45 lb (Bar)' : '20 kg (Bar)'}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
 
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[
                       styles.chip,
                       barWeightDisplay === (unit === 'lb' ? 35 : 15) && styles.chipActive,
                     ]}
                     onPress={() => setBarWeightDisplay(unit === 'lb' ? 35 : 15)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Bar ${unit === 'lb' ? 35 : 15} ${unit}`}
+                    accessibilityState={{
+                      selected: barWeightDisplay === (unit === 'lb' ? 35 : 15),
+                    }}
                   >
                     <Text
                       style={[
@@ -279,18 +282,21 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                     >
                       {unit === 'lb' ? '35 lb' : '15 kg'}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
 
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[styles.chip, barWeightDisplay === 0 && styles.chipActive]}
                     onPress={() => setBarWeightDisplay(0)}
+                    accessibilityRole="button"
+                    accessibilityLabel="No bar"
+                    accessibilityState={{ selected: barWeightDisplay === 0 }}
                   >
                     <Text
                       style={[styles.chipText, barWeightDisplay === 0 && styles.chipTextActive]}
                     >
                       None (0)
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 </View>
               </View>
             </View>
@@ -314,11 +320,14 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                   const stepCount =
                     presetKey === 'custom' ? customStepRatios.length : p.steps.length;
                   return (
-                    <TouchableOpacity
+                    <AppTouchable
                       key={presetKey}
                       style={[styles.presetCard, isSelected && styles.presetCardActive]}
                       onPress={() => setSelectedPreset(presetKey)}
                       activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Warmup preset ${p.name.split('/')[0].trim()}, ${stepCount} sets`}
+                      accessibilityState={{ selected: isSelected }}
                     >
                       <View style={styles.presetHeader}>
                         <Text style={[styles.presetTitle, isSelected && styles.presetTitleActive]}>
@@ -331,7 +340,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                       <Text style={styles.presetDesc} numberOfLines={2}>
                         {p.description}
                       </Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   );
                 })}
               </View>
@@ -341,10 +350,15 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                 <View style={styles.customStepsContainer}>
                   <View style={styles.customStepsHeader}>
                     <Text style={styles.customStepsTitle}>Custom Steps Setup</Text>
-                    <TouchableOpacity style={styles.addCustomStepBtn} onPress={handleAddCustomStep}>
+                    <AppTouchable
+                      style={styles.addCustomStepBtn}
+                      onPress={handleAddCustomStep}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add custom warmup step"
+                    >
                       <Plus size={13} color={colors.primary} />
                       <Text style={styles.addCustomStepText}>Add Step</Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   </View>
                   <View style={styles.customStepsList}>
                     {customStepRatios.map((cs, cIdx) => (
@@ -353,27 +367,33 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
 
                         {/* Percentage Stepper */}
                         <View style={styles.customStepper}>
-                          <TouchableOpacity
+                          <AppTouchable
                             style={styles.customStepBtn}
                             onPress={() => adjustCustomStepPct(cIdx, -0.05)}
                             disabled={cs.percentage <= 0}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Decrease percentage of custom step ${cIdx + 1}`}
+                            accessibilityState={{ disabled: cs.percentage <= 0 }}
                           >
                             <Minus
                               size={10}
                               color={cs.percentage <= 0 ? colors.textFaint : colors.textSecondary}
                             />
-                          </TouchableOpacity>
+                          </AppTouchable>
                           <Text style={styles.customStepLabel}>
                             {cs.percentage === 0 && cs.useBarIfAvailable
                               ? 'Bar'
                               : `${Math.round(cs.percentage * 100)}%`}
                           </Text>
-                          <TouchableOpacity
+                          <AppTouchable
                             style={styles.customStepBtn}
                             onPress={() => adjustCustomStepPct(cIdx, 0.05)}
                             disabled={cs.percentage >= 0.95}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Increase percentage of custom step ${cIdx + 1}`}
+                            accessibilityState={{ disabled: cs.percentage >= 0.95 }}
                           >
                             <Plus
                               size={10}
@@ -381,42 +401,49 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                                 cs.percentage >= 0.95 ? colors.textFaint : colors.textSecondary
                               }
                             />
-                          </TouchableOpacity>
+                          </AppTouchable>
                         </View>
 
                         <Text style={styles.customStepSeparator}>·</Text>
 
                         {/* Reps Stepper */}
                         <View style={styles.customStepper}>
-                          <TouchableOpacity
+                          <AppTouchable
                             style={styles.customStepBtn}
                             onPress={() => adjustCustomStepReps(cIdx, -1)}
                             disabled={cs.reps <= 1}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Decrease reps of custom step ${cIdx + 1}`}
+                            accessibilityState={{ disabled: cs.reps <= 1 }}
                           >
                             <Minus
                               size={10}
                               color={cs.reps <= 1 ? colors.textFaint : colors.textSecondary}
                             />
-                          </TouchableOpacity>
+                          </AppTouchable>
                           <Text style={styles.customStepReps}>{cs.reps} reps</Text>
-                          <TouchableOpacity
+                          <AppTouchable
                             style={styles.customStepBtn}
                             onPress={() => adjustCustomStepReps(cIdx, 1)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Increase reps of custom step ${cIdx + 1}`}
                           >
                             <Plus size={10} color={colors.textSecondary} />
-                          </TouchableOpacity>
+                          </AppTouchable>
                         </View>
 
                         {customStepRatios.length > 1 && (
-                          <TouchableOpacity
+                          <AppTouchable
                             style={styles.deleteCustomBtn}
                             onPress={() => handleRemoveCustomStep(cIdx)}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove custom step ${cIdx + 1}`}
                           >
                             <Trash2 size={14} color={colors.danger} />
-                          </TouchableOpacity>
+                          </AppTouchable>
                         )}
                       </View>
                     ))}
@@ -443,7 +470,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                 const effectiveReps = customReps[step.setIndex] ?? step.reps;
 
                 return (
-                  <TouchableOpacity
+                  <AppTouchable
                     key={`ramp-${step.setIndex}`}
                     style={[
                       styles.tableRow,
@@ -452,15 +479,21 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                     ]}
                     onPress={() => setSelectedStepIndex(stepIdx)}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Warmup set ${stepIdx + 1}${isExcluded ? ', excluded' : ''}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     {/* Checkbox */}
-                    <TouchableOpacity
+                    <AppTouchable
                       style={[styles.stepCheckbox, !isExcluded && styles.stepCheckboxChecked]}
                       onPress={() => toggleIncludeStep(step.setIndex)}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={`Include warmup set ${step.setIndex + 1}`}
+                      accessibilityState={{ checked: !isExcluded }}
                     >
                       {!isExcluded && <Check size={11} color={colors.text} strokeWidth={3} />}
-                    </TouchableOpacity>
+                    </AppTouchable>
 
                     {/* Set Pill */}
                     <View style={styles.warmupBadge}>
@@ -477,27 +510,32 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
 
                     {/* Reps Adjuster */}
                     <View style={styles.repsControl}>
-                      <TouchableOpacity
+                      <AppTouchable
                         style={styles.repBtn}
                         onPress={() => adjustStepReps(step.setIndex, -1, step.reps)}
                         disabled={effectiveReps <= 1}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Decrease reps for warmup set ${step.setIndex + 1}`}
+                        accessibilityState={{ disabled: effectiveReps <= 1 }}
                       >
                         <Minus
                           size={11}
                           color={effectiveReps <= 1 ? colors.textFaint : colors.textSoft}
                         />
-                      </TouchableOpacity>
+                      </AppTouchable>
                       <Text style={[styles.tdReps, isExcluded && styles.tdTextExcluded]}>
                         {effectiveReps}
                       </Text>
-                      <TouchableOpacity
+                      <AppTouchable
                         style={styles.repBtn}
                         onPress={() => adjustStepReps(step.setIndex, 1, step.reps)}
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Increase reps for warmup set ${step.setIndex + 1}`}
                       >
                         <Plus size={11} color={colors.textSoft} />
-                      </TouchableOpacity>
+                      </AppTouchable>
                     </View>
 
                     {/* Plates Breakdown */}
@@ -507,7 +545,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
                     >
                       {platesSummary || '—'}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 );
               })}
 
@@ -536,33 +574,44 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
             )}
 
             {/* Options */}
-            <TouchableOpacity
+            <AppTouchable
               style={styles.optionRow}
               onPress={() => setReplaceExisting(prev => !prev)}
               activeOpacity={0.7}
+              accessibilityRole="checkbox"
+              accessibilityLabel="Replace existing warmup sets"
+              accessibilityState={{ checked: replaceExisting }}
             >
               <View style={[styles.checkbox, replaceExisting && styles.checkboxChecked]}>
                 {replaceExisting && <Check size={14} color={colors.text} strokeWidth={3} />}
               </View>
               <Text style={styles.optionText}>Replace existing warmup sets</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </ScrollView>
 
           {/* Action Buttons */}
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+            <AppTouchable
+              style={styles.cancelBtn}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel warmup calculator"
+            >
               <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </AppTouchable>
+            <AppTouchable
               style={[styles.applyBtn, includedSteps.length === 0 && styles.applyBtnDisabled]}
               disabled={includedSteps.length === 0}
               onPress={handleApply}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${includedSteps.length} warmup ${includedSteps.length === 1 ? 'set' : 'sets'}`}
+              accessibilityState={{ disabled: includedSteps.length === 0 }}
             >
               <Flame size={16} color={colors.text} />
               <Text style={styles.applyBtnText}>
                 Add {includedSteps.length} Warmup {includedSteps.length === 1 ? 'Set' : 'Sets'}
               </Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
         </View>
       </View>

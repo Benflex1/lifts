@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import { Modal, View, Text, FlatList, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Trash2, X, Clock, Dumbbell } from 'lucide-react-native';
 import { WorkoutDraft } from '../database/contract';
@@ -47,9 +48,15 @@ export function DraftRecoveryModal({
               <Text style={styles.title}>{PAUSED_WORKOUT_MODAL_TITLE}</Text>
               <Text style={styles.subtitle}>{getPausedWorkoutModalSubtitle(drafts.length)}</Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+            <AppTouchable
+              style={styles.closeBtn}
+              onPress={onClose}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Close draft recovery"
+            >
               <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <FlatList
@@ -89,21 +96,25 @@ export function DraftRecoveryModal({
                   </View>
 
                   <View style={styles.cardActions}>
-                    <TouchableOpacity
+                    <AppTouchable
                       style={styles.discardBtn}
                       onPress={() => onDiscard(item.workout.id)}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Discard ${item.workout.name || 'workout'} draft`}
                     >
                       <Trash2 size={16} color={colors.danger} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </AppTouchable>
+                    <AppTouchable
                       style={styles.resumeBtn}
                       onPress={() => onResume(item)}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Continue ${item.workout.name || 'workout'}`}
                     >
                       <Play size={14} color={colors.black} fill={colors.black} />
                       <Text style={styles.resumeText}>Continue</Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   </View>
                 </View>
               );

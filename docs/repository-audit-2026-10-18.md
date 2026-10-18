@@ -547,10 +547,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-01 — Core workout controls have incomplete screen-reader coverage
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `ActiveWorkoutScreen.tsx` contains 55 `TouchableOpacity` elements, 22 `accessibilityRole` attributes, and 23 `accessibilityLabel` attributes. Missing coverage includes the collapsed exercise row at `:763-781`, the compact RPE badge at `:1084-1093`, and the inline RPE cell at `:1097-1106`. The set checkbox at `:1111-1126` shows the correct pattern.
 - **Impact:** A screen-reader user cannot reliably identify or operate the primary set controls.
 - **Required change:** Add roles, labels, hints, and state to every interactive control, starting with the logger set/exercise/RPE surfaces.
+- **Implementation (2026-10-18):** The logger interaction tree was migrated to `AppTouchable` and every control now carries a role, a label, and dynamic state or hints: the collapsed/expanded exercise rows (`ActiveExerciseCard`; the collapsed row announces "name, N of M sets completed" with an expand hint), the expanded menu and collapse buttons, set badges, compact and inline RPE cells, and move/delete controls (`ActiveSetRow`), the add-exercise button (`ExerciseStream`), all `ExerciseOptionsMenu` rows (including the conditional superset label and disabled state on move up/down), the `WorkoutOptionsMenu` rows (conditional RPE-column label, documented scrim as `accessible={false}`), the `SetOptionsModal` close/done/type/drop/RPE chips (with selected state), plate and delete shortcuts, and the logger-reachable modals: `WarmupModal` (bar chips, presets, custom steps, ramp rows and steppers, replace toggle, apply button with disabled state), `WorkoutDurationModal`, `PlateCalculatorModal`, `ExercisePickerModal`, `DraftRecoveryModal`, and `DraftResumeBanner`. A scoped `no-restricted-imports` rule now rejects raw `TouchableOpacity`/`TouchableHighlight`/`Pressable` imports in these files, so new controls must use the primitive. `WorkoutHeader` and `ActiveWorkoutScreen` controls were already labelled and only needed the primitive migration. Verification: the brace-aware scan used to size the work reports 124 unlabelled touchables app-wide before and 0 in the logger surfaces after; both typechecks, ESLint, Prettier, and the 584-test suite pass. Remaining unlabelled controls outside the logger and rest scope are tracked as `A11Y-06`.
 - **Done when:** Every touchable in the logger has a meaningful label and role, verified by a checklist and automated where possible.
 
 ### A11Y-02 — Rest controls, mini bar, and read-only banner are unlabeled
@@ -587,8 +588,17 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Evidence:** Accessibility attributes are applied ad hoc. There is no required-label wrapper component and no `jsx-a11y`-style rule in CI.
 - **Impact:** New UI will keep reproducing the same gaps.
 - **Required change:** Add an `AppTouchable`/`IconButton` primitive that requires an accessibility label, and enforce it through review and lint where possible.
-- **Implementation (2026-10-18):** `src/components/ui.tsx` exports `AppTouchable`, whose props require `accessibilityLabel` and default `accessibilityRole` to `button` (`IconButton` already required a label). `tests/unit/app-touchable.test.ts` covers label and role forwarding, press handling, and the type-level requirement (a `@ts-expect-error` proves an omitted label does not compile). Scoped `no-restricted-imports` rules reject raw `TouchableOpacity`/`Pressable`/`TouchableHighlight` imports in the logger and rest surfaces (landed with `A11Y-01` and `A11Y-02`), so new controls there must use the primitive. `eslint-plugin-react-native-a11y` was evaluated first but supports only ESLint 8 and below, so the type-enforced primitive plus scoped import restrictions carry the enforcement.
+- **Implementation (2026-10-18):** `src/components/ui.tsx` exports `AppTouchable`, whose props require `accessibilityLabel` and default `accessibilityRole` to `button` (`IconButton` already required a label); dismiss scrims opt out with `accessible={false}` instead of a meaningless label. `tests/unit/app-touchable.test.ts` covers label and role forwarding, press handling, the scrim opt-out, and the type-level requirement (a `@ts-expect-error` proves an omitted label does not compile). Scoped `no-restricted-imports` rules reject raw `TouchableOpacity`/`Pressable`/`TouchableHighlight` imports in the logger and rest surfaces (landed with `A11Y-01`; the rest surfaces follow in `A11Y-02`), so new controls there must use the primitive. `eslint-plugin-react-native-a11y` was evaluated first but supports only ESLint 8 and below, so the type-enforced primitive plus scoped import restrictions carry the enforcement.
 - **Done when:** New interactive components use the primitive by default.
+
+### A11Y-06 — Unlabelled controls remain outside the logger and rest surfaces
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** After the logger (`A11Y-01`) and rest (`A11Y-02`) migrations, a brace-aware scan for `TouchableOpacity` openings without an `accessibilityLabel` still reports 49 controls in shared modals, shared primitives whose accessible name currently comes from child text, and secondary screens: `RoutineEditorModal` (21), `CsvImportModal` (6), `FolderManageModal` (4), `WorkoutEditModal` (4), `CustomExerciseModal` (3), `ExerciseScopeModal` (3), `ui.tsx` (4), and one each in `AnalyticsScreen`, `ExercisesScreen`, `WorkoutScreen`, and `history/HistoryCard`. These are outside the Phase 3 exit criteria (logger and rest controls) and are logged as residual instead of being skipped.
+- **Impact:** Outside the logging flow, screen readers fall back to child text or announce icon-only controls incompletely.
+- **Required change:** Migrate the remaining interactive components to `AppTouchable`, adding labels/roles/state and extending the scoped `no-restricted-imports` list; give the shared primitives (`SegmentedControl`, `Chip`, `ActionSheet`, header actions) explicit labels where child text is not a full description.
+- **Done when:** The scan reports zero unlabelled touchables outside explicit `accessibilityViewIsModal`/`accessible={false}` dismiss scrims.
 
 ---
 
@@ -815,7 +825,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `DX-06` Add dependency automation and an audit policy.
 - [x] `DX-08` Fix version and documentation drift.
 - [ ] `DX-09` Add collaboration and security templates.
-- [ ] `A11Y-01` Label the core logger controls.
+- [x] `A11Y-01` Label the core logger controls.
 - [ ] `A11Y-02` Label rest controls, mini bar, and read-only banner.
 - [ ] `A11Y-03` Add live regions and value semantics.
 - [ ] `A11Y-04` Standardize modal semantics.
@@ -835,6 +845,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `ARCH-09` Decide and document the navigation model.
 - [ ] `ARCH-10` Remove dead code.
 - [ ] `ARCH-11` Tighten storage-boundary types.
+- [ ] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
 
 ---
 

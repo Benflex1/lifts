@@ -1,5 +1,6 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { AppTouchable } from '../components/ui';
 import { X } from 'lucide-react-native';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
@@ -58,14 +59,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           <Text style={styles.supersetCueText} numberOfLines={1}>
             {overlays.nextUpCue}
           </Text>
-          <TouchableOpacity
+          <AppTouchable
             onPress={overlays.onDismissNextUpCue}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Dismiss next up cue"
           >
             <X size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       )}
 

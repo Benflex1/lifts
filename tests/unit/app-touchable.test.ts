@@ -89,6 +89,19 @@ test('AppTouchable keeps a caller-supplied role and forwards presses (A11Y-05)',
   assert.equal(presses, 1);
 });
 
+test('AppTouchable allows dismiss scrims to opt out of accessibility (A11Y-05)', () => {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      React.createElement(AppTouchable, { accessible: false, onPress: () => {} }),
+    );
+  });
+
+  const node = renderer.root.findByType('TouchableOpacity' as any);
+  assert.equal(node.props.accessible, false);
+  assert.equal(node.props.accessibilityLabel, undefined);
+});
+
 test('the label prop is required at the type level (A11Y-05)', () => {
   // @ts-expect-error accessibilityLabel is required by AppTouchableProps
   const element = React.createElement(AppTouchable, {});

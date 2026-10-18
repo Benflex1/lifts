@@ -34,6 +34,37 @@ export default tseslint.config(
     },
   },
   {
+    // A11Y-01/A11Y-02: labelled surfaces must use the AppTouchable primitive.
+    // Raw touchables (with ad-hoc or missing labels) are rejected here.
+    files: [
+      'src/screens/activeWorkout/**/*.{ts,tsx}',
+      'src/screens/ActiveWorkoutScreen.tsx',
+      'src/components/ActiveExerciseCard.tsx',
+      'src/components/ActiveSetRow.tsx',
+      'src/components/WarmupModal.tsx',
+      'src/components/WorkoutDurationModal.tsx',
+      'src/components/PlateCalculatorModal.tsx',
+      'src/components/ExercisePickerModal.tsx',
+      'src/components/DraftRecoveryModal.tsx',
+      'src/components/DraftResumeBanner.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-native',
+              importNames: ['TouchableOpacity', 'TouchableHighlight', 'Pressable'],
+              message:
+                'Use AppTouchable from src/components/ui (it requires an accessibility label).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Tests exercise host-component stubs and legacy fixtures; loose typing is
     // expected there and is checked by tsconfig.test.json instead.
     files: ['tests/**/*.{ts,tsx}'],

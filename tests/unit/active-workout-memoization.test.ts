@@ -24,6 +24,7 @@ mockModule('react-native', {
   StyleSheet: { create: (styles: unknown) => styles },
 });
 mockModule('lucide-react-native', iconProxy);
+mockModule('../../src/components/ui', { AppTouchable: 'TouchableOpacity' });
 mockModule('../../src/components/SwipeableSetRow', { SwipeableSetRow: 'SwipeableSetRow' });
 mockModule('../../src/components/WeightInput', { WeightInput: 'WeightInput' });
 mockModule('../../src/components/RepsInput', { RepsInput: 'RepsInput' });

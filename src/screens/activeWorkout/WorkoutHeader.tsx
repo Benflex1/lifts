@@ -1,5 +1,6 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { AppTouchable } from '../../components/ui';
 import { ChevronDown, MoreHorizontal } from 'lucide-react-native';
 import { useWorkoutClock } from '../../context/WorkoutContext';
 import { formatTimer } from '../../utils/calculator';
@@ -48,7 +49,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
     <>
       {/* Top App Bar */}
       <View style={[styles.topBar, { paddingTop: Math.max(50, topInset + 8) }]}>
-        <TouchableOpacity
+        <AppTouchable
           onPress={onMinimize}
           style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -56,7 +57,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
           accessibilityRole="button"
         >
           <ChevronDown size={22} color={colors.textSoft} />
-        </TouchableOpacity>
+        </AppTouchable>
 
         <View style={styles.topBarTitleWrap}>
           <Text style={styles.topBarTitle} numberOfLines={1}>
@@ -70,7 +71,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
         </View>
 
         <View style={styles.topRightWrap}>
-          <TouchableOpacity
+          <AppTouchable
             onPress={onOpenMenu}
             style={styles.moreBtn}
             hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
@@ -78,9 +79,9 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
             accessibilityRole="button"
           >
             <MoreHorizontal size={20} color={colors.textSoft} />
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             onPress={onFinish}
             style={[styles.finishBtn, isFinishing && styles.btnDisabled]}
             disabled={isFinishing}
@@ -89,13 +90,13 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
             accessibilityState={{ busy: isFinishing, disabled: isFinishing }}
           >
             <Text style={styles.finishBtnText}>{isFinishing ? 'Saving...' : 'Finish'}</Text>
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
 
       {/* Live Metrics Strip */}
       <View style={styles.metricsContainer}>
-        <TouchableOpacity
+        <AppTouchable
           style={styles.metricColumn}
           onPress={onOpenDuration}
           accessibilityRole="button"
@@ -105,7 +106,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
             <LiveWorkoutClock />
           </Text>
           <Text style={styles.metricColLabel}>Duration</Text>
-        </TouchableOpacity>
+        </AppTouchable>
         <View style={styles.metricColumn}>
           <Text style={styles.metricColValue}>{formatWeight(liveVolume, unit)}</Text>
           <Text style={styles.metricColLabel}>Volume</Text>

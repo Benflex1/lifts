@@ -28,6 +28,7 @@ mockModule('react-native', {
   Dimensions: { get: () => ({ width: 400, height: 800 }) },
 });
 mockModule('lucide-react-native', iconProxy);
+mockModule('../../src/components/ui', { AppTouchable: 'TouchableOpacity' });
 mockModule('../../src/context/WorkoutContext', { useWorkoutClock: () => 90 });
 mockModule('../../src/components/ActiveExerciseCard', { ActiveExerciseCard: 'ActiveExerciseCard' });
 

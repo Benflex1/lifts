@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, View, Text, TextInput, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { Clock, Sparkles, AlertCircle, X, Check } from 'lucide-react-native';
 import { Workout } from '../types';
 import { formatDuration } from '../utils/calculator';
@@ -91,18 +92,20 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                     : 'Set how long this workout lasted.')}
               </Text>
             </View>
-            <TouchableOpacity
+            <AppTouchable
               onPress={onClose}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close duration options"
             >
               <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           {/* Prompt Choices for 4hr+ Safety */}
           {showSafetyPrompt && !showCustomInputs && (
             <View style={styles.safetyOptions}>
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.estimatePrimaryButton}
                 onPress={handleApplyEstimate}
                 accessibilityRole="button"
@@ -115,9 +118,9 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                     ~{formatDuration(estimatedDuration)} (based on completed sets)
                   </Text>
                 </View>
-              </TouchableOpacity>
+              </AppTouchable>
 
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.optionButton}
                 onPress={() => setShowCustomInputs(true)}
                 accessibilityRole="button"
@@ -125,9 +128,9 @@ export const WorkoutDurationModal: React.FC<Props> = ({
               >
                 <Clock size={18} color={colors.primary} />
                 <Text style={styles.optionButtonText}>Enter Custom Time</Text>
-              </TouchableOpacity>
+              </AppTouchable>
 
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.optionButtonSecondary}
                 onPress={handleKeepOriginal}
                 accessibilityRole="button"
@@ -137,7 +140,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                 <Text style={styles.optionButtonSecondaryText}>
                   Keep {formatDuration(initialDurationSeconds)}
                 </Text>
-              </TouchableOpacity>
+              </AppTouchable>
             </View>
           )}
 
@@ -175,7 +178,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
               </View>
 
               {workout && (
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.estimateChip}
                   onPress={() => {
                     const { hours: eh, minutes: em } = secondsToHoursMinutes(estimatedDuration);
@@ -189,17 +192,27 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                   <Text style={styles.estimateChipText}>
                     Estimate from sets: {formatDuration(estimatedDuration)}
                   </Text>
-                </TouchableOpacity>
+                </AppTouchable>
               )}
 
               <View style={styles.actionsRow}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                <AppTouchable
+                  style={styles.cancelBtn}
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel time entry"
+                >
                   <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCustom}>
+                </AppTouchable>
+                <AppTouchable
+                  style={styles.saveBtn}
+                  onPress={handleSaveCustom}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save custom workout time"
+                >
                   <Check size={18} color={colors.black} />
                   <Text style={styles.saveBtnText}>Save Time</Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             </View>
           )}

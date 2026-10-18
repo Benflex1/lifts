@@ -4,11 +4,11 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   FlatList,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { AppTouchable } from './ui';
 import { Search, X, Plus, Check } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { searchExercises } from '../database/db';
@@ -162,12 +162,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
             clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity
+            <AppTouchable
               onPress={() => setSearchQuery('')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
             >
               <X size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           )}
         </View>
 
@@ -208,10 +210,15 @@ export const ExercisePickerModal: React.FC<Props> = ({
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No exercises found.</Text>
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.createCustomBar}
                   onPress={handleOpenAddCustom}
                   accessibilityRole="button"
+                  accessibilityLabel={
+                    searchQuery.trim()
+                      ? `Create custom exercise ${searchQuery.trim()}`
+                      : 'Create custom exercise'
+                  }
                 >
                   <Plus size={16} color={colors.primaryLight} />
                   <Text style={styles.createCustomText}>
@@ -219,7 +226,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
                       ? `Create "${searchQuery.trim()}"`
                       : 'Create Custom Exercise'}
                   </Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             }
           />
@@ -228,7 +235,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
         {/* Floating Batch Add Bar */}
         {multiSelect && selectedExercises.size > 0 && (
           <View style={styles.floatingBarWrap}>
-            <TouchableOpacity
+            <AppTouchable
               style={styles.floatingAddBtn}
               onPress={() => {
                 if (onSelectMultiple) {
@@ -238,12 +245,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
                 }
                 onClose();
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${selectedExercises.size} selected ${selectedExercises.size === 1 ? 'exercise' : 'exercises'}`}
             >
               <Check size={20} color={colors.onPrimary} strokeWidth={2.5} />
               <Text style={styles.floatingAddBtnText}>
                 Add {selectedExercises.size} Exercise{selectedExercises.size > 1 ? 's' : ''}
               </Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
         )}
 

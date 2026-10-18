@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { Play, Trash2, List } from 'lucide-react-native';
 import { useWorkout } from '../context/WorkoutContext';
 import { formatDuration } from '../utils/calculator';
@@ -52,13 +53,19 @@ export const DraftResumeBanner: React.FC = () => {
         </View>
         <View style={styles.bannerActions}>
           {availableDrafts.length > 1 ? (
-            <TouchableOpacity style={styles.reviewBtn} onPress={openDraftModal} activeOpacity={0.7}>
+            <AppTouchable
+              style={styles.reviewBtn}
+              onPress={openDraftModal}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Review paused workouts"
+            >
               <List size={14} color={colors.black} />
               <Text style={styles.reviewBtnText}>Review & Continue</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           ) : (
             <>
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.discardBtn}
                 onPress={() => handleDiscard(firstDraft.workout.id)}
                 activeOpacity={0.7}
@@ -66,8 +73,8 @@ export const DraftResumeBanner: React.FC = () => {
                 accessibilityLabel="Discard paused workout"
               >
                 <Trash2 size={14} color={colors.danger} />
-              </TouchableOpacity>
-              <TouchableOpacity
+              </AppTouchable>
+              <AppTouchable
                 style={styles.resumeBtn}
                 onPress={() => resumeDraft(firstDraft)}
                 activeOpacity={0.7}
@@ -76,7 +83,7 @@ export const DraftResumeBanner: React.FC = () => {
               >
                 <Play size={14} color={colors.black} fill={colors.black} />
                 <Text style={styles.resumeBtnText}>Continue</Text>
-              </TouchableOpacity>
+              </AppTouchable>
             </>
           )}
         </View>

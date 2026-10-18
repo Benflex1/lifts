@@ -28,14 +28,17 @@ import { colors, radii, spacing, type, HEADER_TOP_FALLBACK } from '../theme';
 // AppTouchable
 // ---------------------------------------------------------------------------
 
-export interface AppTouchableProps extends Omit<
+export type AppTouchableProps = Omit<
   TouchableOpacityProps,
   'accessibilityLabel' | 'accessibilityRole'
-> {
-  /** Required: every interactive control must be announceable by a screen reader. */
-  accessibilityLabel: string;
-  accessibilityRole?: AccessibilityRole;
-}
+> & { accessibilityRole?: AccessibilityRole } & (
+    | { accessibilityLabel: string }
+    | {
+        /** Dismiss scrims are intentionally invisible to screen readers. */
+        accessible: false;
+        accessibilityLabel?: string;
+      }
+  );
 
 /**
  * The required-label primitive (A11Y-05). Interactive components compose this
