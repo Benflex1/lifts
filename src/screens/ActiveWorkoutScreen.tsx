@@ -419,7 +419,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     [updateSet],
   );
 
-  const handleApplyOverload = (activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
+  const handleApplyOverload = useCallback((activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
     if (Platform.OS !== 'web') {
       try {
         Haptics.selectionAsync();
@@ -433,7 +433,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         isWeightEdited: true,
       });
     }
-  };
+  }, [updateSet]);
+
+  const handleExplainOverload = useCallback(
+    (label: string, suggestion: OverloadSuggestion) =>
+      void notify({ title: `Next target: ${label}`, message: suggestion.reason }),
+    [notify],
+  );
 
   // Handle hardware back press on Android to minimize instead of exiting
   useEffect(() => {
@@ -851,9 +857,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 overloadEnabled={overloadEnabled}
                 isDeload={activeWorkout.isDeload === true}
                 onApplyOverload={handleApplyOverload}
-                onExplainOverload={(label, suggestion) =>
-                  void notify({ title: `Next target: ${label}`, message: suggestion.reason })
-                }
+                onExplainOverload={handleExplainOverload}
                 onToggleExpanded={toggleExerciseExpanded}
                 onCommitNotes={updateExerciseNotes}
                 onOpenDetail={setSelectedDetailExercise}
