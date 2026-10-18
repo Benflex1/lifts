@@ -29,6 +29,9 @@ jobs:
       - name: Prettier format check
         run: npm run format:check
 
+      - name: Version sync check
+        run: npm run version:check
+
       - name: TypeScript typecheck
         run: npm run typecheck
 

@@ -662,10 +662,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-08 — Version and documentation drift
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `package.json` says version 1.0.0 while `app.json` says 1.0.5. `docs/audit-remediation-results.md:76` says 147 tests (current baseline is 620+). The release checklist and README disagree on Node requirements.
 - **Impact:** Small inconsistencies erode trust in the documentation and complicate release checks.
 - **Required change:** Make `app.json` the single version source (or synchronize both), refresh the stale test counts, and update prerequisites.
+- **Implementation (2026-10-18):** `package.json` is at 1.0.5, matching `app.json` `expo.version`, and `scripts/check-version-sync.mjs` enforces package/app agreement plus the documented `android.versionCode` base formula (`npm run version:check`, also a CI step). The release checklist's "Cutting a release" steps now include the version check and a documentation-freshness pass over this audit and the test counts. `docs/audit-remediation-results.md` was refreshed from the stale 147-test block to the current 580 unit + 173 integration totals, with the original figure noted. README, CONTRIBUTING, and the release checklist already agreed on Node 22.5+/24 via `DX-07`. Coverage: `tests/unit/version-sync.test.ts` passes on the repository and exits 1 for mismatched fixtures.
 - **Done when:** Version and documentation checks are part of the release checklist.
 
 ### DX-09 — Missing open-source collaboration templates
@@ -810,7 +811,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `DX-03` Add coverage reporting and a threshold.
 - [ ] `DX-04` Add one end-to-end smoke journey.
 - [ ] `DX-06` Add dependency automation and an audit policy.
-- [ ] `DX-08` Fix version and documentation drift.
+- [x] `DX-08` Fix version and documentation drift.
 - [ ] `DX-09` Add collaboration and security templates.
 - [ ] `A11Y-01` Label the core logger controls.
 - [ ] `A11Y-02` Label rest controls, mini bar, and read-only banner.
