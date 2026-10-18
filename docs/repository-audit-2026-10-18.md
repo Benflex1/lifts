@@ -214,7 +214,7 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Impact:** Each typed character re-aggregates the entire training history and re-renders the records subtree.
 - **Required change:** Debounce the search input (150-250 ms) and compute the aggregate once. Filter the precomputed record list by query instead of re-running aggregation.
 - **Implementation (2026-10-18):** `RecordsView` keeps the input text in local state and commits through a 200 ms `createDebouncer` (`SEARCH_DEBOUNCE_MS`). `AnalyticsScreen.recordsOverview` no longer depends on the query — `buildTrophyRoomSummary` runs only when history, catalog, gyms, scopes, or the gym filter change — and `trophySummary` narrows the precomputed records with the order-preserving `filterTrophyRecords` (`src/workout/trophy-room.ts`). Coverage: `tests/unit/debounce.test.ts`, a filter-equivalence test in `tests/unit/trophy-room.test.ts`, and `tests/unit/records-row-memoization.test.ts`.
-- **Deferred:** A renderer-level spy proving the screen itself never re-runs the aggregate per keystroke requires the RNTL harness tracked under `DX-02` (Phase 3); the dependency list and the equivalence test are the current evidence.
+- **Renderer verification (2026-10-18, DX-02):** `tests/unit/perf-03-records-aggregate.test.ts` mounts `RecordsSection`, spies on `buildTrophyRoomSummary`, commits search text through the 200 ms debounce, and asserts the aggregate stays at one call while rows filter and reach the empty state.
 - **Done when:**
   - [x] Typing only filters an existing record list.
   - [ ] `buildTrophyRoomSummary` is not called per keystroke, verified with a spy or render-count test. — deferred to `DX-02`; verified structurally today (`recordsOverview` deps exclude `trophySearch`).
@@ -291,7 +291,7 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Impact:** Users with many trained exercises mount every record row at once, and the whole subtree re-renders on each search update.
 - **Required change:** Make the records list a `FlatList` with the header content in `ListHeaderComponent`, or memoize the row component and bound the rendered list.
 - **Implementation (2026-10-18):** The records branch is a `FlatList` with the card header and chip rows in `ListHeaderComponent` (only that branch dropped the outer `ScrollView`; the header scrollers keep it), configured with `initialNumToRender={12}`, `maxToRenderPerBatch={12}`, and `windowSize={7}`. `RecordRow` is extracted and memoized so a filtered list only re-renders rows whose own props changed. Coverage: `tests/unit/records-row-memoization.test.ts` — replacing one record re-renders only that row, and filtering the list leaves unchanged middle rows untouched.
-- **Deferred:** The mount-count assertion ("only visible rows are mounted for a 500-record dataset") needs a real renderer; it lands with the RNTL harness tracked under `DX-02` (Phase 3).
+- **Renderer verification (2026-10-18, DX-02):** `tests/unit/perf-09-records-virtualization.test.ts` mounts the list with 500 synthetic records and asserts exactly the 12-row initial window renders; React Native's own list is Flow-typed source that Node cannot load, so the mount count is measured through react-native-web's virtualized list under jsdom, and the native element's window configuration (initialNumToRender 12, maxToRenderPerBatch 12, windowSize 7) is asserted directly on the rendered `FlatList`.
 - **Done when:**
   - [ ] Only visible rows are mounted for a 500-record synthetic dataset. — deferred to `DX-02`; the `FlatList` windowing configuration is in place.
   - [x] Search updates do not re-render unrelated rows.
@@ -620,10 +620,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-02 — No component or UI tests
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No React renderer dependency exists. The only component-adjacent tests are hand-rolled React fakes in `tests/unit/exercise-visual.test.ts` and `tests/unit/workout-health-sync.test.ts`. `tests/` references 2 of roughly 45 UI files.
 - **Impact:** Regressions in the primary logging flow, modals, and navigation are caught only by manual testing or the APK launch smoke test.
 - **Required change:** Add React Native Testing Library and cover the critical flows: set logging, rest timer, finish/discard, draft recovery, and exercise search. Add one device-level end-to-end flow.
+- **Implementation (2026-10-18):** `@testing-library/react-native` 14 (loaded through its `pure` entry so jest-only matchers are not required) plus `test-renderer` run under the existing `node --test` runner via `tests/helpers/rntlHarness.ts`: React Native itself is Flow-typed source that Node cannot load, so the harness stubs `react-native` with string host components, mocks lucide/safe-area, and provides a row-rendering FlatList double for flow tests (explicitly not a virtualization double). `tests/unit/critical-flows.test.ts` covers the five critical journeys: set logging (`ActiveSetRow`: checkbox toggle, debounced weight commit asserting nothing fires per keystroke, RPE cell), rest timer (`RestTimerOverlay`: read, +30s/-30s, skip), finish and discard (`WorkoutHeader` finish, `WorkoutOptionsMenu` discard and close), draft recovery (`DraftRecoveryModal` continue/discard), and exercise search (`ExercisePickerModal`: initial load, 120 ms debounce, filtering, and selection closing the picker). The harness also unblocked the deferred renderer verifications: the `PERF-03` aggregate spy and the `PERF-09` 500-record mount count. The device-level end-to-end journey lands in `DX-04` (Maestro).
 - **Done when:** Critical UI paths have automated tests that run in CI.
 
 ### DX-03 — No coverage measurement or threshold
@@ -793,7 +794,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `PERF-12` Reduce the rest-timer tick to one update per second.
 - [x] `PERF-13` Fix confetti and SVG parsing costs.
 
-**Renderer-level verifications deferred to Phase 3:** the `PERF-03` per-keystroke spy and `PERF-09` mount-count assertion need mount/render introspection (React Native Testing Library) and ride on `DX-02`. The comparator, memoization, query-count, revision-contract, and call-count tests listed per finding are in place today.
+**Renderer-level verifications (landed 2026-10-18 with `DX-02`):** the `PERF-03` per-keystroke aggregate spy and the `PERF-09` 500-record mount-count assertion now run in the React Native Testing Library harness; see each finding for the tests. The comparator, memoization, query-count, revision-contract, and call-count tests listed per finding remain in place.
 
 **Exit criteria:** Toggling a set re-renders only the affected rows; typing does not trigger a full workout re-render; returning to Analytics with no changes does not hydrate the full database; a 500-record dataset scrolls without mounting all rows.
 
@@ -822,7 +823,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 ### Phase 3 — Quality gates and accessibility (target: ongoing, start immediately)
 
 - [x] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
-- [ ] `DX-02` Add React Native Testing Library and critical-flow tests.
+- [x] `DX-02` Add React Native Testing Library and critical-flow tests.
 - [x] `DX-03` Add coverage reporting and a threshold.
 - [ ] `DX-04` Add one end-to-end smoke journey.
 - [ ] `DX-06` Add dependency automation and an audit policy.

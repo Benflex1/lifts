@@ -133,6 +133,7 @@ export const RecordRow = React.memo(function RecordRow({
       ]}
       onPress={() => onOpen(record)}
       activeOpacity={0.7}
+      testID="record-row"
       accessibilityRole="button"
       accessibilityLabel={`View ${record.exerciseName} record details`}
     >
