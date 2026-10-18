@@ -452,10 +452,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-09 — Hand-rolled navigation limits deep links and back behavior
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `App.tsx:35-42` defines a static tab array and renders screens via conditionals. No navigation library or linking integration is present. Android back handling exists only inside the active logger.
 - **Impact:** There are no deep links, no browser URL/history state, no back stack, and Android back exits the app from tab screens. Future flows (onboarding, settings, exercise deep links) will need navigation primitives built from scratch.
 - **Required change:** Decide explicitly whether the fixed four-tab model is permanent. If yes, document the constraint and add web history plus shell-level Android back handling. If no, plan an expo-router/React Navigation migration.
+- **Implementation (2026-10-18):** The fixed four-tab model is documented as the decision in `docs/navigation.md` (rationale, behavior matrix, extension path). Web now keeps URL state: tabs map to `#/<tab>`, a valid hash selects the tab on load, tab changes push a history entry, browser back/forward select the tab in the URL, and an empty hash is normalised with `replaceState`. Shell-level Android back returns to Workout from any secondary tab and lets Workout exit; the logger's own handler keeps precedence. The logic lives in `src/navigation/tabRoutes.ts`, `useWebTabHistory.ts`, and `useAndroidBackToWorkout.ts`, with tests in `tests/unit/navigation.test.ts`.
 - **Done when:** The product decision is documented and the chosen behavior is covered by tests.
 
 ### ARCH-10 — Dead code and unnecessarily public exports
@@ -752,10 +753,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PROD-05 — No deep links or web URL state
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `App.tsx` has no linking integration, and no code writes browser history. External links are limited to exercise references in `src/utils/exercise-links.ts`.
 - **Impact:** Web refresh always returns to the Workout tab, and exercises/workouts cannot be linked to or bookmarked.
 - **Required change:** Decide whether deep links are in scope. If yes, add route state and browser history; if no, document the limitation.
+- **Implementation (2026-10-18):** Deep links are in scope for tab state only. The active tab is mirrored to the URL hash and browser history on web (see `ARCH-09`), so refresh, bookmarks, and back/forward work for all four tabs; exercise- and workout-level deep links remain out of scope and are documented in `docs/navigation.md`.
 - **Done when:** The chosen behavior is implemented or explicitly documented.
 
 ### PROD-06 — Web installability and offline shell are not configured
@@ -848,10 +850,10 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `PROD-02` Merge or close automatic backups, remote photos, and time/distance charts.
 - [ ] `PROD-03` Scope the next media/watch milestone.
 - [ ] `PROD-04` Add i18n scaffolding.
-- [ ] `PROD-05` Decide and document deep-link scope.
+- [x] `PROD-05` Decide and document deep-link scope.
 - [ ] `PROD-06` Add the web manifest/service worker or document the limitation.
 - [x] `ARCH-08` Standardize platform dispatch.
-- [ ] `ARCH-09` Decide and document the navigation model.
+- [x] `ARCH-09` Decide and document the navigation model.
 - [x] `ARCH-10` Remove dead code.
 - [ ] `ARCH-11` Tighten storage-boundary types.
 - [x] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).

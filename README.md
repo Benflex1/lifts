@@ -158,6 +158,8 @@ To build a standalone debug APK locally without relying on cloud services:
 - [Product Roadmap](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
 - [Release & Verification Checklist](docs/release-checklist.md) (including signing and publishing)
+- [Navigation Model](docs/navigation.md)
+- [Platform Dispatch](docs/platform-dispatch.md)
 - [Multi-Gym Tracking & Machine Isolation Design Spec](docs/superpowers/specs/2026-09-10-multi-gym-tracking-design.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)

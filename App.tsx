@@ -38,8 +38,11 @@ import {
   createActivationEmitter,
 } from './src/hooks/useReloadOnActivate';
 import { useTabRetention } from './src/hooks/useTabRetention';
+import type { TabKey } from './src/navigation/tabRoutes';
+import { useWebTabHistory } from './src/navigation/useWebTabHistory';
+import { useAndroidBackToWorkout } from './src/navigation/useAndroidBackToWorkout';
 
-type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
+type Tab = TabKey;
 
 const TABS: { key: Tab; label: string; icon: typeof Dumbbell }[] = [
   { key: 'workout', label: 'Workout', icon: Dumbbell },
@@ -82,6 +85,10 @@ function MainAppContent() {
     setCurrentTab(tab);
     mountTab(tab);
   };
+
+  // ARCH-09/PROD-05: web URL history and shell-level Android back navigation.
+  useWebTabHistory({ tab: currentTab, onSelectTab: selectTab });
+  useAndroidBackToWorkout(currentTab, selectTab);
 
   // Warm the lazy screens shortly after startup so their first visit does not wait on the
   // network, without putting them back into the initial bundle.
