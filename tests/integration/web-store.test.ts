@@ -338,7 +338,7 @@ describe('webStore persistence and lease handling', () => {
     assert.equal(gym.name, 'Downtown');
     await store.updateGym(gym.id, { name: 'Downtown 2' });
     await store.setDefaultGym(gym.id);
-    await assert.rejects(() => store.deleteGym(gym.id, gym.id), /Replacement gym must be different/);
+    await assert.rejects(() => store.deleteGym(gym.id, gym.id), /replacement gym must be different/i);
     await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'global' });
     assert.equal((await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType, 'global');
     const snapshot = await store.readSnapshot();

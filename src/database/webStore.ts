@@ -10,14 +10,21 @@ import { reportError } from '../utils/errorReporting';
 import { validateTargetReps } from '../workout/sets';
 import {
   DEFAULT_GYM_COLOR,
-  isActiveWorkoutForGym,
   validateGymColor,
-  validateGymDeletion,
   validateGymName,
   validateWorkoutGymId,
 } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
-import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
+import {
+  canonicalizeSnapshotGyms,
+  compareBinaryStrings,
+  normalizeDraftRecord,
+  normalizeExerciseRecord,
+  normalizeRoutineRecord,
+  normalizeWorkoutRecord,
+  planGymDeletion,
+  planSnapshotMerge,
+} from './storeCore';
 import { asCompletedRecord, isInProgressRecord } from './workoutRecord';
 
 export interface WebStoreOptions {
@@ -38,75 +45,10 @@ const DEFAULT_GYM: Gym = {
   createdAt: '2026-09-10T00:00:00.000Z',
 };
 
-function normalizeWorkout(workout: Workout): Workout {
-  const exercises = workout.exercises.map((activeExercise) => {
-    const exercise = normalizeExercise(activeExercise.exercise);
-    return exercise === activeExercise.exercise ? activeExercise : { ...activeExercise, exercise };
-  });
-  const withGym = workout.gymId ? workout : { ...workout, gymId: 'gym-default' };
-  if (withGym === workout && exercises.every((exercise, index) => exercise === workout.exercises[index])) return workout;
-  return { ...withGym, exercises };
-}
-
-function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
-  const workout = normalizeWorkout(draft.workout);
-  return workout === draft.workout ? draft : { ...draft, workout };
-}
-
-function normalizeExercise(exercise: Exercise): Exercise {
-  const secondaryMuscles = Array.isArray(exercise.secondaryMuscles) ? exercise.secondaryMuscles : [];
-  const instructions = Array.isArray(exercise.instructions) ? exercise.instructions : [];
-  if (secondaryMuscles === exercise.secondaryMuscles && instructions === exercise.instructions) return exercise;
-  return { ...exercise, secondaryMuscles, instructions };
-}
-
-function normalizeRoutine(routine: Routine): Routine {
-  const exercises = routine.exercises.map((routineExercise) => {
-    const exercise = normalizeExercise(routineExercise.exercise);
-    return exercise === routineExercise.exercise ? routineExercise : { ...routineExercise, exercise };
-  });
-  if (exercises.every((exercise, index) => exercise === routine.exercises[index])) return routine;
-  return { ...routine, exercises };
-}
-
-function compareBinaryStrings(a: string, b: string): number {
-  const aCodePoints = Array.from(a);
-  const bCodePoints = Array.from(b);
-  const length = Math.min(aCodePoints.length, bCodePoints.length);
-  for (let index = 0; index < length; index++) {
-    const difference = aCodePoints[index].codePointAt(0)! - bCodePoints[index].codePointAt(0)!;
-    if (difference !== 0) return difference;
-  }
-  return aCodePoints.length - bCodePoints.length;
-}
-
 function compareHealthSyncRecords(a: HealthSyncRecord, b: HealthSyncRecord): number {
   return compareBinaryStrings(a.attemptedAt, b.attemptedAt)
     || compareBinaryStrings(a.workoutId, b.workoutId)
     || compareBinaryStrings(a.provider, b.provider);
-}
-
-function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
-  return a.exerciseId === b.exerciseId && a.scopeType === b.scopeType
-    && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
-}
-
-function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
-  if (!Array.isArray(snapshot.gyms)) return snapshot;
-  return {
-    ...snapshot,
-    gyms: snapshot.gyms.map((gym) => {
-      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
-      if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
-        throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
-      }
-      return {
-        ...gym,
-        name: validateGymName(gym.name),
-        color: validateGymColor(gym.color),
-      };
-    }),
-  };
 }
 
 export async function createWebStore(name: string = 'lifts_web_db', options?: WebStoreOptions): Promise<WebStore> {
@@ -427,13 +369,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         const draftsReq = draftStore.getAll();
         workoutsReq.onsuccess = () => {
           for (const workout of workoutsReq.result as Workout[]) {
-            const normalized = normalizeWorkout(workout);
+            const normalized = normalizeWorkoutRecord(workout);
             if (normalized !== workout) workoutStore.put(normalized);
           }
         };
         draftsReq.onsuccess = () => {
           for (const draft of draftsReq.result as WorkoutDraft[]) {
-            const normalized = normalizeDraft(draft);
+            const normalized = normalizeDraftRecord(draft);
             if (normalized !== draft) draftStore.put(normalized);
           }
         };
@@ -474,7 +416,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const req = tx.objectStore('exercises').getAll();
       req.onsuccess = () => {
         const list = req.result as Exercise[];
-        const normalized = list.map(normalizeExercise);
+        const normalized = list.map(normalizeExerciseRecord);
         normalized.sort((a, b) => a.name.localeCompare(b.name));
         cachedExercises = normalized;
         resolve(normalized);
@@ -543,58 +485,55 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> {
-    if (id === replacementGymId) throw new Error('Replacement gym must be different');
-    const database = await openDb(); await verifyAndRenewLease(database);
-    validateGymDeletion(id, replacementGymId, await getGyms(), activeWorkoutGymId);
+    const database = await openDb();
+    await verifyAndRenewLease(database);
+
+    const [gyms, drafts, scopes, rawWorkouts] = await Promise.all([
+      getGyms(),
+      getWorkoutDrafts(),
+      getExerciseGymScopes(),
+      new Promise<Workout[]>((resolve, reject) => {
+        const tx = database.transaction('workouts', 'readonly');
+        const req = tx.objectStore('workouts').getAll();
+        req.onsuccess = () => resolve((req.result as Workout[]) || []);
+        req.onerror = () => reject(req.error);
+      }),
+    ]);
+
+    const plan = planGymDeletion({
+      gymId: id,
+      replacementGymId,
+      gyms,
+      activeWorkoutGymId,
+      drafts,
+      scopes,
+      inProgressWorkoutIds: rawWorkouts
+        .filter((record) => isInProgressRecord(record) && (record.gymId || 'gym-default') === id)
+        .map((record) => record.id),
+    });
+
     await new Promise<void>((resolve, reject) => {
       const tx = database.transaction(['gyms', 'workouts', 'workout_drafts', 'exercise_gym_scopes'], 'readwrite');
-      let validationError: unknown = null;
-      const gyms = tx.objectStore('gyms'); const workouts = tx.objectStore('workouts'); const drafts = tx.objectStore('workout_drafts'); const scopes = tx.objectStore('exercise_gym_scopes');
-      const all = gyms.getAll();
-      all.onsuccess = () => {
-        const rows = all.result as Gym[];
-        validateGymDeletion(id, replacementGymId, rows, activeWorkoutGymId);
-        const removed = rows.find(g => g.id === id)!;
-        const dr = drafts.getAll();
-        dr.onerror = () => {
-          validationError = dr.error;
-          tx.abort();
-        };
-        dr.onsuccess = () => {
-          try {
-            if ((dr.result as WorkoutDraft[]).some((draft) => isActiveWorkoutForGym(normalizeDraft(draft).workout, id))) {
-              throw new Error('cannot delete the gym used by an active workout draft');
-            }
-            for (const gym of rows) gyms.put({ ...gym, isDefault: removed.isDefault ? gym.id === replacementGymId : gym.isDefault });
-            for (const draft of dr.result as WorkoutDraft[]) {
-              const normalizedDraft = normalizeDraft(draft);
-              if (normalizedDraft.workout.gymId === id) {
-                drafts.put({ ...normalizedDraft, workout: { ...normalizedDraft.workout, gymId: replacementGymId } });
-              }
-            }
-            const wr = workouts.getAll(); wr.onsuccess = () => (wr.result as Workout[]).forEach(w => { if (w.gymId === id) workouts.put({ ...w, gymId: replacementGymId }); });
-            const sr = scopes.getAll(); sr.onsuccess = () => {
-              for (const scope of sr.result as ExerciseGymScope[]) {
-                if (!scope.linkedGymIds?.includes(id)) continue;
-                const ids = scope.linkedGymIds.filter(g => g !== id);
-                if (ids.length === 0) scopes.delete(scope.exerciseId);
-                else scopes.put({ ...scope, scopeType: ids.length < 2 ? 'gym_specific' : 'linked_group', linkedGymIds: ids.length < 2 ? undefined : ids });
-              }
-              gyms.delete(id);
-            };
-          } catch (error) {
-            validationError = error;
-            tx.abort();
-          }
-        };
-      };
-      all.onerror = () => {
-        validationError = all.error;
-        tx.abort();
-      };
+      const gymsStore = tx.objectStore('gyms');
+      const workoutsStore = tx.objectStore('workouts');
+      const draftsStore = tx.objectStore('workout_drafts');
+      const scopesStore = tx.objectStore('exercise_gym_scopes');
+
+      for (const record of rawWorkouts) {
+        if ((record.gymId || 'gym-default') === id) workoutsStore.put({ ...record, gymId: replacementGymId });
+      }
+      for (const { id: draftId, draft } of plan.reassignDrafts) draftsStore.put({ ...draft, id: draftId });
+      for (const { exerciseId, scope } of plan.scopeWrites) {
+        if (scope) scopesStore.put(scope);
+        else scopesStore.delete(exerciseId);
+      }
+      if (plan.makeDefault) {
+        for (const gym of gyms) gymsStore.put({ ...gym, isDefault: gym.id === replacementGymId });
+      }
+      gymsStore.delete(id);
+
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(validationError || tx.error);
-      tx.onabort = () => reject(validationError || tx.error || new Error('Gym deletion aborted'));
+      tx.onerror = () => reject(tx.error);
     });
   }
 
@@ -627,7 +566,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return new Promise((resolve, reject) => {
       const tx = database.transaction('exercises', 'readonly');
       const req = tx.objectStore('exercises').get(id);
-      req.onsuccess = () => resolve(req.result ? normalizeExercise(req.result as Exercise) : null);
+      req.onsuccess = () => resolve(req.result ? normalizeExerciseRecord(req.result as Exercise) : null);
       req.onerror = () => reject(req.error);
     });
   }
@@ -636,7 +575,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     const database = await openDb();
     await verifyAndRenewLease(database);
 
-    const custom = normalizeExercise({
+    const custom = normalizeExerciseRecord({
       ...exercise,
       id: (exercise as any).id || createScopedId('custom'),
       isCustom: true,
@@ -688,7 +627,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       throw new Error('Exercise name cannot be empty');
     }
 
-    const updated = normalizeExercise({
+    const updated = normalizeExerciseRecord({
       ...existing,
       ...updates,
       name: updatedName,
@@ -795,7 +734,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const routines = req.result as Routine[];
         routines.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        resolve(routines.map(normalizeRoutine));
+        resolve(routines.map(normalizeRoutineRecord));
       };
       req.onerror = () => reject(req.error);
     });
@@ -806,7 +745,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return new Promise((resolve, reject) => {
       const tx = database.transaction('routines', 'readonly');
       const req = tx.objectStore('routines').get(id);
-      req.onsuccess = () => resolve(req.result ? normalizeRoutine(req.result as Routine) : null);
+      req.onsuccess = () => resolve(req.result ? normalizeRoutineRecord(req.result as Routine) : null);
       req.onerror = () => reject(req.error);
     });
   }
@@ -943,7 +882,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       gymRequest.onsuccess = () => {
         try {
           const gymId = validateWorkoutGymId(workout.gymId, gymRequest.result as Gym[]);
-          const validatedWorkout = normalizeWorkout({ ...workout, gymId });
+          const validatedWorkout = normalizeWorkoutRecord({ ...workout, gymId });
           // Only completed workouts belong in the workouts store; the explicit
           // marker mirrors native's `in_progress = 0` write and lets every read
           // path filter foreign records with the same rule.
@@ -984,7 +923,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const workouts = (req.result as Workout[])
           .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkout);
+          .map(normalizeWorkoutRecord);
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         resolve(workouts);
       };
@@ -1018,7 +957,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const record = req.result as Workout | undefined;
         // Mirrors native's `AND in_progress = 0` guard on the detail query.
-        resolve(record && !isInProgressRecord(record) ? normalizeWorkout(record) : null);
+        resolve(record && !isInProgressRecord(record) ? normalizeWorkoutRecord(record) : null);
       };
       req.onerror = () => reject(req.error);
     });
@@ -1099,7 +1038,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const workouts = (req.result as Workout[])
           .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkout)
+          .map(normalizeWorkoutRecord)
           .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
@@ -1137,7 +1076,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const allWorkouts = (req.result as Workout[])
           .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkout);
+          .map(normalizeWorkoutRecord);
         allWorkouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         const result: Record<string, Workout[]> = {};
         for (const id of idSet) {
@@ -1164,7 +1103,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const workouts = (req.result as Workout[])
           .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkout)
+          .map(normalizeWorkoutRecord)
           .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
         resolve(calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined));
       };
@@ -1202,7 +1141,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         // reassignment must not rewrite them either.
         const workouts = ((workoutReq.result as Workout[]) || [])
           .filter(record => !isInProgressRecord(record))
-          .map(normalizeWorkout);
+          .map(normalizeWorkoutRecord);
         for (const w of workouts) {
           let hasMatch = false;
           let workoutSetCount = 0;
@@ -1262,7 +1201,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
-    draft = normalizeDraft(draft);
+    draft = normalizeDraftRecord(draft);
     const database = await openDb();
     await verifyAndRenewLease(database);
 
@@ -1283,7 +1222,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const tx = database.transaction('workout_drafts', 'readonly');
       const req = tx.objectStore('workout_drafts').getAll();
       req.onsuccess = () => {
-        const drafts = (req.result as WorkoutDraft[]).map(normalizeDraft);
+        const drafts = (req.result as WorkoutDraft[]).map(normalizeDraftRecord);
         drafts.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
         resolve(drafts);
       };
@@ -1297,7 +1236,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       return new Promise((resolve, reject) => {
         const tx = database.transaction('workout_drafts', 'readonly');
         const req = tx.objectStore('workout_drafts').get(id);
-        req.onsuccess = () => resolve(req.result ? normalizeDraft(req.result as WorkoutDraft) : null);
+        req.onsuccess = () => resolve(req.result ? normalizeDraftRecord(req.result as WorkoutDraft) : null);
         req.onerror = () => reject(req.error);
       });
     }
@@ -1416,64 +1355,33 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     snapshot = canonicalizeSnapshotGyms(snapshot);
 
     const existing = await readSnapshot();
-    const destinationGyms = existing.gyms;
-    const incomingGyms = snapshot.gyms || [];
-    validateSharedSnapshotForMerge(snapshot, existing);
-    const knownExerciseIds = new Set([...existing.exercises.map(exercise => exercise.id), ...snapshot.exercises.map(exercise => exercise.id)]);
-    const existingScopes = new Map(existing.exerciseGymScopes.map(scope => [scope.exerciseId, scope]));
-    for (const scope of snapshot.exerciseGymScopes || []) {
-      const existingScope = existingScopes.get(scope.exerciseId);
-      if (existingScope && !scopesAreIdentical(scope, existingScope)) throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
-    }
+    const plan = planSnapshotMerge(snapshot, existing);
 
     await new Promise<void>((resolve, reject) => {
       const tx = database.transaction(['exercises', 'routines', 'workouts', 'workout_drafts', 'settings', 'gyms', 'exercise_gym_scopes'], 'readwrite');
 
       const gymStore = tx.objectStore('gyms');
-      const destinationGymIds = new Set(destinationGyms.map((gym) => gym.id));
-      for (const gym of incomingGyms) {
-        if (!destinationGymIds.has(gym.id)) gymStore.put({ ...gym, isDefault: false });
-      }
+      for (const gym of plan.gymsToInsert) gymStore.put(gym);
+
       const scopeStore = tx.objectStore('exercise_gym_scopes');
-      for (const scope of snapshot.exerciseGymScopes || []) {
-        if (!existingScopes.has(scope.exerciseId)) scopeStore.put(scope);
-      }
+      for (const scope of plan.scopesToInsert) scopeStore.put(scope);
 
       const exStore = tx.objectStore('exercises');
-      for (const ex of snapshot.exercises) {
-        exStore.put(normalizeExercise(ex));
-      }
+      for (const exercise of plan.exercisesToUpsert) exStore.put(exercise);
 
       const rtStore = tx.objectStore('routines');
-      for (const rt of snapshot.routines) {
-        rtStore.put(normalizeRoutine(rt));
-      }
+      for (const routine of plan.routinesToUpsert) rtStore.put(routine);
 
+      // Imported workouts are stored as completed records, mirroring native's
+      // `in_progress = 0` insert.
       const wStore = tx.objectStore('workouts');
-      for (const w of snapshot.workouts) {
-        // Mirrors native's merge, which inserts every snapshot workout with
-        // `in_progress = 0`, so a legacy backup cannot import in-progress rows.
-        wStore.put(asCompletedRecord(normalizeWorkout(w)));
-      }
+      for (const workout of plan.workoutsToUpsert) wStore.put(workout);
 
       const dStore = tx.objectStore('workout_drafts');
-      for (const d of snapshot.drafts) {
-        dStore.put({
-          ...normalizeDraft(d),
-          id: d.workout.id,
-        });
-      }
+      for (const { id, draft } of plan.draftsToUpsert) dStore.put({ ...draft, id });
 
       const sStore = tx.objectStore('settings');
-      for (const [k, v] of Object.entries(snapshot.settings)) {
-        if (k === 'health_sync_enabled') continue;
-        const getReq = sStore.get(k);
-        getReq.onsuccess = () => {
-          if (!getReq.result) {
-            sStore.put({ key: k, value: v });
-          }
-        };
-      }
+      for (const { key, value } of plan.settingsToInsert) sStore.put({ key, value });
 
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

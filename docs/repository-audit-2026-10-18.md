@@ -380,14 +380,16 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-04 — Native and web stores are forked implementations with behavioral drift
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `nativeStore.ts` (1,569 lines) and `webStore.ts` (1,535 lines) expose 44 identically named methods and duplicate normalization, merge, and deletion logic. Known divergence: native gym deletion rejects in-progress references at `nativeStore.ts:252-294`, while web reassigns workouts at `webStore.ts:534-588`. Web's `(workout as any).inProgress` filter at `webStore.ts:1112` is dead because the field is not in the `Workout` type.
 - **Impact:** Every domain rule must be implemented and tested twice. Platform parity bugs are likely to recur.
 - **Required change:** Extract a storage-agnostic `StoreCore` for normalization, validation, merge planning, and deletion policy. Keep the SQL and IndexedDB files as thin adapters. Add a shared contract suite that runs identical scenarios against both stores.
+- **Implementation (2026-10-18):** New `src/database/storeCore.ts` owns the shared domain logic: record normalizers (`normalizeExerciseRecord`, `normalizeWorkoutRecord`, `normalizeRoutineRecord`, `normalizeDraftRecord`), snapshot canonicalization (`canonicalizeSnapshotGyms`), conflict validation (`validateSnapshotMergeConflicts` — the stricter native checks now also guard web), snapshot merge planning (`planSnapshotMerge`, which returns the exact records to persist in dependency order), and gym deletion policy (`planGymDeletion` + `pruneGymFromScopes`). Both adapters deleted their private copies and now only read/write storage around these plans; `DEFAULT_GYM_ID` now lives in `gym-profile.ts`. The COR-01 completion marker is applied inside the merge plan so imported records are completed on both platforms. Web also gained native's duplicate-scope and unknown-exercise merge validation for free.
+- **Verification:** `tests/helpers/storeContract.ts` + `tests/integration/store-contract.test.ts` run 7 identical scenarios on both platforms (seed idempotency, workout round-trip, draft round-trip, gym-deletion policy incl. active drafts and in-progress records, merge import + scope conflicts). Full suites still pass after the extraction (167 integration / 526 unit). One web-only test message assertion (`Replacement gym…`) was aligned to the shared policy message.
 - **Done when:**
-  - [ ] Shared domain logic lives in one module.
-  - [ ] The contract suite runs against both stores in integration tests.
-  - [ ] The known gym-deletion divergence is resolved or explicitly documented as intentional.
+  - [x] Shared domain logic lives in one module.
+  - [x] The contract suite runs against both stores in integration tests.
+  - [x] The known gym-deletion divergence is resolved or explicitly documented as intentional.
 
 ### ARCH-05 — Exercise picker and Exercises screen duplicate roughly 200 lines
 
@@ -472,10 +474,12 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### COR-02 — Gym deletion policy diverges between native and web
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** Native rejects deletion when a draft or in-progress workout references the gym (`nativeStore.ts:258-271`). Web rejects only draft references and silently reassigns workouts (`webStore.ts:554-564`).
 - **Impact:** The same user action succeeds on web and fails on native, with different data consequences.
 - **Required change:** Define one policy in `StoreCore` and apply it on both platforms.
+- **Implementation (2026-10-18):** `planGymDeletion` in `src/database/storeCore.ts` is the single policy: `validateGymDeletion`, rejection while an active draft or an in-progress stored workout references the gym, then a plan for draft/scope rewrites and default inheritance. Native feeds it `getWorkoutDrafts()`/`getExerciseGymScopes()` and an `in_progress = 1` query; web feeds the same readers plus raw records marked `inProgress` (via the COR-01 marker). Web now rejects in-progress references instead of silently reassigning; error messages are identical across platforms.
+- **Verification:** Store contract suite scenarios "rejects gym deletion while an active draft references the gym", "rejects gym deletion while an in-progress workout references the gym", and "deletes a gym and reassigns workouts, scope links, and default status" pass on both stores.
 - **Done when:** A parity test exercises gym deletion with drafts and in-progress workouts on both stores.
 
 ### COR-03 — Refresh signatures omit relevant fields
@@ -732,7 +736,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `ARCH-01` Decompose `ActiveWorkoutScreen`.
 - [ ] `ARCH-02` Decompose `AnalyticsScreen`.
 - [ ] `ARCH-03` Split `WorkoutProvider` into focused hooks.
-- [ ] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
+- [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
 - [ ] `ARCH-05` Deduplicate custom-exercise UI.
 - [ ] `ARCH-06` Add repository/domain hooks.
 - [ ] `ARCH-07` Add a store revision counter and invalidation.
@@ -740,7 +744,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
 - [ ] `PERF-14` Add IndexedDB indexes and indexed history reads.
 - [x] `COR-01` Fix the web completion filter.
-- [ ] `COR-02` Unify gym deletion policy.
+- [x] `COR-02` Unify gym deletion policy.
 - [ ] `COR-03` Replace partial signatures with the revision counter.
 
 **Exit criteria:** No screen exceeds roughly 600 lines; shared domain rules live in one module; both stores pass the same contract suite; cold-start catalog work is eliminated once seeded.
