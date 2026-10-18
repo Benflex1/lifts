@@ -10,7 +10,7 @@ export interface ReadNativeFileOptions {
       uri: string,
       options?: { encoding?: EncodingType | 'utf8' | 'base64' },
     ) => Promise<string>;
-    EncodingType?: { UTF8: EncodingType };
+    EncodingType?: { UTF8: EncodingType | 'utf8' | 'base64' };
   };
   fetchFn?: typeof fetch;
   fileConstructor?: FileConstructor;

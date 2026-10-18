@@ -14,6 +14,7 @@ import {
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 import { useModalAccessibility } from '../../hooks/useModalAccessibility';
+import { useI18n } from '../../i18n';
 
 export interface WorkoutOptionsMenuProps {
   visible: boolean;
@@ -48,6 +49,7 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
   onToggleRpeColumn,
   onDiscard,
 }) => {
+  const { t } = useI18n();
   // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
   const modalA11yRef = useModalAccessibility(visible);
 
@@ -72,7 +74,7 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
               onPress={onClose}
               style={styles.modalCloseBtn}
               accessibilityRole="button"
-              accessibilityLabel="Close workout options"
+              accessibilityLabel={t('menu.close')}
             >
               <X size={20} color={colors.textSecondary} />
             </AppTouchable>
@@ -82,30 +84,30 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
             style={styles.menuItem}
             onPress={onExpandAll}
             accessibilityRole="button"
-            accessibilityLabel="Expand all exercises"
+            accessibilityLabel={t('menu.expandAll')}
           >
             <ChevronDown size={18} color={colors.textSecondary} />
-            <Text style={styles.menuItemText}>Expand All Exercises</Text>
+            <Text style={styles.menuItemText}>{t('menu.expandAllVisible')}</Text>
           </AppTouchable>
 
           <AppTouchable
             style={styles.menuItem}
             onPress={onCollapseAll}
             accessibilityRole="button"
-            accessibilityLabel="Collapse all exercises"
+            accessibilityLabel={t('menu.collapseAll')}
           >
             <ChevronUp size={18} color={colors.textSecondary} />
-            <Text style={styles.menuItemText}>Collapse All Exercises</Text>
+            <Text style={styles.menuItemText}>{t('menu.collapseAllVisible')}</Text>
           </AppTouchable>
 
           <AppTouchable
             style={styles.menuItem}
             onPress={onReorder}
             accessibilityRole="button"
-            accessibilityLabel="Reorder exercises"
+            accessibilityLabel={t('menu.reorder')}
           >
             <ArrowUpDown size={18} color={colors.textSecondary} />
-            <Text style={styles.menuItemText}>Reorder Exercises</Text>
+            <Text style={styles.menuItemText}>{t('menu.reorderVisible')}</Text>
           </AppTouchable>
 
           {gymTrackingEnabled && activeGymName && (
@@ -113,11 +115,11 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
               style={styles.menuItem}
               onPress={onChangeGym}
               accessibilityRole="button"
-              accessibilityLabel={`Change workout gym, currently ${activeGymName}`}
+              accessibilityLabel={t('menu.changeGymA11y', { gym: activeGymName })}
             >
               <MapPin size={18} color={colors.textSecondary} />
               <Text style={styles.menuItemText} numberOfLines={1}>
-                Change Gym · {activeGymName}
+                {t('menu.changeGym', { gym: activeGymName })}
               </Text>
             </AppTouchable>
           )}
@@ -126,21 +128,21 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
             style={styles.menuItem}
             onPress={onAdjustDuration}
             accessibilityRole="button"
-            accessibilityLabel="Adjust workout duration"
+            accessibilityLabel={t('menu.adjustTime')}
           >
             <Clock size={18} color={colors.textSecondary} />
-            <Text style={styles.menuItemText}>Adjust Workout Time</Text>
+            <Text style={styles.menuItemText}>{t('menu.adjustTimeVisible')}</Text>
           </AppTouchable>
 
           <AppTouchable
             style={styles.menuItem}
             onPress={onToggleRpeColumn}
             accessibilityRole="button"
-            accessibilityLabel={showRpeColumn ? 'Hide RPE column' : 'Show RPE column'}
+            accessibilityLabel={showRpeColumn ? t('menu.hideRpeA11y') : t('menu.showRpeA11y')}
           >
             <Gauge size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>
-              {showRpeColumn ? 'Hide RPE Column' : 'Show RPE Column'}
+              {showRpeColumn ? t('menu.hideRpe') : t('menu.showRpe')}
             </Text>
           </AppTouchable>
 
@@ -148,10 +150,10 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
             style={[styles.menuItem, styles.menuItemDestructive]}
             onPress={onDiscard}
             accessibilityRole="button"
-            accessibilityLabel="Discard workout"
+            accessibilityLabel={t('menu.discardA11y')}
           >
             <Trash2 size={18} color={colors.danger} />
-            <Text style={styles.menuItemTextDestructive}>Discard Workout</Text>
+            <Text style={styles.menuItemTextDestructive}>{t('menu.discard')}</Text>
           </AppTouchable>
         </View>
       </AppTouchable>

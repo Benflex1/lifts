@@ -5,6 +5,7 @@ import { Timer, Plus, Minus, X } from 'lucide-react-native';
 import { useRestTimer, useWorkout } from '../context/WorkoutContext';
 import { formatTimer } from '../utils/calculator';
 import { colors } from '../theme';
+import { useI18n } from '../i18n';
 
 export interface RestTimerOverlayProps {
   nextUpText?: string | null;
@@ -12,6 +13,7 @@ export interface RestTimerOverlayProps {
 }
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, bottomOffset }) => {
+  const { t } = useI18n();
   const { adjustRestTimer, stopRestTimer } = useWorkout();
   const restTimer = useRestTimer();
 
@@ -55,12 +57,14 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
           </View>
           <View>
             <Text style={[styles.timerTitle, isWarning && styles.timerTitleWarning]}>
-              {isWarning ? `Get Ready! (${restTimer.remainingSeconds})` : 'Rest Time'}
+              {isWarning
+                ? t('rest.getReady', { seconds: restTimer.remainingSeconds })
+                : t('rest.title')}
             </Text>
             <Text
               style={[styles.timerCountdown, { color: accentColor }]}
               accessibilityRole="timer"
-              accessibilityLabel="Rest time remaining"
+              accessibilityLabel={t('rest.remaining')}
               accessibilityValue={{ text: formatTimer(restTimer.remainingSeconds) }}
               accessibilityLiveRegion="polite"
             >
@@ -76,7 +80,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
             onPress={() => adjustRestTimer(-30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
-            accessibilityLabel="Decrease rest timer by 30 seconds"
+            accessibilityLabel={t('rest.decrease')}
           >
             <Minus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
@@ -87,7 +91,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
             onPress={() => adjustRestTimer(30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
-            accessibilityLabel="Increase rest timer by 30 seconds"
+            accessibilityLabel={t('rest.increase')}
           >
             <Plus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
@@ -98,7 +102,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
             onPress={stopRestTimer}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
-            accessibilityLabel="Skip rest"
+            accessibilityLabel={t('rest.skip')}
           >
             <X size={18} color={colors.textSoft} />
           </AppTouchable>
@@ -109,7 +113,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
       {nextUpText ? (
         <View style={styles.nextUpContainer}>
           <View style={styles.nextUpBadge}>
-            <Text style={styles.nextUpBadgeText}>NEXT</Text>
+            <Text style={styles.nextUpBadgeText}>{t('rest.next')}</Text>
           </View>
           <Text style={styles.nextUpText} numberOfLines={1}>
             {nextUpText}

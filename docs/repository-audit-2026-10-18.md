@@ -745,10 +745,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PROD-04 — No localization or i18n infrastructure
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The app is English-only; no i18n library, message catalog, or locale-aware formatting layer exists.
 - **Impact:** International adoption is limited, and retrofitting strings after more UI work is more expensive.
 - **Required change:** Introduce a minimal message catalog and locale-aware number/date formatting before expanding the string surface.
+- **Implementation (2026-10-18):** Added `src/i18n/` with a typed catalog (`en` is the key source and `de` must implement every key at compile time), a `translate` helper with `{placeholder}` interpolation and English fallback, and `I18nProvider`/`useI18n` (switching locales re-renders consumers; isolated component renders fall back to English for tests). The navigation shell, Workout screen, routine cards, workout header, workout options menu, and rest overlay now read all visible copy and accessibility labels from the catalog, with German as the proof locale. Remaining screens are tracked in `PROD-07` so the migration continues screen by screen. Tests: `tests/unit/i18n.test.ts` (interpolation, fallbacks, provider switching, and a real surface rendered in German).
 - **Done when:** User-facing strings are centralized and a second locale can be added without touching screen logic.
 
 ### PROD-05 — No deep links or web URL state
@@ -779,6 +780,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Impact:** Indexed reads (`array[i]`, `record[key]`) are typed as always present, so guards are only written where the author remembers; parser and chart code is the most exposed.
 - **Required change:** Enable the flag (optionally together with `exactOptionalPropertyTypes`), fix the reported reads with local guards or `requireDefined`, and keep the flag on in CI.
 - **Done when:** `tsc --noEmit` is clean with `noUncheckedIndexedAccess` enabled and the tsconfig flag is committed.
+
+### PROD-07 — Localize the remaining screens
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `PROD-04` introduced the catalog and provider and converted the navigation shell, Workout screen, routine cards, workout header, workout options menu, and rest overlay. The logger's set/exercise surfaces, history, analytics, exercises, settings, dialogs, and import/export flows still contain hardcoded English strings.
+- **Impact:** A second locale is selectable in principle but those screens would render mixed languages.
+- **Required change:** Move the remaining user-facing strings and accessibility labels into the catalog, screen by screen, and add tests for the highest-traffic ones.
+- **Done when:** No user-facing string literals remain in screen or component code (catalog and formatting exceptions only).
 
 ---
 
@@ -868,6 +878,8 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-10` Remove dead code.
 - [x] `ARCH-11` Tighten storage-boundary types.
 - [x] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
+- [x] `PROD-04` Add i18n scaffolding.
+- [ ] `PROD-07` Localize the remaining screens (deferred residual from PROD-04).
 - [ ] `ARCH-14` Enable `noUncheckedIndexedAccess` (deferred residual: 261 reported reads).
 
 ---
