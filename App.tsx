@@ -21,10 +21,15 @@ import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
 import { DraftResumeBanner } from './src/components/DraftResumeBanner';
 import { ReadOnlyBanner } from './src/components/ReadOnlyBanner';
+import { PersistenceErrorBanner } from './src/components/PersistenceErrorBanner';
+import { AppErrorBoundary } from './src/components/AppErrorBoundary';
+import { setErrorSink } from './src/utils/errorReporting';
+import { setSetting } from './src/database/db';
 import { DialogProvider } from './src/context/DialogContext';
 import { WorkoutSummaryModal } from './src/components/WorkoutSummaryModal';
 import { Workout } from './src/types';
 import { saveCompletedWorkout } from './src/database/db';
+import { saveCompletedWorkoutEdit } from './src/workout/completion';
 import { colors } from './src/theme';
 import {
   ActivationEmitter,
@@ -42,7 +47,7 @@ const TABS: { key: Tab; label: string; icon: typeof Dumbbell }[] = [
 ];
 
 function MainAppContent() {
-  const { isWorkingOut, isMinimized, gyms } = useWorkout();
+  const { isWorkingOut, isMinimized, gyms, activeWorkout } = useWorkout();
   const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
   // Tabs are mounted on first visit and then kept alive (hidden) so switching back is instant.
@@ -95,7 +100,7 @@ function MainAppContent() {
   };
 
   const handleSummaryWorkoutUpdate = async (updated: Workout) => {
-    await saveCompletedWorkout(updated);
+    await saveCompletedWorkoutEdit(updated, saveCompletedWorkout);
     setCompletedWorkout(updated);
     setHistoryWorkoutUpdate(updated);
   };
@@ -103,6 +108,9 @@ function MainAppContent() {
   return (
     <View style={styles.appWrapper}>
       <StatusBar style="light" />
+
+      {/* Autosave failures must stay visible over both tabs and the logger. */}
+      <PersistenceErrorBanner workout={activeWorkout} />
 
       {/* Completion summary modal surviving logger unmount */}
       <WorkoutSummaryModal
@@ -116,7 +124,9 @@ function MainAppContent() {
       {showLogger && (
         <View style={styles.appWrapper}>
           <ReadOnlyBanner />
-          <ActiveWorkoutScreen onFinish={handleWorkoutCompleted} />
+          <AppErrorBoundary label="Active workout">
+            <ActiveWorkoutScreen onFinish={handleWorkoutCompleted} />
+          </AppErrorBoundary>
         </View>
       )}
 
@@ -127,12 +137,17 @@ function MainAppContent() {
           {TABS.map(tab =>
             visitedTabs.has(tab.key) ? (
               <View key={tab.key} style={[styles.tabPane, currentTab !== tab.key && styles.hidden]}>
-                <TabActivationContext.Provider value={tabEmitters[tab.key]}>
-                  {tab.key === 'workout' && <WorkoutScreen />}
-                  {tab.key === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
-                  {tab.key === 'exercises' && <ExercisesScreen />}
-                  {tab.key === 'analytics' && <AnalyticsScreen />}
-                </TabActivationContext.Provider>
+                <AppErrorBoundary
+                  label={tab.label}
+                  resetKey={currentTab === tab.key ? `${tab.key}:visible` : `${tab.key}:hidden`}
+                >
+                  <TabActivationContext.Provider value={tabEmitters[tab.key]}>
+                    {tab.key === 'workout' && <WorkoutScreen />}
+                    {tab.key === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
+                    {tab.key === 'exercises' && <ExercisesScreen />}
+                    {tab.key === 'analytics' && <AnalyticsScreen />}
+                  </TabActivationContext.Provider>
+                </AppErrorBoundary>
               </View>
             ) : null,
           )}
@@ -217,13 +232,37 @@ function AppRoot() {
 }
 
 export default function App() {
+  // Persist the latest error breadcrumb so a crash survives a reload and can be
+  // inspected afterwards. Best-effort: storage may be the failing dependency, so
+  // write failures are intentionally ignored here.
+  useEffect(() => {
+    let lastRecord = '';
+    setErrorSink((error, context) => {
+      const record = JSON.stringify({
+        message: error.message,
+        scope: context.scope,
+        componentStack:
+          typeof context.componentStack === 'string' ? context.componentStack : null,
+        at: new Date().toISOString(),
+      });
+      if (record === lastRecord) return;
+      lastRecord = record;
+      setSetting('last_app_error', record).catch(() => {
+        // Intentional: the in-memory breadcrumb is already recorded.
+      });
+    });
+    return () => setErrorSink(null);
+  }, []);
+
   return (
     <SafeAreaProvider>
-      <StorageProvider>
-        <DialogProvider>
-          <AppRoot />
-        </DialogProvider>
-      </StorageProvider>
+      <AppErrorBoundary label="App">
+        <StorageProvider>
+          <DialogProvider>
+            <AppRoot />
+          </DialogProvider>
+        </StorageProvider>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }

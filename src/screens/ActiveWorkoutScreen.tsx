@@ -45,6 +45,7 @@ import {
   Feather,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useIsRestTimerActive, useWorkout, useWorkoutClock } from '../context/WorkoutContext';
 import { computeElapsedSeconds } from '../utils/timer';
@@ -224,15 +225,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     );
 
     if (Platform.OS !== 'web') {
-      try {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
+      bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
     }
   };
 
   const handleMoveExercise = (activeExerciseId: string, direction: -1 | 1) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }
     moveExercise(activeExerciseId, direction);
@@ -240,7 +239,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   const handleMoveExerciseToIndex = (activeExerciseId: string, targetIndex: number) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }
     moveExerciseToIndex(activeExerciseId, targetIndex);
@@ -330,9 +329,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       if (!previousCompletedSetIdsRef.current.has(setId)) {
         const pr = prSummary?.setPRs.get(setId);
         if (pr?.primary) {
-          try {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch (_) {}
+          bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
           for (const ex of activeWorkout.exercises) {
             const foundSet = ex.sets.find((s) => s.id === setId);
             if (foundSet) {
@@ -382,9 +379,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     if (set.isCompleted) return;
     if (set.previousWeightKg === undefined && set.previousReps === undefined) return;
     if (Platform.OS !== 'web') {
-      try {
-        Haptics.selectionAsync();
-      } catch (_) {}
+      bestEffortHaptic(() => Haptics.selectionAsync());
     }
     const fallbackReps = parseInt(targetReps || '10', 10) || 10;
     const applied = applyPreviousSetStats(set, fallbackReps);
@@ -1702,7 +1697,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       onPress={() => {
                         if (setOptionsModal && !isFirstSet) {
                           if (Platform.OS !== 'web') {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
                           }
                           moveSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, -1);
                         }
@@ -1722,7 +1717,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       onPress={() => {
                         if (setOptionsModal && !isLastSet) {
                           if (Platform.OS !== 'web') {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
                           }
                           moveSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, 1);
                         }
@@ -1828,7 +1823,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               onPress={() => {
                 if (menuActiveExercise) {
                   if (Platform.OS !== 'web') {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
                     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   }
                   moveExercise(menuActiveExercise.id, -1);
@@ -1849,7 +1844,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               onPress={() => {
                 if (menuActiveExercise) {
                   if (Platform.OS !== 'web') {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
                     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   }
                   moveExercise(menuActiveExercise.id, 1);

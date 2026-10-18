@@ -1,11 +1,12 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
-node_modules/
+node_modules
 
 # Expo
 .expo/
 dist/
+dist-*/
 web-build/
 expo-env.d.ts
 
@@ -55,3 +56,6 @@ build-artifacts/
 
 # Local feature worktrees
 .worktrees/
+
+# Generated test reports
+coverage/

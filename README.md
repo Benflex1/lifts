@@ -78,7 +78,7 @@ Lifts employs a dual-engine local storage architecture:
 ## Getting Started
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v18.0.0 or higher)
+- [Node.js](https://nodejs.org/) (v22.5.0 or higher; Node 24 is what CI and `.nvmrc` use)
 - [npm](https://www.npmjs.com/) (v9.0.0 or higher)
 - [Expo Go](https://expo.dev/client) app installed on your iOS or Android device (for standard web and non-health native development testing; it does not provide the HealthKit or Health Connect native modules)
 

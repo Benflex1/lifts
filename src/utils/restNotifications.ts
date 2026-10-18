@@ -22,7 +22,9 @@ export function isExpoGoAndroid(): boolean {
       if (typeof expo?.isRunningInExpoGo === 'function' && expo.isRunningInExpoGo()) {
         return true;
       }
-    } catch {}
+    } catch {
+      // Intentional: detection is best-effort; a failure means "not Expo Go".
+    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const mod = require('expo-constants');
@@ -33,7 +35,9 @@ export function isExpoGoAndroid(): boolean {
       ) {
         return true;
       }
-    } catch {}
+    } catch {
+      // Intentional: detection is best-effort; a failure means "not Expo Go".
+    }
     return false;
   } catch {
     return false;

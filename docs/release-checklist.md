@@ -7,7 +7,7 @@ This document details the environment requirements, build procedures, and device
 ## 1. Local Toolchain & Build Prerequisites
 
 ### General
-- **Node.js**: v18.0.0 or v20.x LTS
+- **Node.js**: v22.5.0 or higher (Node 24 matches `.nvmrc` and CI)
 - **npm**: v9.0.0 or higher
 - **Expo CLI**: bundled via repository dependencies (`npx expo`)
 

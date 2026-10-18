@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { getStore, initDatabase } from '../database/db';
+import { reportError } from '../utils/errorReporting';
 
 export interface StorageContextValue {
   isReady: boolean;
@@ -35,7 +36,7 @@ export function StorageProvider({ children }: { children: ReactNode }) {
       setIsReadOnly(Boolean(store.isReadOnly?.()));
       setIsReady(true);
     } catch (err: any) {
-      console.error('Storage initialization failed:', err);
+      reportError(err, { scope: 'storage.init' });
       setError(err?.message || 'Storage initialization failed');
       setIsReady(false);
     }
@@ -51,7 +52,7 @@ export function StorageProvider({ children }: { children: ReactNode }) {
       }
       return true;
     } catch (err: any) {
-      console.error('Failed to take over storage lease:', err);
+      reportError(err, { scope: 'storage.take-over-lease' });
       return false;
     }
   }, []);
@@ -72,7 +73,9 @@ export function StorageProvider({ children }: { children: ReactNode }) {
           });
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        reportError(err, { scope: 'storage.read-only-subscription' });
+      });
 
     return () => {
       unsubscribe?.();
@@ -87,7 +90,9 @@ export function StorageProvider({ children }: { children: ReactNode }) {
         if (store.isReadOnly) {
           setIsReadOnly(Boolean(store.isReadOnly()));
         }
-      } catch (_) {}
+      } catch (err) {
+        reportError(err, { scope: 'storage.focus-refresh' });
+      }
     };
     window.addEventListener('focus', handleFocus);
     return () => {

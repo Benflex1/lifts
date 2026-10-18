@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { X, Flame, Check, Dumbbell, Layers, Plus, Minus, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { ActiveExercise } from '../types';
 import { WeightUnit, kgToDisplay, displayToKg } from '../utils/units';
 import {
@@ -182,9 +183,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
   const handleApply = () => {
     if (includedSteps.length === 0) return;
     if (Platform.OS !== 'web') {
-      try {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch (_) {}
+      bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
     }
 
     const setsToApply = includedSteps.map((s) => ({

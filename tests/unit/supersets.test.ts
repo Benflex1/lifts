@@ -291,7 +291,7 @@ describe('Supersets and Giant Sets Engine', () => {
 
 describe('Superset Link & Unlink Membership Management', () => {
   it('links two unlinked exercises into a new superset', () => {
-    const list = [
+    const list: Array<{ id: string; supersetId?: string }> = [
       { id: 'ex-1' },
       { id: 'ex-2' },
       { id: 'ex-3' },
@@ -362,7 +362,7 @@ describe('Superset Link & Unlink Membership Management', () => {
 
 describe('Interactive Superset Grouping & Reordering Engine', () => {
   it('groups non-adjacent exercises contiguously into a new superset', () => {
-    const list = [
+    const list: Array<{ id: string; supersetId?: string }> = [
       { id: 'ex-bench' },
       { id: 'ex-squat' },
       { id: 'ex-overhead' },

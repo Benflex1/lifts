@@ -92,6 +92,7 @@ describe('CSV Import Planner', () => {
 "Morning Session B","2024-08-01T08:00:00.000Z","2024-08-01T09:00:00.000Z","","Squat (Barbell)",1,"normal",120,5,8`;
 
     const plan = computeCsvImportPlan(csvWithInFileDup, { ...baseSnapshot, workouts: [] }, {
+      targetGymId: 'gym-default',
       skipExistingWorkouts: true,
     });
 

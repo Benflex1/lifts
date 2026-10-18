@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Dimensions, Animated, Easing, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 
 const CONFETTI_COLORS = [
   '#F59E0B', // Gold
@@ -37,15 +38,11 @@ export const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({
   const animValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const timer = setTimeout(() => {
-        try {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        } catch (_) {}
-      }, 160);
-      return () => clearTimeout(timer);
-    } catch (_) {}
+    bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+    const timer = setTimeout(() => {
+      bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
+    }, 160);
+    return () => clearTimeout(timer);
   }, []);
 
   const particlesRef = useRef<Particle[]>([]);

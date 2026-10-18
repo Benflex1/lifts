@@ -1,4 +1,5 @@
 import { buildBackupJson } from './backup';
+import { reportError } from './errorReporting';
 import { getBackupFilename, type SaveBackupResult } from './saveBackupCommon';
 import type { WritingOptions } from 'expo-file-system/legacy';
 
@@ -105,7 +106,7 @@ export async function saveBackupAndroidWithFallback(
       );
     }
   } catch (safErr) {
-    console.warn('StorageAccessFramework failed, falling back to share sheet:', safErr);
+    reportError(safErr, { scope: 'backup.save.saf-fallback' });
   }
   return saveBackupToIos(json, filename, fileSystem, sharing);
 }
@@ -116,6 +117,7 @@ function getPlatformOS(): string {
     const rn = require('react-native');
     return rn?.Platform?.OS || 'unknown';
   } catch {
+    // Intentional: platform probing; callers only use this for diagnostics.
     return 'unknown';
   }
 }

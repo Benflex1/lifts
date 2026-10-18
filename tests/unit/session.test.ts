@@ -9,6 +9,7 @@ function createMockStore(): Store & {
   drafts: Map<string, WorkoutDraft>;
   workouts: Map<string, Workout>;
   failNextFinish: boolean;
+  failDraftSaves: boolean;
   finishDelayMs: number;
 } {
   const drafts = new Map<string, WorkoutDraft>();
@@ -18,6 +19,7 @@ function createMockStore(): Store & {
     drafts,
     workouts,
     failNextFinish: false,
+    failDraftSaves: false,
     finishDelayMs: 0,
     init: async () => {},
     isReadOnly: () => false,
@@ -32,6 +34,9 @@ function createMockStore(): Store & {
       exerciseGymScopes: [],
     }),
     saveDraft: async (draft: WorkoutDraft) => {
+      if (res.failDraftSaves) {
+        throw new Error('Disk full on autosave');
+      }
       drafts.set(draft.workout.id, draft);
     },
     getWorkoutDrafts: async () => Array.from(drafts.values()),
@@ -83,7 +88,7 @@ function createMockStore(): Store & {
     getAllExercises: async () => [],
     searchExercises: async () => [],
     getExerciseById: async () => null,
-    createCustomExercise: async (e) => ({ ...e, id: 'c1' }),
+    createCustomExercise: async (e: Parameters<Store['createCustomExercise']>[0]) => ({ ...e, id: 'c1' }),
     getSetting: async () => null,
     setSetting: async () => {},
     renameFolder: async () => {},
@@ -220,6 +225,40 @@ describe('SessionController Unit Tests', () => {
     const finished = await controller.finish();
     assert.equal(finished.id, 'w-err');
     assert.equal(controller.getState().phase, 'idle');
+  });
+
+  it('surfaces autosave failures and clears them after a successful retry flush', async () => {
+    const currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+    const mockStore = createMockStore();
+    const controller = createSessionController(mockStore, () => currentTime);
+
+    const workout: Workout = {
+      id: 'w-autosave',
+      name: 'Push Day',
+      gymId: 'gym-default',
+      startTime: new Date(currentTime).toISOString(),
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: [],
+    };
+    await controller.start(workout);
+
+    mockStore.failDraftSaves = true;
+    controller.update(workout);
+
+    await assert.rejects(() => controller.flush(), /Disk full on autosave/);
+    assert.ok(
+      controller.getState().persistenceError,
+      'Failed autosave must surface a persistence error',
+    );
+
+    mockStore.failDraftSaves = false;
+    await controller.flush();
+    assert.equal(
+      controller.getState().persistenceError,
+      null,
+      'Successful retry must clear the persistence error',
+    );
   });
 
   it('recovers 20-minute draft without rebasing startTime and recomputes wall-clock elapsed duration', async () => {

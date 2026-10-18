@@ -18,14 +18,19 @@ const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   ...overrides,
 });
 
+type MockableContext = {
+  mock?: { module: (specifier: string, options: { exports: object }) => void };
+};
+
 before(async (t) => {
-  if (typeof t.mock.module === 'function') {
-    mockLinking(t);
+  const context = t as unknown as MockableContext;
+  if (typeof context.mock?.module === 'function') {
+    mockLinking(context as Required<MockableContext>);
   }
   ({ getExerciseInstructionLink, openExerciseInstructionLink } = await import('../../src/utils/exercise-links'));
 });
 
-function mockLinking(t: { mock: { module: (specifier: string, options: { exports: object }) => void } }): void {
+function mockLinking(t: Required<MockableContext>): void {
   t.mock.module('react-native', {
     exports: {
       Linking: {

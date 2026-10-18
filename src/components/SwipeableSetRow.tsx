@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { colors } from '../theme';
 
 interface Props {
@@ -79,7 +80,7 @@ export const SwipeableSetRow: React.FC<Props> = ({
         if (isPastThreshold) {
           isDeletingRef.current = true;
           if (Platform.OS !== 'web') {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
           }
 
           Animated.timing(translateX, {

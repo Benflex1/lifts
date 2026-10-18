@@ -26,6 +26,7 @@ import {
   PieChart,
 } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
+import { reportError } from '../utils/errorReporting';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { getStore, getAllExercises } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
@@ -177,7 +178,7 @@ const AnalyticsScreenInner: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Failed to load analytics:', error);
+      reportError(error, { scope: 'analytics.load' });
     } finally {
       setAnalyticsLoading(false);
     }

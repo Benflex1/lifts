@@ -6,7 +6,7 @@ Thank you for contributing to Lifts! Lifts is a free, local-first, open-source g
 
 ## 1. Prerequisites & Toolchain
 
-- **Node.js**: v18.0.0 or higher (LTS recommended)
+- **Node.js**: v22.5.0 or higher (Node 24 recommended; see `.nvmrc`)
 - **npm**: v9.0.0 or higher
 - **Expo CLI**: bundled via local dependencies
 - **Git**: modern git client
@@ -47,13 +47,16 @@ Every change must pass our verification suite before submitting a pull request:
 # 1. Type check
 npx tsc --noEmit
 
-# 2. Fast unit tests
+# 2. Type check the test suite
+npm run typecheck:tests
+
+# 3. Fast unit tests
 npm test
 
-# 3. Cross-platform integration tests (Native SQLite + Web IndexedDB)
+# 4. Cross-platform integration tests (Native SQLite + Web IndexedDB)
 npm run test:integration
 
-# 4. Web production export smoke test
+# 5. Web production export smoke test
 npx expo export --platform web --output-dir dist-audit-web
 ```
 
@@ -97,6 +100,6 @@ When contributing code, adhere strictly to these core principles:
    ```bash
    git commit -m "feat: descriptive message in lowercase without emojis"
    ```
-3. Run the full verification suite (`npx tsc --noEmit && npm test && npm run test:integration`).
+3. Run the full verification suite (`npx tsc --noEmit && npm run typecheck:tests && npm test && npm run test:integration`).
 4. Push your branch to GitHub and open a Pull Request against `main`.
 5. Clearly describe the motivation, test evidence, and verified platforms in your PR description.

@@ -18,7 +18,7 @@ export class ExerciseVisualErrorBoundary extends React.Component<
 > {
   state: ExerciseVisualErrorBoundaryState = { hasError: false };
 
-  static getDerivedStateFromError(): ExerciseVisualErrorBoundaryState {
+  static getDerivedStateFromError(_error: unknown): ExerciseVisualErrorBoundaryState {
     return { hasError: true };
   }
 

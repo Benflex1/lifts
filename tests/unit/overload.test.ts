@@ -1,5 +1,5 @@
 import { describe, it } from 'node:test';
-import * as assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { SetType } from '../../src/types';
 import {
   getOverloadIncrement,
@@ -26,7 +26,11 @@ describe('progressive overload suggestions', () => {
       unit: 'kg',
     });
     assert.deepEqual(
-      { kind: suggestion?.kind, weightKg: suggestion?.weightKg, reps: suggestion?.reps },
+      {
+        kind: suggestion?.kind,
+        weightKg: suggestion?.weightKg,
+        reps: suggestion?.reps,
+      },
       { kind: 'add_weight', weightKg: 62.5, reps: 8 },
     );
     assert.match(suggestion!.reason, /Every set hit 12 reps at 60 kg/);
@@ -68,7 +72,11 @@ describe('progressive overload suggestions', () => {
     assert.equal(hit?.weightKg, 82);
     assert.equal(hit?.reps, 8);
 
-    const missed = suggestNextTarget({ sets: [ghost(80, 8), ghost(80, 6)], trackingType: 'weight_reps', unit: 'kg' });
+    const missed = suggestNextTarget({
+      sets: [ghost(80, 8), ghost(80, 6)],
+      trackingType: 'weight_reps',
+      unit: 'kg',
+    });
     assert.equal(missed?.kind, 'repeat');
     assert.equal(missed?.reps, 8);
   });
@@ -141,15 +149,56 @@ describe('progressive overload suggestions', () => {
   it('gives nothing without history, for unloaded sets, lists, AMRAP or other tracking types', () => {
     assert.equal(suggestNextTarget({ sets: [], trackingType: 'weight_reps', unit: 'kg' }), null);
     assert.equal(
-      suggestNextTarget({ sets: [{ previousWeightKg: 60, previousReps: 10 }], trackingType: 'weight_reps', unit: 'kg' }),
+      suggestNextTarget({
+        sets: [{ previousWeightKg: 60, previousReps: 10 }],
+        trackingType: 'weight_reps',
+        unit: 'kg',
+      }),
       null,
       'sets from before set types were carried have no suggestion',
     );
-    assert.equal(suggestNextTarget({ sets: [ghost(0, 10)], trackingType: 'weight_reps', unit: 'kg' }), null);
-    assert.equal(suggestNextTarget({ sets: [ghost(60, 10)], targetReps: '12, 10, 8', trackingType: 'weight_reps', unit: 'kg' }), null);
-    assert.equal(suggestNextTarget({ sets: [ghost(60, 10)], targetReps: 'AMRAP', trackingType: 'weight_reps', unit: 'kg' }), null);
-    assert.equal(suggestNextTarget({ sets: [ghost(20, 10)], trackingType: 'assisted_bodyweight', unit: 'kg' }), null);
-    assert.equal(suggestNextTarget({ sets: [ghost(0, 10)], trackingType: 'duration', unit: 'kg' }), null);
+    assert.equal(
+      suggestNextTarget({
+        sets: [ghost(0, 10)],
+        trackingType: 'weight_reps',
+        unit: 'kg',
+      }),
+      null,
+    );
+    assert.equal(
+      suggestNextTarget({
+        sets: [ghost(60, 10)],
+        targetReps: '12, 10, 8',
+        trackingType: 'weight_reps',
+        unit: 'kg',
+      }),
+      null,
+    );
+    assert.equal(
+      suggestNextTarget({
+        sets: [ghost(60, 10)],
+        targetReps: 'AMRAP',
+        trackingType: 'weight_reps',
+        unit: 'kg',
+      }),
+      null,
+    );
+    assert.equal(
+      suggestNextTarget({
+        sets: [ghost(20, 10)],
+        trackingType: 'assisted_bodyweight',
+        unit: 'kg',
+      }),
+      null,
+    );
+    assert.equal(
+      suggestNextTarget({
+        sets: [ghost(0, 10)],
+        trackingType: 'duration',
+        unit: 'kg',
+      }),
+      null,
+    );
   });
 });
 
@@ -192,33 +241,72 @@ describe('last session set type and RPE reach the active workout', () => {
   it('carries type and RPE from history into suggestions and sets', async () => {
     const { resolvePreviousSetsForExercise } = await import('../../src/workout/gym-history');
     const { createWorkoutSetsFromSuggestions } = await import('../../src/workout/gym-session');
-    const exercise = { id: 'bench', name: 'Bench', category: 'strength', equipment: 'barbell', primaryMuscles: ['chest'] };
-    const suggestions = resolvePreviousSetsForExercise(exercise, [{
-      workoutId: 'w1',
-      startTime: '2026-10-01T10:00:00.000Z',
-      gymId: 'gym-default',
-      gymName: 'Default Gym',
-      occurrenceIndex: 0,
-      sets: [
-        { weightKg: 40, reps: 8, type: 'warmup' },
-        { weightKg: 60, reps: 12, type: 'normal', rpe: 8 },
+    const exercise = {
+      id: 'bench',
+      name: 'Bench',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    };
+    const suggestions = resolvePreviousSetsForExercise(
+      exercise,
+      [
+        {
+          workoutId: 'w1',
+          startTime: '2026-10-01T10:00:00.000Z',
+          gymId: 'gym-default',
+          gymName: 'Default Gym',
+          occurrenceIndex: 0,
+          sets: [
+            { weightKg: 40, reps: 8, type: 'warmup' },
+            { weightKg: 60, reps: 12, type: 'normal', rpe: 8 },
+          ],
+        },
       ],
-    }], 'gym-default');
+      'gym-default',
+    );
     assert.equal(suggestions[0].type, 'warmup');
     assert.equal(suggestions[1].rpe, 8);
 
-    const sets = createWorkoutSetsFromSuggestions({ activeExerciseId: 'ae', targetSets: 3, suggestions, currentGymId: 'gym-default' });
-    assert.deepEqual(sets.map((set) => set.previousType), ['warmup', 'normal', 'normal']);
-    assert.deepEqual(sets.map((set) => set.previousRpe), [undefined, 8, 8]);
+    const sets = createWorkoutSetsFromSuggestions({
+      activeExerciseId: 'ae',
+      targetSets: 3,
+      suggestions,
+      currentGymId: 'gym-default',
+    });
+    assert.deepEqual(
+      sets.map(set => set.previousType),
+      ['warmup', 'normal', 'normal'],
+    );
+    assert.deepEqual(
+      sets.map(set => set.previousRpe),
+      [undefined, 8, 8],
+    );
     assert.equal('previousDurationSeconds' in sets[0], false);
 
-    const suggestion = suggestNextTarget({ sets, targetReps: '8-12', trackingType: 'weight_reps', equipment: 'barbell', unit: 'kg' });
+    const suggestion = suggestNextTarget({
+      sets,
+      targetReps: '8-12',
+      trackingType: 'weight_reps',
+      equipment: 'barbell',
+      unit: 'kg',
+    });
     assert.equal(suggestion?.weightKg, 62.5);
   });
 
   it('accepts drafts with the new fields and rejects bad values', async () => {
-    const { validateWorkoutSetRecord } = await import('../../src/database/snapshot-validation');
-    const base = { id: 's1', setNumber: 1, type: 'normal', weightKg: 0, reps: 0, isCompleted: false };
+    const {
+      validateWorkoutSetRecord,
+    }: { validateWorkoutSetRecord: (value: unknown, label: string) => void } =
+      await import('../../src/database/snapshot-validation');
+    const base = {
+      id: 's1',
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 0,
+      reps: 0,
+      isCompleted: false,
+    };
     validateWorkoutSetRecord({ ...base, previousType: 'failure', previousRpe: 9 }, 'set');
     validateWorkoutSetRecord(base, 'set');
     assert.throws(() => validateWorkoutSetRecord({ ...base, previousType: 'heavy' }, 'set'));
@@ -246,34 +334,107 @@ describe('review follow-ups', () => {
     assert.equal(nextLoadableWeight(135, 5), 140);
     assert.equal(nextLoadableWeight(61, 2.5), 62.5);
     assert.equal(nextLoadableWeight(22.5, 2), 24);
-    const suggestion = suggestNextTarget({ sets: [ghost(100, 5)], targetReps: '5', trackingType: 'weight_reps', unit: 'lb' });
+    const suggestion = suggestNextTarget({
+      sets: [ghost(100, 5)],
+      targetReps: '5',
+      trackingType: 'weight_reps',
+      unit: 'lb',
+    });
     assert.equal(suggestion?.weightKg, 102.06); // 225 lb
   });
 
   it('does not fill rows that were warmups or drop sets last time', () => {
-    assert.equal(isOverloadFillTarget({ isCompleted: false, type: 'normal', previousType: 'warmup' }), false);
-    assert.equal(isOverloadFillTarget({ isCompleted: false, type: 'normal', previousType: 'drop' }), false);
-    assert.equal(isOverloadFillTarget({ isCompleted: false, type: 'normal', previousType: 'normal' }), true);
+    assert.equal(
+      isOverloadFillTarget({
+        isCompleted: false,
+        type: 'normal',
+        previousType: 'warmup',
+      }),
+      false,
+    );
+    assert.equal(
+      isOverloadFillTarget({
+        isCompleted: false,
+        type: 'normal',
+        previousType: 'drop',
+      }),
+      false,
+    );
+    assert.equal(
+      isOverloadFillTarget({
+        isCompleted: false,
+        type: 'normal',
+        previousType: 'normal',
+      }),
+      true,
+    );
   });
 
   it('drops stale effort from completed sets on an exercise swap and gym switch', async () => {
     const { replaceActiveExercise } = await import('../../src/workout/active-exercises');
     const { rehydrateUntouchedSuggestions } = await import('../../src/workout/gym-session');
-    const bench = { id: 'bench', name: 'Bench', category: 'strength', equipment: 'barbell', primaryMuscles: ['chest'] };
+    const bench = {
+      id: 'bench',
+      name: 'Bench',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    };
     const dbBench = { ...bench, id: 'db-bench', equipment: 'dumbbell' };
-    const done = { id: 's1', setNumber: 1, type: 'normal' as const, weightKg: 100, reps: 8, isCompleted: true, previousWeightKg: 100, previousReps: 8, previousType: 'normal' as const, previousRpe: 8 };
-    const todo = { ...done, id: 's2', setNumber: 2, isCompleted: false, weightKg: 0, reps: 0 };
-    const exercise = { id: 'ae1', exerciseId: 'bench', exercise: bench, restTimerSeconds: 90, sets: [done, todo] };
+    const done = {
+      id: 's1',
+      setNumber: 1,
+      type: 'normal' as const,
+      weightKg: 100,
+      reps: 8,
+      isCompleted: true,
+      previousWeightKg: 100,
+      previousReps: 8,
+      previousType: 'normal' as const,
+      previousRpe: 8,
+    };
+    const todo = {
+      ...done,
+      id: 's2',
+      setNumber: 2,
+      isCompleted: false,
+      weightKg: 0,
+      reps: 0,
+    };
+    const exercise = {
+      id: 'ae1',
+      exerciseId: 'bench',
+      exercise: bench,
+      restTimerSeconds: 90,
+      sets: [done, todo],
+    };
 
-    const [swapped] = replaceActiveExercise([exercise], 'ae1', dbBench, [{ weightKg: 30, reps: 10, type: 'normal' }]);
+    const [swapped] = replaceActiveExercise([exercise], 'ae1', dbBench, [
+      { weightKg: 30, reps: 10, type: 'normal' },
+    ]);
     assert.equal(swapped.sets[0].previousType, undefined);
     assert.equal(swapped.sets[0].previousRpe, undefined);
     assert.equal(swapped.sets[1].previousType, 'normal');
-    const target = suggestNextTarget({ sets: swapped.sets, trackingType: 'weight_reps', equipment: 'dumbbell', unit: 'kg' });
+    const target = suggestNextTarget({
+      sets: swapped.sets,
+      trackingType: 'weight_reps',
+      equipment: 'dumbbell',
+      unit: 'kg',
+    });
     assert.equal(target?.weightKg, 32);
 
-    const workout = { id: 'w', name: 'W', gymId: 'gym-b', startTime: '2026-10-11T10:00:00.000Z', durationSeconds: 0, totalVolumeKg: 0, exercises: [exercise] };
-    const rehydrated = rehydrateUntouchedSuggestions(workout, { bench: [{ weightKg: 80, reps: 8, type: 'normal' }] });
+    const workout = {
+      id: 'w',
+      name: 'W',
+      gymId: 'gym-b',
+      startTime: '2026-10-11T10:00:00.000Z',
+      durationSeconds: 0,
+      totalVolumeKg: 0,
+      exercises: [exercise],
+    };
+    const rehydrated = rehydrateUntouchedSuggestions(workout, {
+      bench: [{ weightKg: 80, reps: 8, type: 'normal' }],
+    });
     assert.equal(rehydrated.exercises[0].sets[0].previousType, undefined);
     assert.equal(rehydrated.exercises[0].sets[0].previousWeightKg, 100, 'ghost numbers stay');
   });

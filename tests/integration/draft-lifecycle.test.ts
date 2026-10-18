@@ -49,6 +49,7 @@ describe('Draft Lifecycle Integration', () => {
               equipment: 'Barbell',
               primaryMuscles: ['Chest'],
             },
+            restTimerSeconds: 90,
             sets: [
               {
                 id: 's-1',

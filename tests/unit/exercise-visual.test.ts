@@ -106,7 +106,10 @@ describe('ExerciseVisual runtime guard', () => {
     });
 
     boundary.state = ExerciseVisualErrorBoundary.getDerivedStateFromError(new Error('broken SVG'));
-    const fallback = boundary.render() as React.ReactElement;
+    const fallback = boundary.render() as React.ReactElement<{
+      size: number;
+      accessibilityLabel: string;
+    }>;
 
     assert.ok(isDumbbellIcon(fallback.type));
     assert.equal(fallback.props.size, 56);

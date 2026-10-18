@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Platform, StyleSheet, View } from 'react-native';
 import { GripVertical } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import type { ExerciseLayout } from '../workout/active-exercises';
 import { colors } from '../theme';
 
@@ -50,7 +51,7 @@ export function DraggableExerciseCard({
 
     if (wasDragging && shouldDrop) {
       if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
       }
       // Give React Native's gesture responder a frame to complete before state update
       setTimeout(() => {
@@ -84,7 +85,7 @@ export function DraggableExerciseCard({
           setIsDragging(true);
           onDragActiveChangeRef.current(true);
           if (Platform.OS !== 'web') {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
           }
         },
         onPanResponderMove: (_, gestureState) => {

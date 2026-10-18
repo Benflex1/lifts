@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Search, X, Plus } from 'lucide-react-native';
 import { Exercise, ExerciseGymScope, Gym } from '../types';
+import { reportError } from '../utils/errorReporting';
 import {
   searchExercises,
   createCustomExercise,
@@ -156,7 +157,7 @@ const ExercisesScreenInner: React.FC = () => {
       setExerciseScope(scope);
       setShowScopeModal(true);
     } catch (e) {
-      console.error('Error loading scope details:', e);
+      reportError(e, { scope: 'exercises.scope-details' });
     }
   };
 
@@ -194,7 +195,7 @@ const ExercisesScreenInner: React.FC = () => {
           : results,
       );
     } catch (e) {
-      console.error(e);
+      reportError(e, { scope: 'exercises.load' });
     } finally {
       setInitialLoading(false);
     }

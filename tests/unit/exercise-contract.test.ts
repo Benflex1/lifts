@@ -14,7 +14,7 @@ const validExercise = {
 
 describe('Exercise contract', () => {
   it('accepts legacy records that omit optional instruction links', () => {
-    const legacyExercise = { ...validExercise };
+    const legacyExercise: Record<string, unknown> = { ...validExercise };
     delete legacyExercise.secondaryMuscles;
     delete legacyExercise.instructions;
 
