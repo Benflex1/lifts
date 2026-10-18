@@ -155,7 +155,8 @@ Releases are built by `.github/workflows/release.yml` and signed with the Lifts 
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-5. The workflow runs typecheck and both test suites, then:
+5. Confirm the end-to-end smoke journey is green for the tagged commit: `.github/workflows/e2e.yml` runs it on every `main` push that touches the app, and can be dispatched manually from `main`.
+6. The workflow runs typecheck and both test suites, then:
    - builds one unsigned APK per ABI with `fdroid build` in F-Droid's `buildserver-trixie` image from `.fdroid.yml` (the same bytes F-Droid will build), and signs each with the upload key using `apksigner` 34.0.0;
    - builds a universal APK with Gradle and `LIFTS_REQUIRE_RELEASE_SIGNING=true`;
    - rejects the Android debug certificate, checks the pinned fingerprint, and runs `apksigcopier compare` to prove the signature copies onto the unsigned F-Droid build;

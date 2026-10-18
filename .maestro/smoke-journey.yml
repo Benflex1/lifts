@@ -1,0 +1,37 @@
+# DX-04: device-level smoke journey (start workout, log a set, minimize, resume, finish).
+#
+# Runs in CI on an Android emulator (.github/workflows/e2e.yml). Locally, with a
+# device or emulator connected and the app installed:
+#
+#   maestro test .maestro/smoke-journey.yml
+#
+appId: com.benflex1.lifts
+---
+- launchApp:
+    clearState: true
+
+# Fresh state seeds the default routines; the Workout tab is the landing screen.
+- assertVisible: 'Routines'
+- assertVisible: 'Start Empty Workout'
+
+- tapOn: 'Start Push Day (Chest/Shoulders/Triceps)'
+- assertVisible: 'Start Workout'
+- tapOn: 'Start Workout'
+
+# Logger: complete one set of the first exercise.
+- assertVisible: 'Complete set 1'
+- tapOn: 'Complete set 1'
+- assertVisible: 'Complete set 2'
+
+# Minimize to the floating bar, then resume.
+- tapOn: 'Minimize workout'
+- assertVisible:
+    text: 'Resume workout.*'
+- tapOn:
+    text: 'Resume workout.*'
+- assertVisible: 'Complete set 1'
+
+# Finish and confirm the completion summary.
+- tapOn: 'Finish workout'
+- assertVisible: 'Workout Complete!'
+- takeScreenshot: smoke-journey-complete

@@ -1,0 +1,94 @@
+name: End-to-end smoke journey
+
+# DX-04: runs the Maestro journey from .maestro/smoke-journey.yml on an Android
+# emulator against the same debug-signed preview APK that build-apk.yml produces.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'phase-*']
+    paths:
+      - 'src/**'
+      - 'App.tsx'
+      - 'app.json'
+      - 'eas.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'plugins/**'
+      - 'modules/**'
+      - 'scripts/android-smoke-test.sh'
+      - '.maestro/**'
+      - '.github/workflows/e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prebuild Android project
+        run: npx expo prebuild --platform android --clean
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      # No LIFTS_UPLOAD_* variables: preview APKs stay debug-signed and embed the
+      # JS bundle, so the emulator does not need Metro. See build-apk.yml.
+      - name: Build Android preview APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease -x lint -x lintVitalRelease --no-daemon
+
+      - name: Install Maestro
+        run: |
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the Maestro journey on an Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: |
+            bash scripts/android-smoke-test.sh "$(ls android/app/build/outputs/apk/release/*.apk | head -n 1)"
+            maestro test .maestro/smoke-journey.yml --format junit --output maestro-report.xml
+
+      - name: Upload Maestro report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-e2e-${{ github.sha }}
+          path: |
+            maestro-report.xml
+            *.png
+          if-no-files-found: warn

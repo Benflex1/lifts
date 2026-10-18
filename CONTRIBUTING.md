@@ -68,6 +68,14 @@ npx expo export --platform web --output-dir dist-audit-web
 
 Run `npm run format` before committing to apply the shared Prettier configuration.
 
+### End-to-end smoke journey
+
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). With a device or emulator connected and the app installed, run it locally:
+
+```bash
+maestro test .maestro/smoke-journey.yml
+```
+
 ---
 
 ## 4. Architecture & Design Rules
