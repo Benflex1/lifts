@@ -333,6 +333,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
             placeholderTextColor={colors.textMuted}
             onFocus={onInputFocus}
             autoFocus={isNoteEditing && (!exercise.notes || exercise.notes.length === 0)}
+            accessibilityLabel={`Note for ${exercise.exercise?.name || 'exercise'}`}
           />
         </View>
       )}

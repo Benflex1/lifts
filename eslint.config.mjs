@@ -51,6 +51,7 @@ export default tseslint.config(
       'src/components/ActiveWorkoutMiniBar.tsx',
       'src/components/ReadOnlyBanner.tsx',
       'src/components/RestTimeWheelModal.tsx',
+      'src/components/PRCelebrationToast.tsx',
     ],
     rules: {
       'no-restricted-imports': [

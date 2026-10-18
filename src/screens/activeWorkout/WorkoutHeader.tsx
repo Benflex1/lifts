@@ -8,10 +8,28 @@ import { WeightUnit, formatWeight } from '../../utils/units';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 
-/** Renders the ticking workout duration without re-rendering the whole logger every second. */
-const LiveWorkoutClock: React.FC = () => {
+/**
+ * Renders the ticking workout duration without re-rendering the whole logger every
+ * second. The duration button lives here so its accessibility value follows the
+ * clock without re-rendering the header.
+ */
+const LiveWorkoutClock: React.FC<{ onPress: () => void }> = ({ onPress }) => {
   const elapsedSeconds = useWorkoutClock();
-  return <>{formatTimer(elapsedSeconds)}</>;
+  const formatted = formatTimer(elapsedSeconds);
+
+  return (
+    <AppTouchable
+      style={styles.metricColumn}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Workout duration"
+      accessibilityHint="Opens workout duration options"
+      accessibilityValue={{ text: formatted }}
+    >
+      <Text style={[styles.metricColValue, { color: colors.primary }]}>{formatted}</Text>
+      <Text style={styles.metricColLabel}>Duration</Text>
+    </AppTouchable>
+  );
 };
 
 export interface WorkoutHeaderProps {
@@ -96,17 +114,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
 
       {/* Live Metrics Strip */}
       <View style={styles.metricsContainer}>
-        <AppTouchable
-          style={styles.metricColumn}
-          onPress={onOpenDuration}
-          accessibilityRole="button"
-          accessibilityLabel="Adjust workout duration"
-        >
-          <Text style={[styles.metricColValue, { color: colors.primary }]}>
-            <LiveWorkoutClock />
-          </Text>
-          <Text style={styles.metricColLabel}>Duration</Text>
-        </AppTouchable>
+        <LiveWorkoutClock onPress={onOpenDuration} />
         <View style={styles.metricColumn}>
           <Text style={styles.metricColValue}>{formatWeight(liveVolume, unit)}</Text>
           <Text style={styles.metricColLabel}>Volume</Text>

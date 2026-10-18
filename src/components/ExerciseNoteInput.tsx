@@ -14,6 +14,7 @@ interface ExerciseNoteInputProps {
   placeholderTextColor?: string;
   autoFocus?: boolean;
   onFocus?: TextInputProps['onFocus'];
+  accessibilityLabel?: string;
 }
 
 /**
@@ -30,6 +31,7 @@ export const ExerciseNoteInput = React.memo(function ExerciseNoteInput({
   placeholderTextColor,
   autoFocus,
   onFocus,
+  accessibilityLabel,
 }: ExerciseNoteInputProps) {
   const [text, setText] = useState(notes ?? '');
 
@@ -74,6 +76,8 @@ export const ExerciseNoteInput = React.memo(function ExerciseNoteInput({
       onBlur={() => debouncer.flushNow()}
       onFocus={onFocus}
       autoFocus={autoFocus}
+      accessibilityLabel={accessibilityLabel ?? 'Exercise note'}
+      accessibilityValue={{ text: text === '' ? 'empty' : text }}
     />
   );
 });

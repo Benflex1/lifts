@@ -168,7 +168,7 @@ test('WorkoutHeader renders live metrics and wires header actions', async () => 
   pressByLabel(renderer, 'Minimize workout');
   pressByLabel(renderer, 'Workout menu');
   pressByLabel(renderer, 'Finish workout');
-  pressByLabel(renderer, 'Adjust workout duration');
+  pressByLabel(renderer, 'Workout duration');
   assert.deepEqual(calls, ['minimize', 'menu', 'finish', 'duration']);
 });
 

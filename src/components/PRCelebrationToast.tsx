@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { AppTouchable } from './ui';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -111,12 +112,13 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
         },
       ]}
     >
-      <TouchableOpacity
+      <AppTouchable
         style={[styles.card, { borderColor: accent + '55' }]}
         activeOpacity={0.9}
         onPress={handleDismiss}
         accessibilityRole="alert"
         accessibilityLabel={`${rankTitle}: ${exerciseName}, ${setText}. ${desc}`}
+        accessibilityLiveRegion="assertive"
       >
         <PRMark rank={achievement.rank} size={40} />
 
@@ -133,7 +135,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
           </Text>
         </View>
 
-        <TouchableOpacity
+        <AppTouchable
           style={styles.closeBtn}
           onPress={handleDismiss}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -141,8 +143,8 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
           accessibilityLabel="Dismiss PR notification"
         >
           <X size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </AppTouchable>
+      </AppTouchable>
     </Animated.View>
   );
 };

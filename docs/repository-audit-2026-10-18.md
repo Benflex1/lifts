@@ -567,10 +567,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-03 — No live regions or value semantics for dynamic UI
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** There are zero `accessibilityLiveRegion` and zero `accessibilityValue` occurrences in `src/`. The rest timer, workout clock, PR toast, and 30 text inputs expose no dynamic semantics.
 - **Impact:** Countdowns and record celebrations are silent, and inputs do not announce their current values.
 - **Required change:** Add live regions to timers and toasts, and add label/value semantics to weight, reps, RPE, and notes inputs.
+- **Implementation (2026-10-18):** The rest countdown is a polite live region with `accessibilityRole="timer"` and a value ("Rest time remaining"): the PR toast is an assertive live region (role `alert` with the full announcement) and now uses `AppTouchable`. The header duration metric became a self-contained clock component so its `accessibilityValue` follows the ticking time without re-rendering the header; it is deliberately not a live region because a once-per-second announcement stream is hostile, and the value stays queryable on demand. `WeightInput`, `RepsInput`, and `ExerciseNoteInput` accept an `accessibilityLabel` and expose `accessibilityValue` from their current display text; `ActiveSetRow` passes per-set labels ("Weight for set 3", "Reps for set 3") and `ActiveExerciseCard` labels the note field per exercise. RPE is chip-based and was covered by `A11Y-01`. Tests: `tests/unit/accessibility-semantics.test.ts` asserts the live regions, roles, and values.
 - **Done when:** Dynamic updates are announced without requiring focus changes.
 
 ### A11Y-04 — Modal semantics and focus handling are inconsistent
@@ -828,7 +829,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `DX-09` Add collaboration and security templates.
 - [x] `A11Y-01` Label the core logger controls.
 - [x] `A11Y-02` Label rest controls, mini bar, and read-only banner.
-- [ ] `A11Y-03` Add live regions and value semantics.
+- [x] `A11Y-03` Add live regions and value semantics.
 - [ ] `A11Y-04` Standardize modal semantics.
 - [x] `A11Y-05` Add a required-label primitive.
 

@@ -11,6 +11,7 @@ interface Props {
   style?: StyleProp<TextStyle>;
   selectTextOnFocus?: boolean;
   onFocus?: (e: any, inputRef?: React.RefObject<TextInput | null>) => void;
+  accessibilityLabel?: string;
 }
 
 export const RepsInput: React.FC<Props> = ({
@@ -20,6 +21,7 @@ export const RepsInput: React.FC<Props> = ({
   style,
   selectTextOnFocus = false,
   onFocus,
+  accessibilityLabel,
 }) => {
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -99,6 +101,8 @@ export const RepsInput: React.FC<Props> = ({
       onChangeText={handleTextChange}
       onBlur={handleBlur}
       onSubmitEditing={handleBlur}
+      accessibilityLabel={accessibilityLabel ?? 'Reps'}
+      accessibilityValue={{ text: shownText === '' ? 'not set' : shownText }}
     />
   );
 };

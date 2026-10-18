@@ -166,6 +166,7 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
             completed={set.isCompleted}
             style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
             onFocus={onInputFocus}
+            accessibilityLabel={`Weight for set ${set.setNumber}`}
           />
         </View>
 
@@ -178,6 +179,7 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
             completed={set.isCompleted}
             style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
             onFocus={onInputFocus}
+            accessibilityLabel={`Reps for set ${set.setNumber}`}
           />
           {/* Compact RPE badge if defined and inline column is hidden */}
           {!showRpeColumn && set.rpe != null && (

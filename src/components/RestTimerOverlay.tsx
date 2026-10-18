@@ -57,7 +57,13 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
             <Text style={[styles.timerTitle, isWarning && styles.timerTitleWarning]}>
               {isWarning ? `Get Ready! (${restTimer.remainingSeconds})` : 'Rest Time'}
             </Text>
-            <Text style={[styles.timerCountdown, { color: accentColor }]}>
+            <Text
+              style={[styles.timerCountdown, { color: accentColor }]}
+              accessibilityRole="timer"
+              accessibilityLabel="Rest time remaining"
+              accessibilityValue={{ text: formatTimer(restTimer.remainingSeconds) }}
+              accessibilityLiveRegion="polite"
+            >
               {formatTimer(restTimer.remainingSeconds)}
             </Text>
           </View>
