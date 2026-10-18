@@ -358,13 +358,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-01 — ActiveWorkoutScreen is a 2,904-line component
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/screens/ActiveWorkoutScreen.tsx` spans lines 87-2904, with 24 `useState` calls, 6 effects, and zero `useCallback`. Three inline modals occupy roughly lines 1362-2013.
 - **Impact:** Every feature change touches one of the highest-risk files in the app. Handlers are recreated on every render, defeating child memoization.
 - **Required change:** Extract a controller hook/reducer for screen state, `WorkoutHeader`, `ExerciseStream`/`ExerciseCard`, and the three modals. Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Implementation (2026-10-18):** `ActiveWorkoutScreen.tsx` dropped from 1,629 (already trimmed by Phases 0-1) to 115 lines and is now pure composition. New `src/screens/activeWorkout/` module: `useActiveWorkoutController.ts` owns all screen state (24 `useState`), derived data (superset metadata, prior-record index, PR summary, live volume/set counts, displayed gym), the 6 effects (PR history load, PR celebration, Android back, gym-tracking reset, keyboard show/hide, ref sync), and every handler, including the ones previously inlined into the menus; `WorkoutHeader.tsx` (131 lines) keeps `LiveWorkoutClock` isolated on the clock context; `ExerciseStream.tsx` (176) owns superset headers/connectors, cards, empty state, and the add button; `SetOptionsModal.tsx` (291), `ExerciseOptionsMenu.tsx` (206), and `WorkoutOptionsMenu.tsx` (130) are the three extracted menus; `activeWorkoutLogic.ts` (122) holds the pure helpers (live stats, completed-set IDs, prior-workout collection/index, displayed-gym resolution, previous working set, drop suggestions, move guards). The unstable `useCallback`s (`handleToggleSetWithHaptics`, `handleApplyPreviousStats`, `openSetOptions`, `handleInputFocus`) were preserved so memoized cards keep their identity guarantees; dead bindings (`linkSuperset`, `startRestTimer`, `menuNextExercise`) were removed with the move.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 559 unit (543 + 16 new focused tests in `tests/unit/active-workout-logic.test.ts` and `tests/unit/active-workout-components.test.ts`) / 173 integration tests green; `npx expo export --platform web` succeeds.
 - **Done when:**
-  - [ ] The screen is under 600 lines and the extracted modules have focused tests.
-  - [ ] No behavior regressions in the session, draft, or completion integration tests.
+  - [x] The screen is under 600 lines and the extracted modules have focused tests.
+  - [x] No behavior regressions in the session, draft, or completion integration tests.
 
 ### ARCH-02 — AnalyticsScreen is a 2,031-line component with 32 state variables
 
@@ -754,7 +756,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 ### Phase 2 — Architecture and startup (target: two to four weeks)
 
-- [ ] `ARCH-01` Decompose `ActiveWorkoutScreen`.
+- [x] `ARCH-01` Decompose `ActiveWorkoutScreen`.
 - [x] `ARCH-02` Decompose `AnalyticsScreen`.
 - [x] `ARCH-03` Split `WorkoutProvider` into focused hooks.
 - [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
