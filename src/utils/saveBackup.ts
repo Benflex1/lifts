@@ -15,3 +15,6 @@ export async function saveBackupToFiles(): Promise<SaveBackupResult> {
   const { saveBackupJson } = await import('./saveBackup.native');
   return saveBackupJson(json, filename);
 }
+
+// Node/test fallback; Metro resolves the native/web variants for the app.
+export { saveBackupJson } from './saveBackup.web';

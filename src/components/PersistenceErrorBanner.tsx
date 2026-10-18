@@ -1,10 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Share } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Share,
+  Platform,
+} from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 import { usePersistenceError, useWorkoutActions } from '../context/WorkoutContext';
 import { useDialog } from '../context/DialogContext';
 import { Workout } from '../types';
 import { colors } from '../theme';
+import { saveBackupJson } from '../utils/saveBackup';
 
 interface PersistenceErrorBannerProps {
   workout: Workout | null;
@@ -44,6 +53,13 @@ export function PersistenceErrorBanner({ workout }: PersistenceErrorBannerProps)
   const handleShare = async () => {
     if (!workout) return;
     try {
+      if (Platform.OS === 'web') {
+        await saveBackupJson(
+          JSON.stringify(workout, null, 2),
+          `lifts-unsaved-workout-${workout.id}.json`,
+        );
+        return;
+      }
       await Share.share({
         title: `${workout.name} (unsaved workout)`,
         message: JSON.stringify(workout, null, 2),
@@ -73,9 +89,13 @@ export function PersistenceErrorBanner({ workout }: PersistenceErrorBannerProps)
           onPress={handleShare}
           disabled={!workout}
           accessibilityRole="button"
-          accessibilityLabel="Share a copy of the workout"
+          accessibilityLabel={
+            Platform.OS === 'web' ? 'Save a copy of the workout' : 'Share a copy of the workout'
+          }
         >
-          <Text style={styles.secondaryButtonText}>Share copy</Text>
+          <Text style={styles.secondaryButtonText}>
+            {Platform.OS === 'web' ? 'Save copy' : 'Share copy'}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.retryButton}

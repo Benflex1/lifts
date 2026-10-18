@@ -68,9 +68,15 @@ npx expo export --platform web --output-dir dist-audit-web
 
 Run `npm run format` before committing to apply the shared Prettier configuration.
 
+### Coverage scope
+
+The coverage thresholds measure modules executed by the Node tests, not all application source. This phase uses 90% lines, 83% branches, and 88% functions: the controller regression now includes a previously uninstrumented module in the denominator. The final phase restores the 89% function threshold alongside its additional coverage and platform-dispatch cleanup. Unimported screens and the app shell are absent from the denominator. LCOV is generated locally and uploaded as a CI artifact; it is not tracked in Git. Use component and emulator tests to verify wiring.
+
 ### End-to-end smoke journey
 
-The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). With a device or emulator connected and the app installed, run it locally:
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). The journey runs for relevant pull requests into `main`/`develop` and pushes to `main`, `develop`, or phase branches. Branch protection must require `emulator-journey` for it to block merging.
+
+With a device or emulator connected and the app installed, run it locally:
 
 ```bash
 maestro test .maestro/smoke-journey.yml
