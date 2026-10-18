@@ -491,13 +491,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-13 — WorkoutScreen is a 703-line component
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/screens/WorkoutScreen.tsx` is 703 lines: the component spans lines 40-441 (seven `useState` calls, one effect, seven handlers) and the style sheet spans 443-702. The week summary card (lines 190-238) and each routine card (lines 299-358) are inline JSX.
 - **Impact:** Routine list changes and start-flow changes share one component, and the cards cannot be rendered or tested in isolation.
 - **Required change:** Extract a controller hook for screen state, a `WeekSummaryCard` and a `RoutineCard` component, and the pure helpers (folder collection/filtering, routine summary metrics, week labels). Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Implementation (2026-10-18):** `WorkoutScreen.tsx` dropped from 703 to 170 lines and is now composition (`ScreenHeader`, quick-start card, `SectionHeader`, folder chips, `RoutineCard` list, empty states, action sheet, and the four modals). New `src/screens/workout/` module: `useWorkoutScreenController.ts` (224 lines) owns the seven state variables, the folder auto-reset effect, the start/duplicate/delete/edit handlers, and the derived folder list and filtered routines; `WeekSummaryCard.tsx` (60 lines) renders the week-in-review card; `RoutineCard.tsx` (80 lines) renders one routine row; `workoutScreenLogic.ts` (53 lines) holds the pure helpers (`collectRoutineFolders`, `filterRoutinesByFolder`, `buildRoutineSummary`, `formatTodayLabel`, `formatWeekDuration`). The style sheet moved to `src/screens/workoutStyles.ts` so the screen and both cards share it.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 578 unit (9 new focused tests in `tests/unit/workout-screen-logic.test.ts` and `tests/unit/workout-screen-components.test.ts`) / 173 integration tests green.
 - **Done when:**
-  - [ ] The screen is under 600 lines and the extracted modules have focused tests.
-  - [ ] No behavior regressions in the routine, folder, and start integration tests.
+  - [x] The screen is under 600 lines and the extracted modules have focused tests.
+  - [x] No behavior regressions in the routine, folder, and start integration tests.
 
 ---
 
@@ -788,7 +790,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-06` Add repository/domain hooks.
 - [x] `ARCH-07` Add a store revision counter and invalidation.
 - [x] `ARCH-12` Decompose `HistoryScreen`.
-- [ ] `ARCH-13` Decompose `WorkoutScreen`.
+- [x] `ARCH-13` Decompose `WorkoutScreen`.
 - [x] `PERF-06` Lazy-load the exercise catalog.
 - [x] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
 - [x] `PERF-14` Add IndexedDB indexes and indexed history reads.
