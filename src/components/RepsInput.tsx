@@ -17,7 +17,6 @@ export const RepsInput: React.FC<Props> = ({
   value,
   onCommit,
   placeholder,
-  completed,
   style,
   selectTextOnFocus = false,
   onFocus,
@@ -103,4 +102,3 @@ export const RepsInput: React.FC<Props> = ({
     />
   );
 };
-

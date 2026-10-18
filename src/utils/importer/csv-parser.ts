@@ -9,7 +9,6 @@ import {
   ParsedExerciseGroup,
   ParsedSet,
   ParsedWorkoutSession,
-  RawCsvSetRow,
 } from './types';
 
 const LB_TO_KG = 0.45359237;
@@ -17,14 +16,16 @@ const LB_TO_KG = 0.45359237;
 export function normalizeSetType(rawType?: string, notes?: string): SetType {
   const typeStr = (rawType || '').toLowerCase().trim();
   if (typeStr === 'warmup' || typeStr === 'warm up' || typeStr === 'w') return 'warmup';
-  if (typeStr === 'dropset' || typeStr === 'drop set' || typeStr === 'drop' || typeStr === 'd') return 'drop';
+  if (typeStr === 'dropset' || typeStr === 'drop set' || typeStr === 'drop' || typeStr === 'd')
+    return 'drop';
   if (typeStr === 'failure' || typeStr === 'f') return 'failure';
 
   if (notes) {
     const notesLower = notes.toLowerCase().trim();
     if (/\b(warmup|warm up)\b/.test(notesLower)) return 'warmup';
     if (/\b(drop set|dropset)\b/.test(notesLower)) return 'drop';
-    if (/\b(to failure|till failure|until failure|failure set)\b/.test(notesLower)) return 'failure';
+    if (/\b(to failure|till failure|until failure|failure set)\b/.test(notesLower))
+      return 'failure';
   }
   return 'normal';
 }
@@ -32,7 +33,7 @@ export function normalizeSetType(rawType?: string, notes?: string): SetType {
 export function parseWeightToKg(
   rawWeight?: string,
   unit?: string,
-  fallbackUnit: 'kg' | 'lb' = 'kg'
+  fallbackUnit: 'kg' | 'lb' = 'kg',
 ): number {
   if (!rawWeight || !rawWeight.trim()) return 0;
   // Handle European comma decimal: "102,5" -> "102.5"
@@ -101,7 +102,10 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
 
   norm.forEach((h, idx) => {
     // Workout Title / Name
-    if (indices.workoutName === -1 && (h === 'workout name' || h === 'workout' || h === 'title' || h === 'routine name')) {
+    if (
+      indices.workoutName === -1 &&
+      (h === 'workout name' || h === 'workout' || h === 'title' || h === 'routine name')
+    ) {
       indices.workoutName = idx;
     }
     // Date / Start Time
@@ -116,7 +120,10 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
       indices.endTime = idx;
     }
     // Duration
-    if (indices.duration === -1 && (h.includes('duration') || h === 'workout duration' || h === 'total time' || h === 'time')) {
+    if (
+      indices.duration === -1 &&
+      (h.includes('duration') || h === 'workout duration' || h === 'total time' || h === 'time')
+    ) {
       indices.duration = idx;
       if (h.includes('second') || h === 'duration_seconds' || h.endsWith('_s')) {
         indices.durationUnit = 'seconds';
@@ -125,7 +132,14 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
       }
     }
     // Exercise Name
-    if (indices.exerciseName === -1 && (h === 'exercise title' || h === 'exercise name' || h === 'exercise' || h === 'ename' || h === 'movement')) {
+    if (
+      indices.exerciseName === -1 &&
+      (h === 'exercise title' ||
+        h === 'exercise name' ||
+        h === 'exercise' ||
+        h === 'ename' ||
+        h === 'movement')
+    ) {
       indices.exerciseName = idx;
     }
     // Category
@@ -133,7 +147,10 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
       indices.category = idx;
     }
     // Set Order / Index
-    if (indices.setIndex === -1 && (h === 'set order' || h === 'set index' || h === 'set' || h === 'set number')) {
+    if (
+      indices.setIndex === -1 &&
+      (h === 'set order' || h === 'set index' || h === 'set' || h === 'set number')
+    ) {
       indices.setIndex = idx;
     }
     // Set Type
@@ -144,7 +161,13 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
     if (h === 'weight kg' || h === 'weight (kg)' || h === 'weight(kg)' || h === 'kg') {
       indices.weight = idx;
       indices.headerWeightUnit = 'kg';
-    } else if (h === 'weight lbs' || h === 'weight (lbs)' || h === 'weight(lbs)' || h === 'weight lb' || h === 'lbs') {
+    } else if (
+      h === 'weight lbs' ||
+      h === 'weight (lbs)' ||
+      h === 'weight(lbs)' ||
+      h === 'weight lb' ||
+      h === 'lbs'
+    ) {
       indices.weight = idx;
       indices.headerWeightUnit = 'lb';
     } else if (indices.weight === -1 && (h === 'weight' || h === 'load')) {
@@ -154,7 +177,10 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
       indices.weightUnit = idx;
     }
     // Reps
-    if (indices.reps === -1 && (h === 'reps' || h === 'repetitions' || h === 'repetition' || h === 'rep')) {
+    if (
+      indices.reps === -1 &&
+      (h === 'reps' || h === 'repetitions' || h === 'repetition' || h === 'rep')
+    ) {
       indices.reps = idx;
     }
     // RPE
@@ -162,10 +188,17 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
       indices.rpe = idx;
     }
     // Notes
-    if (h === 'exercise notes' || (indices.exerciseNotes === -1 && (h === 'notes' || h === 'comment'))) {
+    if (
+      h === 'exercise notes' ||
+      (indices.exerciseNotes === -1 && (h === 'notes' || h === 'comment'))
+    ) {
       indices.exerciseNotes = idx;
     }
-    if (h === 'workout notes' || h === 'description' || (indices.workoutNotes === -1 && h === 'workout note')) {
+    if (
+      h === 'workout notes' ||
+      h === 'description' ||
+      (indices.workoutNotes === -1 && h === 'workout note')
+    ) {
       indices.workoutNotes = idx;
     }
   });
@@ -176,7 +209,7 @@ function resolveColumnIndices(headerRow: string[]): ColumnIndices {
 export function parseWorkoutCsv(
   csvText: string,
   existingExercises: Exercise[] = [],
-  options?: Partial<CsvImportOptions>
+  options?: Partial<CsvImportOptions>,
 ): {
   sessions: ParsedWorkoutSession[];
   detectedFormat: DetectedTrackerFormat;
@@ -264,10 +297,7 @@ export function parseWorkoutCsv(
       workoutOrder.push(workoutKey);
     }
 
-    const weightUnit =
-      indices.headerWeightUnit ||
-      getCol(indices.weightUnit) ||
-      defaultUnit;
+    const weightUnit = indices.headerWeightUnit || getCol(indices.weightUnit) || defaultUnit;
 
     workoutGroup.rows.push({
       exerciseName,

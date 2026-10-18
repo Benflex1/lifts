@@ -7,14 +7,21 @@ import { useIsRestTimerActive, useWorkout } from '../../context/WorkoutContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useDialog } from '../../context/DialogContext';
 import type { ScrollView } from 'react-native';
-import { ActiveExercise, Exercise, ExerciseGymScope, SetType, Workout, WorkoutSet } from '../../types';
+import {
+  ActiveExercise,
+  Exercise,
+  ExerciseGymScope,
+  SetType,
+  Workout,
+  WorkoutSet,
+} from '../../types';
 import { computeElapsedSeconds } from '../../utils/timer';
 import { bestEffortHaptic } from '../../utils/haptics';
 import { displayToKg, kgToDisplay } from '../../utils/units';
 import { isExcessiveDuration } from '../../workout/duration';
 import { applyPreviousSetStats } from '../../workout/gym-session';
 import { getCompletedWorkoutsForExercises, getExerciseGymScope } from '../../database/db';
-import { evaluateWorkoutPRsWithSource, WorkoutPRSummary } from '../../workout/pr';
+import { evaluateWorkoutPRsWithSource } from '../../workout/pr';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../../workout/supersets';
 import { getDefaultBarWeight, getDefaultIncrement, roundToIncrement } from '../../workout/warmup';
 import { PRCelebrationEvent } from '../../components/PRCelebrationToast';
@@ -72,7 +79,9 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showGymPicker, setShowGymPicker] = useState(false);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
-  const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
+  const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(
+    null,
+  );
   const [plateCalcWeight, setPlateCalcWeight] = useState<number | null>(null);
   const [activeSetForPlateCalc, setActiveSetForPlateCalc] = useState<{
     exerciseId: string;
@@ -102,7 +111,9 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
 
   // PR Tracking & Historical baseline cache
   const [exerciseWorkouts, setExerciseWorkouts] = useState<Record<string, Workout[]>>({});
-  const [exerciseScopes, setExerciseScopes] = useState<Record<string, ExerciseGymScope | undefined>>({});
+  const [exerciseScopes, setExerciseScopes] = useState<
+    Record<string, ExerciseGymScope | undefined>
+  >({});
   const [prCelebrationEvent, setPrCelebrationEvent] = useState<PRCelebrationEvent | null>(null);
 
   const supersetMetaMap = useMemo(() => {
@@ -119,7 +130,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
   }, [activeWorkout, supersetMetaMap]);
 
   const supersetModalExercises = useMemo(() => {
-    return (activeWorkout?.exercises || []).map((e) => ({
+    return (activeWorkout?.exercises || []).map(e => ({
       id: e.id,
       name: e.exercise?.name || 'Exercise',
       category: e.exercise?.category,
@@ -131,23 +142,23 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
 
   useEffect(() => {
     if (!activeWorkout) return;
-    const missingIds = Array.from(
-      new Set(activeWorkout.exercises.map((ex) => ex.exerciseId))
-    ).filter((id) => !(id in exerciseWorkouts));
+    const missingIds = Array.from(new Set(activeWorkout.exercises.map(ex => ex.exerciseId))).filter(
+      id => !(id in exerciseWorkouts),
+    );
 
     if (missingIds.length === 0) return;
 
     let mounted = true;
     Promise.all([
       getCompletedWorkoutsForExercises(missingIds),
-      Promise.all(missingIds.map((id) => getExerciseGymScope(id))),
+      Promise.all(missingIds.map(id => getExerciseGymScope(id))),
     ]).then(([workoutsByEx, scopes]) => {
       if (!mounted) return;
-      setExerciseWorkouts((prev) => ({
+      setExerciseWorkouts(prev => ({
         ...prev,
         ...workoutsByEx,
       }));
-      setExerciseScopes((prev) => {
+      setExerciseScopes(prev => {
         const next = { ...prev };
         missingIds.forEach((id, idx) => {
           next[id] = scopes[idx] || undefined;
@@ -159,6 +170,8 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     return () => {
       mounted = false;
     };
+    // Keyed to the exercise list identity; scopes are merged incrementally and must not reload per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkout?.exercises]);
 
   // Prior records are indexed once per loaded history, so re-ranking after each set change only
@@ -170,7 +183,13 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
 
   const prSummary = useMemo(() => {
     if (!activeWorkout) return null;
-    return evaluateWorkoutPRsWithSource(activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes);
+    return evaluateWorkoutPRsWithSource(
+      activeWorkout,
+      priorRecordIndex,
+      gyms,
+      gymTrackingEnabled,
+      exerciseScopes,
+    );
   }, [activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
 
   const previousCompletedSetIdsRef = useRef<Set<string> | null>(null);
@@ -193,9 +212,11 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
       if (!previousCompletedSetIdsRef.current.has(setId)) {
         const pr = prSummary?.setPRs.get(setId);
         if (pr?.primary) {
-          bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+          bestEffortHaptic(() =>
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+          );
           for (const ex of activeWorkout.exercises) {
-            const foundSet = ex.sets.find((s) => s.id === setId);
+            const foundSet = ex.sets.find(s => s.id === setId);
             if (foundSet) {
               setPrCelebrationEvent({
                 exerciseName: ex.exercise?.name || 'Exercise',
@@ -214,43 +235,51 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     previousCompletedSetIdsRef.current = currentCompleted;
   }, [activeWorkout, prSummary]);
 
-  const handleToggleSetWithHaptics = useCallback((exerciseId: string, setId: string) => {
-    const workout = activeWorkoutRef.current;
-    const currentEx = workout?.exercises.find((e) => e.id === exerciseId);
-    const targetSet = currentEx?.sets.find((s) => s.id === setId);
-    const isBecomingCompleted = targetSet ? !targetSet.isCompleted : false;
+  const handleToggleSetWithHaptics = useCallback(
+    (exerciseId: string, setId: string) => {
+      const workout = activeWorkoutRef.current;
+      const currentEx = workout?.exercises.find(e => e.id === exerciseId);
+      const targetSet = currentEx?.sets.find(s => s.id === setId);
+      const isBecomingCompleted = targetSet ? !targetSet.isCompleted : false;
 
-    toggleSetComplete(exerciseId, setId);
+      toggleSetComplete(exerciseId, setId);
 
-    if (isBecomingCompleted && currentEx?.supersetId && workout) {
-      const nextTarget = resolveNextSupersetTarget(workout, exerciseId, setId);
-      if (nextTarget && !nextTarget.isRoundComplete) {
-        setExerciseExpanded(nextTarget.nextExerciseId, true);
-        const meta = supersetMetaMapRef.current.get(exerciseId);
-        const groupLabel = meta?.label || 'SUPERSET';
-        setSupersetNextUpCue(`${groupLabel}: ${nextTarget.nextExerciseName} · Set ${nextTarget.nextSetNumber}`);
-      } else {
+      if (isBecomingCompleted && currentEx?.supersetId && workout) {
+        const nextTarget = resolveNextSupersetTarget(workout, exerciseId, setId);
+        if (nextTarget && !nextTarget.isRoundComplete) {
+          setExerciseExpanded(nextTarget.nextExerciseId, true);
+          const meta = supersetMetaMapRef.current.get(exerciseId);
+          const groupLabel = meta?.label || 'SUPERSET';
+          setSupersetNextUpCue(
+            `${groupLabel}: ${nextTarget.nextExerciseName} · Set ${nextTarget.nextSetNumber}`,
+          );
+        } else {
+          setSupersetNextUpCue(null);
+        }
+      } else if (!isBecomingCompleted) {
         setSupersetNextUpCue(null);
       }
-    } else if (!isBecomingCompleted) {
-      setSupersetNextUpCue(null);
-    }
-  }, [toggleSetComplete, setExerciseExpanded]);
+    },
+    [toggleSetComplete, setExerciseExpanded],
+  );
 
-  const handleApplyPreviousStats = useCallback((exerciseId: string, set: WorkoutSet, targetReps?: string) => {
-    if (set.isCompleted) return;
-    if (set.previousWeightKg === undefined && set.previousReps === undefined) return;
-    if (Platform.OS !== 'web') {
-      bestEffortHaptic(() => Haptics.selectionAsync());
-    }
-    const fallbackReps = parseInt(targetReps || '10', 10) || 10;
-    const applied = applyPreviousSetStats(set, fallbackReps);
-    updateSet(exerciseId, set.id, {
-      weightKg: applied.weightKg,
-      reps: applied.reps,
-      isWeightEdited: true,
-    });
-  }, [updateSet]);
+  const handleApplyPreviousStats = useCallback(
+    (exerciseId: string, set: WorkoutSet, targetReps?: string) => {
+      if (set.isCompleted) return;
+      if (set.previousWeightKg === undefined && set.previousReps === undefined) return;
+      if (Platform.OS !== 'web') {
+        bestEffortHaptic(() => Haptics.selectionAsync());
+      }
+      const fallbackReps = parseInt(targetReps || '10', 10) || 10;
+      const applied = applyPreviousSetStats(set, fallbackReps);
+      updateSet(exerciseId, set.id, {
+        weightKg: applied.weightKg,
+        reps: applied.reps,
+        isWeightEdited: true,
+      });
+    },
+    [updateSet],
+  );
 
   // Handle hardware back press on Android to minimize instead of exiting
   useEffect(() => {
@@ -296,10 +325,13 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     }
   }, []);
 
-  const handleInputFocus = useCallback((event: any, inputRef?: React.RefObject<any>) => {
-    activeInputRef.current = inputRef?.current || event?.target;
-    setTimeout(ensureInputVisible, 120);
-  }, [ensureInputVisible]);
+  const handleInputFocus = useCallback(
+    (event: any, inputRef?: React.RefObject<any>) => {
+      activeInputRef.current = inputRef?.current || event?.target;
+      setTimeout(ensureInputVisible, 120);
+    },
+    [ensureInputVisible],
+  );
 
   useEffect(() => {
     const onShow = (e: any) => {
@@ -316,18 +348,18 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
 
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      onShow
+      onShow,
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      onHide
+      onHide,
     );
 
     return () => {
       showSub.remove();
       hideSub.remove();
     };
-  }, []);
+  }, [ensureInputVisible]);
 
   // Memoize live volume and completed sets counts to prevent recomputation on 1-second clock ticks
   const { liveVolume, completedSetsCount, totalSetsCount } = useMemo(
@@ -338,22 +370,22 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
   const displayedActiveGym = resolveDisplayedActiveGym(activeGym, gyms, activeWorkout?.gymId);
 
   const menuExerciseIndex = menuActiveExercise
-    ? (activeWorkout?.exercises ?? []).findIndex((exercise) => exercise.id === menuActiveExercise.id)
+    ? (activeWorkout?.exercises ?? []).findIndex(exercise => exercise.id === menuActiveExercise.id)
     : -1;
 
   const handleAddQuickWarmup = (activeEx: ActiveExercise) => {
     const defaultBar = getDefaultBarWeight(
       activeEx.exercise?.equipment,
       activeEx.exercise?.category,
-      unit
+      unit,
     );
 
-    let targetWorkingWeight = 0;
-    const workingSet = activeEx.sets.find((s) => s.type !== 'warmup' && s.weightKg > 0);
+    let targetWorkingWeight: number;
+    const workingSet = activeEx.sets.find(s => s.type !== 'warmup' && s.weightKg > 0);
     if (workingSet) {
       targetWorkingWeight = workingSet.weightKg;
     } else {
-      const ghostSet = activeEx.sets.find((s) => (s.previousWeightKg || 0) > 0);
+      const ghostSet = activeEx.sets.find(s => (s.previousWeightKg || 0) > 0);
       targetWorkingWeight =
         ghostSet?.previousWeightKg ||
         (defaultBar > 0 ? (unit === 'lb' ? displayToKg(135, 'lb') : 60) : 0);
@@ -361,17 +393,10 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
 
     const inc = getDefaultIncrement(unit);
     const displayWorking = kgToDisplay(targetWorkingWeight, unit);
-    const displayWarmup = Math.max(
-      roundToIncrement(displayWorking * 0.5, inc),
-      defaultBar
-    );
+    const displayWarmup = Math.max(roundToIncrement(displayWorking * 0.5, inc), defaultBar);
     const warmupWeightKg = displayToKg(displayWarmup, unit);
 
-    insertWarmupSets(
-      activeEx.id,
-      [{ weightKg: warmupWeightKg, reps: 8 }],
-      false
-    );
+    insertWarmupSets(activeEx.id, [{ weightKg: warmupWeightKg, reps: 8 }], false);
 
     if (Platform.OS !== 'web') {
       bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
@@ -476,18 +501,21 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
   };
 
   // Open the instant Set Options / 1-Tap RPE modal
-  const openSetOptions = useCallback((activeExerciseId: string, exerciseName: string, set: WorkoutSet) => {
-    setSetOptionsModal({
-      activeExerciseId,
-      exerciseName,
-      set,
-    });
-  }, []);
+  const openSetOptions = useCallback(
+    (activeExerciseId: string, exerciseName: string, set: WorkoutSet) => {
+      setSetOptionsModal({
+        activeExerciseId,
+        exerciseName,
+        set,
+      });
+    },
+    [],
+  );
 
   const handleSelectSetType = (type: SetType) => {
     if (!setOptionsModal) return;
-    const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
-    const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
+    const modalEx = activeWorkout?.exercises.find(e => e.id === setOptionsModal.activeExerciseId);
+    const setIdx = modalEx?.sets.findIndex(s => s.id === setOptionsModal.set.id) ?? -1;
     // Find the previous working set (ignoring warmups and unweighted sets)
     const prevWorkingSet = findPreviousWorkingSet(modalEx?.sets ?? [], setIdx);
 
@@ -502,7 +530,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     ) {
       const inc = getDefaultIncrement(unit);
       const prevDisp = kgToDisplay(prevWorkingSet.weightKg, unit);
-      updatedWeightKg = displayToKg(roundToIncrement(prevDisp * 0.80, inc), unit);
+      updatedWeightKg = displayToKg(roundToIncrement(prevDisp * 0.8, inc), unit);
       isWeightEdited = true;
     }
 
@@ -512,7 +540,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
         ? { weightKg: updatedWeightKg, isWeightEdited: true }
         : {}),
     });
-    setSetOptionsModal((prev) =>
+    setSetOptionsModal(prev =>
       prev
         ? {
             ...prev,
@@ -523,7 +551,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
               isWeightEdited,
             },
           }
-        : null
+        : null,
     );
   };
 
@@ -531,7 +559,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     if (!setOptionsModal) return;
     const updatedRpe = rpe ?? undefined;
     updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, { rpe: updatedRpe });
-    setSetOptionsModal((prev) => (prev ? { ...prev, set: { ...prev.set, rpe: updatedRpe } } : null));
+    setSetOptionsModal(prev => (prev ? { ...prev, set: { ...prev.set, rpe: updatedRpe } } : null));
   };
 
   const handleSetOptionsMoveSet = (direction: -1 | 1) => {
@@ -548,13 +576,13 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
       weightKg,
       isWeightEdited: true,
     });
-    setSetOptionsModal((prev) =>
+    setSetOptionsModal(prev =>
       prev
         ? {
             ...prev,
             set: { ...prev.set, weightKg, isWeightEdited: true },
           }
-        : null
+        : null,
     );
   };
 
@@ -751,7 +779,10 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
         activeExercise: warmupModalExercise,
         unit,
         onClose: () => setWarmupModalExercise(null),
-        onApplyWarmupSets: (warmupSets: { weightKg: number; reps: number }[], replaceExisting: boolean) => {
+        onApplyWarmupSets: (
+          warmupSets: { weightKg: number; reps: number }[],
+          replaceExisting: boolean,
+        ) => {
           if (warmupModalExercise) {
             insertWarmupSets(warmupModalExercise.id, warmupSets, replaceExisting);
             setWarmupModalExercise(null);
@@ -895,7 +926,7 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
           setShowDurationModal(true);
         },
         onToggleRpeColumn: () => {
-          setShowRpeColumn((prev) => !prev);
+          setShowRpeColumn(prev => !prev);
           setShowWorkoutMenu(false);
         },
         onDiscard: handleDiscard,

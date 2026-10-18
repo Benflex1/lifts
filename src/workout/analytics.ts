@@ -43,7 +43,7 @@ function dateLabel(date: Date): string {
 export function buildWeeklyVolume(
   workouts: Workout[],
   now: Date = new Date(),
-  weekCount: number = 8
+  weekCount: number = 8,
 ): WeeklyVolumePoint[] {
   const count = Math.max(1, Math.floor(weekCount));
   const currentWeek = startOfWeek(now);
@@ -79,18 +79,15 @@ export function buildMuscleFrequency(
   workouts: Workout[],
   options?: MuscleFrequencyOptions,
 ): MuscleFrequencyPoint[];
-export function buildMuscleFrequency(
-  workouts: Workout[],
-  limit?: number,
-): MuscleFrequencyPoint[];
+export function buildMuscleFrequency(workouts: Workout[], limit?: number): MuscleFrequencyPoint[];
 export function buildMuscleFrequency(
   workouts: Workout[],
   optionsOrLimit: MuscleFrequencyOptions | number = {},
 ): MuscleFrequencyPoint[] {
   const options = typeof optionsOrLimit === 'number' ? {} : optionsOrLimit;
-  const limit = typeof optionsOrLimit === 'number' ? optionsOrLimit : options.limit ?? 8;
+  const limit = typeof optionsOrLimit === 'number' ? optionsOrLimit : (options.limit ?? 8);
   const catalogById = new Map(
-    (options.exerciseCatalog || []).map((exercise) => [exercise.id, exercise]),
+    (options.exerciseCatalog || []).map(exercise => [exercise.id, exercise]),
   );
   const counts = new Map<string, { primaryCount: number; secondaryCount: number }>();
 
@@ -215,9 +212,10 @@ export function extractExerciseProgression(
 
   for (const workout of workouts) {
     if (allowedGymIds) {
-      const isAllowed = allowedGymIds instanceof Set
-        ? allowedGymIds.has(workout.gymId)
-        : (allowedGymIds.length === 0 || allowedGymIds.includes(workout.gymId));
+      const isAllowed =
+        allowedGymIds instanceof Set
+          ? allowedGymIds.has(workout.gymId)
+          : allowedGymIds.length === 0 || allowedGymIds.includes(workout.gymId);
       if (!isAllowed) {
         continue;
       }
@@ -229,8 +227,8 @@ export function extractExerciseProgression(
       continue;
     }
 
-    const occurrences = (workout.exercises || []).filter((e) => e.exerciseId === exerciseId);
-    const completedSets = occurrences.flatMap((e) => e.sets || []).filter((s) => s.isCompleted);
+    const occurrences = (workout.exercises || []).filter(e => e.exerciseId === exerciseId);
+    const completedSets = occurrences.flatMap(e => e.sets || []).filter(s => s.isCompleted);
     if (completedSets.length === 0) continue;
 
     let maxWeightKg = 0;
@@ -262,7 +260,9 @@ export function extractExerciseProgression(
     }
 
     const gymName = gymNamesMap
-      ? (gymNamesMap instanceof Map ? gymNamesMap.get(workout.gymId) : (gymNamesMap as Record<string, string>)[workout.gymId])
+      ? gymNamesMap instanceof Map
+        ? gymNamesMap.get(workout.gymId)
+        : (gymNamesMap as Record<string, string>)[workout.gymId]
       : undefined;
 
     rawPoints.push({
@@ -317,15 +317,16 @@ export function extractExerciseProgression(
   }
 
   // True all-time bests across full history
-  const allTimeBest1RM = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.e1rmKg)) : 0;
-  const allTimeBestWeight = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxWeightKg)) : 0;
-  const allTimeBestReps = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxReps)) : 0;
+  const allTimeBest1RM = rawPoints.length > 0 ? Math.max(...rawPoints.map(p => p.e1rmKg)) : 0;
+  const allTimeBestWeight =
+    rawPoints.length > 0 ? Math.max(...rawPoints.map(p => p.maxWeightKg)) : 0;
+  const allTimeBestReps = rawPoints.length > 0 ? Math.max(...rawPoints.map(p => p.maxReps)) : 0;
   const current1RM = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].e1rmKg : 0;
   const currentWeight = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxWeightKg : 0;
   const currentReps = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxReps : 0;
 
   // Filter points to timeframe window after calculating true PRs and all-time bests
-  const filteredPoints = cutoffMs > 0 ? rawPoints.filter((p) => p.timestamp >= cutoffMs) : rawPoints;
+  const filteredPoints = cutoffMs > 0 ? rawPoints.filter(p => p.timestamp >= cutoffMs) : rawPoints;
 
   let changePercent1RM = 0;
   let changePercentReps = 0;
@@ -362,7 +363,10 @@ export function extractExerciseProgression(
   };
 }
 
-export function isPointPrForMetric(point: ProgressionDataPoint, metric: ProgressionMetric): boolean {
+export function isPointPrForMetric(
+  point: ProgressionDataPoint,
+  metric: ProgressionMetric,
+): boolean {
   if (point.prMetrics) {
     switch (metric) {
       case 'e1rm':
@@ -402,15 +406,19 @@ export function buildTrainingDistribution(
     if (Number.isNaN(workoutTime) || workoutTime < cutoffMs) continue;
 
     for (const ex of workout.exercises || []) {
-      const completedSets = (ex.sets || []).filter((s) => s.isCompleted);
+      const completedSets = (ex.sets || []).filter(s => s.isCompleted);
       if (completedSets.length === 0) continue;
 
       const rawMuscles = ex.exercise?.primaryMuscles || [];
-      const muscles = rawMuscles.length > 0
-        ? rawMuscles.map((m) => m.trim().toLowerCase()).filter(Boolean)
-        : ['other'];
+      const muscles =
+        rawMuscles.length > 0
+          ? rawMuscles.map(m => m.trim().toLowerCase()).filter(Boolean)
+          : ['other'];
 
-      const totalExVolume = completedSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+      const totalExVolume = completedSets.reduce(
+        (sum, s) => sum + (s.weightKg || 0) * (s.reps || 0),
+        0,
+      );
       const totalExSets = completedSets.length;
       grandTotalVolume += totalExVolume;
       grandTotalSets += totalExSets;
@@ -433,8 +441,10 @@ export function buildTrainingDistribution(
       muscle,
       volumeKg: Number(data.volumeKg.toFixed(1)),
       setsCount: data.setsCount % 1 === 0 ? data.setsCount : Number(data.setsCount.toFixed(1)),
-      percentage: grandTotalVolume > 0 ? Number(((data.volumeKg / grandTotalVolume) * 100).toFixed(1)) : 0,
-      setsPercentage: grandTotalSets > 0 ? Number(((data.setsCount / grandTotalSets) * 100).toFixed(1)) : 0,
+      percentage:
+        grandTotalVolume > 0 ? Number(((data.volumeKg / grandTotalVolume) * 100).toFixed(1)) : 0,
+      setsPercentage:
+        grandTotalSets > 0 ? Number(((data.setsCount / grandTotalSets) * 100).toFixed(1)) : 0,
     }))
     .sort((a, b) => b.volumeKg - a.volumeKg || a.muscle.localeCompare(b.muscle));
 }
@@ -621,7 +631,7 @@ export function buildConsistencySummary(
   let currentStreakWeeks = 0;
   // If current week has workouts, start checking from current week.
   // Otherwise, start checking from previous week (streak is still ongoing if last week was active).
-  let checkDate = new Date(currentWeekDate);
+  const checkDate = new Date(currentWeekDate);
   if (currentWeekCount === 0) {
     checkDate.setUTCDate(checkDate.getUTCDate() - 7);
   }

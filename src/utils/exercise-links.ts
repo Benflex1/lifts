@@ -30,10 +30,7 @@ const isGitHubHost = (hostname: string): boolean => {
   return normalized === 'github.com' || normalized.endsWith('.github.com');
 };
 
-const isValidCuratedLink = (
-  url: unknown,
-  type: unknown,
-): url is string => {
+const isValidCuratedLink = (url: unknown, type: unknown): url is string => {
   if (typeof url !== 'string' || !url || url.trim() !== url) return false;
   if (type !== 'website' && type !== 'youtube') return false;
 
@@ -44,14 +41,18 @@ const isValidCuratedLink = (
     return false;
   }
 
-  if (!parsed.hostname || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) return false;
+  if (!parsed.hostname || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:'))
+    return false;
   if (isGitHubHost(parsed.hostname)) return false;
   return (type === 'youtube') === isYouTubeUrl(parsed);
 };
 
 export function getExerciseInstructionLink(exercise: Exercise): ExerciseInstructionLink {
   const type = exercise.instructionUrlType;
-  if (isValidCuratedLink(exercise.instructionUrl, type) && (type === 'website' || type === 'youtube')) {
+  if (
+    isValidCuratedLink(exercise.instructionUrl, type) &&
+    (type === 'website' || type === 'youtube')
+  ) {
     return {
       url: exercise.instructionUrl,
       type,

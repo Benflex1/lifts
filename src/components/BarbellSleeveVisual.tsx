@@ -21,7 +21,7 @@ export const BarbellSleeveVisual: React.FC<BarbellSleeveVisualProps> = ({
     return null;
   }
 
-  const { barWeight, targetWeight, weightPerSide, plates, remainder } = calculation;
+  const { barWeight, targetWeight, plates, remainder } = calculation;
 
   // Flatten plates array: e.g. [{weight: 20, count: 2}] -> [20, 20]
   const individualPlates: number[] = [];
@@ -90,7 +90,9 @@ export const BarbellSleeveVisual: React.FC<BarbellSleeveVisualProps> = ({
             {/* Empty Bar State Cue */}
             {isEmptyBar && (
               <View style={styles.emptySleeveNotice}>
-                <Text style={styles.emptySleeveText}>Empty Bar ({barWeight} {unit})</Text>
+                <Text style={styles.emptySleeveText}>
+                  Empty Bar ({barWeight} {unit})
+                </Text>
               </View>
             )}
           </View>
@@ -106,9 +108,7 @@ export const BarbellSleeveVisual: React.FC<BarbellSleeveVisualProps> = ({
           {individualPlates.length > 0 && (
             <>
               {' + 2× ('}
-              <Text style={styles.summaryHighlight}>
-                {individualPlates.join(' + ')}
-              </Text>
+              <Text style={styles.summaryHighlight}>{individualPlates.join(' + ')}</Text>
               {` ${unit}) = `}
             </>
           )}

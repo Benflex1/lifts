@@ -16,7 +16,11 @@ import {
 describe('Seed Data Integrity', () => {
   it('does not evaluate the bundled catalog JSON until first use', () => {
     const jsonPath = require.resolve('../../src/database/defaultExercises.json');
-    assert.equal(require.cache[jsonPath], undefined, 'JSON must stay unevaluated until a seed or sync needs it');
+    assert.equal(
+      require.cache[jsonPath],
+      undefined,
+      'JSON must stay unevaluated until a seed or sync needs it',
+    );
   });
 
   it('exports the current bundled exercise catalog version', () => {
@@ -43,14 +47,32 @@ describe('Seed Data Integrity', () => {
       assert.ok(ex.name, `Exercise ${ex.id} must have a name`);
       assert.ok(ex.category, `Exercise ${ex.id} must have a category`);
       assert.ok(ex.equipment, `Exercise ${ex.id} must have equipment`);
-      assert.ok(Array.isArray(ex.primaryMuscles), `Exercise ${ex.id} must have primaryMuscles array`);
-      assert.ok(ex.primaryMuscles.length > 0, `Exercise ${ex.id} must have at least one primary muscle`);
-      assert.ok(ex.primaryMuscles.every(muscle => muscle.trim().length > 0), `Exercise ${ex.id} must have non-blank primary muscles`);
-      assert.ok(Array.isArray(ex.secondaryMuscles), `Exercise ${ex.id} must have secondaryMuscles array`);
-      assert.ok(ex.secondaryMuscles.every(muscle => muscle.trim().length > 0), `Exercise ${ex.id} must have non-blank secondary muscles`);
+      assert.ok(
+        Array.isArray(ex.primaryMuscles),
+        `Exercise ${ex.id} must have primaryMuscles array`,
+      );
+      assert.ok(
+        ex.primaryMuscles.length > 0,
+        `Exercise ${ex.id} must have at least one primary muscle`,
+      );
+      assert.ok(
+        ex.primaryMuscles.every(muscle => muscle.trim().length > 0),
+        `Exercise ${ex.id} must have non-blank primary muscles`,
+      );
+      assert.ok(
+        Array.isArray(ex.secondaryMuscles),
+        `Exercise ${ex.id} must have secondaryMuscles array`,
+      );
+      assert.ok(
+        ex.secondaryMuscles.every(muscle => muscle.trim().length > 0),
+        `Exercise ${ex.id} must have non-blank secondary muscles`,
+      );
       assert.ok(Array.isArray(ex.instructions), `Exercise ${ex.id} must have instructions array`);
       assert.ok(ex.instructions.length > 0, `Exercise ${ex.id} must have instructions`);
-      assert.ok(ex.instructions.every(instruction => instruction.trim().length > 0), `Exercise ${ex.id} must have non-blank instructions`);
+      assert.ok(
+        ex.instructions.every(instruction => instruction.trim().length > 0),
+        `Exercise ${ex.id} must have non-blank instructions`,
+      );
       assert.doesNotMatch(ex.instructionUrl || '', /github\.com/i);
       if (ex.instructionUrl !== undefined) assert.equal(ex.instructionUrlType, 'website');
       assert.doesNotThrow(() => validateExerciseRecord(ex, `bundled exercise ${ex.id}`));
@@ -67,7 +89,10 @@ describe('Seed Data Integrity', () => {
       ['Pushups', 'https://musclewiki.com/exercise/push-up'],
     ]);
 
-    assert.equal(getDefaultExercises().filter(exercise => exercise.instructionUrl !== undefined).length, expected.size);
+    assert.equal(
+      getDefaultExercises().filter(exercise => exercise.instructionUrl !== undefined).length,
+      expected.size,
+    );
     for (const [id, url] of expected) {
       const record = getDefaultExercises().find(exercise => exercise.id === id);
       assert.ok(record, `Missing bundled exercise ${id}`);
@@ -96,7 +121,11 @@ describe('Seed Data Integrity', () => {
         assert.ok(re.exerciseId);
         assert.equal(re.exercise.id, re.exerciseId, 'Embedded exercise id must equal exerciseId');
         const fromLibrary = getBundledExercise(re.exerciseId);
-        assert.deepEqual(re.exercise, fromLibrary, 'Embedded exercise must be identical to bundled definition');
+        assert.deepEqual(
+          re.exercise,
+          fromLibrary,
+          'Embedded exercise must be identical to bundled definition',
+        );
       }
     }
   });

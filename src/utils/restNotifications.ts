@@ -11,13 +11,13 @@ export function isExpoGoAndroid(): boolean {
     return false;
   }
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native probe keeps Node-based tests free of the RN module
     const { Platform } = require('react-native');
     if (Platform?.OS !== 'android') {
       return false;
     }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional dependency; absent outside Expo Go
       const expo = require('expo');
       if (typeof expo?.isRunningInExpoGo === 'function' && expo.isRunningInExpoGo()) {
         return true;
@@ -26,13 +26,10 @@ export function isExpoGoAndroid(): boolean {
       // Intentional: detection is best-effort; a failure means "not Expo Go".
     }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional dependency; absent in bare runtimes
       const mod = require('expo-constants');
       const Constants = mod?.default ?? mod;
-      if (
-        Constants?.appOwnership === 'expo' ||
-        Constants?.executionEnvironment === 'storeClient'
-      ) {
+      if (Constants?.appOwnership === 'expo' || Constants?.executionEnvironment === 'storeClient') {
         return true;
       }
     } catch {
@@ -58,7 +55,7 @@ export async function initRestNotifications(): Promise<void> {
 
 export async function scheduleRestNotification(
   endsAtMs: number,
-  exerciseName?: string
+  exerciseName?: string,
 ): Promise<string | null> {
   if (typeof document !== 'undefined') {
     const { scheduleRestNotification } = await import('./restNotifications.web');
@@ -82,4 +79,3 @@ export async function cancelRestNotification(): Promise<void> {
   const { cancelRestNotification } = await import('./restNotifications.ios');
   return cancelRestNotification();
 }
-

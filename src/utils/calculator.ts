@@ -6,7 +6,7 @@ export const KG_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
 export function calculatePlates(
   targetWeight: number,
   barWeight: number = 20,
-  availablePlates: number[] = KG_PLATES
+  availablePlates: number[] = KG_PLATES,
 ): PlateCalculation {
   if (targetWeight <= barWeight) {
     return {
@@ -40,7 +40,10 @@ export function calculatePlates(
   };
 }
 
-export function calculate1RM(weight: number, reps: number): { epley: number; brzycki: number; average: number } {
+export function calculate1RM(
+  weight: number,
+  reps: number,
+): { epley: number; brzycki: number; average: number } {
   if (reps <= 1) {
     return { epley: weight, brzycki: weight, average: weight };
   }

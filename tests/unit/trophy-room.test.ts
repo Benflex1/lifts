@@ -38,7 +38,13 @@ describe('Trophy Room Aggregation Engine', () => {
 
   const allExercises = [bench, squat, deadlift, pullUps];
 
-  const gymA: Gym = { id: 'gym-a', name: 'Gold Gym', isDefault: true, color: '#F59E0B', createdAt: '2026-01-01' };
+  const gymA: Gym = {
+    id: 'gym-a',
+    name: 'Gold Gym',
+    isDefault: true,
+    color: '#F59E0B',
+    createdAt: '2026-01-01',
+  };
   const allGyms = [gymA];
 
   it('aggregates total medals, best lifts, and computes SBD total', () => {
@@ -138,7 +144,7 @@ describe('Trophy Room Aggregation Engine', () => {
     assert.equal(summary.sbdTotalKg, expectedSBD);
 
     // Bodyweight pullups record
-    const pullupRecord = summary.records.find((r) => r.exerciseId === pullUps.id);
+    const pullupRecord = summary.records.find(r => r.exerciseId === pullUps.id);
     assert.ok(pullupRecord);
     assert.equal(pullupRecord.bestReps?.value, 15);
   });
@@ -184,21 +190,27 @@ describe('Trophy Room Aggregation Engine', () => {
           exerciseId: barbellBenchStandard.id,
           exercise: barbellBenchStandard,
           restTimerSeconds: 90,
-          sets: [{ id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true }],
+          sets: [
+            { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+          ],
         },
         {
           id: 'ae2',
           exerciseId: barbellSquatStandard.id,
           exercise: barbellSquatStandard,
           restTimerSeconds: 90,
-          sets: [{ id: 's2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true }],
+          sets: [
+            { id: 's2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true },
+          ],
         },
         {
           id: 'ae3',
           exerciseId: barbellDeadliftStandard.id,
           exercise: barbellDeadliftStandard,
           restTimerSeconds: 90,
-          sets: [{ id: 's3', setNumber: 1, type: 'normal', weightKg: 180, reps: 5, isCompleted: true }],
+          sets: [
+            { id: 's3', setNumber: 1, type: 'normal', weightKg: 180, reps: 5, isCompleted: true },
+          ],
         },
       ],
     };
@@ -250,14 +262,18 @@ describe('Trophy Room Aggregation Engine', () => {
           exerciseId: bench.id,
           exercise: bench,
           restTimerSeconds: 90,
-          sets: [{ id: 's-d1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true }],
+          sets: [
+            { id: 's-d1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+          ],
         },
         {
           id: 'ae-d2',
           exerciseId: squat.id,
           exercise: squat,
           restTimerSeconds: 90,
-          sets: [{ id: 's-d2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true }],
+          sets: [
+            { id: 's-d2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true },
+          ],
         },
       ],
     };
@@ -275,14 +291,18 @@ describe('Trophy Room Aggregation Engine', () => {
           exerciseId: bench.id,
           exercise: bench,
           restTimerSeconds: 90,
-          sets: [{ id: 's-d3', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: true }],
+          sets: [
+            { id: 's-d3', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: true },
+          ],
         },
         {
           id: 'ae-d4',
           exerciseId: pullUps.id,
           exercise: pullUps,
           restTimerSeconds: 90,
-          sets: [{ id: 's-d4', setNumber: 1, type: 'normal', weightKg: 0, reps: 15, isCompleted: true }],
+          sets: [
+            { id: 's-d4', setNumber: 1, type: 'normal', weightKg: 0, reps: 15, isCompleted: true },
+          ],
         },
       ],
     };
@@ -312,8 +332,8 @@ describe('Trophy Room Aggregation Engine', () => {
       const derived = filterTrophyRecords(overview.records, filters);
 
       assert.deepEqual(
-        derived.map((r) => ({ id: r.exerciseId, name: r.exerciseName })),
-        full.records.map((r) => ({ id: r.exerciseId, name: r.exerciseName })),
+        derived.map(r => ({ id: r.exerciseId, name: r.exerciseName })),
+        full.records.map(r => ({ id: r.exerciseId, name: r.exerciseName })),
         `filters ${JSON.stringify(filters)} derive the same records as a full aggregation`,
       );
     }

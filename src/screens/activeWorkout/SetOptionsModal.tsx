@@ -53,8 +53,8 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
 }) => {
   const setPR = target ? prSummary?.setPRs.get(target.set.id) : undefined;
 
-  const modalExercise = exercises.find((e) => e.id === target?.activeExerciseId);
-  const currentSetIndex = modalExercise?.sets.findIndex((s) => s.id === target?.set.id) ?? -1;
+  const modalExercise = exercises.find(e => e.id === target?.activeExerciseId);
+  const currentSetIndex = modalExercise?.sets.findIndex(s => s.id === target?.set.id) ?? -1;
   const totalSets = modalExercise?.sets.length ?? 0;
   const isFirstSet = currentSetIndex <= 0;
   const isLastSet = currentSetIndex >= totalSets - 1;
@@ -70,12 +70,8 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
         <View style={[styles.setOptionsSheet, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={styles.modalHeaderTitle}>
-                Set {target?.set.setNumber} Details
-              </Text>
-              <Text style={styles.modalHeaderSubtitle}>
-                {target?.exerciseName}
-              </Text>
+              <Text style={styles.modalHeaderTitle}>Set {target?.set.setNumber} Details</Text>
+              <Text style={styles.modalHeaderSubtitle}>{target?.exerciseName}</Text>
             </View>
             <TouchableOpacity
               onPress={onClose}
@@ -95,8 +91,8 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                   {setPR.primary?.rank === 1
                     ? 'PERSONAL RECORD (1ST BEST)'
                     : setPR.primary?.rank === 2
-                    ? 'SILVER RECORD (2ND BEST)'
-                    : 'BRONZE RECORD (3RD BEST)'}
+                      ? 'SILVER RECORD (2ND BEST)'
+                      : 'BRONZE RECORD (3RD BEST)'}
                 </Text>
               </View>
               {setPR.achievements.map((ach, idx) => (
@@ -111,7 +107,7 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
           <View style={styles.optionsSection}>
             <Text style={styles.sectionLabel}>SET TYPE</Text>
             <View style={styles.typeChipsRow}>
-              {SET_TYPE_CHIPS.map((t) => {
+              {SET_TYPE_CHIPS.map(t => {
                 const isSelected = target?.set.type === t.type;
                 return (
                   <TouchableOpacity
@@ -119,9 +115,7 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                     style={[styles.typeChip, isSelected && styles.typeChipActive]}
                     onPress={() => onSelectType(t.type)}
                   >
-                    <Text
-                      style={[styles.typeChipText, isSelected && styles.typeChipTextActive]}
-                    >
+                    <Text style={[styles.typeChipText, isSelected && styles.typeChipTextActive]}>
                       {t.label}
                     </Text>
                   </TouchableOpacity>
@@ -132,10 +126,11 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
             {/* Quick Drop Set Load Reduction Helper */}
             {(() => {
               if (!target || target.set.type !== 'drop') return null;
-              const dropExercise = exercises.find((e) => e.id === target.activeExerciseId);
-              const setIdx = dropExercise?.sets.findIndex((s) => s.id === target.set.id) ?? -1;
+              const dropExercise = exercises.find(e => e.id === target.activeExerciseId);
+              const setIdx = dropExercise?.sets.findIndex(s => s.id === target.set.id) ?? -1;
               const prevWorkingSet = findPreviousWorkingSet(dropExercise?.sets ?? [], setIdx);
-              if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0) return null;
+              if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0)
+                return null;
 
               const prevDisplay = kgToDisplay(prevWorkingSet.weightKg, unit);
               const dropReductions = computeDropSetSuggestions(prevWorkingSet, unit);
@@ -147,7 +142,7 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                     Based on Set #{prevWorkingSet.setNumber} ({prevDisplay} {unit}):
                   </Text>
                   <View style={styles.dropChipsRow}>
-                    {dropReductions.map((r) => {
+                    {dropReductions.map(r => {
                       const isCurrent = Math.abs(target.set.weightKg - r.kg) < 0.05;
                       return (
                         <TouchableOpacity
@@ -158,7 +153,12 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                           <Text style={[styles.dropChipPct, isCurrent && styles.dropChipPctActive]}>
                             -{r.pct}%
                           </Text>
-                          <Text style={[styles.dropChipWeight, isCurrent && styles.dropChipWeightActive]}>
+                          <Text
+                            style={[
+                              styles.dropChipWeight,
+                              isCurrent && styles.dropChipWeightActive,
+                            ]}
+                          >
                             {kgToDisplay(r.kg, unit)} {unit}
                           </Text>
                         </TouchableOpacity>
@@ -178,11 +178,8 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
             </View>
 
             <View style={styles.rpeChipsGrid}>
-              {RPE_CHIPS.map((val) => {
-                const isSelected =
-                  val === null
-                    ? target?.set.rpe == null
-                    : target?.set.rpe === val;
+              {RPE_CHIPS.map(val => {
+                const isSelected = val === null ? target?.set.rpe == null : target?.set.rpe === val;
                 return (
                   <TouchableOpacity
                     key={val === null ? 'none' : val.toString()}
@@ -227,7 +224,12 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                 accessibilityLabel="Move set up"
               >
                 <ArrowUp size={16} color={isFirstSet ? colors.textFaint : colors.purpleLight} />
-                <Text style={[styles.shortcutBtnText, { color: isFirstSet ? colors.textFaint : colors.purpleLight }]}>
+                <Text
+                  style={[
+                    styles.shortcutBtnText,
+                    { color: isFirstSet ? colors.textFaint : colors.purpleLight },
+                  ]}
+                >
                   Move Up {currentSetIndex > 0 ? `(to #${currentSetIndex})` : ''}
                 </Text>
               </TouchableOpacity>
@@ -244,8 +246,16 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                 accessibilityLabel="Move set down"
               >
                 <ArrowDown size={16} color={isLastSet ? colors.textFaint : colors.purpleLight} />
-                <Text style={[styles.shortcutBtnText, { color: isLastSet ? colors.textFaint : colors.purpleLight }]}>
-                  Move Down {currentSetIndex >= 0 && currentSetIndex < totalSets - 1 ? `(to #${currentSetIndex + 2})` : ''}
+                <Text
+                  style={[
+                    styles.shortcutBtnText,
+                    { color: isLastSet ? colors.textFaint : colors.purpleLight },
+                  ]}
+                >
+                  Move Down{' '}
+                  {currentSetIndex >= 0 && currentSetIndex < totalSets - 1
+                    ? `(to #${currentSetIndex + 2})`
+                    : ''}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -278,10 +288,7 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.doneModalBtn}
-            onPress={onClose}
-          >
+          <TouchableOpacity style={styles.doneModalBtn} onPress={onClose}>
             <Text style={styles.doneModalBtnText}>Done</Text>
           </TouchableOpacity>
         </View>

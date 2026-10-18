@@ -1,11 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { reportError } from '../utils/errorReporting';
@@ -65,7 +59,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   const [currentDialog, setCurrentDialog] = useState<DialogState | null>(null);
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    return new Promise<boolean>((resolve) => {
+    return new Promise<boolean>(resolve => {
       setCurrentDialog({
         type: 'confirm',
         title: options.title,
@@ -80,7 +74,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const notify = useCallback((options: NotifyOptions): Promise<void> => {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
       setCurrentDialog({
         type: 'notify',
         title: options.title,
@@ -116,7 +110,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       });
       const actionError = getDialogActionErrorMessage(error, dialog.action);
       // Keep the dialog open and replace any previous failure copy so the user can retry.
-      setCurrentDialog((current) => (current ? { ...current, actionError } : current));
+      setCurrentDialog(current => (current ? { ...current, actionError } : current));
     }
   };
 

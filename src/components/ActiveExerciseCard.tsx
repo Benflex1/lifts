@@ -49,7 +49,7 @@ export interface ActiveExerciseCardProps {
 function sameCardSetPRs(
   prev: WorkoutPRSummary | null,
   next: WorkoutPRSummary | null,
-  sets: WorkoutSet[]
+  sets: WorkoutSet[],
 ): boolean {
   if (prev === next) return true;
   if (!prev || !next) return false;
@@ -79,7 +79,10 @@ function sameSupersetMeta(a?: ExerciseSupersetMeta, b?: ExerciseSupersetMeta): b
  * not care about: a set toggle only replaces the owning exercise object, so
  * every other card skips re-rendering unless its own PR badges changed.
  */
-export function areCardPropsEqual(prev: ActiveExerciseCardProps, next: ActiveExerciseCardProps): boolean {
+export function areCardPropsEqual(
+  prev: ActiveExerciseCardProps,
+  next: ActiveExerciseCardProps,
+): boolean {
   if (prev.exercise !== next.exercise) return false;
   if (prev.isExpanded !== next.isExpanded) return false;
   if (prev.isNoteEditing !== next.isNoteEditing) return false;
@@ -127,7 +130,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
   onOpenSetOptions,
   onInputFocus,
 }: ActiveExerciseCardProps) {
-  const completedCount = exercise.sets.filter((s) => s.isCompleted).length;
+  const completedCount = exercise.sets.filter(s => s.isCompleted).length;
   const totalCount = exercise.sets.length;
   const isAllCompleted = totalCount > 0 && completedCount === totalCount;
   const rowViewModel = exercise.exercise ? getExerciseRowViewModel(exercise.exercise) : null;
@@ -146,7 +149,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
     >
       <TouchableOpacity
         style={styles.exerciseAvatar}
-        onPress={(e) => {
+        onPress={e => {
           e.stopPropagation();
           onOpenDetail(exercise.exercise || null);
         }}
@@ -171,18 +174,15 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
         </Text>
         <View style={styles.collapsedMetaRow}>
           {supersetMeta && (
-            <View style={[styles.ssPositionBadge, { borderColor: supersetMeta.color, marginRight: 6 }]}>
+            <View
+              style={[styles.ssPositionBadge, { borderColor: supersetMeta.color, marginRight: 6 }]}
+            >
               <Text style={[styles.ssPositionText, { color: supersetMeta.color }]}>
                 {supersetMeta.positionInGroup}/{supersetMeta.totalInGroup}
               </Text>
             </View>
           )}
-          <Text
-            style={[
-              styles.collapsedSubtitle,
-              isAllCompleted && styles.completedSubtitleText,
-            ]}
-          >
+          <Text style={[styles.collapsedSubtitle, isAllCompleted && styles.completedSubtitleText]}>
             {completedCount}/{totalCount} done
           </Text>
           {isAllCompleted && (
@@ -194,7 +194,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
       <View style={styles.collapsedActions}>
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={(e) => {
+          onPress={e => {
             e.stopPropagation();
             onOpenMenu(exercise);
           }}
@@ -275,17 +275,17 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
             onPress={() => onOpenMenu(exercise)}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-                <MoreHorizontal size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => onToggleExpanded(exercise.id)}
-                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              >
-                <ChevronUp size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          </View>
+            <MoreHorizontal size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => onToggleExpanded(exercise.id)}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+          >
+            <ChevronUp size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* Rest timer + note pills */}
       <View style={styles.exerciseMetaRow}>
@@ -344,7 +344,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
       </View>
 
       {/* Set Rows */}
-      {exercise.sets.map((set) => (
+      {exercise.sets.map(set => (
         <ActiveSetRow
           key={set.id}
           set={set}

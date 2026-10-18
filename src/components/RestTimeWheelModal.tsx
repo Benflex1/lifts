@@ -173,14 +173,20 @@ export const RestTimeWheelModal: React.FC<Props> = ({
                 </Text>
               )}
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <X color={colors.textSecondary} size={24} />
             </TouchableOpacity>
           </View>
 
           {/* Big Digital Display Banner */}
           <View style={styles.displayBanner}>
-            <Timer size={24} color={totalCalculatedSeconds > 0 ? colors.success : colors.textMuted} />
+            <Timer
+              size={24}
+              color={totalCalculatedSeconds > 0 ? colors.success : colors.textMuted}
+            />
             <Text
               style={[
                 styles.digitalTimeText,
@@ -296,7 +302,8 @@ export const RestTimeWheelModal: React.FC<Props> = ({
                         <Text
                           style={[styles.wheelItemText, isFocused && styles.wheelItemTextFocused]}
                         >
-                          {s.toString().padStart(2, '0')} <Text style={styles.wheelItemUnit}>sec</Text>
+                          {s.toString().padStart(2, '0')}{' '}
+                          <Text style={styles.wheelItemUnit}>sec</Text>
                         </Text>
                       </TouchableOpacity>
                     );

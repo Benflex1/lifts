@@ -27,7 +27,8 @@ export const DraftResumeBanner: React.FC = () => {
   const handleDiscard = async (id: string) => {
     const shouldDiscard = await confirm({
       title: 'Discard Draft?',
-      message: 'Are you sure you want to discard this unfinished workout? Logged sets will be deleted.',
+      message:
+        'Are you sure you want to discard this unfinished workout? Logged sets will be deleted.',
       confirmLabel: 'Discard',
       destructive: true,
     });
@@ -84,7 +85,7 @@ export const DraftResumeBanner: React.FC = () => {
       <DraftRecoveryModal
         visible={isDraftModalOpen}
         drafts={availableDrafts}
-        onResume={(d) => resumeDraft(d)}
+        onResume={d => resumeDraft(d)}
         onDiscard={handleDiscard}
         onClose={closeDraftModal}
       />

@@ -61,7 +61,8 @@ function isIdenticalScope(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
   return (
     a.exerciseId === b.exerciseId &&
     a.scopeType === b.scopeType &&
-    JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort())
+    JSON.stringify([...(a.linkedGymIds || [])].sort()) ===
+      JSON.stringify([...(b.linkedGymIds || [])].sort())
   );
 }
 
@@ -133,15 +134,15 @@ function isIdenticalDraft(a: WorkoutDraft, b: WorkoutDraft): boolean {
 
 export async function computeRestorePlan(
   backup: BackupV3,
-  store: Store
+  store: Store,
 ): Promise<{ snapshotToMerge: DataSnapshot; preview: RestorePreview }> {
   const existing = await store.readSnapshot();
 
   const gymMapping = buildGymRestoreMapping(backup.gyms, existing.gyms);
   const remappedBackup = remapGymReferences(backup, gymMapping.idMap);
   const knownGymIds = new Set([
-    ...existing.gyms.map((gym) => gym.id),
-    ...gymMapping.gymsToInsert.map((gym) => gym.id),
+    ...existing.gyms.map(gym => gym.id),
+    ...gymMapping.gymsToInsert.map(gym => gym.id),
   ]);
   for (const workout of remappedBackup.workouts) {
     if (!knownGymIds.has(workout.gymId)) {
@@ -154,7 +155,9 @@ export async function computeRestorePlan(
     }
   }
 
-  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
+  const existingScopes = new Map(
+    existing.exerciseGymScopes.map(scope => [scope.exerciseId, scope]),
+  );
   const scopesToInsert: ExerciseGymScope[] = [];
   for (const scope of remappedBackup.exerciseGymScopes) {
     validateExerciseGymScope(scope, knownGymIds);
@@ -168,10 +171,10 @@ export async function computeRestorePlan(
     }
   }
 
-  const existingWorkouts = new Map(existing.workouts.map((w) => [w.id, w]));
-  const existingRoutines = new Map(existing.routines.map((r) => [r.id, r]));
-  const existingExercises = new Map(existing.exercises.map((e) => [e.id, e]));
-  const existingDrafts = new Map(existing.drafts.map((d) => [d.workout.id, d]));
+  const existingWorkouts = new Map(existing.workouts.map(w => [w.id, w]));
+  const existingRoutines = new Map(existing.routines.map(r => [r.id, r]));
+  const existingExercises = new Map(existing.exercises.map(e => [e.id, e]));
+  const existingDrafts = new Map(existing.drafts.map(d => [d.workout.id, d]));
 
   const workoutsToInsert: Workout[] = [];
   let skippedWorkoutsCount = 0;
@@ -182,7 +185,7 @@ export async function computeRestorePlan(
         skippedWorkoutsCount++;
       } else {
         throw new Error(
-          `Conflicting workout ID: ${w.id} ("${w.name}") already exists with different data`
+          `Conflicting workout ID: ${w.id} ("${w.name}") already exists with different data`,
         );
       }
     } else {
@@ -199,7 +202,7 @@ export async function computeRestorePlan(
         skippedRoutinesCount++;
       } else {
         throw new Error(
-          `Conflicting routine ID: ${r.id} ("${r.name}") already exists with different data`
+          `Conflicting routine ID: ${r.id} ("${r.name}") already exists with different data`,
         );
       }
     } else {
@@ -213,7 +216,7 @@ export async function computeRestorePlan(
     if (exE) {
       if (!isIdenticalExercise(ex, exE)) {
         throw new Error(
-          `Conflicting exercise ID: ${ex.id} ("${ex.name}") already exists with different data`
+          `Conflicting exercise ID: ${ex.id} ("${ex.name}") already exists with different data`,
         );
       }
     } else {
@@ -227,7 +230,7 @@ export async function computeRestorePlan(
     if (exD) {
       if (!isIdenticalDraft(d, exD)) {
         throw new Error(
-          `Conflicting draft ID: ${d.workout.id} ("${d.workout.name}") already exists with different data`
+          `Conflicting draft ID: ${d.workout.id} ("${d.workout.name}") already exists with different data`,
         );
       }
     } else {
@@ -261,7 +264,7 @@ export async function computeRestorePlan(
     scopeOverridesCount: scopesToInsert.length,
     workoutsCount: workoutsToInsert.length,
     routinesCount: routinesToInsert.length,
-    customExercisesCount: exercisesToInsert.filter((e) => e.isCustom).length,
+    customExercisesCount: exercisesToInsert.filter(e => e.isCustom).length,
     draftsCount: draftsToInsert.length,
     newSettingsCount,
     skippedWorkoutsCount,

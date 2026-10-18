@@ -28,11 +28,11 @@ export type ExerciseDetailStore = Pick<
 export async function loadExerciseDetailData(
   store: ExerciseDetailStore,
   exercise: Exercise,
-  initialGym?: Gym | null
+  initialGym?: Gym | null,
 ): Promise<ExerciseDetailData> {
   const [allGyms, defaultGym] = await Promise.all([store.getGyms(), store.getDefaultGym()]);
   const resolvedGym =
-    initialGym || allGyms.find((g) => g.id === defaultGym.id) || allGyms[0] || defaultGym;
+    initialGym || allGyms.find(g => g.id === defaultGym.id) || allGyms[0] || defaultGym;
 
   const [scope, historyWorkouts] = await Promise.all([
     store.getExerciseGymScope(exercise.id),
@@ -44,13 +44,18 @@ export async function loadExerciseDetailData(
   // Stats use the definition stored in history (matching the previous stats
   // call); the podium uses the catalog definition for scope resolution.
   const historyExercise = historyWorkouts
-    .flatMap((workout) => workout.exercises)
-    .find((occurrence) => occurrence.exerciseId === exercise.id)?.exercise;
-  const stats = summarizeDualStatsForEntries(entries, historyExercise, resolvedGym.id, scope || undefined);
+    .flatMap(workout => workout.exercises)
+    .find(occurrence => occurrence.exerciseId === exercise.id)?.exercise;
+  const stats = summarizeDualStatsForEntries(
+    entries,
+    historyExercise,
+    resolvedGym.id,
+    scope || undefined,
+  );
   const podium = buildExercisePodium(
     entries,
     allGyms,
-    getAllowedGymIds(exercise, scope || undefined, resolvedGym.id)
+    getAllowedGymIds(exercise, scope || undefined, resolvedGym.id),
   );
 
   return {
@@ -60,6 +65,6 @@ export async function loadExerciseDetailData(
     podium,
     gyms: allGyms,
     resolvedGym,
-    gymNamesMap: new Map(allGyms.map((g) => [g.id, g.name])),
+    gymNamesMap: new Map(allGyms.map(g => [g.id, g.name])),
   };
 }

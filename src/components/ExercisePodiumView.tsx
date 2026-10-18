@@ -35,7 +35,9 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
   const options = METRIC_OPTIONS.filter(option => podium[option.key].length > 0);
   if (options.length === 0) return null;
 
-  const metric = options.some(option => option.key === selectedMetric) ? selectedMetric : options[0].key;
+  const metric = options.some(option => option.key === selectedMetric)
+    ? selectedMetric
+    : options[0].key;
   const entries = [1, 2, 3]
     .map(rank => podium[metric].find(entry => entry.rank === rank))
     .filter((entry): entry is PodiumEntry => Boolean(entry));
@@ -87,14 +89,20 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
                 year: 'numeric',
               })
             : '';
-          const meta = [dateStr, gymTrackingEnabled ? entry.gymName : undefined].filter(Boolean).join(' · ');
+          const meta = [dateStr, gymTrackingEnabled ? entry.gymName : undefined]
+            .filter(Boolean)
+            .join(' · ');
           return (
             <View key={`${entry.rank}-${idx}`} style={[styles.row, idx > 0 && styles.rowDivider]}>
               <PRMark rank={entry.rank} size={32} />
               <View style={styles.rowText}>
                 <View style={styles.valueRow}>
-                  <Text style={[styles.value, entry.rank === 1 && styles.valueBest]}>{value.primary}</Text>
-                  {value.secondary ? <Text style={styles.valueSecondary}>{value.secondary}</Text> : null}
+                  <Text style={[styles.value, entry.rank === 1 && styles.valueBest]}>
+                    {value.primary}
+                  </Text>
+                  {value.secondary ? (
+                    <Text style={styles.valueSecondary}>{value.secondary}</Text>
+                  ) : null}
                 </View>
                 {meta ? <Text style={styles.meta}>{meta}</Text> : null}
               </View>

@@ -31,7 +31,7 @@ export interface SessionController {
 export function createSessionController(
   store: Store,
   nowFn: () => number = () => Date.now(),
-  options?: SessionControllerOptions
+  options?: SessionControllerOptions,
 ): SessionController {
   let getNow = nowFn;
   const maxDirtyTimeMs = options?.maxDirtyTimeMs || 3000;
@@ -46,7 +46,6 @@ export function createSessionController(
 
   const listeners = new Set<(s: SessionState) => void>();
   let saveTimer: any = null;
-  let isDirty = false;
   let firstDirtyTime: number | null = null;
   let inFlightWrite: Promise<void> | null = null;
 
@@ -66,7 +65,6 @@ export function createSessionController(
       clearTimeout(saveTimer);
       saveTimer = null;
     }
-    isDirty = false;
     firstDirtyTime = null;
   }
 
@@ -93,7 +91,10 @@ export function createSessionController(
     notify();
 
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000),
+    );
     const activeWorkout: Workout = {
       ...workout,
       durationSeconds,
@@ -130,13 +131,19 @@ export function createSessionController(
     }
   }
 
-  function update(workout: Workout, restTimer?: { endsAt: number; totalSeconds: number } | null): void {
+  function update(
+    workout: Workout,
+    restTimer?: { endsAt: number; totalSeconds: number } | null,
+  ): void {
     if (state.phase !== 'active' || !state.workout) {
       return;
     }
 
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000),
+    );
 
     state = {
       ...state,
@@ -149,7 +156,6 @@ export function createSessionController(
     };
     notify();
 
-    isDirty = true;
     if (firstDirtyTime === null) {
       firstDirtyTime = currentNow;
     }
@@ -189,7 +195,10 @@ export function createSessionController(
 
     const targetRevision = state.revision;
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(state.workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(state.workout.startTime).getTime()) / 1000),
+    );
     const draftWorkout: Workout = {
       ...state.workout,
       durationSeconds,
@@ -237,7 +246,10 @@ export function createSessionController(
     clearAutosave();
 
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(draft.workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(draft.workout.startTime).getTime()) / 1000),
+    );
 
     let restTimer = draft.restTimer;
     if (restTimer && restTimer.endsAt <= currentNow) {
@@ -273,16 +285,17 @@ export function createSessionController(
     await drainInFlightWrite();
 
     const finalNow = getNow();
-    const finalDuration = durationSecondsOverride !== undefined && durationSecondsOverride >= 0
-      ? Math.floor(durationSecondsOverride)
-      : Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
+    const finalDuration =
+      durationSecondsOverride !== undefined && durationSecondsOverride >= 0
+        ? Math.floor(durationSecondsOverride)
+        : Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
     const calculatedVolume = (currentWorkout.exercises || []).reduce(
       (sum, ex) =>
         sum +
         (ex.sets || [])
-          .filter((s) => s.isCompleted)
+          .filter(s => s.isCompleted)
           .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0),
-      0
+      0,
     );
 
     const completedWorkout: Workout = {

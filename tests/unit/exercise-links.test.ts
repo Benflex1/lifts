@@ -22,12 +22,13 @@ type MockableContext = {
   mock?: { module: (specifier: string, options: { exports: object }) => void };
 };
 
-before(async (t) => {
+before(async t => {
   const context = t as unknown as MockableContext;
   if (typeof context.mock?.module === 'function') {
     mockLinking(context as Required<MockableContext>);
   }
-  ({ getExerciseInstructionLink, openExerciseInstructionLink } = await import('../../src/utils/exercise-links'));
+  ({ getExerciseInstructionLink, openExerciseInstructionLink } =
+    await import('../../src/utils/exercise-links'));
 });
 
 function mockLinking(t: Required<MockableContext>): void {
@@ -51,28 +52,38 @@ describe('exercise instruction links', () => {
   });
 
   it('prefers a valid curated website link', () => {
-    assert.deepEqual(getExerciseInstructionLink(exercise({
-      instructionUrl: 'https://example.com/bench',
-      instructionUrlType: 'website',
-      isCustom: true,
-    })), {
-      url: 'https://example.com/bench',
-      type: 'website',
-      label: 'Open exercise guide',
-      isFallback: false,
-    });
+    assert.deepEqual(
+      getExerciseInstructionLink(
+        exercise({
+          instructionUrl: 'https://example.com/bench',
+          instructionUrlType: 'website',
+          isCustom: true,
+        }),
+      ),
+      {
+        url: 'https://example.com/bench',
+        type: 'website',
+        label: 'Open exercise guide',
+        isFallback: false,
+      },
+    );
   });
 
   it('uses the curated YouTube label for a valid direct YouTube link', () => {
-    assert.deepEqual(getExerciseInstructionLink(exercise({
-      instructionUrl: 'https://www.youtube.com/watch?v=bench',
-      instructionUrlType: 'youtube',
-    })), {
-      url: 'https://www.youtube.com/watch?v=bench',
-      type: 'youtube',
-      label: 'Watch form video',
-      isFallback: false,
-    });
+    assert.deepEqual(
+      getExerciseInstructionLink(
+        exercise({
+          instructionUrl: 'https://www.youtube.com/watch?v=bench',
+          instructionUrlType: 'youtube',
+        }),
+      ),
+      {
+        url: 'https://www.youtube.com/watch?v=bench',
+        type: 'youtube',
+        label: 'Watch form video',
+        isFallback: false,
+      },
+    );
   });
 
   it('falls back when the curated URL is missing, invalid, or mismatched', () => {
@@ -89,8 +100,14 @@ describe('exercise instruction links', () => {
   });
 
   it('uses the verified MuscleWiki guide for a mapped bundled exercise with a missing link', () => {
-    const bundled = getDefaultExercises().find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
-    const link = getExerciseInstructionLink({ ...bundled, instructionUrl: undefined, instructionUrlType: undefined });
+    const bundled = getDefaultExercises().find(
+      exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip',
+    )!;
+    const link = getExerciseInstructionLink({
+      ...bundled,
+      instructionUrl: undefined,
+      instructionUrlType: undefined,
+    });
     assert.equal(link.url, 'https://musclewiki.com/exercise/barbell-bench-press');
     assert.equal(link.type, 'website');
     assert.equal(link.label, 'Open exercise guide');
@@ -98,8 +115,14 @@ describe('exercise instruction links', () => {
   });
 
   it('uses the verified MuscleWiki guide for a mapped bundled exercise with an invalid link', () => {
-    const bundled = getDefaultExercises().find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
-    const link = getExerciseInstructionLink({ ...bundled, instructionUrl: 'not a URL', instructionUrlType: 'website' });
+    const bundled = getDefaultExercises().find(
+      exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip',
+    )!;
+    const link = getExerciseInstructionLink({
+      ...bundled,
+      instructionUrl: 'not a URL',
+      instructionUrlType: 'website',
+    });
     assert.equal(link.url, 'https://musclewiki.com/exercise/barbell-bench-press');
     assert.equal(link.label, 'Open exercise guide');
     assert.equal(link.isFallback, true);
@@ -107,7 +130,11 @@ describe('exercise instruction links', () => {
 
   it('uses a deterministic YouTube fallback for an unmapped bundled exercise', () => {
     const bundled = getDefaultExercises().find(exercise => exercise.instructionUrl === undefined)!;
-    const link = getExerciseInstructionLink({ ...bundled, instructionUrl: undefined, instructionUrlType: undefined });
+    const link = getExerciseInstructionLink({
+      ...bundled,
+      instructionUrl: undefined,
+      instructionUrlType: undefined,
+    });
     assert.equal(link.type, 'youtube');
     assert.match(link.url, /^https:\/\/www\.youtube\.com\/results\?search_query=/);
     assert.equal(link.label, 'Find form videos on YouTube');
@@ -167,43 +194,56 @@ describe('exercise instruction links', () => {
 
     assert.equal(link.type, 'youtube');
     assert.equal(link.isFallback, true);
-    assert.equal(link.url, `https://www.youtube.com/results?search_query=${encodeURIComponent(`${bundled.name} exercise form`)}`);
+    assert.equal(
+      link.url,
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(`${bundled.name} exercise form`)}`,
+    );
   });
 
   it('encodes punctuation, spaces, and non-ASCII exercise names deterministically', () => {
     const name = 'Développé, assis & mobilité';
     const link = getExerciseInstructionLink(exercise({ name }));
 
-    assert.equal(link.url, `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} exercise form`)}`);
-    assert.equal(decodeURIComponent(link.url), `https://www.youtube.com/results?search_query=${name} exercise form`);
+    assert.equal(
+      link.url,
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} exercise form`)}`,
+    );
+    assert.equal(
+      decodeURIComponent(link.url),
+      `https://www.youtube.com/results?search_query=${name} exercise form`,
+    );
   });
 
-  it('delegates opening to the platform-safe Linking API', async (t) => {
+  it('delegates opening to the platform-safe Linking API', async t => {
     if (typeof t.mock.module !== 'function') {
       t.skip('Node module mocks are required to isolate React Native in Node');
       return;
     }
     openedUrl = undefined;
     openURLImplementation = async () => {};
-    const link = getExerciseInstructionLink(exercise({
-      instructionUrl: 'https://example.com/bench',
-      instructionUrlType: 'website',
-    }));
+    const link = getExerciseInstructionLink(
+      exercise({
+        instructionUrl: 'https://example.com/bench',
+        instructionUrlType: 'website',
+      }),
+    );
 
     await openExerciseInstructionLink(link);
 
     assert.equal(openedUrl, link.url);
   });
 
-  it('invokes Linking.openURL during the original call stack', async (t) => {
+  it('invokes Linking.openURL during the original call stack', async t => {
     if (typeof t.mock.module !== 'function') {
       t.skip('Node module mocks are required to isolate React Native in Node');
       return;
     }
-    const link = getExerciseInstructionLink(exercise({
-      instructionUrl: 'https://example.com/bench',
-      instructionUrlType: 'website',
-    }));
+    const link = getExerciseInstructionLink(
+      exercise({
+        instructionUrl: 'https://example.com/bench',
+        instructionUrlType: 'website',
+      }),
+    );
     let afterCall = false;
     openURLImplementation = async () => {
       assert.equal(afterCall, false);
@@ -214,7 +254,7 @@ describe('exercise instruction links', () => {
     await opening;
   });
 
-  it('propagates an open failure to the caller', async (t) => {
+  it('propagates an open failure to the caller', async t => {
     if (typeof t.mock.module !== 'function') {
       t.skip('Node module mocks are required to isolate React Native in Node');
       return;
@@ -226,7 +266,7 @@ describe('exercise instruction links', () => {
 
     await assert.rejects(
       () => openExerciseInstructionLink(getExerciseInstructionLink(exercise())),
-      (error) => error === expected,
+      error => error === expected,
     );
   });
 });

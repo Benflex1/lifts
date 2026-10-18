@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -58,10 +58,7 @@ const ExercisesScreenInner: React.FC = () => {
   const handleOpenScope = async () => {
     if (!activeDetail) return;
     try {
-      const [, scope] = await Promise.all([
-        reloadGyms(),
-        getExerciseGymScope(activeDetail.id),
-      ]);
+      const [, scope] = await Promise.all([reloadGyms(), getExerciseGymScope(activeDetail.id)]);
       setExerciseScope(scope);
       setShowScopeModal(true);
     } catch (e) {
@@ -71,7 +68,7 @@ const ExercisesScreenInner: React.FC = () => {
 
   const handleScopeSaved = (scope: ExerciseGymScope | null) => {
     setExerciseScope(scope);
-    setScopeRefreshKey((k) => k + 1);
+    setScopeRefreshKey(k => k + 1);
   };
 
   useEffect(() => {
@@ -137,7 +134,10 @@ const ExercisesScreenInner: React.FC = () => {
           clearButtonMode="while-editing"
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity
+            onPress={() => setSearchQuery('')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <X size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         )}

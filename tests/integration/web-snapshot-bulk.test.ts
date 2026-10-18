@@ -6,22 +6,24 @@ import { getDefaultExercises } from '../../src/database/seedData';
 import { Workout } from '../../src/types';
 
 function makeWorkout(index: number): Workout {
-  const exercises = getDefaultExercises().slice(index % 4, (index % 4) + 2).map((exercise, exerciseIndex) => ({
-    id: `web-bulk-${index}-ex${exerciseIndex}`,
-    exerciseId: exercise.id,
-    exercise,
-    restTimerSeconds: 90,
-    targetReps: '8-12',
-    sets: [0, 1].map((setIndex) => ({
-      id: `web-bulk-${index}-ex${exerciseIndex}-s${setIndex}`,
-      setNumber: setIndex + 1,
-      type: 'normal' as const,
-      weightKg: 50 + setIndex * 5,
-      reps: 10 - setIndex,
-      isCompleted: true,
-      completedAt: new Date(Date.UTC(2026, 1, 1 + index, 8, 10 + setIndex)).toISOString(),
-    })),
-  }));
+  const exercises = getDefaultExercises()
+    .slice(index % 4, (index % 4) + 2)
+    .map((exercise, exerciseIndex) => ({
+      id: `web-bulk-${index}-ex${exerciseIndex}`,
+      exerciseId: exercise.id,
+      exercise,
+      restTimerSeconds: 90,
+      targetReps: '8-12',
+      sets: [0, 1].map(setIndex => ({
+        id: `web-bulk-${index}-ex${exerciseIndex}-s${setIndex}`,
+        setNumber: setIndex + 1,
+        type: 'normal' as const,
+        weightKg: 50 + setIndex * 5,
+        reps: 10 - setIndex,
+        isCompleted: true,
+        completedAt: new Date(Date.UTC(2026, 1, 1 + index, 8, 10 + setIndex)).toISOString(),
+      })),
+    }));
 
   return {
     id: `web-bulk-${String(index).padStart(3, '0')}`,
@@ -83,7 +85,9 @@ describe('web snapshot read performance guarantees', () => {
       assert.ok(snapshot.workouts.every(workout => workout.exercises.length > 0));
       assert.ok(
         snapshot.workouts.every(workout =>
-          workout.exercises.every(exercise => exercise.sets.length > 0 && Boolean(exercise.exercise?.name)),
+          workout.exercises.every(
+            exercise => exercise.sets.length > 0 && Boolean(exercise.exercise?.name),
+          ),
         ),
         'snapshot workouts must contain full exercise and set data',
       );

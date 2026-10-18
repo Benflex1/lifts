@@ -16,7 +16,7 @@ function emptyStats(): ExerciseStats {
 /** Reduces one already-collected history pass into stat maxima. */
 export function summarizeStatsForEntries(
   entries: ExerciseHistoryEntry[],
-  gymFilter: Set<string> | null
+  gymFilter: Set<string> | null,
 ): ExerciseStats {
   const stats = emptyStats();
 
@@ -27,7 +27,10 @@ export function summarizeStatsForEntries(
       stats.maxWeightKg = Math.max(stats.maxWeightKg, set.weightKg);
       stats.maxSetVolumeKg = Math.max(stats.maxSetVolumeKg, set.weightKg * set.reps);
       stats.maxReps = Math.max(stats.maxReps, set.reps);
-      stats.estimated1RM = Math.max(stats.estimated1RM, calculate1RM(set.weightKg, set.reps).average);
+      stats.estimated1RM = Math.max(
+        stats.estimated1RM,
+        calculate1RM(set.weightKg, set.reps).average,
+      );
     }
     stats.sessionCount += 1;
   }
@@ -39,13 +42,13 @@ export function calculateDualExerciseStats(
   workouts: Workout[],
   exerciseId: string,
   currentGymId: string,
-  scope?: ExerciseGymScope
+  scope?: ExerciseGymScope,
 ): DualExerciseStats {
   const entries = collectExerciseHistory(workouts, exerciseId);
 
   const exercise = workouts
-    .flatMap((workout) => workout.exercises)
-    .find((occurrence) => occurrence.exerciseId === exerciseId)?.exercise;
+    .flatMap(workout => workout.exercises)
+    .find(occurrence => occurrence.exerciseId === exerciseId)?.exercise;
 
   return summarizeDualStatsForEntries(entries, exercise, currentGymId, scope);
 }
@@ -59,7 +62,7 @@ export function summarizeDualStatsForEntries(
   entries: ExerciseHistoryEntry[],
   exercise: Exercise | undefined,
   currentGymId: string,
-  scope?: ExerciseGymScope
+  scope?: ExerciseGymScope,
 ): DualExerciseStats {
   const global = summarizeStatsForEntries(entries, null);
   const gym = exercise

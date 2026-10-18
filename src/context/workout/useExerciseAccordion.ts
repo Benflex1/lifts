@@ -29,14 +29,14 @@ export function useExerciseAccordion(
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
 
   const toggleExerciseExpanded = useCallback((activeExerciseId: string) => {
-    setExpandedExercises((prev) => ({
+    setExpandedExercises(prev => ({
       ...prev,
       [activeExerciseId]: !(prev[activeExerciseId] ?? false),
     }));
   }, []);
 
   const setExerciseExpanded = useCallback((activeExerciseId: string, expanded: boolean) => {
-    setExpandedExercises((prev) => ({
+    setExpandedExercises(prev => ({
       ...prev,
       [activeExerciseId]: expanded,
     }));
@@ -46,7 +46,7 @@ export function useExerciseAccordion(
     const workout = controllerRef.current?.getState().workout;
     if (!workout) return;
     const all: Record<string, boolean> = {};
-    workout.exercises.forEach((e) => {
+    workout.exercises.forEach(e => {
       all[e.id] = true;
     });
     setExpandedExercises(all);
@@ -56,14 +56,14 @@ export function useExerciseAccordion(
     const workout = controllerRef.current?.getState().workout;
     if (!workout) return;
     const all: Record<string, boolean> = {};
-    workout.exercises.forEach((e) => {
+    workout.exercises.forEach(e => {
       all[e.id] = false;
     });
     setExpandedExercises(all);
   }, [controllerRef]);
 
   const expandExercises = useCallback((activeExerciseIds: string[]) => {
-    setExpandedExercises((prev) => {
+    setExpandedExercises(prev => {
       const next = { ...prev };
       for (const id of activeExerciseIds) {
         next[id] = true;
@@ -73,7 +73,7 @@ export function useExerciseAccordion(
   }, []);
 
   const removeExercise = useCallback((activeExerciseId: string) => {
-    setExpandedExercises((prev) => {
+    setExpandedExercises(prev => {
       const next = { ...prev };
       delete next[activeExerciseId];
       return next;
@@ -82,7 +82,7 @@ export function useExerciseAccordion(
 
   const applyInitialState = useCallback(
     (exercises: ActiveExercise[], options?: { onlyWhenEmpty?: boolean }) => {
-      setExpandedExercises((prev) => {
+      setExpandedExercises(prev => {
         if (options?.onlyWhenEmpty && Object.keys(prev).length > 0) return prev;
         return resolveInitialAccordionState(exercises);
       });

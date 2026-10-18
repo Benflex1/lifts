@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Award, Check, Clock, Dumbbell, Flame, MapPin, Trophy, Edit2, AlertCircle, Sparkles } from 'lucide-react-native';
+import {
+  Award,
+  Check,
+  Clock,
+  Dumbbell,
+  Flame,
+  MapPin,
+  Trophy,
+  Edit2,
+  AlertCircle,
+  Sparkles,
+} from 'lucide-react-native';
 import { ExerciseGymScope, Gym, Workout } from '../types';
 import { formatDuration } from '../utils/calculator';
 import { useSettings } from '../context/SettingsContext';
@@ -16,7 +20,7 @@ import { formatWeight } from '../utils/units';
 import { GymPickerModal } from './GymPickerModal';
 import { useDialog } from '../context/DialogContext';
 import { applyWorkoutEdits, reassignWorkoutGym } from '../workout/workout-edit';
-import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
+import { getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
 import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from './PRBadge';
 import { ConfettiCelebration } from './ConfettiCelebration';
@@ -70,15 +74,13 @@ export function WorkoutSummaryModal({
     }
 
     let mounted = true;
-    const distinctExerciseIds = Array.from(
-      new Set(workout.exercises.map((ex) => ex.exerciseId))
-    );
+    const distinctExerciseIds = Array.from(new Set(workout.exercises.map(ex => ex.exerciseId)));
 
     if (distinctExerciseIds.length === 0) return;
 
     Promise.all([
       getCompletedWorkoutsForExercises(distinctExerciseIds),
-      Promise.all(distinctExerciseIds.map((id) => getExerciseGymScope(id))),
+      Promise.all(distinctExerciseIds.map(id => getExerciseGymScope(id))),
     ]).then(([workoutsByEx, scopes]) => {
       if (!mounted) return;
       const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
@@ -91,7 +93,7 @@ export function WorkoutSummaryModal({
         workoutsByEx,
         gyms,
         gymTrackingEnabled,
-        scopesByEx
+        scopesByEx,
       );
       setPrSummary(summary);
     });
@@ -99,9 +101,11 @@ export function WorkoutSummaryModal({
     return () => {
       mounted = false;
     };
+    // Deliberately keyed to the id/gym only: other field changes must not re-run the PR evaluation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workout?.id, workout?.gymId, gyms, gymTrackingEnabled]);
 
-  const currentGym = workout ? gyms.find((gym) => gym.id === workout.gymId) : null;
+  const currentGym = workout ? gyms.find(gym => gym.id === workout.gymId) : null;
 
   const handleGymSelect = async (gymId: string) => {
     if (!workout) return;
@@ -120,219 +124,218 @@ export function WorkoutSummaryModal({
   if (!visible || !workout) return null;
 
   const totalCompletedSets = workout.exercises.reduce(
-    (acc, ex) => acc + ex.sets.filter((s) => s.isCompleted).length,
-    0
+    (acc, ex) => acc + ex.sets.filter(s => s.isCompleted).length,
+    0,
   );
 
   const totalCompletedReps = workout.exercises.reduce(
-    (acc, ex) =>
-      acc +
-      ex.sets
-        .filter((s) => s.isCompleted)
-        .reduce((sAcc, s) => sAcc + s.reps, 0),
-    0
+    (acc, ex) => acc + ex.sets.filter(s => s.isCompleted).reduce((sAcc, s) => sAcc + s.reps, 0),
+    0,
   );
 
   return (
     <>
-      <Modal
-        visible={visible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={onDismiss}
-      >
-      <SafeAreaView style={styles.overlay}>
-        {prSummary && prSummary.totalCount > 0 && <ConfettiCelebration />}
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.iconCircle}>
-              <Award size={36} color={colors.success} />
-            </View>
-            <Text style={styles.title}>Workout Complete!</Text>
-            <Text style={styles.workoutName}>{workout.name}</Text>
-          </View>
-
-          {/* Excessive Duration Warning Card */}
-          {isExcessiveDuration(workout.durationSeconds) && (
-            <View style={styles.longDurationCard}>
-              <View style={styles.longDurationHeader}>
-                <View style={styles.warningIconBadge}>
-                  <AlertCircle size={20} color={colors.warning} />
-                </View>
-                <View style={styles.longDurationTextWrap}>
-                  <Text style={styles.longDurationTitle}>
-                    Did this workout really take {formatDuration(workout.durationSeconds)}?
-                  </Text>
-                  <Text style={styles.longDurationSubtitle}>
-                    It looks like the timer was left running. You can auto-estimate or edit the duration.
-                  </Text>
-                </View>
+      <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onDismiss}>
+        <SafeAreaView style={styles.overlay}>
+          {prSummary && prSummary.totalCount > 0 && <ConfettiCelebration />}
+          <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.iconCircle}>
+                <Award size={36} color={colors.success} />
               </View>
-
-              <View style={styles.longDurationActionsRow}>
-                <TouchableOpacity
-                  style={styles.autoEstimateButton}
-                  onPress={() => {
-                    const est = estimateWorkoutDuration(workout);
-                    handleDurationSave(est);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Auto-estimate workout duration"
-                >
-                  <Sparkles size={16} color={colors.black} />
-                  <Text style={styles.autoEstimateButtonText}>
-                    Auto-estimate (~{formatDuration(estimateWorkoutDuration(workout))})
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.changeTimeButton}
-                  onPress={() => setShowDurationModal(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Change workout duration manually"
-                >
-                  <Clock size={16} color={colors.primary} />
-                  <Text style={styles.changeTimeButtonText}>Change Time</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Key Metrics Grid */}
-          <View style={styles.metricsGrid}>
-            <TouchableOpacity
-              style={styles.metricCard}
-              onPress={() => setShowDurationModal(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Edit duration, currently ${formatDuration(workout.durationSeconds)}`}
-            >
-              <View style={styles.metricCardHeader}>
-                <Clock size={18} color={colors.primary} />
-                <Edit2 size={11} color={colors.primaryLight} />
-              </View>
-              <Text style={styles.metricValue}>
-                {formatDuration(workout.durationSeconds)}
-              </Text>
-              <Text style={styles.metricLabel}>Duration</Text>
-            </TouchableOpacity>
-
-            <View style={styles.metricCard}>
-              <Dumbbell size={18} color={colors.warning} />
-              <Text style={styles.metricValue}>
-                {formatWeight(workout.totalVolumeKg, unit)}
-              </Text>
-              <Text style={styles.metricLabel}>Volume</Text>
+              <Text style={styles.title}>Workout Complete!</Text>
+              <Text style={styles.workoutName}>{workout.name}</Text>
             </View>
 
-            <View style={styles.metricCard}>
-              <Flame size={18} color={colors.danger} />
-              <Text style={styles.metricValue}>{totalCompletedSets}</Text>
-              <Text style={styles.metricLabel}>Sets ({totalCompletedReps} reps)</Text>
-            </View>
-          </View>
-
-          {gymTrackingEnabled && currentGym && (
-            <View style={styles.gymRow}>
-              <View style={styles.gymRowInfo}>
-                <View style={[styles.gymIcon, { backgroundColor: `${currentGym.color}22` }]}>
-                  <MapPin size={16} color={currentGym.color} />
-                </View>
-                <View style={styles.gymCopy}>
-                  <Text style={styles.gymLabel}>Gym</Text>
-                  <Text style={styles.gymName} numberOfLines={1}>{currentGym.name}</Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={styles.changeGymButton}
-                onPress={() => setShowGymPicker(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Change workout gym, currently ${currentGym.name}`}
-              >
-                <Text style={styles.changeGymText}>Change</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Personal Records Section */}
-          {prSummary && prSummary.totalCount > 0 && (
-            <View style={styles.prSection}>
-              <View style={styles.prSectionHeader}>
-                <Trophy size={18} color={colors.warning} />
-                <Text style={styles.prSectionTitle}>
-                  {prSummary.totalCount} New Personal Record{prSummary.totalCount > 1 ? 's' : ''}
-                </Text>
-              </View>
-              <ScrollView style={styles.prList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                {prSummary.achievements.map((item, idx) => (
-                  <View key={idx} style={styles.prCard}>
-                    <PRMark rank={item.achievement.rank} size={34} />
-                    <View style={styles.prCardContent}>
-                      <Text style={styles.prCardExercise}>{item.exerciseName}</Text>
-                      <Text style={styles.prCardMetric}>
-                        {item.weightKg > 0 ? `${formatWeight(item.weightKg, unit)} × ${item.reps} · ` : `${item.reps} reps · `}
-                        {formatPRDescription(item.achievement, unit)}
-                      </Text>
-                    </View>
+            {/* Excessive Duration Warning Card */}
+            {isExcessiveDuration(workout.durationSeconds) && (
+              <View style={styles.longDurationCard}>
+                <View style={styles.longDurationHeader}>
+                  <View style={styles.warningIconBadge}>
+                    <AlertCircle size={20} color={colors.warning} />
                   </View>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* Exercise Breakdown */}
-          <Text style={styles.breakdownTitle}>Exercise Summary</Text>
-          <ScrollView style={styles.exerciseList} showsVerticalScrollIndicator={false}>
-            {workout.exercises.map((ex, idx) => {
-              const completedSets = ex.sets.filter((s) => s.isCompleted);
-              if (completedSets.length === 0) return null;
-              const maxWeight = completedSets.reduce(
-                (max, s) => (s.weightKg > max ? s.weightKg : max),
-                0
-              );
-              const exercisePRs = prSummary?.achievements.filter((a) => a.exerciseId === ex.exerciseId);
-
-              return (
-                <View key={ex.id || idx} style={styles.exerciseItem}>
-                  <View style={styles.exerciseInfo}>
-                    <View style={styles.exerciseNameRow}>
-                      <Text style={styles.exerciseNameText}>{ex.exercise.name}</Text>
-                      {exercisePRs && exercisePRs.length > 0 && (
-                        <PRBadge
-                          compact
-                          achievement={
-                            exercisePRs.reduce((best, a) => (a.achievement.rank < best.achievement.rank ? a : best))
-                              .achievement
-                          }
-                        />
-                      )}
-                    </View>
-                    <Text style={styles.exerciseMetaText}>
-                      {completedSets.length} {completedSets.length === 1 ? 'set' : 'sets'}
-                      {maxWeight > 0 ? ` · Top: ${formatWeight(maxWeight, unit)}` : ''}
+                  <View style={styles.longDurationTextWrap}>
+                    <Text style={styles.longDurationTitle}>
+                      Did this workout really take {formatDuration(workout.durationSeconds)}?
+                    </Text>
+                    <Text style={styles.longDurationSubtitle}>
+                      It looks like the timer was left running. You can auto-estimate or edit the
+                      duration.
                     </Text>
                   </View>
-                  {completedSets.length > 0 && (
-                    <View style={styles.checkIcon}>
-                      <Check size={16} color={colors.success} />
-                    </View>
-                  )}
                 </View>
-              );
-            })}
-          </ScrollView>
 
-          {/* Done Button */}
-          <TouchableOpacity
-            style={styles.doneButton}
-            onPress={onDismiss}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Done"
-          >
-            <Text style={styles.doneButtonText}>Done</Text>
-          </TouchableOpacity>
-        </View>
+                <View style={styles.longDurationActionsRow}>
+                  <TouchableOpacity
+                    style={styles.autoEstimateButton}
+                    onPress={() => {
+                      const est = estimateWorkoutDuration(workout);
+                      handleDurationSave(est);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Auto-estimate workout duration"
+                  >
+                    <Sparkles size={16} color={colors.black} />
+                    <Text style={styles.autoEstimateButtonText}>
+                      Auto-estimate (~{formatDuration(estimateWorkoutDuration(workout))})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.changeTimeButton}
+                    onPress={() => setShowDurationModal(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Change workout duration manually"
+                  >
+                    <Clock size={16} color={colors.primary} />
+                    <Text style={styles.changeTimeButtonText}>Change Time</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Key Metrics Grid */}
+            <View style={styles.metricsGrid}>
+              <TouchableOpacity
+                style={styles.metricCard}
+                onPress={() => setShowDurationModal(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit duration, currently ${formatDuration(workout.durationSeconds)}`}
+              >
+                <View style={styles.metricCardHeader}>
+                  <Clock size={18} color={colors.primary} />
+                  <Edit2 size={11} color={colors.primaryLight} />
+                </View>
+                <Text style={styles.metricValue}>{formatDuration(workout.durationSeconds)}</Text>
+                <Text style={styles.metricLabel}>Duration</Text>
+              </TouchableOpacity>
+
+              <View style={styles.metricCard}>
+                <Dumbbell size={18} color={colors.warning} />
+                <Text style={styles.metricValue}>{formatWeight(workout.totalVolumeKg, unit)}</Text>
+                <Text style={styles.metricLabel}>Volume</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Flame size={18} color={colors.danger} />
+                <Text style={styles.metricValue}>{totalCompletedSets}</Text>
+                <Text style={styles.metricLabel}>Sets ({totalCompletedReps} reps)</Text>
+              </View>
+            </View>
+
+            {gymTrackingEnabled && currentGym && (
+              <View style={styles.gymRow}>
+                <View style={styles.gymRowInfo}>
+                  <View style={[styles.gymIcon, { backgroundColor: `${currentGym.color}22` }]}>
+                    <MapPin size={16} color={currentGym.color} />
+                  </View>
+                  <View style={styles.gymCopy}>
+                    <Text style={styles.gymLabel}>Gym</Text>
+                    <Text style={styles.gymName} numberOfLines={1}>
+                      {currentGym.name}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.changeGymButton}
+                  onPress={() => setShowGymPicker(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Change workout gym, currently ${currentGym.name}`}
+                >
+                  <Text style={styles.changeGymText}>Change</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Personal Records Section */}
+            {prSummary && prSummary.totalCount > 0 && (
+              <View style={styles.prSection}>
+                <View style={styles.prSectionHeader}>
+                  <Trophy size={18} color={colors.warning} />
+                  <Text style={styles.prSectionTitle}>
+                    {prSummary.totalCount} New Personal Record{prSummary.totalCount > 1 ? 's' : ''}
+                  </Text>
+                </View>
+                <ScrollView
+                  style={styles.prList}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
+                  {prSummary.achievements.map((item, idx) => (
+                    <View key={idx} style={styles.prCard}>
+                      <PRMark rank={item.achievement.rank} size={34} />
+                      <View style={styles.prCardContent}>
+                        <Text style={styles.prCardExercise}>{item.exerciseName}</Text>
+                        <Text style={styles.prCardMetric}>
+                          {item.weightKg > 0
+                            ? `${formatWeight(item.weightKg, unit)} × ${item.reps} · `
+                            : `${item.reps} reps · `}
+                          {formatPRDescription(item.achievement, unit)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Exercise Breakdown */}
+            <Text style={styles.breakdownTitle}>Exercise Summary</Text>
+            <ScrollView style={styles.exerciseList} showsVerticalScrollIndicator={false}>
+              {workout.exercises.map((ex, idx) => {
+                const completedSets = ex.sets.filter(s => s.isCompleted);
+                if (completedSets.length === 0) return null;
+                const maxWeight = completedSets.reduce(
+                  (max, s) => (s.weightKg > max ? s.weightKg : max),
+                  0,
+                );
+                const exercisePRs = prSummary?.achievements.filter(
+                  a => a.exerciseId === ex.exerciseId,
+                );
+
+                return (
+                  <View key={ex.id || idx} style={styles.exerciseItem}>
+                    <View style={styles.exerciseInfo}>
+                      <View style={styles.exerciseNameRow}>
+                        <Text style={styles.exerciseNameText}>{ex.exercise.name}</Text>
+                        {exercisePRs && exercisePRs.length > 0 && (
+                          <PRBadge
+                            compact
+                            achievement={
+                              exercisePRs.reduce((best, a) =>
+                                a.achievement.rank < best.achievement.rank ? a : best,
+                              ).achievement
+                            }
+                          />
+                        )}
+                      </View>
+                      <Text style={styles.exerciseMetaText}>
+                        {completedSets.length} {completedSets.length === 1 ? 'set' : 'sets'}
+                        {maxWeight > 0 ? ` · Top: ${formatWeight(maxWeight, unit)}` : ''}
+                      </Text>
+                    </View>
+                    {completedSets.length > 0 && (
+                      <View style={styles.checkIcon}>
+                        <Check size={16} color={colors.success} />
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            {/* Done Button */}
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={onDismiss}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       </Modal>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal,
   View,
@@ -57,14 +57,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (visible) {
-      loadExercises();
-      setSelectedExercises(new Map());
-    }
-  }, [visible, debouncedQuery, selectedMuscle, selectedEquipment]);
-
-  const loadExercises = async () => {
+  const loadExercises = useCallback(async () => {
     try {
       const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
       setExercises(results);
@@ -73,7 +66,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
     } finally {
       setInitialLoading(false);
     }
-  };
+  }, [debouncedQuery, selectedMuscle, selectedEquipment]);
+
+  useEffect(() => {
+    if (visible) {
+      loadExercises();
+      setSelectedExercises(new Map());
+    }
+  }, [visible, loadExercises]);
 
   const handleItemPress = (item: Exercise) => {
     if (multiSelect) {
@@ -113,7 +113,9 @@ export const ExercisePickerModal: React.FC<Props> = ({
   const handleCustomSaved = async (saved: Exercise, mode: CustomExerciseSaveMode) => {
     await loadExercises();
     if (mode === 'updated') {
-      setSelectedExercises(prev => (prev.has(saved.id) ? new Map(prev).set(saved.id, saved) : prev));
+      setSelectedExercises(prev =>
+        prev.has(saved.id) ? new Map(prev).set(saved.id, saved) : prev,
+      );
     } else if (multiSelect) {
       setSelectedExercises(prev => new Map(prev).set(saved.id, saved));
     } else {
@@ -160,7 +162,10 @@ export const ExercisePickerModal: React.FC<Props> = ({
             clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <X size={16} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
@@ -184,7 +189,10 @@ export const ExercisePickerModal: React.FC<Props> = ({
           <FlatList
             data={exercises}
             keyExtractor={item => item.id}
-            contentContainerStyle={[styles.listContent, multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 }]}
+            contentContainerStyle={[
+              styles.listContent,
+              multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 },
+            ]}
             keyboardShouldPersistTaps="handled"
             {...EXERCISE_LIST_PERFORMANCE_PROPS}
             extraData={selectedExercises}
@@ -207,7 +215,9 @@ export const ExercisePickerModal: React.FC<Props> = ({
                 >
                   <Plus size={16} color={colors.primaryLight} />
                   <Text style={styles.createCustomText}>
-                    {searchQuery.trim() ? `Create "${searchQuery.trim()}"` : 'Create Custom Exercise'}
+                    {searchQuery.trim()
+                      ? `Create "${searchQuery.trim()}"`
+                      : 'Create Custom Exercise'}
                   </Text>
                 </TouchableOpacity>
               </View>

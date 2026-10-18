@@ -77,7 +77,8 @@ export function useCsvImportFlow({
     if (isWorkingOut) {
       await notify({
         title: 'Session In Progress',
-        message: 'Cannot import workouts while a workout session is active. Please finish or discard your current workout first.',
+        message:
+          'Cannot import workouts while a workout session is active. Please finish or discard your current workout first.',
       });
       return;
     }

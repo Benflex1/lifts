@@ -45,7 +45,14 @@ describe('History-derived stats & previous set suggestions', () => {
                 primaryMuscles: ['pectorals'],
               },
               sets: [
-                { id: 'ds1', setNumber: 1, type: 'normal', weightKg: 300, reps: 10, isCompleted: true },
+                {
+                  id: 'ds1',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 300,
+                  reps: 10,
+                  isCompleted: true,
+                },
               ],
             },
           ],
@@ -55,11 +62,23 @@ describe('History-derived stats & previous set suggestions', () => {
 
       // Draft must not affect exercise stats or suggestions
       const statsAfterDraft = await fixture.store.getExerciseStats(exId, currentGymId);
-      assert.equal(statsAfterDraft.global.sessionCount, 0, 'Draft should not increase sessionCount');
-      assert.equal(statsAfterDraft.global.maxWeightKg, 0, 'Draft sets should not affect maxWeightKg');
+      assert.equal(
+        statsAfterDraft.global.sessionCount,
+        0,
+        'Draft should not increase sessionCount',
+      );
+      assert.equal(
+        statsAfterDraft.global.maxWeightKg,
+        0,
+        'Draft sets should not affect maxWeightKg',
+      );
 
       const prevSetsFromDraft = await fixture.store.getPreviousSetsForExercise(exId);
-      assert.equal(prevSetsFromDraft.length, 0, 'Draft sets should not be returned as previous sets');
+      assert.equal(
+        prevSetsFromDraft.length,
+        0,
+        'Draft sets should not be returned as previous sets',
+      );
 
       await fixture.dispose();
     });
@@ -114,14 +133,15 @@ describe('History-derived stats & previous set suggestions', () => {
 
       // Session count should be 1, not 2!
       const stats1 = await fixture.store.getExerciseStats(exId, currentGymId);
-      assert.equal(stats1.global.sessionCount, 1, 'Workout with 2 occurrences of same exercise counts as 1 session');
+      assert.equal(
+        stats1.global.sessionCount,
+        1,
+        'Workout with 2 occurrences of same exercise counts as 1 session',
+      );
       assert.equal(stats1.global.maxWeightKg, 100);
       assert.equal(stats1.global.maxReps, 8);
       // 1RM consistent with calculate1RM average
-      const expected1RM = Math.max(
-        calculate1RM(100, 5).average,
-        calculate1RM(80, 8).average
-      );
+      const expected1RM = Math.max(calculate1RM(100, 5).average, calculate1RM(80, 8).average);
       assert.equal(stats1.global.estimated1RM, expected1RM);
 
       // 2. Add a more recent workout with NO completed sets for this exercise
@@ -145,7 +165,14 @@ describe('History-derived stats & previous set suggestions', () => {
               primaryMuscles: ['pectorals'],
             },
             sets: [
-              { id: 's3', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: false },
+              {
+                id: 's3',
+                setNumber: 1,
+                type: 'normal',
+                weightKg: 110,
+                reps: 5,
+                isCompleted: false,
+              },
             ],
           },
         ],
@@ -192,20 +219,24 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime: '2026-09-10T10:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 360,
-          exercises: [{
-            id: `${platform}-default-stats-occurrence`,
-            exerciseId: exercise.id,
-            exercise,
-            restTimerSeconds: 90,
-            sets: [{
-              id: `${platform}-default-stats-set`,
-              setNumber: 1,
-              type: 'normal',
-              weightKg: 45,
-              reps: 8,
-              isCompleted: true,
-            }],
-          }],
+          exercises: [
+            {
+              id: `${platform}-default-stats-occurrence`,
+              exerciseId: exercise.id,
+              exercise,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: `${platform}-default-stats-set`,
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 45,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
 
         const explicit = await fixture.store.getExerciseStats(exercise.id, defaultGym.id);
@@ -240,38 +271,46 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime,
           durationSeconds: 600,
           totalVolumeKg: weightKg * 8,
-          exercises: [{
-            id: `${id}-occ-0`,
-            exerciseId: exercise!.id,
-            exercise: exercise!,
-            restTimerSeconds: 90,
-            sets: [{
-              id: `${id}-set-0`,
-              setNumber: 1,
-              type: 'normal',
-              weightKg,
-              reps: 8,
-              isCompleted: true,
-            }],
-          }],
+          exercises: [
+            {
+              id: `${id}-occ-0`,
+              exerciseId: exercise!.id,
+              exercise: exercise!,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: `${id}-set-0`,
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
 
-        await fixture.store.finishWorkout(workoutWith(
-          'machine-local', gymA.id, '2026-09-09T10:00:00.000Z', machine, 45,
-        ));
-        await fixture.store.finishWorkout(workoutWith(
-          'machine-foreign', gymB.id, '2026-09-10T10:00:00.000Z', machine, 35,
-        ));
-        await fixture.store.finishWorkout(workoutWith(
-          'global-barbell', gymB.id, '2026-09-11T10:00:00.000Z', barbell, 100,
-        ));
+        await fixture.store.finishWorkout(
+          workoutWith('machine-local', gymA.id, '2026-09-09T10:00:00.000Z', machine, 45),
+        );
+        await fixture.store.finishWorkout(
+          workoutWith('machine-foreign', gymB.id, '2026-09-10T10:00:00.000Z', machine, 35),
+        );
+        await fixture.store.finishWorkout(
+          workoutWith('global-barbell', gymB.id, '2026-09-11T10:00:00.000Z', barbell, 100),
+        );
         await fixture.store.saveDraft({
           version: 1,
           revision: 1,
           savedAt: '2026-09-12T10:00:00.000Z',
           restTimer: null,
           workout: workoutWith(
-            'machine-draft', defaultGym.id, '2026-09-12T09:00:00.000Z', machine, 300,
+            'machine-draft',
+            defaultGym.id,
+            '2026-09-12T09:00:00.000Z',
+            machine,
+            300,
           ),
         });
 
@@ -279,11 +318,19 @@ describe('History-derived stats & previous set suggestions', () => {
         assert.equal(local[0].weightKg, 45);
         assert.equal(local[0].sourceGymName, undefined);
 
-        const foreign = await fixture.store.getPreviousSetsForExercise(machine.id, 0, defaultGym.id);
+        const foreign = await fixture.store.getPreviousSetsForExercise(
+          machine.id,
+          0,
+          defaultGym.id,
+        );
         assert.equal(foreign[0].weightKg, 35);
         assert.equal(foreign[0].sourceGymName, 'McFit');
 
-        const globalSuggestion = await fixture.store.getPreviousSetsForExercise(barbell.id, 0, defaultGym.id);
+        const globalSuggestion = await fixture.store.getPreviousSetsForExercise(
+          barbell.id,
+          0,
+          defaultGym.id,
+        );
         assert.equal(globalSuggestion[0].weightKg, 100);
         assert.equal(globalSuggestion[0].sourceGymName, undefined);
 
@@ -315,9 +362,18 @@ describe('History-derived stats & previous set suggestions', () => {
         const allHistory = history.map(item => ({ ...item }));
         const gymAHistory = history.filter(item => item.gymId === gymA.id);
         assert.equal(gymAHistory.length, 1);
-        assert.equal(gymAHistory.reduce((sum, item) => sum + item.totalVolumeKg, 0), 45 * 8);
-        assert.deepEqual(history.map(item => item.id), allHistory.map(item => item.id));
-        assert.deepEqual(history.map(item => item.gymId), allHistory.map(item => item.gymId));
+        assert.equal(
+          gymAHistory.reduce((sum, item) => sum + item.totalVolumeKg, 0),
+          45 * 8,
+        );
+        assert.deepEqual(
+          history.map(item => item.id),
+          allHistory.map(item => item.id),
+        );
+        assert.deepEqual(
+          history.map(item => item.gymId),
+          allHistory.map(item => item.gymId),
+        );
         assert.equal((await fixture.store.getWorkoutDetail('machine-local'))?.gymId, gymA.id);
       } finally {
         await fixture.dispose();
@@ -343,21 +399,43 @@ describe('History-derived stats & previous set suggestions', () => {
               exerciseId: exercise.id,
               exercise,
               restTimerSeconds: 90,
-              sets: [{ id: 'repeated-incomplete', setNumber: 1, type: 'normal', weightKg: 70, reps: 8, isCompleted: false }],
+              sets: [
+                {
+                  id: 'repeated-incomplete',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 70,
+                  reps: 8,
+                  isCompleted: false,
+                },
+              ],
             },
             {
               id: 'repeated-occ-1',
               exerciseId: exercise.id,
               exercise,
               restTimerSeconds: 90,
-              sets: [{ id: 'repeated-complete', setNumber: 1, type: 'normal', weightKg: 60, reps: 8, isCompleted: true }],
+              sets: [
+                {
+                  id: 'repeated-complete',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 60,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
             },
           ],
         };
         await fixture.store.finishWorkout(workout);
 
         const requested = await fixture.store.getPreviousSetsForExercise(exercise.id, 1, gym.id);
-        const emptyRequested = await fixture.store.getPreviousSetsForExercise(exercise.id, 0, gym.id);
+        const emptyRequested = await fixture.store.getPreviousSetsForExercise(
+          exercise.id,
+          0,
+          gym.id,
+        );
         assert.equal(requested[0].weightKg, 60);
         assert.equal(emptyRequested[0].weightKg, 60);
       } finally {
@@ -386,28 +464,58 @@ describe('History-derived stats & previous set suggestions', () => {
               exerciseId: machine.id,
               exercise: machine,
               restTimerSeconds: 90,
-              sets: [{ id: 'interleaved-set-0', setNumber: 1, type: 'normal', weightKg: 45, reps: 8, isCompleted: true }],
+              sets: [
+                {
+                  id: 'interleaved-set-0',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 45,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
             },
             {
               id: 'interleaved-barbell-0',
               exerciseId: barbell.id,
               exercise: barbell,
               restTimerSeconds: 90,
-              sets: [{ id: 'interleaved-barbell-set', setNumber: 1, type: 'normal', weightKg: 80, reps: 8, isCompleted: true }],
+              sets: [
+                {
+                  id: 'interleaved-barbell-set',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 80,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
             },
             {
               id: 'interleaved-machine-1',
               exerciseId: machine.id,
               exercise: machine,
               restTimerSeconds: 90,
-              sets: [{ id: 'interleaved-set-1', setNumber: 1, type: 'normal', weightKg: 65, reps: 8, isCompleted: true }],
+              sets: [
+                {
+                  id: 'interleaved-set-1',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 65,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
             },
           ],
         };
         await fixture.store.finishWorkout(workout);
 
         const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 1, gym.id);
-        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [65]);
+        assert.deepEqual(
+          suggestions.map(suggestion => suggestion.weightKg),
+          [65],
+        );
       } finally {
         await fixture.dispose();
       }
@@ -426,19 +534,33 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime: '2026-09-10T10:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 0,
-          exercises: [{
-            id: `${id}-occurrence`,
-            exerciseId: machine.id,
-            exercise: machine,
-            restTimerSeconds: 90,
-            sets: [{ id: `${id}-set`, setNumber: 1, type: 'normal', weightKg, reps: 8, isCompleted: true }],
-          }],
+          exercises: [
+            {
+              id: `${id}-occurrence`,
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: `${id}-set`,
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
         await fixture.store.finishWorkout(makeWorkout('tie-a', 40));
         await fixture.store.finishWorkout(makeWorkout('tie-b', 50));
 
         const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
-        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [50]);
+        assert.deepEqual(
+          suggestions.map(suggestion => suggestion.weightKg),
+          [50],
+        );
       } finally {
         await fixture.dispose();
       }
@@ -457,19 +579,33 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime: '2026-09-10T10:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 0,
-          exercises: [{
-            id: `${id}-occurrence`,
-            exerciseId: machine.id,
-            exercise: machine,
-            restTimerSeconds: 90,
-            sets: [{ id: `${id}-set`, setNumber: 1, type: 'normal', weightKg, reps: 8, isCompleted: true }],
-          }],
+          exercises: [
+            {
+              id: `${id}-occurrence`,
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: `${id}-set`,
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
         await fixture.store.finishWorkout(makeWorkout('Z-workout', 40));
         await fixture.store.finishWorkout(makeWorkout('a-workout', 50));
 
         const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
-        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [50]);
+        assert.deepEqual(
+          suggestions.map(suggestion => suggestion.weightKg),
+          [50],
+        );
       } finally {
         await fixture.dispose();
       }
@@ -488,20 +624,39 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime: '2026-09-10T10:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 0,
-          exercises: [{
-            id: 'binary-set-occurrence',
-            exerciseId: machine.id,
-            exercise: machine,
-            restTimerSeconds: 90,
-            sets: [
-              { id: 'a-set', setNumber: 1, type: 'normal', weightKg: 10, reps: 8, isCompleted: true },
-              { id: 'Z-set', setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
-            ],
-          }],
+          exercises: [
+            {
+              id: 'binary-set-occurrence',
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: 'a-set',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 10,
+                  reps: 8,
+                  isCompleted: true,
+                },
+                {
+                  id: 'Z-set',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 20,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
 
         const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
-        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [20, 10]);
+        assert.deepEqual(
+          suggestions.map(suggestion => suggestion.weightKg),
+          [20, 10],
+        );
       } finally {
         await fixture.dispose();
       }
@@ -520,19 +675,33 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime: '2026-09-10T10:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 0,
-          exercises: [{
-            id: `${id}-occurrence`,
-            exerciseId: machine.id,
-            exercise: machine,
-            restTimerSeconds: 90,
-            sets: [{ id: `${id}-set`, setNumber: 1, type: 'normal', weightKg, reps: 8, isCompleted: true }],
-          }],
+          exercises: [
+            {
+              id: `${id}-occurrence`,
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: `${id}-set`,
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
         await fixture.store.finishWorkout(makeWorkout('\uE000-workout', 40));
         await fixture.store.finishWorkout(makeWorkout('\u{10000}-workout', 50));
 
         const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
-        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [50]);
+        assert.deepEqual(
+          suggestions.map(suggestion => suggestion.weightKg),
+          [50],
+        );
       } finally {
         await fixture.dispose();
       }
@@ -551,20 +720,39 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime: '2026-09-10T10:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 0,
-          exercises: [{
-            id: 'utf8-set-occurrence',
-            exerciseId: machine.id,
-            exercise: machine,
-            restTimerSeconds: 90,
-            sets: [
-              { id: '\uE000-set', setNumber: 1, type: 'normal', weightKg: 10, reps: 8, isCompleted: true },
-              { id: '\u{10000}-set', setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
-            ],
-          }],
+          exercises: [
+            {
+              id: 'utf8-set-occurrence',
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: '\uE000-set',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 10,
+                  reps: 8,
+                  isCompleted: true,
+                },
+                {
+                  id: '\u{10000}-set',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 20,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
 
         const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
-        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [10, 20]);
+        assert.deepEqual(
+          suggestions.map(suggestion => suggestion.weightKg),
+          [10, 20],
+        );
       } finally {
         await fixture.dispose();
       }
@@ -583,20 +771,39 @@ describe('History-derived stats & previous set suggestions', () => {
           startTime: '2026-09-10T10:00:00.000Z',
           durationSeconds: 600,
           totalVolumeKg: 0,
-          exercises: [{
-            id: 'unsorted-sets-occurrence',
-            exerciseId: machine.id,
-            exercise: machine,
-            restTimerSeconds: 90,
-            sets: [
-              { id: 'set-2', setNumber: 2, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
-              { id: 'set-1', setNumber: 1, type: 'normal', weightKg: 10, reps: 8, isCompleted: true },
-            ],
-          }],
+          exercises: [
+            {
+              id: 'unsorted-sets-occurrence',
+              exerciseId: machine.id,
+              exercise: machine,
+              restTimerSeconds: 90,
+              sets: [
+                {
+                  id: 'set-2',
+                  setNumber: 2,
+                  type: 'normal',
+                  weightKg: 20,
+                  reps: 8,
+                  isCompleted: true,
+                },
+                {
+                  id: 'set-1',
+                  setNumber: 1,
+                  type: 'normal',
+                  weightKg: 10,
+                  reps: 8,
+                  isCompleted: true,
+                },
+              ],
+            },
+          ],
         });
 
         const suggestions = await fixture.store.getPreviousSetsForExercise(machine.id, 0, gym.id);
-        assert.deepEqual(suggestions.map(suggestion => suggestion.weightKg), [10, 20]);
+        assert.deepEqual(
+          suggestions.map(suggestion => suggestion.weightKg),
+          [10, 20],
+        );
       } finally {
         await fixture.dispose();
       }

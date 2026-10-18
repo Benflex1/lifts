@@ -5,7 +5,12 @@ import * as Haptics from 'expo-haptics';
 import { useDialog } from '../DialogContext';
 import { ActiveExercise, Exercise, Routine, SetType, Workout, WorkoutSet } from '../../types';
 import { getStore } from '../../database/db';
-import { initialReps, moveWorkoutSet, resolveRestTimerSeconds, validateCompletedSet } from '../../workout/sets';
+import {
+  initialReps,
+  moveWorkoutSet,
+  resolveRestTimerSeconds,
+  validateCompletedSet,
+} from '../../workout/sets';
 import {
   moveActiveExercise,
   moveActiveExerciseToIndex,
@@ -61,7 +66,7 @@ export interface WorkoutMutations {
   insertWarmupSets: (
     activeExerciseId: string,
     warmupSets: { weightKg: number; reps: number }[],
-    replaceExisting?: boolean
+    replaceExisting?: boolean,
   ) => void;
   linkSuperset: (firstExerciseId: string, secondExerciseId: string) => void;
   unlinkSuperset: (exerciseId: string) => void;
@@ -82,10 +87,7 @@ export interface WorkoutMutations {
 function calculateTotalVolume(exercises: ActiveExercise[]): number {
   return exercises.reduce((sum, ex) => {
     return (
-      sum +
-      ex.sets
-        .filter((s) => s.isCompleted)
-        .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0)
+      sum + ex.sets.filter(s => s.isCompleted).reduce((sSum, s) => sSum + s.weightKg * s.reps, 0)
     );
   }, 0);
 }
@@ -126,28 +128,25 @@ export function useWorkoutMutations({
     const workoutId = `wo-${Crypto.randomUUID()}`;
     const name = customName || (routine ? routine.name : 'Quick Workout');
     const store = await getStore();
-    const [loadedGyms, defaultGym] = await Promise.all([
-      store.getGyms(),
-      store.getDefaultGym(),
-    ]);
+    const [loadedGyms, defaultGym] = await Promise.all([store.getGyms(), store.getDefaultGym()]);
     const gymId = resolveStartGymId(defaultGym, options);
-    const selectedGym = loadedGyms.find((gym) => gym.id === gymId);
+    const selectedGym = loadedGyms.find(gym => gym.id === gymId);
     if (!selectedGym) {
       throw new Error(`Cannot start workout: unknown gym ${gymId}`);
     }
-    const gymNames = new Map(loadedGyms.map((gym) => [gym.id, gym.name]));
+    const gymNames = new Map(loadedGyms.map(gym => [gym.id, gym.name]));
 
     let exercises: ActiveExercise[] = [];
 
     if (initialExercises && initialExercises.length > 0) {
-      exercises = initialExercises.map((exercise) => ({
+      exercises = initialExercises.map(exercise => ({
         ...exercise,
-        sets: exercise.sets.map((set) => {
+        sets: exercise.sets.map(set => {
           const normalizedSet = clearSameGymProvenance(set, gymId);
           return {
             ...normalizedSet,
             previousGymName: normalizedSet.previousGymId
-              ? (normalizedSet.previousGymName || gymNames.get(normalizedSet.previousGymId))
+              ? normalizedSet.previousGymName || gymNames.get(normalizedSet.previousGymId)
               : normalizedSet.previousGymName,
           };
         }),
@@ -166,7 +165,7 @@ export function useWorkoutMutations({
           targetReps: item.targetReps,
           suggestions: prevSets,
           currentGymId: gymId,
-          idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+          idGenerator: i => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
         });
 
         exercises.push({
@@ -260,7 +259,7 @@ export function useWorkoutMutations({
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -324,9 +323,8 @@ export function useWorkoutMutations({
         targetReps: '10',
         suggestions: prevSets,
         currentGymId: currentWorkout.gymId,
-        idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+        idGenerator: i => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
       });
-
 
       newActiveExercises.push({
         id: activeExId,
@@ -340,7 +338,7 @@ export function useWorkoutMutations({
     }
 
     appendExercisesToCurrentWorkout(ctrl, expectedVersion, newActiveExercises);
-    accordion.expandExercises(newActiveExercises.map((ex) => ex.id));
+    accordion.expandExercises(newActiveExercises.map(ex => ex.id));
   };
 
   const addExerciseToWorkout = async (exercise: Exercise) => {
@@ -355,14 +353,19 @@ export function useWorkoutMutations({
 
     accordion.removeExercise(activeExerciseId);
 
-    const updatedExercises = state.workout.exercises.filter((e) => e.id !== activeExerciseId);
+    const updatedExercises = state.workout.exercises.filter(e => e.id !== activeExerciseId);
     const totalVol = calculateTotalVolume(updatedExercises);
     const updated: Workout = {
       ...state.workout,
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const moveExercise = (activeExerciseId: string, direction: -1 | 1) => {
@@ -371,7 +374,11 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = moveActiveExercise(state.workout.exercises, activeExerciseId, direction);
+    const updatedExercises = moveActiveExercise(
+      state.workout.exercises,
+      activeExerciseId,
+      direction,
+    );
     if (updatedExercises === state.workout.exercises) return;
 
     const updated: Workout = {
@@ -382,7 +389,7 @@ export function useWorkoutMutations({
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -395,7 +402,7 @@ export function useWorkoutMutations({
     const updatedExercises = moveActiveExerciseToIndex(
       state.workout.exercises,
       activeExerciseId,
-      targetIndex
+      targetIndex,
     );
     if (updatedExercises === state.workout.exercises) return;
 
@@ -407,7 +414,7 @@ export function useWorkoutMutations({
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -455,7 +462,7 @@ export function useWorkoutMutations({
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -465,7 +472,7 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       const nextNum = ex.sets.length + 1;
       const ghostStats = resolveAddedSetGhostStats(ex.sets);
@@ -493,24 +500,29 @@ export function useWorkoutMutations({
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const insertWarmupSets = (
     activeExerciseId: string,
     warmupSets: { weightKg: number; reps: number }[],
-    replaceExisting: boolean = true
+    replaceExisting: boolean = true,
   ) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
 
-      const completedWarmupSets = ex.sets.filter((s) => s.type === 'warmup' && s.isCompleted);
-      const nonWarmupSets = ex.sets.filter((s) => s.type !== 'warmup');
+      const completedWarmupSets = ex.sets.filter(s => s.type === 'warmup' && s.isCompleted);
+      const nonWarmupSets = ex.sets.filter(s => s.type !== 'warmup');
 
       const newWarmupSets: WorkoutSet[] = warmupSets.map((ws, i) => ({
         id: `set-${ex.id}-w${i + 1}-${Crypto.randomUUID().slice(0, 6)}`,
@@ -538,7 +550,12 @@ export function useWorkoutMutations({
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const linkSuperset = (firstExerciseId: string, secondExerciseId: string) => {
@@ -547,8 +564,8 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const idx1 = state.workout.exercises.findIndex((e) => e.id === firstExerciseId);
-    const idx2 = state.workout.exercises.findIndex((e) => e.id === secondExerciseId);
+    const idx1 = state.workout.exercises.findIndex(e => e.id === firstExerciseId);
+    const idx2 = state.workout.exercises.findIndex(e => e.id === secondExerciseId);
     if (idx1 === -1 || idx2 === -1) return;
 
     const fallbackId = `ss-${Crypto.randomUUID().slice(0, 8)}`;
@@ -558,7 +575,12 @@ export function useWorkoutMutations({
       ...state.workout,
       exercises: updatedExercises,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const unlinkSuperset = (exerciseId: string) => {
@@ -567,7 +589,7 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const targetIdx = state.workout.exercises.findIndex((e) => e.id === exerciseId);
+    const targetIdx = state.workout.exercises.findIndex(e => e.id === exerciseId);
     if (targetIdx === -1) return;
 
     const updatedExercises = unlinkExerciseFromGroup(state.workout.exercises, targetIdx);
@@ -576,7 +598,12 @@ export function useWorkoutMutations({
       ...state.workout,
       exercises: updatedExercises,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const setSupersetGroup = (selectedExerciseIds: string[]) => {
@@ -589,7 +616,7 @@ export function useWorkoutMutations({
     const updatedExercises = setSupersetGroupInList(
       state.workout.exercises,
       selectedExerciseIds,
-      fallbackId
+      fallbackId,
     );
 
     const updated: Workout = {
@@ -600,7 +627,7 @@ export function useWorkoutMutations({
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -610,9 +637,9 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
-      const filtered = ex.sets.filter((s) => s.id !== setId);
+      const filtered = ex.sets.filter(s => s.id !== setId);
       const renumbered = filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
       return { ...ex, sets: renumbered };
     });
@@ -623,7 +650,12 @@ export function useWorkoutMutations({
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const moveSet = (activeExerciseId: string, setId: string, direction: -1 | 1) => {
@@ -632,7 +664,7 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       return {
         ...ex,
@@ -648,7 +680,7 @@ export function useWorkoutMutations({
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -658,11 +690,11 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       return {
         ...ex,
-        sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...updates } : s)),
+        sets: ex.sets.map(s => (s.id === setId ? { ...s, ...updates } : s)),
       };
     });
 
@@ -672,7 +704,12 @@ export function useWorkoutMutations({
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const updateExerciseNotes = (activeExerciseId: string, notes: string) => {
@@ -681,11 +718,16 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) =>
-      ex.id === activeExerciseId ? { ...ex, notes } : ex
+    const updatedExercises = state.workout.exercises.map(ex =>
+      ex.id === activeExerciseId ? { ...ex, notes } : ex,
     );
     const updated: Workout = { ...state.workout, exercises: updatedExercises };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const updateExerciseRestTimer = (activeExerciseId: string, seconds: number) => {
@@ -694,11 +736,16 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) =>
-      ex.id === activeExerciseId ? { ...ex, restTimerSeconds: seconds } : ex
+    const updatedExercises = state.workout.exercises.map(ex =>
+      ex.id === activeExerciseId ? { ...ex, restTimerSeconds: seconds } : ex,
     );
     const updated: Workout = { ...state.workout, exercises: updatedExercises };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
@@ -707,23 +754,22 @@ export function useWorkoutMutations({
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const targetEx = state.workout.exercises.find((e) => e.id === activeExerciseId);
-    const targetSet = targetEx?.sets.find((s) => s.id === setId);
+    const targetEx = state.workout.exercises.find(e => e.id === activeExerciseId);
+    const targetSet = targetEx?.sets.find(s => s.id === setId);
     if (!targetSet || !targetEx) return;
 
     let effectiveSet = targetSet;
     if (!targetSet.isCompleted) {
-      const isWeightEdited = targetSet.isWeightEdited ?? (targetSet.weightKg > 0);
+      const isWeightEdited = targetSet.isWeightEdited ?? targetSet.weightKg > 0;
       const needsReps = targetSet.reps <= 0;
-      const needsWeight = !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
+      const needsWeight =
+        !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
       if (needsReps || needsWeight) {
-        const setIdx = targetEx.sets.findIndex((s) => s.id === setId);
+        const setIdx = targetEx.sets.findIndex(s => s.id === setId);
         const fallbackReps = needsReps
           ? initialReps(targetEx.targetReps, setIdx >= 0 ? setIdx : 0, targetSet.previousReps)
           : targetSet.reps;
-        const fallbackWeight = needsWeight
-          ? (targetSet.previousWeightKg ?? 0)
-          : targetSet.weightKg;
+        const fallbackWeight = needsWeight ? (targetSet.previousWeightKg ?? 0) : targetSet.weightKg;
         effectiveSet = {
           ...targetSet,
           reps: fallbackReps,
@@ -746,11 +792,11 @@ export function useWorkoutMutations({
     let justCompleted = false;
     let completedExerciseName: string | undefined;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       return {
         ...ex,
-        sets: ex.sets.map((s) => {
+        sets: ex.sets.map(s => {
           if (s.id !== setId) return s;
           const nextCompleted = !s.isCompleted;
           if (nextCompleted) {
@@ -788,15 +834,21 @@ export function useWorkoutMutations({
       }
       if (targetRestSeconds) {
         startRestTimer(targetRestSeconds, completedExerciseName);
-        timerMeta = { endsAt: Date.now() + targetRestSeconds * 1000, totalSeconds: targetRestSeconds };
+        timerMeta = {
+          endsAt: Date.now() + targetRestSeconds * 1000,
+          totalSeconds: targetRestSeconds,
+        };
       }
     } else {
-      timerMeta = restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null;
+      timerMeta =
+        restTimer.isActive && restTimer.endsAt
+          ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+          : null;
     }
 
     ctrl.update(updated, timerMeta);
     // Flush immediately on completed-set changes as required by spec
-    ctrl.flush().catch((error) => {
+    ctrl.flush().catch(error => {
       reportError(error, { scope: 'workout.autosave.set-complete' });
     });
   };

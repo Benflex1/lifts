@@ -18,8 +18,6 @@ class FakeAnimatedValue {
   interpolate = (config: unknown) => config;
 }
 
-class FakeAnimatedView extends Object {}
-
 mockModule('react-native', {
   View: 'View',
   Animated: {
@@ -56,9 +54,7 @@ test('ConfettiCelebration builds particles once per mount', async () => {
   try {
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {
-      renderer = TestRenderer.create(
-        React.createElement(ConfettiCelebration, { count: 7 }),
-      );
+      renderer = TestRenderer.create(React.createElement(ConfettiCelebration, { count: 7 }));
     });
     const callsAfterMount = randomCalls;
     assert.ok(callsAfterMount > 0, 'particles are generated on mount');
@@ -73,9 +69,7 @@ test('ConfettiCelebration builds particles once per mount', async () => {
     );
 
     const tree = renderer.toJSON();
-    const particleCount = Array.isArray(tree)
-      ? tree.length
-      : (tree?.children ?? []).length;
+    const particleCount = Array.isArray(tree) ? tree.length : (tree?.children ?? []).length;
     assert.equal(particleCount, 7, 'all particles are rendered');
   } finally {
     Math.random = originalRandom;

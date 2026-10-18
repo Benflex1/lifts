@@ -8,7 +8,7 @@ const MIN_SCHEDULE_LEAD_MS = 1000;
 
 export function createAndroidRestNotifications(
   native: RestAlarmNativeModule | null,
-  now: () => number = Date.now
+  now: () => number = Date.now,
 ) {
   let permissionRequested = false;
 
@@ -33,7 +33,10 @@ export function createAndroidRestNotifications(
     }
   }
 
-  async function scheduleRestNotification(endsAtMs: number, exerciseName?: string): Promise<string | null> {
+  async function scheduleRestNotification(
+    endsAtMs: number,
+    exerciseName?: string,
+  ): Promise<string | null> {
     if (!native) return null;
 
     await initRestNotifications();

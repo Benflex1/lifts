@@ -45,7 +45,7 @@ interface WorkoutContextType {
   insertWarmupSets: (
     activeExerciseId: string,
     warmupSets: { weightKg: number; reps: number }[],
-    replaceExisting?: boolean
+    replaceExisting?: boolean,
   ) => void;
   linkSuperset: (firstExerciseId: string, secondExerciseId: string) => void;
   unlinkSuperset: (exerciseId: string) => void;
@@ -109,7 +109,10 @@ type WorkoutActions = Omit<
   | 'expandedExercises'
 >;
 const WorkoutActionsContext = createContext<WorkoutActions | undefined>(undefined);
-const WorkoutGymsContext = createContext<{ gyms: Gym[]; activeGym: Gym | null }>({ gyms: [], activeGym: null });
+const WorkoutGymsContext = createContext<{ gyms: Gym[]; activeGym: Gym | null }>({
+  gyms: [],
+  activeGym: null,
+});
 const IsWorkingOutContext = createContext<boolean>(false);
 // Persistence failures are rare and urgent; a dedicated context keeps the whole app from
 // re-rendering every time the autosave health changes.
@@ -160,6 +163,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => {
       cancelled = true;
     };
+    // Mount-once initialization; the hook exports are recreated per render but must run only here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const actions = {
@@ -187,7 +192,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // reaches the latest implementation (and therefore the latest state it closes over).
   const stableActions = useMemo(() => {
     const proxies = {} as typeof actions;
-    (Object.keys(actionsRef.current) as (keyof typeof actions)[]).forEach((key) => {
+    (Object.keys(actionsRef.current) as (keyof typeof actions)[]).forEach(key => {
       (proxies as Record<string, unknown>)[key] = (...args: unknown[]) =>
         (actionsRef.current[key] as (...a: unknown[]) => unknown)(...args);
     });

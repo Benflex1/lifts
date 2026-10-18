@@ -44,21 +44,29 @@ Thank you for contributing to Lifts! Lifts is a free, local-first, open-source g
 Every change must pass our verification suite before submitting a pull request:
 
 ```bash
-# 1. Type check
-npx tsc --noEmit
+# 1. Lint (errors block CI; warnings are tracked in the audit backlog)
+npm run lint
 
-# 2. Type check the test suite
+# 2. Formatting check
+npm run format:check
+
+# 3. Type check
+npm run typecheck
+
+# 4. Type check the test suite
 npm run typecheck:tests
 
-# 3. Fast unit tests
+# 5. Fast unit tests
 npm test
 
-# 4. Cross-platform integration tests (Native SQLite + Web IndexedDB)
+# 6. Cross-platform integration tests (Native SQLite + Web IndexedDB)
 npm run test:integration
 
-# 5. Web production export smoke test
+# 7. Web production export smoke test
 npx expo export --platform web --output-dir dist-audit-web
 ```
+
+Run `npm run format` before committing to apply the shared Prettier configuration.
 
 ---
 
@@ -100,6 +108,6 @@ When contributing code, adhere strictly to these core principles:
    ```bash
    git commit -m "feat: descriptive message in lowercase without emojis"
    ```
-3. Run the full verification suite (`npx tsc --noEmit && npm run typecheck:tests && npm test && npm run test:integration`).
+3. Run the full verification suite (`npm run lint && npm run format:check && npm run typecheck && npm run typecheck:tests && npm test && npm run test:integration`).
 4. Push your branch to GitHub and open a Pull Request against `main`.
 5. Clearly describe the motivation, test evidence, and verified platforms in your PR description.

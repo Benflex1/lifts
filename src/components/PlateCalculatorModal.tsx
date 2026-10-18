@@ -30,7 +30,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
   const { unit } = useSettings();
   const [modalUnit, setModalUnit] = useState<WeightUnit>(unit);
   const [targetWeight, setTargetWeight] = useState(
-    unit === 'lb' ? kgToDisplay(initialWeight, 'lb').toString() : initialWeight.toString()
+    unit === 'lb' ? kgToDisplay(initialWeight, 'lb').toString() : initialWeight.toString(),
   );
   const [barWeight, setBarWeight] = useState(unit === 'lb' ? 45 : 20);
 
@@ -107,7 +107,10 @@ export const PlateCalculatorModal: React.FC<Props> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Plate Calculator</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <X color={colors.textSecondary} size={24} />
             </TouchableOpacity>
           </View>
@@ -177,7 +180,12 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                     onPress={() => setBarWeight(w)}
                   >
                     <Text style={[styles.pillText, barWeight === w && styles.pillTextActive]}>
-                      {w} {modalUnit} {modalUnit === 'kg' && w === 20 ? '(Olympic)' : modalUnit === 'lb' && w === 45 ? '(Olympic)' : ''}
+                      {w} {modalUnit}{' '}
+                      {modalUnit === 'kg' && w === 20
+                        ? '(Olympic)'
+                        : modalUnit === 'lb' && w === 45
+                          ? '(Olympic)'
+                          : ''}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -187,7 +195,10 @@ export const PlateCalculatorModal: React.FC<Props> = ({
             {/* Results Display */}
             <View style={styles.resultBox}>
               <Text style={styles.resultSummary}>
-                Weight per side: <Text style={styles.highlightText}>{calc.weightPerSide} {modalUnit}</Text>
+                Weight per side:{' '}
+                <Text style={styles.highlightText}>
+                  {calc.weightPerSide} {modalUnit}
+                </Text>
               </Text>
 
               {calc.plates.length === 0 ? (
@@ -206,7 +217,10 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                         style={[styles.plateChip, { borderColor: getPlateColor(p.weight) }]}
                       >
                         <View
-                          style={[styles.plateColorDot, { backgroundColor: getPlateColor(p.weight) }]}
+                          style={[
+                            styles.plateColorDot,
+                            { backgroundColor: getPlateColor(p.weight) },
+                          ]}
                         />
                         <Text style={styles.plateText}>
                           {p.count} × {p.weight} {modalUnit}
@@ -219,7 +233,8 @@ export const PlateCalculatorModal: React.FC<Props> = ({
 
               {calc.remainder > 0 && (
                 <Text style={styles.remainderText}>
-                  Note: Remainder: {calc.remainder.toFixed(2)} {modalUnit} cannot be loaded with standard plates.
+                  Note: Remainder: {calc.remainder.toFixed(2)} {modalUnit} cannot be loaded with
+                  standard plates.
                 </Text>
               )}
             </View>

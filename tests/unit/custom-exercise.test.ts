@@ -67,7 +67,7 @@ before(async () => {
 });
 
 async function flush(): Promise<void> {
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
 }
 
 interface ModalResult {
@@ -116,7 +116,11 @@ test('shared filter lists and resolvers keep the screen and picker in sync', () 
 });
 
 test('customExerciseDefaults prefills from an existing exercise', () => {
-  assert.deepEqual(customExerciseDefaults(null), { name: '', muscle: 'Chest', equipment: 'Barbell' });
+  assert.deepEqual(customExerciseDefaults(null), {
+    name: '',
+    muscle: 'Chest',
+    equipment: 'Barbell',
+  });
   assert.deepEqual(
     customExerciseDefaults({
       id: 'e-lat',

@@ -9,14 +9,11 @@ import {
   dissolveSupersetInList,
   SUPERSET_PALETTE,
 } from '../../src/workout/supersets';
-import { Workout, ActiveExercise } from '../../src/types';
+import { Workout } from '../../src/types';
 
 describe('Supersets and Giant Sets Engine', () => {
   it('ignores singleton exercises with supersetId (requires at least 2)', () => {
-    const exercises = [
-      { id: 'ex-1', supersetId: 'ss-solo' },
-      { id: 'ex-2' },
-    ];
+    const exercises = [{ id: 'ex-1', supersetId: 'ss-solo' }, { id: 'ex-2' }];
     const meta = getSupersetMetadata(exercises);
     assert.equal(meta.size, 0);
   });
@@ -89,22 +86,62 @@ describe('Supersets and Giant Sets Engine', () => {
           id: 'ae-bench',
           exerciseId: 'ex-bench',
           supersetId: 'ss-1',
-          exercise: { id: 'ex-bench', name: 'Barbell Bench Press', category: 'Chest', equipment: 'Barbell', primaryMuscles: ['Chest'] },
+          exercise: {
+            id: 'ex-bench',
+            name: 'Barbell Bench Press',
+            category: 'Chest',
+            equipment: 'Barbell',
+            primaryMuscles: ['Chest'],
+          },
           restTimerSeconds: 90,
           sets: [
-            { id: 's-bench-1', setNumber: 1, type: 'normal', weightKg: 80, reps: 8, isCompleted: true },
-            { id: 's-bench-2', setNumber: 2, type: 'normal', weightKg: 80, reps: 8, isCompleted: false },
+            {
+              id: 's-bench-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 80,
+              reps: 8,
+              isCompleted: true,
+            },
+            {
+              id: 's-bench-2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 80,
+              reps: 8,
+              isCompleted: false,
+            },
           ],
         },
         {
           id: 'ae-row',
           exerciseId: 'ex-row',
           supersetId: 'ss-1',
-          exercise: { id: 'ex-row', name: 'Barbell Row', category: 'Back', equipment: 'Barbell', primaryMuscles: ['Back'] },
+          exercise: {
+            id: 'ex-row',
+            name: 'Barbell Row',
+            category: 'Back',
+            equipment: 'Barbell',
+            primaryMuscles: ['Back'],
+          },
           restTimerSeconds: 90,
           sets: [
-            { id: 's-row-1', setNumber: 1, type: 'normal', weightKg: 70, reps: 8, isCompleted: false },
-            { id: 's-row-2', setNumber: 2, type: 'normal', weightKg: 70, reps: 8, isCompleted: false },
+            {
+              id: 's-row-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 70,
+              reps: 8,
+              isCompleted: false,
+            },
+            {
+              id: 's-row-2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 70,
+              reps: 8,
+              isCompleted: false,
+            },
           ],
         },
       ],
@@ -139,9 +176,17 @@ describe('Supersets and Giant Sets Engine', () => {
         {
           id: 'ae-squat',
           exerciseId: 'ex-squat',
-          exercise: { id: 'ex-squat', name: 'Squat', category: 'Legs', equipment: 'Barbell', primaryMuscles: ['Quads'] },
+          exercise: {
+            id: 'ex-squat',
+            name: 'Squat',
+            category: 'Legs',
+            equipment: 'Barbell',
+            primaryMuscles: ['Quads'],
+          },
           restTimerSeconds: 120,
-          sets: [{ id: 's-1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true }],
+          sets: [
+            { id: 's-1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+          ],
         },
       ],
     };
@@ -163,22 +208,62 @@ describe('Supersets and Giant Sets Engine', () => {
           id: 'ae-bench',
           exerciseId: 'ex-bench',
           supersetId: 'ss-warm',
-          exercise: { id: 'ex-bench', name: 'Barbell Bench Press', category: 'Chest', equipment: 'Barbell', primaryMuscles: ['Chest'] },
+          exercise: {
+            id: 'ex-bench',
+            name: 'Barbell Bench Press',
+            category: 'Chest',
+            equipment: 'Barbell',
+            primaryMuscles: ['Chest'],
+          },
           restTimerSeconds: 90,
           sets: [
-            { id: 's-bench-w1', setNumber: 1, type: 'warmup', weightKg: 20, reps: 10, isCompleted: true },
-            { id: 's-bench-w2', setNumber: 2, type: 'warmup', weightKg: 50, reps: 5, isCompleted: false },
-            { id: 's-bench-work1', setNumber: 3, type: 'normal', weightKg: 80, reps: 8, isCompleted: false },
+            {
+              id: 's-bench-w1',
+              setNumber: 1,
+              type: 'warmup',
+              weightKg: 20,
+              reps: 10,
+              isCompleted: true,
+            },
+            {
+              id: 's-bench-w2',
+              setNumber: 2,
+              type: 'warmup',
+              weightKg: 50,
+              reps: 5,
+              isCompleted: false,
+            },
+            {
+              id: 's-bench-work1',
+              setNumber: 3,
+              type: 'normal',
+              weightKg: 80,
+              reps: 8,
+              isCompleted: false,
+            },
           ],
         },
         {
           id: 'ae-row',
           exerciseId: 'ex-row',
           supersetId: 'ss-warm',
-          exercise: { id: 'ex-row', name: 'Barbell Row', category: 'Back', equipment: 'Barbell', primaryMuscles: ['Back'] },
+          exercise: {
+            id: 'ex-row',
+            name: 'Barbell Row',
+            category: 'Back',
+            equipment: 'Barbell',
+            primaryMuscles: ['Back'],
+          },
           restTimerSeconds: 90,
           sets: [
-            { id: 's-row-work1', setNumber: 1, type: 'normal', weightKg: 70, reps: 8, isCompleted: false },
+            {
+              id: 's-row-work1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 70,
+              reps: 8,
+              isCompleted: false,
+            },
           ],
         },
       ],
@@ -202,25 +287,79 @@ describe('Supersets and Giant Sets Engine', () => {
           id: 'ae-bench',
           exerciseId: 'ex-bench',
           supersetId: 'ss-uneven',
-          exercise: { id: 'ex-bench', name: 'Barbell Bench Press', category: 'Chest', equipment: 'Barbell', primaryMuscles: ['Chest'] },
+          exercise: {
+            id: 'ex-bench',
+            name: 'Barbell Bench Press',
+            category: 'Chest',
+            equipment: 'Barbell',
+            primaryMuscles: ['Chest'],
+          },
           restTimerSeconds: 90,
           sets: [
-            { id: 's-bench-w1', setNumber: 1, type: 'warmup', weightKg: 20, reps: 10, isCompleted: true },
-            { id: 's-bench-w2', setNumber: 2, type: 'warmup', weightKg: 50, reps: 5, isCompleted: true },
-            { id: 's-bench-work1', setNumber: 3, type: 'normal', weightKg: 80, reps: 8, isCompleted: true },
-            { id: 's-bench-work2', setNumber: 4, type: 'normal', weightKg: 80, reps: 8, isCompleted: false },
+            {
+              id: 's-bench-w1',
+              setNumber: 1,
+              type: 'warmup',
+              weightKg: 20,
+              reps: 10,
+              isCompleted: true,
+            },
+            {
+              id: 's-bench-w2',
+              setNumber: 2,
+              type: 'warmup',
+              weightKg: 50,
+              reps: 5,
+              isCompleted: true,
+            },
+            {
+              id: 's-bench-work1',
+              setNumber: 3,
+              type: 'normal',
+              weightKg: 80,
+              reps: 8,
+              isCompleted: true,
+            },
+            {
+              id: 's-bench-work2',
+              setNumber: 4,
+              type: 'normal',
+              weightKg: 80,
+              reps: 8,
+              isCompleted: false,
+            },
           ],
         },
         {
           id: 'ae-row',
           exerciseId: 'ex-row',
           supersetId: 'ss-uneven',
-          exercise: { id: 'ex-row', name: 'Barbell Row', category: 'Back', equipment: 'Barbell', primaryMuscles: ['Back'] },
+          exercise: {
+            id: 'ex-row',
+            name: 'Barbell Row',
+            category: 'Back',
+            equipment: 'Barbell',
+            primaryMuscles: ['Back'],
+          },
           restTimerSeconds: 90,
           sets: [
             // Row has NO warmups, directly starts with working sets
-            { id: 's-row-work1', setNumber: 1, type: 'normal', weightKg: 70, reps: 8, isCompleted: false },
-            { id: 's-row-work2', setNumber: 2, type: 'normal', weightKg: 70, reps: 8, isCompleted: false },
+            {
+              id: 's-row-work1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 70,
+              reps: 8,
+              isCompleted: false,
+            },
+            {
+              id: 's-row-work2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 70,
+              reps: 8,
+              isCompleted: false,
+            },
           ],
         },
       ],
@@ -258,23 +397,63 @@ describe('Supersets and Giant Sets Engine', () => {
           id: 'ae-1',
           exerciseId: 'ex-1',
           supersetId: 'ss-ooo',
-          exercise: { id: 'ex-1', name: 'Exercise 1', category: 'Chest', equipment: 'Barbell', primaryMuscles: ['Chest'] },
+          exercise: {
+            id: 'ex-1',
+            name: 'Exercise 1',
+            category: 'Chest',
+            equipment: 'Barbell',
+            primaryMuscles: ['Chest'],
+          },
           restTimerSeconds: 60,
           sets: [
-            { id: 's-1-1', setNumber: 1, type: 'normal', weightKg: 50, reps: 10, isCompleted: true },
-            { id: 's-1-2', setNumber: 2, type: 'normal', weightKg: 50, reps: 10, isCompleted: false },
+            {
+              id: 's-1-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 50,
+              reps: 10,
+              isCompleted: true,
+            },
+            {
+              id: 's-1-2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 50,
+              reps: 10,
+              isCompleted: false,
+            },
           ],
         },
         {
           id: 'ae-2',
           exerciseId: 'ex-2',
           supersetId: 'ss-ooo',
-          exercise: { id: 'ex-2', name: 'Exercise 2', category: 'Back', equipment: 'Barbell', primaryMuscles: ['Back'] },
+          exercise: {
+            id: 'ex-2',
+            name: 'Exercise 2',
+            category: 'Back',
+            equipment: 'Barbell',
+            primaryMuscles: ['Back'],
+          },
           restTimerSeconds: 60,
           sets: [
             // Exercise 2's first working set is already completed ahead of time!
-            { id: 's-2-1', setNumber: 1, type: 'normal', weightKg: 50, reps: 10, isCompleted: true },
-            { id: 's-2-2', setNumber: 2, type: 'normal', weightKg: 50, reps: 10, isCompleted: false },
+            {
+              id: 's-2-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 50,
+              reps: 10,
+              isCompleted: true,
+            },
+            {
+              id: 's-2-2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 50,
+              reps: 10,
+              isCompleted: false,
+            },
           ],
         },
       ],
@@ -417,9 +596,9 @@ describe('Interactive Superset Grouping & Reordering Engine', () => {
     // User forms a new superset between ex-2 and ex-3, removing ex-2 from the ex-1/ex-2 pair.
     // ex-1 becomes a singleton and should have its supersetId cleared!
     const result = setSupersetGroupInList(list, ['ex-2', 'ex-3']);
-    assert.equal(result.find((e) => e.id === 'ex-1')?.supersetId, undefined);
-    const ss2 = result.find((e) => e.id === 'ex-2')?.supersetId;
-    const ss3 = result.find((e) => e.id === 'ex-3')?.supersetId;
+    assert.equal(result.find(e => e.id === 'ex-1')?.supersetId, undefined);
+    const ss2 = result.find(e => e.id === 'ex-2')?.supersetId;
+    const ss3 = result.find(e => e.id === 'ex-3')?.supersetId;
     assert.ok(ss2);
     assert.equal(ss2, ss3);
   });
@@ -448,7 +627,6 @@ describe('Interactive Superset Grouping & Reordering Engine', () => {
     assert.equal(result[1].supersetId, 'ss-other');
     assert.equal(result[2].supersetId, undefined);
     assert.equal(result[3].supersetId, 'ss-other');
-    assert.equal(result.map((e) => e.id).join(','), 'ex-1,ex-2,ex-3,ex-4');
+    assert.equal(result.map(e => e.id).join(','), 'ex-1,ex-2,ex-3,ex-4');
   });
 });
-

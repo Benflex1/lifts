@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { ChevronUp, Play, Clock, Dumbbell, Timer } from 'lucide-react-native';
+import { ChevronUp, Clock, Dumbbell, Timer } from 'lucide-react-native';
 import { useRestTimer, useWorkout, useWorkoutClock } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
@@ -28,11 +28,7 @@ export const ActiveWorkoutMiniBar: React.FC = () => {
   }
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={maximizeWorkout}
-      activeOpacity={0.9}
-    >
+    <TouchableOpacity style={styles.container} onPress={maximizeWorkout} activeOpacity={0.9}>
       <View style={styles.leftSection}>
         <View style={styles.pulseDot} />
         <View>

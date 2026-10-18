@@ -33,7 +33,12 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsChanged }: GymProfilesModalProps) {
+export function GymProfilesModal({
+  visible,
+  onClose,
+  activeWorkoutGymId,
+  onGymsChanged,
+}: GymProfilesModalProps) {
   const { confirm, notify } = useDialog();
   const [gyms, setGyms] = useState<Gym[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,11 +66,15 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
     let active = true;
     setLoading(true);
     getGyms()
-      .then((list) => {
+      .then(list => {
         if (active) setGyms(list);
       })
-      .catch(async (error) => {
-        if (active) await notify({ title: 'Gym Error', message: errorMessage(error, 'Failed to load gyms.') });
+      .catch(async error => {
+        if (active)
+          await notify({
+            title: 'Gym Error',
+            message: errorMessage(error, 'Failed to load gyms.'),
+          });
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -110,7 +119,10 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
       await refreshGyms();
       await onGymsChanged?.();
     } catch (error) {
-      await notify({ title: 'Gym Error', message: errorMessage(error, 'Failed to set default gym.') });
+      await notify({
+        title: 'Gym Error',
+        message: errorMessage(error, 'Failed to set default gym.'),
+      });
     } finally {
       setSaving(false);
     }
@@ -162,7 +174,13 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
 
   return (
     <>
-      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} accessibilityViewIsModal>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+        accessibilityViewIsModal
+      >
         <View style={styles.overlay}>
           <View style={styles.container}>
             <View style={styles.header}>
@@ -194,12 +212,16 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                 />
                 <Text style={styles.paletteLabel}>Color</Text>
                 <View style={styles.palette}>
-                  {GYM_COLOR_PALETTE.map((paletteColor) => {
+                  {GYM_COLOR_PALETTE.map(paletteColor => {
                     const selected = color === paletteColor;
                     return (
                       <TouchableOpacity
                         key={paletteColor}
-                        style={[styles.colorButton, { backgroundColor: paletteColor }, selected && styles.colorButtonSelected]}
+                        style={[
+                          styles.colorButton,
+                          { backgroundColor: paletteColor },
+                          selected && styles.colorButtonSelected,
+                        ]}
                         onPress={() => setColor(paletteColor)}
                         accessibilityRole="button"
                         accessibilityLabel={`Choose gym color ${paletteColor}`}
@@ -230,8 +252,14 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                     accessibilityRole="button"
                     accessibilityLabel={editingGymId ? 'Save gym changes' : 'Add gym'}
                   >
-                    {saving ? <ActivityIndicator size="small" color={colors.text} /> : <Plus size={18} color={colors.text} />}
-                    <Text style={styles.primaryButtonText}>{editingGymId ? 'Save Changes' : 'Add Gym'}</Text>
+                    {saving ? (
+                      <ActivityIndicator size="small" color={colors.text} />
+                    ) : (
+                      <Plus size={18} color={colors.text} />
+                    )}
+                    <Text style={styles.primaryButtonText}>
+                      {editingGymId ? 'Save Changes' : 'Add Gym'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -242,14 +270,16 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
               ) : gyms.length === 0 ? (
                 <Text style={styles.emptyText}>No gyms available.</Text>
               ) : (
-                gyms.map((gym) => (
+                gyms.map(gym => (
                   <View key={gym.id} style={styles.gymRow}>
                     <View style={[styles.swatch, { backgroundColor: gym.color }]} />
                     <View style={styles.gymDetails}>
                       <Text style={styles.gymName}>{gym.name}</Text>
                       {gym.isDefault && <Text style={styles.defaultText}>Default gym</Text>}
                       {isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId) && (
-                        <Text style={styles.activeWorkoutText}>Active workout gym — finish before deleting</Text>
+                        <Text style={styles.activeWorkoutText}>
+                          Active workout gym — finish before deleting
+                        </Text>
                       )}
                     </View>
                     <View style={styles.rowActions}>
@@ -276,7 +306,11 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                       <TouchableOpacity
                         style={styles.actionButton}
                         onPress={() => handleDelete(gym)}
-                        disabled={saving || gyms.length < 2 || isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)}
+                        disabled={
+                          saving ||
+                          gyms.length < 2 ||
+                          isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)
+                        }
                         accessibilityRole="button"
                         accessibilityLabel={
                           isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId)
@@ -284,7 +318,10 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
                             : `Delete ${gym.name}`
                         }
                         accessibilityState={{
-                          disabled: saving || gyms.length < 2 || isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId),
+                          disabled:
+                            saving ||
+                            gyms.length < 2 ||
+                            isGymUsedByActiveWorkout(gym.id, activeWorkoutGymId),
                         }}
                       >
                         <Trash2
@@ -307,7 +344,7 @@ export function GymProfilesModal({ visible, onClose, activeWorkoutGymId, onGymsC
 
       <GymPickerModal
         visible={replacementPickerVisible}
-        gyms={gyms.filter((gym) => gym.id !== deletingGymId)}
+        gyms={gyms.filter(gym => gym.id !== deletingGymId)}
         title="Move Workouts To"
         onSelect={handleReplacementSelect}
         onClose={() => {

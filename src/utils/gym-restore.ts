@@ -19,10 +19,11 @@ function isIdenticalNonDefaultGym(source: Gym, destination: Gym): boolean {
 
 export function buildGymRestoreMapping(
   sourceGyms: Gym[],
-  destinationGyms: Gym[]
+  destinationGyms: Gym[],
 ): GymRestoreMapping {
-  const destinationDefault = destinationGyms.find((gym) => gym.isDefault)
-    || destinationGyms.find((gym) => gym.id === 'gym-default');
+  const destinationDefault =
+    destinationGyms.find(gym => gym.isDefault) ||
+    destinationGyms.find(gym => gym.id === 'gym-default');
   if (!destinationDefault) throw new Error('Destination default gym is missing');
 
   const sourceIds = new Set<string>();
@@ -33,7 +34,7 @@ export function buildGymRestoreMapping(
 
   const idMap = new Map<string, string>();
   const gymsToInsert: Gym[] = [];
-  const destinationById = new Map(destinationGyms.map((gym) => [gym.id, gym]));
+  const destinationById = new Map(destinationGyms.map(gym => [gym.id, gym]));
   const usedIds = new Set([...destinationById.keys(), ...sourceIds]);
 
   for (const source of sourceGyms) {
@@ -75,36 +76,35 @@ function idMapHasValue(idMap: Map<string, string>, value: string): boolean {
 
 export function remapGymReferences(
   snapshot: DataSnapshot,
-  idMap: Map<string, string>
+  idMap: Map<string, string>,
 ): DataSnapshot {
-  const remap = (id: string | undefined): string | undefined => (
-    id === undefined ? undefined : (idMap.get(id) || id)
-  );
+  const remap = (id: string | undefined): string | undefined =>
+    id === undefined ? undefined : idMap.get(id) || id;
 
   return {
     ...snapshot,
     gyms: snapshot.gyms.reduce<Gym[]>((gyms, gym) => {
       const remappedGym = { ...gym, id: remap(gym.id)! };
-      const existingGymIndex = gyms.findIndex((candidate) => candidate.id === remappedGym.id);
+      const existingGymIndex = gyms.findIndex(candidate => candidate.id === remappedGym.id);
       if (existingGymIndex < 0) gyms.push(remappedGym);
       else if (remappedGym.isDefault) gyms[existingGymIndex] = remappedGym;
       return gyms;
     }, []),
-    workouts: snapshot.workouts.map((workout) => ({
+    workouts: snapshot.workouts.map(workout => ({
       ...workout,
       gymId: remap(workout.gymId || 'gym-default')!,
     })),
-    drafts: snapshot.drafts.map((draft) => ({
+    drafts: snapshot.drafts.map(draft => ({
       ...draft,
       workout: {
         ...draft.workout,
         gymId: remap(draft.workout.gymId || 'gym-default')!,
       },
     })),
-    exerciseGymScopes: snapshot.exerciseGymScopes.map((scope) => ({
+    exerciseGymScopes: snapshot.exerciseGymScopes.map(scope => ({
       ...scope,
       ...(scope.linkedGymIds
-        ? { linkedGymIds: scope.linkedGymIds.map((gymId) => remap(gymId)!) }
+        ? { linkedGymIds: scope.linkedGymIds.map(gymId => remap(gymId)!) }
         : {}),
     })),
   };

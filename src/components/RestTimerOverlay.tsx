@@ -23,7 +23,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
 
   const progressPercent = Math.min(
     100,
-    Math.max(0, ((restTimer.totalSeconds - restTimer.remainingSeconds) / restTimer.totalSeconds) * 100)
+    Math.max(
+      0,
+      ((restTimer.totalSeconds - restTimer.remainingSeconds) / restTimer.totalSeconds) * 100,
+    ),
   );
 
   return (
@@ -36,7 +39,12 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
     >
       {/* Progress Line */}
       <View style={styles.progressBarBackground}>
-        <View style={[styles.progressBarFill, { width: `${progressPercent}%`, backgroundColor: accentColor }]} />
+        <View
+          style={[
+            styles.progressBarFill,
+            { width: `${progressPercent}%`, backgroundColor: accentColor },
+          ]}
+        />
       </View>
 
       <View style={styles.contentRow}>

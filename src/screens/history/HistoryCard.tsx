@@ -50,9 +50,7 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
   onEditWorkout,
   onShowSetPR,
 }) => {
-  const supersetMetaMap = detail?.exercises
-    ? getSupersetMetadata(detail.exercises)
-    : new Map();
+  const supersetMetaMap = detail?.exercises ? getSupersetMetadata(detail.exercises) : new Map();
 
   return (
     <View style={styles.historyCard}>
@@ -140,7 +138,9 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
                 return (
                   <React.Fragment key={exIdx}>
                     {ssMeta?.isFirst && (
-                      <View style={[styles.historySupersetHeader, { borderLeftColor: ssMeta.color }]}>
+                      <View
+                        style={[styles.historySupersetHeader, { borderLeftColor: ssMeta.color }]}
+                      >
                         <View
                           style={[
                             styles.historySupersetBadge,
@@ -177,16 +177,16 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
                                 { borderColor: ssMeta.color + '60' },
                               ]}
                             >
-                              <Text style={[styles.historySupersetPosText, { color: ssMeta.color }]}>
+                              <Text
+                                style={[styles.historySupersetPosText, { color: ssMeta.color }]}
+                              >
                                 {ssMeta.positionInGroup}/{ssMeta.totalInGroup}
                               </Text>
                             </View>
                           )}
                         </View>
                       </View>
-                      {ex.notes ? (
-                        <Text style={styles.detailExNotes}>Note: {ex.notes}</Text>
-                      ) : null}
+                      {ex.notes ? <Text style={styles.detailExNotes}>Note: {ex.notes}</Text> : null}
                       <View style={styles.detailSetsGrid}>
                         {completedSets.map((s, sIdx) => {
                           const setPR = prSummary?.setPRs.get(s.id);
@@ -211,8 +211,8 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
                                     s.type === 'warmup'
                                       ? styles.detailSetTypeWarmup
                                       : s.type === 'drop'
-                                      ? styles.detailSetTypeDrop
-                                      : styles.detailSetTypeFailure,
+                                        ? styles.detailSetTypeDrop
+                                        : styles.detailSetTypeFailure,
                                   ]}
                                 >
                                   <Text
@@ -221,17 +221,15 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
                                       s.type === 'warmup'
                                         ? styles.detailSetTypeWarmupText
                                         : s.type === 'drop'
-                                        ? styles.detailSetTypeDropText
-                                        : styles.detailSetTypeFailureText,
+                                          ? styles.detailSetTypeDropText
+                                          : styles.detailSetTypeFailureText,
                                     ]}
                                   >
                                     {s.type === 'warmup' ? 'W' : s.type === 'drop' ? 'D' : 'F'}
                                   </Text>
                                 </View>
                               )}
-                              {s.rpe != null && (
-                                <Text style={styles.detailRpe}>RPE {s.rpe}</Text>
-                              )}
+                              {s.rpe != null && <Text style={styles.detailRpe}>RPE {s.rpe}</Text>}
                             </View>
                           );
                         })}
@@ -243,9 +241,7 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
             </>
           ) : (
             <View style={styles.exerciseNamesBox}>
-              <Text style={styles.exerciseNamesText}>
-                {item.exerciseNames.join(' • ')}
-              </Text>
+              <Text style={styles.exerciseNamesText}>{item.exerciseNames.join(' • ')}</Text>
             </View>
           )}
 

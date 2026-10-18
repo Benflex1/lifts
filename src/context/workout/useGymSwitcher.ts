@@ -30,20 +30,14 @@ export function useGymSwitcher(controllerRef: RefObject<SessionController | null
 
   const initializeGyms = useCallback(async () => {
     const store = await getStore();
-    const [loadedGyms, defaultGym] = await Promise.all([
-      store.getGyms(),
-      store.getDefaultGym(),
-    ]);
+    const [loadedGyms, defaultGym] = await Promise.all([store.getGyms(), store.getDefaultGym()]);
     setGyms(loadedGyms);
     setActiveGymState(defaultGym);
   }, []);
 
   const refreshGyms = useCallback(async () => {
     const store = await getStore();
-    const [loadedGyms, defaultGym] = await Promise.all([
-      store.getGyms(),
-      store.getDefaultGym(),
-    ]);
+    const [loadedGyms, defaultGym] = await Promise.all([store.getGyms(), store.getDefaultGym()]);
     const currentWorkout = controllerRef.current?.getState().workout;
     setGyms(loadedGyms);
     setActiveGymState(resolveActiveGymAfterRefresh(loadedGyms, defaultGym, currentWorkout?.gymId));
@@ -74,7 +68,7 @@ export function useGymSwitcher(controllerRef: RefObject<SessionController | null
   };
 
   const selectLoadedGym = (gymId: string) => {
-    setActiveGymState(gyms.find((gym) => gym.id === gymId) || null);
+    setActiveGymState(gyms.find(gym => gym.id === gymId) || null);
   };
 
   return { gyms, activeGym, initializeGyms, refreshGyms, setActiveGym, adoptGyms, selectLoadedGym };

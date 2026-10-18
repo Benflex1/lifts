@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Check, X, Plus, Trash2, Clock, Sparkles, Dumbbell } from 'lucide-react-native';
+import { Check, X, Plus, Trash2, Clock, Sparkles } from 'lucide-react-native';
 import { ActiveExercise, Exercise, Gym, SetType, Workout, WorkoutSet } from '../types';
 import { WeightUnit, displayToKg, kgToDisplay } from '../utils/units';
 import { applyWorkoutEdits } from '../workout/workout-edit';
@@ -19,7 +19,6 @@ import {
   parseDurationInput,
   estimateWorkoutDuration,
 } from '../workout/duration';
-import { formatDuration } from '../utils/calculator';
 import { sanitizeWeightInput, sanitizeRepsInput } from '../workout/sets';
 import { colors } from '../theme';
 
@@ -76,7 +75,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
     const clonedExercises: ActiveExercise[] = (workout.exercises || []).map((ex, exIdx) => ({
       ...ex,
       id: ex.id || `we-legacy-${exIdx}-${Date.now()}`,
-      sets: (ex.sets || []).map((s) => ({ ...s })),
+      sets: (ex.sets || []).map(s => ({ ...s })),
     }));
     setExercises(clonedExercises);
 
@@ -93,10 +92,15 @@ export const WorkoutEditModal: React.FC<Props> = ({
     setError(null);
   }, [visible, workout, unit]);
 
-  const updateDraft = (activeExerciseId: string, setId: string, field: 'weight' | 'reps', val: string) => {
+  const updateDraft = (
+    activeExerciseId: string,
+    setId: string,
+    field: 'weight' | 'reps',
+    val: string,
+  ) => {
     const key = draftKey(activeExerciseId, setId);
     const sanitized = field === 'weight' ? sanitizeWeightInput(val) : sanitizeRepsInput(val);
-    setDraftValues((prev) => ({
+    setDraftValues(prev => ({
       ...prev,
       [key]: {
         ...(prev[key] || { weight: '', reps: '' }),
@@ -127,8 +131,8 @@ export const WorkoutEditModal: React.FC<Props> = ({
       restTimerSeconds: 90,
     };
 
-    setExercises((prev) => [...prev, newActiveExercise]);
-    setDraftValues((prev) => ({
+    setExercises(prev => [...prev, newActiveExercise]);
+    setDraftValues(prev => ({
       ...prev,
       [draftKey(newActiveId, newSetId)]: {
         weight: '0',
@@ -138,12 +142,12 @@ export const WorkoutEditModal: React.FC<Props> = ({
   };
 
   const handleRemoveExercise = (activeExerciseId: string) => {
-    setExercises((prev) => prev.filter((ex) => ex.id !== activeExerciseId));
+    setExercises(prev => prev.filter(ex => ex.id !== activeExerciseId));
   };
 
   const handleAddSet = (activeExerciseId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
         const lastSet = ex.sets[ex.sets.length - 1];
         const lastDraft = lastSet ? draftValues[draftKey(activeExerciseId, lastSet.id)] : null;
@@ -157,7 +161,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
           isCompleted: true,
         };
 
-        setDraftValues((dPrev) => ({
+        setDraftValues(dPrev => ({
           ...dPrev,
           [draftKey(activeExerciseId, newSetId)]: {
             weight: lastDraft?.weight || String(kgToDisplay(newSet.weightKg, unit)),
@@ -169,49 +173,49 @@ export const WorkoutEditModal: React.FC<Props> = ({
           ...ex,
           sets: [...ex.sets, newSet],
         };
-      })
+      }),
     );
   };
 
   const handleRemoveSet = (activeExerciseId: string, setId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
-        const filtered = ex.sets.filter((s) => s.id !== setId);
+        const filtered = ex.sets.filter(s => s.id !== setId);
         return {
           ...ex,
           sets: filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 })),
         };
-      })
+      }),
     );
   };
 
   const handleToggleSetComplete = (activeExerciseId: string, setId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
         return {
           ...ex,
-          sets: ex.sets.map((s) => (s.id === setId ? { ...s, isCompleted: !s.isCompleted } : s)),
+          sets: ex.sets.map(s => (s.id === setId ? { ...s, isCompleted: !s.isCompleted } : s)),
         };
-      })
+      }),
     );
   };
 
   const handleCycleSetType = (activeExerciseId: string, setId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
         return {
           ...ex,
-          sets: ex.sets.map((s) => {
+          sets: ex.sets.map(s => {
             if (s.id !== setId) return s;
             const curIdx = SET_TYPES.indexOf(s.type);
             const nextType = SET_TYPES[(curIdx + 1) % SET_TYPES.length];
             return { ...s, type: nextType };
           }),
         };
-      })
+      }),
     );
   };
 
@@ -225,7 +229,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
   const handleSave = async () => {
     if (!workout) return;
 
-    if (gymTrackingEnabled && !gyms.some((gym) => gym.id === selectedGymId)) {
+    if (gymTrackingEnabled && !gyms.some(gym => gym.id === selectedGymId)) {
       setError('Please select a valid gym.');
       return;
     }
@@ -234,9 +238,9 @@ export const WorkoutEditModal: React.FC<Props> = ({
     setError(null);
     try {
       // Reconstitute exercises with latest draft values
-      const finalizedExercises: ActiveExercise[] = exercises.map((ex) => ({
+      const finalizedExercises: ActiveExercise[] = exercises.map(ex => ({
         ...ex,
-        sets: ex.sets.map((s) => {
+        sets: ex.sets.map(s => {
           const draft = draftValues[draftKey(ex.id, s.id)];
           const rawWeight = draft?.weight?.trim();
           const rawReps = draft?.reps?.trim();
@@ -251,14 +255,24 @@ export const WorkoutEditModal: React.FC<Props> = ({
             // Incomplete sets must never become NaN; default empty or invalid fields to clean numbers
             if (rawWeight !== undefined && rawWeight !== '') {
               const parsed = Number(rawWeight);
-              weightNum = Number.isFinite(parsed) && parsed >= 0 ? parsed : (Number.isFinite(s.weightKg) ? s.weightKg : 0);
+              weightNum =
+                Number.isFinite(parsed) && parsed >= 0
+                  ? parsed
+                  : Number.isFinite(s.weightKg)
+                    ? s.weightKg
+                    : 0;
             } else {
               weightNum = Number.isFinite(s.weightKg) ? s.weightKg : 0;
             }
 
             if (rawReps !== undefined && rawReps !== '') {
               const parsed = Number(rawReps);
-              repsNum = Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0 ? parsed : (Number.isFinite(s.reps) ? s.reps : 0);
+              repsNum =
+                Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0
+                  ? parsed
+                  : Number.isFinite(s.reps)
+                    ? s.reps
+                    : 0;
             } else {
               repsNum = Number.isFinite(s.reps) ? s.reps : 0;
             }
@@ -395,10 +409,13 @@ export const WorkoutEditModal: React.FC<Props> = ({
               <>
                 <Text style={styles.label}>GYM</Text>
                 <View style={styles.gymOptions}>
-                  {gyms.map((gym) => (
+                  {gyms.map(gym => (
                     <TouchableOpacity
                       key={gym.id}
-                      style={[styles.gymOption, selectedGymId === gym.id && styles.gymOptionSelected]}
+                      style={[
+                        styles.gymOption,
+                        selectedGymId === gym.id && styles.gymOptionSelected,
+                      ]}
                       onPress={() => setSelectedGymId(gym.id)}
                       disabled={saving}
                       accessibilityRole="button"
@@ -448,7 +465,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                 </TouchableOpacity>
               </View>
             ) : (
-              exercises.map((exercise) => (
+              exercises.map(exercise => (
                 <View key={exercise.id} style={styles.exerciseBlock}>
                   <View style={styles.exerciseBlockHeader}>
                     <View style={styles.exerciseNameWrap}>
@@ -483,7 +500,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   </View>
 
                   {/* Set rows */}
-                  {exercise.sets.map((set) => {
+                  {exercise.sets.map(set => {
                     const key = draftKey(exercise.id, set.id);
                     const draft = draftValues[key] || { weight: '', reps: '' };
                     return (
@@ -507,10 +524,10 @@ export const WorkoutEditModal: React.FC<Props> = ({
                             {set.type === 'normal'
                               ? 'NORM'
                               : set.type === 'warmup'
-                              ? 'WARM'
-                              : set.type === 'drop'
-                              ? 'DROP'
-                              : 'FAIL'}
+                                ? 'WARM'
+                                : set.type === 'drop'
+                                  ? 'DROP'
+                                  : 'FAIL'}
                           </Text>
                         </TouchableOpacity>
 
@@ -518,9 +535,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         <TextInput
                           style={styles.setInput}
                           value={draft.weight}
-                          onChangeText={(value) =>
-                            updateDraft(exercise.id, set.id, 'weight', value)
-                          }
+                          onChangeText={value => updateDraft(exercise.id, set.id, 'weight', value)}
                           keyboardType="decimal-pad"
                           autoCapitalize="none"
                           autoCorrect={false}
@@ -534,9 +549,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         <TextInput
                           style={styles.repsInput}
                           value={draft.reps}
-                          onChangeText={(value) =>
-                            updateDraft(exercise.id, set.id, 'reps', value)
-                          }
+                          onChangeText={value => updateDraft(exercise.id, set.id, 'reps', value)}
                           keyboardType="number-pad"
                           autoCapitalize="none"
                           autoCorrect={false}

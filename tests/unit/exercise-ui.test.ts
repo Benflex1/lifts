@@ -15,33 +15,40 @@ const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   ...overrides,
 });
 
-before(async (t) => {
-  (t as unknown as { mock: { module: (specifier: string, options: { exports: object }) => void } }).mock.module('react-native', {
+before(async t => {
+  (
+    t as unknown as { mock: { module: (specifier: string, options: { exports: object }) => void } }
+  ).mock.module('react-native', {
     exports: {
       Linking: {
         openURL: async () => {},
       },
     },
   });
-  ({ getExerciseFormGuideViewModel, getExerciseRowViewModel } = await import('../../src/utils/exercise-ui'));
+  ({ getExerciseFormGuideViewModel, getExerciseRowViewModel } =
+    await import('../../src/utils/exercise-ui'));
 });
 
 describe('exercise UI view models', () => {
   it('exposes the curated website label for a form-guide action', () => {
-    const viewModel = getExerciseFormGuideViewModel(exercise({
-      instructionUrl: 'https://example.com/bench',
-      instructionUrlType: 'website',
-    }));
+    const viewModel = getExerciseFormGuideViewModel(
+      exercise({
+        instructionUrl: 'https://example.com/bench',
+        instructionUrlType: 'website',
+      }),
+    );
 
     assert.equal(viewModel.label, 'Open exercise guide');
     assert.equal(viewModel.link.isFallback, false);
   });
 
   it('exposes the direct YouTube label for a form-guide action', () => {
-    const viewModel = getExerciseFormGuideViewModel(exercise({
-      instructionUrl: 'https://www.youtube.com/watch?v=bench',
-      instructionUrlType: 'youtube',
-    }));
+    const viewModel = getExerciseFormGuideViewModel(
+      exercise({
+        instructionUrl: 'https://www.youtube.com/watch?v=bench',
+        instructionUrlType: 'youtube',
+      }),
+    );
 
     assert.equal(viewModel.label, 'Watch form video');
     assert.equal(viewModel.link.isFallback, false);
@@ -60,12 +67,14 @@ describe('exercise UI view models', () => {
   });
 
   it('keeps an unknown visual mapping row-safe with a generated fallback', () => {
-    const viewModel = getExerciseRowViewModel(exercise({
-      id: 'unknown-ui-exercise',
-      name: 'Unmapped Movement',
-      category: 'unknown-category',
-      primaryMuscles: ['unknown muscle'],
-    }));
+    const viewModel = getExerciseRowViewModel(
+      exercise({
+        id: 'unknown-ui-exercise',
+        name: 'Unmapped Movement',
+        category: 'unknown-category',
+        primaryMuscles: ['unknown muscle'],
+      }),
+    );
 
     assert.deepEqual(viewModel.visual, {
       kind: 'generated',
@@ -79,6 +88,9 @@ describe('exercise UI view models', () => {
     const viewModel = getExerciseRowViewModel(getDefaultExercises()[0]);
 
     assert.equal(viewModel.visual.kind, 'remote-image');
-    assert.equal(viewModel.visualAccessibilityLabel, `${getDefaultExercises()[0].name} exercise illustration`);
+    assert.equal(
+      viewModel.visualAccessibilityLabel,
+      `${getDefaultExercises()[0].name} exercise illustration`,
+    );
   });
 });

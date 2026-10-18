@@ -41,7 +41,12 @@ function makeActiveExercise(id: string, sets: WorkoutSet[]): ActiveExercise {
   };
 }
 
-function makeWorkout(id: string, startTime: string, exerciseId: string, set: Partial<WorkoutSet>): Workout {
+function makeWorkout(
+  id: string,
+  startTime: string,
+  exerciseId: string,
+  set: Partial<WorkoutSet>,
+): Workout {
   return {
     id,
     name: id,
@@ -68,7 +73,13 @@ function makeWorkout(id: string, startTime: string, exerciseId: string, set: Par
 }
 
 function makeGym(id: string): Gym {
-  return { id, name: id, isDefault: false, color: '#ff0000', createdAt: '2024-01-01T00:00:00.000Z' };
+  return {
+    id,
+    name: id,
+    isDefault: false,
+    color: '#ff0000',
+    createdAt: '2024-01-01T00:00:00.000Z',
+  };
 }
 
 test('computeLiveSetStats sums completed volume and counts completed sets', () => {
@@ -112,11 +123,11 @@ test('collectPriorWorkouts deduplicates across exercise histories and excludes t
   const history = { ex1: [w1, active], ex2: [w2, active], ex3: [w1] };
 
   assert.deepEqual(
-    collectPriorWorkouts(history, active.startTime).map((workout) => workout.id),
+    collectPriorWorkouts(history, active.startTime).map(workout => workout.id),
     ['w1', 'w2'],
   );
   assert.deepEqual(
-    collectPriorWorkouts(history, undefined).map((workout) => workout.id),
+    collectPriorWorkouts(history, undefined).map(workout => workout.id),
     ['w1', 'w3', 'w2'],
   );
 });

@@ -122,7 +122,9 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
         <View
           style={[
             styles.progressFill,
-            { width: `${totalSetsCount > 0 ? Math.round((completedSetsCount / totalSetsCount) * 100) : 0}%` },
+            {
+              width: `${totalSetsCount > 0 ? Math.round((completedSetsCount / totalSetsCount) * 100) : 0}%`,
+            },
           ]}
         />
       </View>

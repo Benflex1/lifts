@@ -14,16 +14,20 @@ export function shapeBackup(
   workouts: WorkoutHistorySummary[],
   routines: Routine[],
   exercises: Exercise[],
-  settings: Record<string, string>
+  settings: Record<string, string>,
 ): string {
-  return JSON.stringify({
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    workouts,
-    routines,
-    exercises,
-    settings,
-  }, null, 2);
+  return JSON.stringify(
+    {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workouts,
+      routines,
+      exercises,
+      settings,
+    },
+    null,
+    2,
+  );
 }
 
 export async function buildBackupJson(): Promise<string> {

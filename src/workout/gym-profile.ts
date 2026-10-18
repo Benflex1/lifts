@@ -1,6 +1,13 @@
 import { Gym, Workout } from '../types';
 
-export const GYM_COLOR_PALETTE = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'] as const;
+export const GYM_COLOR_PALETTE = [
+  '#3B82F6',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+  '#8B5CF6',
+  '#EC4899',
+] as const;
 export const DEFAULT_GYM_COLOR = '#3B82F6';
 export const DEFAULT_GYM_ID = 'gym-default';
 
@@ -13,11 +20,15 @@ export function validateGymName(name: string): string {
 }
 
 export function validateGymColor(color: string): string {
-  if (!(GYM_COLOR_PALETTE as readonly string[]).includes(color)) throw new Error('gym color must be from the approved palette');
+  if (!(GYM_COLOR_PALETTE as readonly string[]).includes(color))
+    throw new Error('gym color must be from the approved palette');
   return color;
 }
 
-export function isGymUsedByActiveWorkout(gymId: string, activeWorkoutGymId?: string | null): boolean {
+export function isGymUsedByActiveWorkout(
+  gymId: string,
+  activeWorkoutGymId?: string | null,
+): boolean {
   return Boolean(activeWorkoutGymId) && gymId === activeWorkoutGymId;
 }
 
@@ -34,12 +45,17 @@ export function resolveActiveGymAfterRefresh(
   activeWorkoutGymId?: string | null,
 ): Gym | null {
   if (activeWorkoutGymId) {
-    return gyms.find((gym) => gym.id === activeWorkoutGymId) || null;
+    return gyms.find(gym => gym.id === activeWorkoutGymId) || null;
   }
   if (defaultGym) {
-    return gyms.find((gym) => gym.id === defaultGym.id) || gyms.find((gym) => gym.isDefault) || gyms[0] || null;
+    return (
+      gyms.find(gym => gym.id === defaultGym.id) ||
+      gyms.find(gym => gym.isDefault) ||
+      gyms[0] ||
+      null
+    );
   }
-  return gyms.find((gym) => gym.isDefault) || gyms[0] || null;
+  return gyms.find(gym => gym.isDefault) || gyms[0] || null;
 }
 
 export function validateGymDeletion(
@@ -53,8 +69,10 @@ export function validateGymDeletion(
   if (isGymUsedByActiveWorkout(gymId, activeWorkoutGymId)) {
     throw new Error('cannot delete the gym used by an active workout');
   }
-  if (!replacementGymId || replacementGymId === gymId) throw new Error('replacement gym must be different');
-  if (!gyms.some(gym => gym.id === replacementGymId)) throw new Error(`unknown replacement gym: ${replacementGymId}`);
+  if (!replacementGymId || replacementGymId === gymId)
+    throw new Error('replacement gym must be different');
+  if (!gyms.some(gym => gym.id === replacementGymId))
+    throw new Error(`unknown replacement gym: ${replacementGymId}`);
 }
 
 export function validateWorkoutGymId(gymId: unknown, gyms: readonly Gym[]): string {

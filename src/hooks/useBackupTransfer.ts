@@ -31,7 +31,9 @@ export function useBackupTransfer(): BackupTransfer {
     } catch (e: any) {
       await notify({
         title: 'Export Error',
-        message: e?.message ? `Failed to export data: ${e.message}` : 'Failed to export data. Please try again.',
+        message: e?.message
+          ? `Failed to export data: ${e.message}`
+          : 'Failed to export data. Please try again.',
       });
     }
   };
@@ -40,11 +42,16 @@ export function useBackupTransfer(): BackupTransfer {
     try {
       const result = await saveBackupToFiles();
       if (result === 'cancelled') return;
-      await notify({ title: 'Backup Saved', message: 'Your workout data was saved to the selected file location.' });
+      await notify({
+        title: 'Backup Saved',
+        message: 'Your workout data was saved to the selected file location.',
+      });
     } catch (e: any) {
       await notify({
         title: 'Save Error',
-        message: e?.message ? `Failed to save data: ${e.message}` : 'Failed to save data. Please try again.',
+        message: e?.message
+          ? `Failed to save data: ${e.message}`
+          : 'Failed to save data. Please try again.',
       });
     }
   };
@@ -53,7 +60,8 @@ export function useBackupTransfer(): BackupTransfer {
     if (isWorkingOut) {
       await notify({
         title: 'Session In Progress',
-        message: 'Cannot restore backup while a workout session is active. Please finish or discard your current workout first.',
+        message:
+          'Cannot restore backup while a workout session is active. Please finish or discard your current workout first.',
       });
       return;
     }

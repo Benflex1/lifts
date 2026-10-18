@@ -27,7 +27,7 @@ export function filterHistoryByGym(
   history: WorkoutHistorySummary[],
   selectedGymId: string | null,
 ): WorkoutHistorySummary[] {
-  return selectedGymId ? history.filter((item) => item.gymId === selectedGymId) : history;
+  return selectedGymId ? history.filter(item => item.gymId === selectedGymId) : history;
 }
 
 export function computeHistoryTotals(history: WorkoutHistorySummary[]): {
@@ -86,15 +86,15 @@ export function buildPRDetailsNotification(
   setPR: SetPRResult,
   unit: WeightUnit,
 ): { title: string; message: string } {
-  const desc = setPR.achievements.map((a) => `• ${formatPRDescription(a, unit)}`).join('\n');
+  const desc = setPR.achievements.map(a => `• ${formatPRDescription(a, unit)}`).join('\n');
   const title =
     setPR.primary?.rank === 1
       ? setPR.primary?.isTie
         ? 'Tied Personal Record'
         : 'Personal Record'
       : setPR.primary?.rank === 2
-      ? 'Silver Record'
-      : 'Bronze Record';
+        ? 'Silver Record'
+        : 'Bronze Record';
   return {
     title,
     message: `${exerciseName} (Set #${setNumber})\n\n${desc}`,

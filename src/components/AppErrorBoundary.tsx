@@ -23,7 +23,10 @@ interface AppErrorBoundaryState {
  * blanking the whole app. Place one at the root and one around each major
  * surface (tabs, active logger) so a crash stays local.
  */
-export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, AppErrorBoundaryState> {
+export class AppErrorBoundary extends React.Component<
+  AppErrorBoundaryProps,
+  AppErrorBoundaryState
+> {
   state: AppErrorBoundaryState = {
     error: null,
     resetKey: this.props.resetKey,

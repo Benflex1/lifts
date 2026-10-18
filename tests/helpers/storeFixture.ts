@@ -28,7 +28,10 @@ export class NodeSqliteDriver implements SqliteDriver {
     this.db.exec(sql);
   }
 
-  async runAsync(sql: string, ...params: any[]): Promise<{ changes: number; lastInsertRowId: number }> {
+  async runAsync(
+    sql: string,
+    ...params: any[]
+  ): Promise<{ changes: number; lastInsertRowId: number }> {
     const stmt = this.db.prepare(sql);
     const safeParams = params.map(p => (p === undefined ? null : p));
     const result = stmt.run(...safeParams);
@@ -70,7 +73,9 @@ export class NodeSqliteDriver implements SqliteDriver {
   close(): void {
     try {
       this.db.close();
-    } catch (_) {}
+    } catch (_) {
+      // Ignore: closing the fixture database is best-effort.
+    }
   }
 }
 
@@ -89,7 +94,10 @@ export interface StoreFixture {
 export async function createStoreFixture(platform: 'native' | 'web'): Promise<StoreFixture> {
   if (platform === 'native') {
     const tempDir = os.tmpdir();
-    const tempFile = path.join(tempDir, `lifts-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    const tempFile = path.join(
+      tempDir,
+      `lifts-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+    );
     let driver = new NodeSqliteDriver(tempFile);
     let store = createNativeStore(driver);
     await store.init();
@@ -97,7 +105,7 @@ export async function createStoreFixture(platform: 'native' | 'web'): Promise<St
     return {
       store,
       driver,
-      insertRawWorkoutRecord: async (input) => {
+      insertRawWorkoutRecord: async input => {
         await driver.runAsync(
           `INSERT INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress, gym_id)
            VALUES (?, NULL, ?, ?, ?, 0, 0, NULL, ?, ?)`,
@@ -144,7 +152,9 @@ export async function createStoreFixture(platform: 'native' | 'web'): Promise<St
         if (fs.existsSync(tempFile)) {
           try {
             fs.unlinkSync(tempFile);
-          } catch (_) {}
+          } catch (_) {
+            // Ignore: closing the fixture database is best-effort.
+          }
         }
       },
     };
@@ -162,7 +172,7 @@ export async function createStoreFixture(platform: 'native' | 'web'): Promise<St
 
     return {
       store,
-      insertRawWorkoutRecord: async (input) => {
+      insertRawWorkoutRecord: async input => {
         await new Promise<void>((resolve, reject) => {
           const request = indexedDB.open(dbName);
           request.onsuccess = () => {

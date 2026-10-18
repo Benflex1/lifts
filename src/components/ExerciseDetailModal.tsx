@@ -8,20 +8,30 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { X, Edit2, Trophy, Info, Calendar as CalendarIcon, TrendingUp, ChevronDown, ChevronUp, ExternalLink, ArrowRightLeft, Play, Pause } from 'lucide-react-native';
+import {
+  X,
+  Edit2,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  ArrowRightLeft,
+  Play,
+  Pause,
+} from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Exercise, DualExerciseStats, Gym, ExerciseGymScope, Workout } from '../types';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
-import {
-  getStore,
-  reassignExerciseHistory,
-} from '../database/db';
+import { getStore, reassignExerciseHistory } from '../database/db';
 import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
 import { loadExerciseDetailData } from '../workout/exercise-detail';
 import { ExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from './ExercisePodiumView';
-import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
+import {
+  extractExerciseProgression,
+  ProgressionMetric,
+  TimeframeFilter,
+} from '../workout/analytics';
 import { calculate1RM } from '../utils/calculator';
 import { EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
@@ -67,7 +77,6 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
   const [exercisePodium, setExercisePodium] = useState<ExercisePodium | null>(null);
   const [resolvedGym, setResolvedGym] = useState<Gym | null>(initialGym ?? null);
-  const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]);
   const [allHistoryWorkouts, setAllHistoryWorkouts] = useState<Workout[]>([]);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<ProgressionMetric>('e1rm');
@@ -128,7 +137,6 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     if (!visible || !exercise) {
       setExerciseStats(null);
       setExerciseScope(null);
-      setRecentWorkouts([]);
       setAllHistoryWorkouts([]);
       setShowAllHistory(false);
       setExercisePodium(null);
@@ -156,7 +164,6 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         setExerciseScope(data.scope);
         setExercisePodium(data.podium);
         setAllHistoryWorkouts(data.historyWorkouts);
-        setRecentWorkouts(data.historyWorkouts.slice(0, 5));
         setGymNamesMap(data.gymNamesMap);
       } catch (err) {
         if (requestId !== requestCounterRef.current) return;
@@ -181,7 +188,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
   const filteredHistoryWorkouts = React.useMemo(() => {
     if (!historyGymFilter) return allHistoryWorkouts;
-    return allHistoryWorkouts.filter((w) => w.gymId === historyGymFilter);
+    return allHistoryWorkouts.filter(w => w.gymId === historyGymFilter);
   }, [allHistoryWorkouts, historyGymFilter]);
 
   if (!exercise) {
@@ -212,7 +219,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         {[
           ['Heaviest lift', stats.maxWeightKg > 0 ? formatWeight(stats.maxWeightKg, unit) : '—'],
           ['Estimated 1RM', stats.estimated1RM > 0 ? formatWeight(stats.estimated1RM, unit) : '—'],
-          ['Best set volume', stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—'],
+          [
+            'Best set volume',
+            stats.maxSetVolumeKg > 0 ? formatWeight(stats.maxSetVolumeKg, unit) : '—',
+          ],
           ['Sessions', String(stats.sessionCount)],
         ].map(([statLabel, value]) => (
           <View key={statLabel} style={styles.statBox}>
@@ -225,11 +235,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   );
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.detailContainer, { paddingTop: Math.max(50, insets.top + 8) }]}>
         <View style={styles.detailHeader}>
           <TouchableOpacity
@@ -269,7 +275,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           <View style={styles.heroVisualSection}>
             <TouchableOpacity
               activeOpacity={hasTwoFrames ? 0.9 : 1}
-              onPress={hasTwoFrames ? () => setIsPlayingAnimation((prev) => !prev) : undefined}
+              onPress={hasTwoFrames ? () => setIsPlayingAnimation(prev => !prev) : undefined}
               accessibilityRole={hasTwoFrames ? 'button' : 'none'}
               accessibilityLabel={
                 hasTwoFrames
@@ -291,13 +297,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             {hasTwoFrames && (
               <View style={styles.formGalleryBar}>
                 <TouchableOpacity
-                  style={[
-                    styles.galleryPlayBtn,
-                    isPlayingAnimation && styles.galleryPlayBtnActive,
-                  ]}
-                  onPress={() => setIsPlayingAnimation((prev) => !prev)}
+                  style={[styles.galleryPlayBtn, isPlayingAnimation && styles.galleryPlayBtnActive]}
+                  onPress={() => setIsPlayingAnimation(prev => !prev)}
                   accessibilityRole="button"
-                  accessibilityLabel={isPlayingAnimation ? 'Pause movement animation' : 'Play movement animation'}
+                  accessibilityLabel={
+                    isPlayingAnimation ? 'Pause movement animation' : 'Play movement animation'
+                  }
                   accessibilityState={{ selected: isPlayingAnimation }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
@@ -318,10 +323,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
                 <View style={styles.galleryPillGroup}>
                   <TouchableOpacity
-                    style={[
-                      styles.galleryPill,
-                      activeFrameIndex === 0 && styles.galleryPillActive,
-                    ]}
+                    style={[styles.galleryPill, activeFrameIndex === 0 && styles.galleryPillActive]}
                     onPress={() => {
                       setIsPlayingAnimation(false);
                       setActiveFrameIndex(0);
@@ -341,10 +343,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[
-                      styles.galleryPill,
-                      activeFrameIndex === 1 && styles.galleryPillActive,
-                    ]}
+                    style={[styles.galleryPill, activeFrameIndex === 1 && styles.galleryPillActive]}
                     onPress={() => {
                       setIsPlayingAnimation(false);
                       setActiveFrameIndex(1);
@@ -425,16 +424,20 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   <Text style={styles.progressionTitleText}>Progress</Text>
                 </View>
                 <View style={styles.metricTabsRow}>
-                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map((m) => {
+                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map(m => {
                     const isSelected = selectedMetric === m;
-                    const label = m === 'e1rm' ? 'Estimated 1RM' : m === 'max_weight' ? 'Heaviest Weight' : m === 'max_reps' ? 'Max Reps' : 'Total Volume';
+                    const label =
+                      m === 'e1rm'
+                        ? 'Estimated 1RM'
+                        : m === 'max_weight'
+                          ? 'Heaviest Weight'
+                          : m === 'max_reps'
+                            ? 'Max Reps'
+                            : 'Total Volume';
                     return (
                       <TouchableOpacity
                         key={m}
-                        style={[
-                          styles.metricTab,
-                          isSelected && styles.metricTabActive,
-                        ]}
+                        style={[styles.metricTab, isSelected && styles.metricTabActive]}
                         hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                         accessibilityRole="button"
                         accessibilityLabel={label}
@@ -442,12 +445,15 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                         onPress={() => setSelectedMetric(m)}
                       >
                         <Text
-                          style={[
-                            styles.metricTabText,
-                            isSelected && styles.metricTabTextActive,
-                          ]}
+                          style={[styles.metricTabText, isSelected && styles.metricTabTextActive]}
                         >
-                          {m === 'e1rm' ? '1RM' : m === 'max_weight' ? 'Weight' : m === 'max_reps' ? 'Reps' : 'Vol'}
+                          {m === 'e1rm'
+                            ? '1RM'
+                            : m === 'max_weight'
+                              ? 'Weight'
+                              : m === 'max_reps'
+                                ? 'Reps'
+                                : 'Vol'}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -457,16 +463,13 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
               {/* Timeframe selector row */}
               <View style={styles.timeframeTabsRow}>
-                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map((tf) => {
+                {(['1M', '3M', '6M', '1Y', 'ALL'] as TimeframeFilter[]).map(tf => {
                   const isSelected = selectedTimeframe === tf;
                   const label = tf === 'ALL' ? 'All time' : `Past ${tf}`;
                   return (
                     <TouchableOpacity
                       key={tf}
-                      style={[
-                        styles.timeframeChip,
-                        isSelected && styles.timeframeChipActive,
-                      ]}
+                      style={[styles.timeframeChip, isSelected && styles.timeframeChipActive]}
                       hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                       accessibilityRole="button"
                       accessibilityLabel={`Timeframe: ${label}`}
@@ -499,9 +502,11 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   unit={unit}
                   height={190}
                   gymTrackingEnabled={gymTrackingEnabled}
-                  onPointPress={(p) => {
+                  onPointPress={p => {
                     setHighlightedWorkoutId(p.workoutId);
-                    const isOutsideTop5 = filteredHistoryWorkouts.slice(0, 5).every((w) => w.id !== p.workoutId);
+                    const isOutsideTop5 = filteredHistoryWorkouts
+                      .slice(0, 5)
+                      .every(w => w.id !== p.workoutId);
                     if (isOutsideTop5) {
                       setShowAllHistory(true);
                     }
@@ -515,36 +520,58 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           <View style={styles.historySection}>
             <View style={styles.historyHeader}>
               <Text style={styles.historyHeaderTitle}>
-                {showAllHistory ? `All sessions (${filteredHistoryWorkouts.length})` : 'Recent sessions'}
+                {showAllHistory
+                  ? `All sessions (${filteredHistoryWorkouts.length})`
+                  : 'Recent sessions'}
               </Text>
             </View>
 
             {/* Gym filter pills for history */}
             {gymTrackingEnabled && availableGyms.length > 1 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.historyGymFilterScroll}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.historyGymFilterScroll}
+              >
                 <TouchableOpacity
-                  style={[styles.historyGymFilterPill, historyGymFilter === null && styles.historyGymFilterPillActive]}
+                  style={[
+                    styles.historyGymFilterPill,
+                    historyGymFilter === null && styles.historyGymFilterPillActive,
+                  ]}
                   hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   accessibilityRole="button"
                   accessibilityLabel="Filter by all gyms"
                   accessibilityState={{ selected: historyGymFilter === null }}
                   onPress={() => setHistoryGymFilter(null)}
                 >
-                  <Text style={[styles.historyGymFilterPillText, historyGymFilter === null && styles.historyGymFilterPillTextActive]}>
+                  <Text
+                    style={[
+                      styles.historyGymFilterPillText,
+                      historyGymFilter === null && styles.historyGymFilterPillTextActive,
+                    ]}
+                  >
                     All Gyms
                   </Text>
                 </TouchableOpacity>
-                {availableGyms.map((g) => (
+                {availableGyms.map(g => (
                   <TouchableOpacity
                     key={g.id}
-                    style={[styles.historyGymFilterPill, historyGymFilter === g.id && styles.historyGymFilterPillActive]}
+                    style={[
+                      styles.historyGymFilterPill,
+                      historyGymFilter === g.id && styles.historyGymFilterPillActive,
+                    ]}
                     hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                     accessibilityRole="button"
                     accessibilityLabel={`Filter by ${g.name}`}
                     accessibilityState={{ selected: historyGymFilter === g.id }}
                     onPress={() => setHistoryGymFilter(g.id)}
                   >
-                    <Text style={[styles.historyGymFilterPillText, historyGymFilter === g.id && styles.historyGymFilterPillTextActive]}>
+                    <Text
+                      style={[
+                        styles.historyGymFilterPillText,
+                        historyGymFilter === g.id && styles.historyGymFilterPillTextActive,
+                      ]}
+                    >
                       {g.name}
                     </Text>
                   </TouchableOpacity>
@@ -554,9 +581,14 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
             {filteredHistoryWorkouts.length > 0 ? (
               <>
-                {(showAllHistory ? filteredHistoryWorkouts : filteredHistoryWorkouts.slice(0, 5)).map((w) => {
-                  const exerciseOccurrences = w.exercises.filter((e) => e.exerciseId === exercise.id);
-                  const allSets = exerciseOccurrences.flatMap((e) => e.sets).filter((s) => s.isCompleted);
+                {(showAllHistory
+                  ? filteredHistoryWorkouts
+                  : filteredHistoryWorkouts.slice(0, 5)
+                ).map(w => {
+                  const exerciseOccurrences = w.exercises.filter(e => e.exerciseId === exercise.id);
+                  const allSets = exerciseOccurrences
+                    .flatMap(e => e.sets)
+                    .filter(s => s.isCompleted);
                   if (allSets.length === 0) return null;
 
                   const dateStr = new Date(w.startTime).toLocaleDateString(undefined, {
@@ -565,17 +597,25 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                     year: 'numeric',
                   });
                   const gymName = gymNamesMap.get(w.gymId);
-                  const firstOccurrenceNotes = exerciseOccurrences.find((o) => Boolean(o.notes))?.notes;
+                  const firstOccurrenceNotes = exerciseOccurrences.find(o =>
+                    Boolean(o.notes),
+                  )?.notes;
 
                   const session1RM = allSets.reduce((max, s) => {
                     const calc = calculate1RM(s.weightKg, s.reps);
                     return calc.average > max ? calc.average : max;
                   }, 0);
-                  const sessionVolume = allSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+                  const sessionVolume = allSets.reduce(
+                    (sum, s) => sum + (s.weightKg || 0) * (s.reps || 0),
+                    0,
+                  );
                   const isHighlighted = w.id === highlightedWorkoutId;
 
                   return (
-                    <View key={w.id} style={[styles.historyCard, isHighlighted && styles.historyCardHighlighted]}>
+                    <View
+                      key={w.id}
+                      style={[styles.historyCard, isHighlighted && styles.historyCardHighlighted]}
+                    >
                       <View style={styles.historyCardHeader}>
                         <View style={styles.historyCardMeta}>
                           <Text style={styles.historyDate}>{dateStr}</Text>
@@ -614,8 +654,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                                   s.type === 'warmup'
                                     ? styles.historySetTypeWarmup
                                     : s.type === 'drop'
-                                    ? styles.historySetTypeDrop
-                                    : styles.historySetTypeFailure,
+                                      ? styles.historySetTypeDrop
+                                      : styles.historySetTypeFailure,
                                 ]}
                               >
                                 <Text style={styles.historySetTypeTagText}>
@@ -641,9 +681,13 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 {filteredHistoryWorkouts.length > 5 && (
                   <TouchableOpacity
                     style={styles.expandHistoryBtn}
-                    onPress={() => setShowAllHistory((prev) => !prev)}
+                    onPress={() => setShowAllHistory(prev => !prev)}
                     accessibilityRole="button"
-                    accessibilityLabel={showAllHistory ? 'Show recent 5 sessions' : `View all ${filteredHistoryWorkouts.length} sessions`}
+                    accessibilityLabel={
+                      showAllHistory
+                        ? 'Show recent 5 sessions'
+                        : `View all ${filteredHistoryWorkouts.length} sessions`
+                    }
                   >
                     <Text style={styles.expandHistoryBtnText}>
                       {showAllHistory
@@ -660,11 +704,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               </>
             ) : (
               <View style={styles.historyEmpty}>
-                <Text style={styles.historyEmptyText}>No recorded workout sessions for this exercise yet.</Text>
+                <Text style={styles.historyEmptyText}>
+                  No recorded workout sessions for this exercise yet.
+                </Text>
               </View>
             )}
           </View>
-
 
           {/* Scope Card */}
           {gymTrackingEnabled && resolvedGym && (
@@ -672,13 +717,13 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
               <View style={styles.scopeText}>
                 <Text style={styles.scopeLabel}>EFFECTIVE SCOPE</Text>
                 <Text style={styles.scopeValue}>
-                  {exerciseScope ? (
-                    exerciseScope.scopeType === 'linked_group'
+                  {exerciseScope
+                    ? exerciseScope.scopeType === 'linked_group'
                       ? `Linked gyms (${exerciseScope.linkedGymIds?.length ?? 0})`
                       : exerciseScope.scopeType === 'gym_specific'
-                      ? 'Gym-specific'
-                      : 'Global'
-                  ) : `${resolveExerciseScope(exercise, undefined) === 'gym_specific' ? 'Gym-specific' : 'Global'} (equipment default)`}
+                        ? 'Gym-specific'
+                        : 'Global'
+                    : `${resolveExerciseScope(exercise, undefined) === 'gym_specific' ? 'Gym-specific' : 'Global'} (equipment default)`}
                 </Text>
               </View>
               {onEditScope && (

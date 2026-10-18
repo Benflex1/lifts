@@ -153,7 +153,10 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected }}
           >
-            <Text style={[styles.segmentText, selected && styles.segmentTextActive]} numberOfLines={1}>
+            <Text
+              style={[styles.segmentText, selected && styles.segmentTextActive]}
+              numberOfLines={1}
+            >
               {option.label}
             </Text>
           </TouchableOpacity>
@@ -176,7 +179,14 @@ interface ChipProps {
   accessibilityLabel?: string;
 }
 
-export function Chip({ label, selected, onPress, leading, size = 'md', accessibilityLabel }: ChipProps) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  leading,
+  size = 'md',
+  accessibilityLabel,
+}: ChipProps) {
   return (
     <TouchableOpacity
       style={[
@@ -311,7 +321,9 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
       onDismiss={runPendingAction}
     >
       <View style={styles.sheetRoot}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}
+        >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}

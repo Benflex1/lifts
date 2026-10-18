@@ -32,7 +32,11 @@ describe('store.getDataRevision contract', () => {
 
         // Once written, the value stays stable across further reads.
         await store.readSnapshot();
-        assert.equal(await store.getDataRevision!(), afterWrite, 'the new revision is stable across reads');
+        assert.equal(
+          await store.getDataRevision!(),
+          afterWrite,
+          'the new revision is stable across reads',
+        );
       } finally {
         await fixture.dispose();
       }
@@ -57,11 +61,15 @@ describe('store.getDataRevision contract', () => {
       assert.ok(afterWrite > before, 'the writing tab advances the revision');
 
       // The follower must read the persisted value rather than a tab-local counter.
-      assert.equal(await reader.getDataRevision(), afterWrite, 'follower tab observes the writer revision');
+      assert.equal(
+        await reader.getDataRevision(),
+        afterWrite,
+        'follower tab observes the writer revision',
+      );
     } finally {
       await writer.close?.();
       await reader.close?.();
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         const req = indexedDB.deleteDatabase(dbName);
         req.onsuccess = () => resolve();
         req.onblocked = () => resolve();

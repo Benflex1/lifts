@@ -40,7 +40,11 @@ function ExerciseListRowInner({
         accessibilityRole="button"
         accessibilityLabel={exercise.name}
       >
-        <ExerciseVisual exercise={exercise} size="compact" accessibilityLabel={visualAccessibilityLabel} />
+        <ExerciseVisual
+          exercise={exercise}
+          size="compact"
+          accessibilityLabel={visualAccessibilityLabel}
+        />
         <View style={styles.info}>
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>

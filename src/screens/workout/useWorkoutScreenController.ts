@@ -54,7 +54,9 @@ export function useWorkoutScreenController() {
       const [gymList] = await Promise.all([getGyms(), refreshGyms()]);
       // With a single gym there is nothing to choose, so start straight away.
       if (gymList.length <= 1) {
-        await startWorkout(routine, customName, undefined, { gymId: resolveInitialStartGymId(gymList) });
+        await startWorkout(routine, customName, undefined, {
+          gymId: resolveInitialStartGymId(gymList),
+        });
         return;
       }
       setPendingStart({ routine, customName });
@@ -75,12 +77,9 @@ export function useWorkoutScreenController() {
     if (!pendingStart) return false;
 
     try {
-      const started = await startWorkout(
-        pendingStart.routine,
-        pendingStart.customName,
-        undefined,
-        { gymId },
-      );
+      const started = await startWorkout(pendingStart.routine, pendingStart.customName, undefined, {
+        gymId,
+      });
       if (started) setPendingStart(null);
       return started;
     } catch (e) {

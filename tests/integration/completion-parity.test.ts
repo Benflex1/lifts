@@ -16,7 +16,13 @@ const GYM_ID = 'gym-default';
 const COMPLETED_ID = 'completed-probe';
 const IN_PROGRESS_ID = 'in-progress-probe';
 
-function makeWorkout(id: string, startTime: string, endTime: string, weightKg: number, reps: number): Workout {
+function makeWorkout(
+  id: string,
+  startTime: string,
+  endTime: string,
+  weightKg: number,
+  reps: number,
+): Workout {
   return {
     id,
     name: `Probe ${id}`,
@@ -97,18 +103,38 @@ for (const platform of ['native', 'web'] as const) {
     it('excludes the in-progress record from every read path', async () => {
       const observed = await observe(platform);
 
-      assert.deepEqual(observed.historyIds, [COMPLETED_ID], 'history lists only the completed workout');
+      assert.deepEqual(
+        observed.historyIds,
+        [COMPLETED_ID],
+        'history lists only the completed workout',
+      );
       assert.equal(observed.detailForInProgress, null, 'detail lookup rejects in-progress records');
       assert.deepEqual(observed.detailForCompleted, {
         id: COMPLETED_ID,
         totalVolumeKg: 500,
         exerciseIds: [EXERCISE.id],
       });
-      assert.deepEqual(observed.snapshotIds, [COMPLETED_ID], 'snapshots contain only completed workouts');
-      assert.deepEqual(observed.completedForExerciseIds, [COMPLETED_ID], 'PR inputs contain only completed workouts');
-      assert.deepEqual(observed.previousSets, [{ weightKg: 100, reps: 5 }], 'previous sets ignore in-progress records');
+      assert.deepEqual(
+        observed.snapshotIds,
+        [COMPLETED_ID],
+        'snapshots contain only completed workouts',
+      );
+      assert.deepEqual(
+        observed.completedForExerciseIds,
+        [COMPLETED_ID],
+        'PR inputs contain only completed workouts',
+      );
+      assert.deepEqual(
+        observed.previousSets,
+        [{ weightKg: 100, reps: 5 }],
+        'previous sets ignore in-progress records',
+      );
       assert.equal(observed.gymStats.maxWeightKg, 100, 'gym stats ignore in-progress records');
-      assert.equal(observed.globalStats.maxWeightKg, 100, 'global stats ignore in-progress records');
+      assert.equal(
+        observed.globalStats.maxWeightKg,
+        100,
+        'global stats ignore in-progress records',
+      );
     });
   });
 }

@@ -17,7 +17,12 @@ export interface RestTimerState {
   endsAt: number | null;
 }
 
-export const IDLE_REST_TIMER: RestTimerState = { isActive: false, remainingSeconds: 0, totalSeconds: 0, endsAt: null };
+export const IDLE_REST_TIMER: RestTimerState = {
+  isActive: false,
+  remainingSeconds: 0,
+  totalSeconds: 0,
+  endsAt: null,
+};
 
 /**
  * ARCH-03: the rest countdown engine — countdown state, the second-aligned ticker, the 3-2-1
@@ -76,7 +81,7 @@ export function useRestTimerEngine(
       const remaining = computeRemaining(endsAt, now);
       if (remaining <= 0) {
         const expiredRecently = Math.abs(now - endsAt) < 1500;
-        setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
+        setRestTimer(prev => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
         const ctrl = controllerRef.current;
         if (ctrl) {
           const state = ctrl.getState();
@@ -140,7 +145,7 @@ export function useRestTimerEngine(
           lastBuzzedSecondRef.current = null;
         }
 
-        setRestTimer((prev) => {
+        setRestTimer(prev => {
           if (prev.remainingSeconds === remaining) return prev;
           return { ...prev, remainingSeconds: remaining };
         });
@@ -178,7 +183,7 @@ export function useRestTimerEngine(
   };
 
   const adjustRestTimer = (deltaSeconds: number) => {
-    setRestTimer((prev) => {
+    setRestTimer(prev => {
       if (!prev.endsAt) return prev;
       const newEndsAt = prev.endsAt + deltaSeconds * 1000;
       const remaining = computeRemaining(newEndsAt, Date.now());
@@ -199,7 +204,7 @@ export function useRestTimerEngine(
         if (state.phase === 'active' && state.workout) {
           ctrl.update(
             state.workout,
-            remaining > 0 ? { endsAt: newEndsAt, totalSeconds: prev.totalSeconds } : null
+            remaining > 0 ? { endsAt: newEndsAt, totalSeconds: prev.totalSeconds } : null,
           );
         }
       }

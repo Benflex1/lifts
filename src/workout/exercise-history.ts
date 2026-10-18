@@ -22,7 +22,7 @@ export interface ExerciseHistoryEntry {
  */
 export function collectExerciseHistory(
   workouts: Workout[],
-  exerciseId: string
+  exerciseId: string,
 ): ExerciseHistoryEntry[] {
   const entries: ExerciseHistoryEntry[] = [];
 

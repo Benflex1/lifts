@@ -39,7 +39,9 @@ export function useAnalyticsSnapshot(): AnalyticsSnapshotQuery {
   const [hasWorkoutData, setHasWorkoutData] = useState(false);
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolumePoint[]>([]);
   const [muscleFrequency, setMuscleFrequency] = useState<MuscleFrequencyPoint[]>([]);
-  const [suggestedProgressionExerciseId, setSuggestedProgressionExerciseId] = useState<string | null>(null);
+  const [suggestedProgressionExerciseId, setSuggestedProgressionExerciseId] = useState<
+    string | null
+  >(null);
   const revisionRef = useRef<number | null>(null);
 
   const reload = async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
@@ -67,7 +69,7 @@ export function useAnalyticsSnapshot(): AnalyticsSnapshotQuery {
       setExercises(exerciseList);
 
       const scopesMap: Record<string, ExerciseGymScope | undefined> = {};
-      (snapshot.exerciseGymScopes || []).forEach((s) => {
+      (snapshot.exerciseGymScopes || []).forEach(s => {
         scopesMap[s.exerciseId] = s;
       });
       setScopes(scopesMap);
@@ -79,7 +81,7 @@ export function useAnalyticsSnapshot(): AnalyticsSnapshotQuery {
       let foundExerciseId: string | null = null;
       for (const w of workoutList) {
         for (const ex of w.exercises || []) {
-          if ((ex.sets || []).some((s) => s.isCompleted)) {
+          if ((ex.sets || []).some(s => s.isCompleted)) {
             foundExerciseId = ex.exerciseId;
             break;
           }

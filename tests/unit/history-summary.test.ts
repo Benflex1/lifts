@@ -12,26 +12,30 @@ const workoutFixture = (): Workout => ({
   durationSeconds: 3600,
   totalVolumeKg: 100,
   notes: 'Updated after finishing',
-  exercises: [{
-    id: 'exercise-1',
-    exerciseId: 'bench-press',
-    exercise: {
-      id: 'bench-press',
-      name: 'Bench Press',
-      category: 'strength',
-      equipment: 'barbell',
-      primaryMuscles: ['chest'],
+  exercises: [
+    {
+      id: 'exercise-1',
+      exerciseId: 'bench-press',
+      exercise: {
+        id: 'bench-press',
+        name: 'Bench Press',
+        category: 'strength',
+        equipment: 'barbell',
+        primaryMuscles: ['chest'],
+      },
+      restTimerSeconds: 90,
+      sets: [
+        {
+          id: 'set-1',
+          setNumber: 1,
+          type: 'normal',
+          weightKg: 50,
+          reps: 2,
+          isCompleted: true,
+        },
+      ],
     },
-    restTimerSeconds: 90,
-    sets: [{
-      id: 'set-1',
-      setNumber: 1,
-      type: 'normal',
-      weightKg: 50,
-      reps: 2,
-      isCompleted: true,
-    }],
-  }],
+  ],
 });
 
 describe('workout history summary updates', () => {

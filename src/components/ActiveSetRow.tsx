@@ -79,64 +79,44 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
   const badge = getSetBadgeStyle(set.type);
 
   return (
-  <SwipeableSetRow
-    key={set.id}
-    isCompleted={set.isCompleted}
-    onDelete={() => onRemoveSet(exerciseId, set.id)}
-  >
-    <View
-      style={[styles.setRow, set.isCompleted && styles.setRowCompleted]}
+    <SwipeableSetRow
+      key={set.id}
+      isCompleted={set.isCompleted}
+      onDelete={() => onRemoveSet(exerciseId, set.id)}
     >
-      {/* Set Number / Type Toggle Badge */}
-      <TouchableOpacity
-        style={[
-          styles.setBadge,
-          { backgroundColor: badge.bg, borderColor: badge.border },
-        ]}
-        onPress={() =>
-          onOpenSetOptions(exerciseId, exerciseName, set)
-        }
-        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-      >
-        <Text style={[styles.setBadgeText, { color: badge.text }]}>
-          {badge.label || set.setNumber}
-        </Text>
-      </TouchableOpacity>
+      <View style={[styles.setRow, set.isCompleted && styles.setRowCompleted]}>
+        {/* Set Number / Type Toggle Badge */}
+        <TouchableOpacity
+          style={[styles.setBadge, { backgroundColor: badge.bg, borderColor: badge.border }]}
+          onPress={() => onOpenSetOptions(exerciseId, exerciseName, set)}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+        >
+          <Text style={[styles.setBadgeText, { color: badge.text }]}>
+            {badge.label || set.setNumber}
+          </Text>
+        </TouchableOpacity>
 
-      {/* Previous Performance Comparison / PR Medal */}
-      <View style={styles.previousCell}>
-        {set.isCompleted && setPR?.primary ? (
-          <View style={styles.prBadgeWrap}>
-            <PRBadge
-              achievement={setPR!.primary!}
-              compact
-              showGym={gymTrackingEnabled}
-              additionalCount={Math.max(0, (setPR?.achievements.length || 0) - 1)}
-              onPress={() =>
-                onOpenSetOptions(exerciseId, exerciseName, set)
-              }
-            />
-          </View>
-        ) : (set.previousWeightKg !== undefined || set.previousReps !== undefined) ? (
-          <TouchableOpacity
-            style={styles.previousButton}
-            onPress={() => onApplyPrevious(exerciseId, set, targetReps)}
-            disabled={set.isCompleted}
-            activeOpacity={0.6}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-            accessibilityRole="button"
-            accessibilityLabel={`Apply previous stats: ${formatPreviousMetric(
-              {
-                weightKg: set.previousWeightKg ?? 0,
-                reps: set.previousReps ?? 0,
-                sourceGymId: set.previousGymId,
-                sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
-              },
-              unit,
-            )}`}
-          >
-            <Text style={[styles.previousText, !set.isCompleted && styles.previousTextClickable]}>
-              {formatPreviousMetric(
+        {/* Previous Performance Comparison / PR Medal */}
+        <View style={styles.previousCell}>
+          {set.isCompleted && setPR?.primary ? (
+            <View style={styles.prBadgeWrap}>
+              <PRBadge
+                achievement={setPR!.primary!}
+                compact
+                showGym={gymTrackingEnabled}
+                additionalCount={Math.max(0, (setPR?.achievements.length || 0) - 1)}
+                onPress={() => onOpenSetOptions(exerciseId, exerciseName, set)}
+              />
+            </View>
+          ) : set.previousWeightKg !== undefined || set.previousReps !== undefined ? (
+            <TouchableOpacity
+              style={styles.previousButton}
+              onPress={() => onApplyPrevious(exerciseId, set, targetReps)}
+              disabled={set.isCompleted}
+              activeOpacity={0.6}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Apply previous stats: ${formatPreviousMetric(
                 {
                   weightKg: set.previousWeightKg ?? 0,
                   reps: set.previousReps ?? 0,
@@ -144,96 +124,99 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
                   sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
                 },
                 unit,
-              )}
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <Text style={styles.previousPlaceholder}>—</Text>
-        )}
-      </View>
+              )}`}
+            >
+              <Text style={[styles.previousText, !set.isCompleted && styles.previousTextClickable]}>
+                {formatPreviousMetric(
+                  {
+                    weightKg: set.previousWeightKg ?? 0,
+                    reps: set.previousReps ?? 0,
+                    sourceGymId: set.previousGymId,
+                    sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
+                  },
+                  unit,
+                )}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.previousPlaceholder}>—</Text>
+          )}
+        </View>
 
-      {/* Weight Input */}
-      <View style={styles.inputWrapWeight}>
-        <WeightInput
-          value={set.weightKg}
-          isEdited={set.isWeightEdited}
-          onCommit={(w, edited) =>
-            onUpdateSet(exerciseId, set.id, {
-              weightKg: w,
-              isWeightEdited: edited !== undefined ? edited : true,
-            })
-          }
-          placeholder={
-            set.previousWeightKg !== undefined && set.previousWeightKg > 0
-              ? kgToDisplay(set.previousWeightKg, unit).toString()
-              : '-'
-          }
-          completed={set.isCompleted}
-          style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
-          onFocus={onInputFocus}
-        />
-      </View>
-
-      {/* Reps Input */}
-      <View style={styles.inputWrapReps}>
-        <RepsInput
-          value={set.reps}
-          onCommit={(r) => onUpdateSet(exerciseId, set.id, { reps: r })}
-          placeholder={
-            targetReps || (set.previousReps ? set.previousReps.toString() : '10')
-          }
-          completed={set.isCompleted}
-          style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
-          onFocus={onInputFocus}
-        />
-        {/* Compact RPE badge if defined and inline column is hidden */}
-        {!showRpeColumn && set.rpe != null && (
-          <TouchableOpacity
-            style={styles.compactRpeBadge}
-            onPress={() =>
-              onOpenSetOptions(exerciseId, exerciseName, set)
+        {/* Weight Input */}
+        <View style={styles.inputWrapWeight}>
+          <WeightInput
+            value={set.weightKg}
+            isEdited={set.isWeightEdited}
+            onCommit={(w, edited) =>
+              onUpdateSet(exerciseId, set.id, {
+                weightKg: w,
+                isWeightEdited: edited !== undefined ? edited : true,
+              })
             }
+            placeholder={
+              set.previousWeightKg !== undefined && set.previousWeightKg > 0
+                ? kgToDisplay(set.previousWeightKg, unit).toString()
+                : '-'
+            }
+            completed={set.isCompleted}
+            style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+            onFocus={onInputFocus}
+          />
+        </View>
+
+        {/* Reps Input */}
+        <View style={styles.inputWrapReps}>
+          <RepsInput
+            value={set.reps}
+            onCommit={r => onUpdateSet(exerciseId, set.id, { reps: r })}
+            placeholder={targetReps || (set.previousReps ? set.previousReps.toString() : '10')}
+            completed={set.isCompleted}
+            style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+            onFocus={onInputFocus}
+          />
+          {/* Compact RPE badge if defined and inline column is hidden */}
+          {!showRpeColumn && set.rpe != null && (
+            <TouchableOpacity
+              style={styles.compactRpeBadge}
+              onPress={() => onOpenSetOptions(exerciseId, exerciseName, set)}
+            >
+              <Text style={styles.compactRpeText}>@{set.rpe}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Optional Inline RPE Column */}
+        {showRpeColumn && (
+          <TouchableOpacity
+            style={styles.rpeColCell}
+            onPress={() => onOpenSetOptions(exerciseId, exerciseName, set)}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
-            <Text style={styles.compactRpeText}>@{set.rpe}</Text>
+            <Text style={styles.rpeColCellText}>{set.rpe != null ? set.rpe.toString() : '–'}</Text>
           </TouchableOpacity>
         )}
-      </View>
 
-      {/* Optional Inline RPE Column */}
-      {showRpeColumn && (
+        {/* Completion Checkbox */}
         <TouchableOpacity
-          style={styles.rpeColCell}
-          onPress={() =>
-            onOpenSetOptions(exerciseId, exerciseName, set)
-          }
+          style={[
+            styles.checkBtn,
+            set.isCompleted ? styles.checkBtnActive : styles.checkBtnInactive,
+          ]}
+          onPress={() => onToggleSet(exerciseId, set.id)}
           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          accessibilityRole="checkbox"
+          accessibilityLabel={`Complete set ${set.setNumber}`}
+          accessibilityState={{ checked: set.isCompleted }}
+          aria-checked={set.isCompleted}
         >
-          <Text style={styles.rpeColCellText}>
-            {set.rpe != null ? set.rpe.toString() : '–'}
-          </Text>
+          <Check
+            size={20}
+            color={set.isCompleted ? colors.black : colors.textFaint}
+            strokeWidth={2.8}
+          />
         </TouchableOpacity>
-      )}
-
-      {/* Completion Checkbox */}
-      <TouchableOpacity
-        style={[
-          styles.checkBtn,
-          set.isCompleted ? styles.checkBtnActive : styles.checkBtnInactive,
-        ]}
-        onPress={() => onToggleSet(exerciseId, set.id)}
-        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-        accessibilityRole="checkbox"
-        accessibilityLabel={`Complete set ${set.setNumber}`}
-        accessibilityState={{ checked: set.isCompleted }}
-        aria-checked={set.isCompleted}
-      >
-        <Check
-          size={20}
-          color={set.isCompleted ? colors.black : colors.textFaint}
-          strokeWidth={2.8}
-        />
-      </TouchableOpacity>
-    </View>
-  </SwipeableSetRow>
+      </View>
+    </SwipeableSetRow>
   );
 }, areRowPropsEqual);

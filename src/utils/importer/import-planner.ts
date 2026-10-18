@@ -1,6 +1,6 @@
 import { DataSnapshot } from '../../database/contract';
 import { validateSnapshotForMerge } from '../../database/snapshot-validation';
-import { ActiveExercise, Exercise, Workout, WorkoutSet } from '../../types';
+import { ActiveExercise, Workout, WorkoutSet } from '../../types';
 import { createScopedId } from '../ids';
 import { parseWorkoutCsv } from './csv-parser';
 import { CsvImportOptions, CsvImportPreview } from './types';
@@ -8,21 +8,20 @@ import { CsvImportOptions, CsvImportPreview } from './types';
 export function computeCsvImportPlan(
   csvText: string,
   existingSnapshot: DataSnapshot,
-  options: CsvImportOptions
+  options: CsvImportOptions,
 ): CsvImportPreview {
   const { sessions, detectedFormat, formatLabel, mapper, warnings } = parseWorkoutCsv(
     csvText,
     existingSnapshot.exercises,
-    options
+    options,
   );
 
-  const targetGymId = options.targetGymId || existingSnapshot.gyms.find(g => g.isDefault)?.id || 'gym-default';
+  const targetGymId =
+    options.targetGymId || existingSnapshot.gyms.find(g => g.isDefault)?.id || 'gym-default';
   const skipExisting = options.skipExistingWorkouts !== false;
 
   // Build existing start-time index to detect duplicate workouts
-  const existingStartTimeSet = new Set(
-    existingSnapshot.workouts.map(w => w.startTime)
-  );
+  const existingStartTimeSet = new Set(existingSnapshot.workouts.map(w => w.startTime));
 
   const workoutsToInsert: Workout[] = [];
   let duplicateWorkoutsCount = 0;
@@ -97,9 +96,9 @@ export function computeCsvImportPlan(
   }
 
   const exerciseAssignments = mapper.getExerciseAssignments();
-  const newCustomExercises = mapper.getNewlyCreatedExercises().filter(
-    ce => !existingSnapshot.exercises.some(ee => ee.id === ce.id)
-  );
+  const newCustomExercises = mapper
+    .getNewlyCreatedExercises()
+    .filter(ce => !existingSnapshot.exercises.some(ee => ee.id === ce.id));
 
   const snapshotToMerge: DataSnapshot = {
     workouts: workoutsToInsert,

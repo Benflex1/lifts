@@ -81,20 +81,20 @@ describe('extractExerciseProgression', () => {
   it('extracts progression points chronologically with correct E1RM and topSet', () => {
     const workouts = [
       makeWorkout('w2', '2026-08-15T10:00:00.000Z', 'gym-main', [
-        makeExercise('bench-press', ['chest'], [
-          { weightKg: 80, reps: 5, rpe: 8 },
-          { weightKg: 85, reps: 5, rpe: 9 },
-        ]),
+        makeExercise(
+          'bench-press',
+          ['chest'],
+          [
+            { weightKg: 80, reps: 5, rpe: 8 },
+            { weightKg: 85, reps: 5, rpe: 9 },
+          ],
+        ),
       ]),
       makeWorkout('w1', '2026-08-01T10:00:00.000Z', 'gym-main', [
-        makeExercise('bench-press', ['chest'], [
-          { weightKg: 80, reps: 5, rpe: 8 },
-        ]),
+        makeExercise('bench-press', ['chest'], [{ weightKg: 80, reps: 5, rpe: 8 }]),
       ]),
       makeWorkout('w3', '2026-09-01T10:00:00.000Z', 'gym-main', [
-        makeExercise('bench-press', ['chest'], [
-          { weightKg: 90, reps: 3, rpe: 9.5 },
-        ]),
+        makeExercise('bench-press', ['chest'], [{ weightKg: 90, reps: 3, rpe: 9.5 }]),
       ]),
     ];
 
@@ -186,9 +186,7 @@ describe('extractExerciseProgression', () => {
   it('skips uncompleted sets and workouts with zero completed sets', () => {
     const workouts = [
       makeWorkout('w1', '2026-09-01T10:00:00.000Z', 'gym-main', [
-        makeExercise('deadlift', ['back'], [
-          { weightKg: 140, reps: 5, isCompleted: false },
-        ]),
+        makeExercise('deadlift', ['back'], [{ weightKg: 140, reps: 5, isCompleted: false }]),
       ]),
     ];
 
@@ -223,13 +221,17 @@ describe('buildRepRangeDistribution', () => {
   it('categorizes completed sets into strength, hypertrophy, and endurance', () => {
     const workouts = [
       makeWorkout('w1', '2026-09-01T10:00:00.000Z', 'gym-main', [
-        makeExercise('mix', ['chest'], [
-          { weightKg: 100, reps: 3 },
-          { weightKg: 100, reps: 5 },
-          { weightKg: 80, reps: 8 },
-          { weightKg: 80, reps: 12 },
-          { weightKg: 50, reps: 15 },
-        ]),
+        makeExercise(
+          'mix',
+          ['chest'],
+          [
+            { weightKg: 100, reps: 3 },
+            { weightKg: 100, reps: 5 },
+            { weightKg: 80, reps: 8 },
+            { weightKg: 80, reps: 12 },
+            { weightKg: 50, reps: 15 },
+          ],
+        ),
       ]),
     ];
 
@@ -262,9 +264,7 @@ describe('buildConsistencySummary', () => {
   });
 
   it('keeps streak alive when current week has not had a workout yet but previous week did', () => {
-    const workouts = [
-      makeWorkout('w1', '2026-09-01T10:00:00.000Z'),
-    ];
+    const workouts = [makeWorkout('w1', '2026-09-01T10:00:00.000Z')];
 
     const now = new Date('2026-09-08T12:00:00.000Z');
     const summary = buildConsistencySummary(workouts, now, 8);
@@ -279,16 +279,25 @@ describe('buildLifetimeTrainingStats', () => {
   it('aggregates total workouts, volume, duration, sets, reps, and this-week totals', () => {
     const workouts = [
       makeWorkout('w1', '2026-08-01T10:00:00.000Z', 'gym-1', [
-        makeExercise('bench', ['chest'], [
-          { weightKg: 100, reps: 10 },
-          { weightKg: 80, reps: 8 },
-        ]),
+        makeExercise(
+          'bench',
+          ['chest'],
+          [
+            { weightKg: 100, reps: 10 },
+            { weightKg: 80, reps: 8 },
+          ],
+        ),
       ]),
-      makeWorkout('w2', '2026-09-10T10:00:00.000Z', 'gym-1', [ // this week (Thu)
-        makeExercise('squat', ['quads'], [
-          { weightKg: 120, reps: 5 },
-          { weightKg: 100, reps: 5 },
-        ]),
+      makeWorkout('w2', '2026-09-10T10:00:00.000Z', 'gym-1', [
+        // this week (Thu)
+        makeExercise(
+          'squat',
+          ['quads'],
+          [
+            { weightKg: 120, reps: 5 },
+            { weightKg: 100, reps: 5 },
+          ],
+        ),
       ]),
     ];
 
@@ -335,17 +344,25 @@ describe('calisthenics and rep PR progression', () => {
   it('prioritizes higher rep count for bodyweight exercises when picking topSet', () => {
     const workouts = [
       makeWorkout('w1', '2026-09-01T10:00:00.000Z', 'gym-1', [
-        makeExercise('pull-up', ['lats'], [
-          { weightKg: 0, reps: 5 },
-          { weightKg: 0, reps: 20 },
-          { weightKg: 0, reps: 10 },
-        ]),
+        makeExercise(
+          'pull-up',
+          ['lats'],
+          [
+            { weightKg: 0, reps: 5 },
+            { weightKg: 0, reps: 20 },
+            { weightKg: 0, reps: 10 },
+          ],
+        ),
       ]),
     ];
 
     const series = extractExerciseProgression(workouts, 'pull-up', { now });
     assert.equal(series.points.length, 1);
-    assert.equal(series.points[0].topSet.reps, 20, 'topSet should be the 20-rep set, not the first 5-rep set');
+    assert.equal(
+      series.points[0].topSet.reps,
+      20,
+      'topSet should be the 20-rep set, not the first 5-rep set',
+    );
     assert.equal(series.points[0].topSet.weightKg, 0);
   });
 });
@@ -382,7 +399,11 @@ describe('timeframe-filtered progression PR accuracy', () => {
 
     // w3 did 100 kg, which is well below all-time 140 kg PR, so isPr MUST be false
     assert.equal(series.points[0].isPr, false);
-    assert.equal(series.points[1].isPr, false, 'w3 (100 kg) must not be flagged as PR when all-time best was 140 kg');
+    assert.equal(
+      series.points[1].isPr,
+      false,
+      'w3 (100 kg) must not be flagged as PR when all-time best was 140 kg',
+    );
 
     // Current metrics match latest session in window
     assert.equal(series.summary.currentWeight, 100);
@@ -395,20 +416,24 @@ describe('multi-muscle volume and sets distribution splitting', () => {
   it('splits volume and sets evenly across multiple primary muscles without exceeding 100%', () => {
     const workouts = [
       makeWorkout('w1', '2026-09-01T10:00:00.000Z', 'gym-1', [
-        makeExercise('halo-extension', ['shoulders', 'triceps'], [
-          { weightKg: 20, reps: 10 },
-          { weightKg: 20, reps: 10 },
-          { weightKg: 20, reps: 10 },
-          { weightKg: 20, reps: 10 },
-        ]),
+        makeExercise(
+          'halo-extension',
+          ['shoulders', 'triceps'],
+          [
+            { weightKg: 20, reps: 10 },
+            { weightKg: 20, reps: 10 },
+            { weightKg: 20, reps: 10 },
+            { weightKg: 20, reps: 10 },
+          ],
+        ),
       ]),
     ];
 
     const distribution = buildTrainingDistribution(workouts, 'ALL', now);
     assert.equal(distribution.length, 2);
 
-    const shoulders = distribution.find((d) => d.muscle === 'shoulders');
-    const triceps = distribution.find((d) => d.muscle === 'triceps');
+    const shoulders = distribution.find(d => d.muscle === 'shoulders');
+    const triceps = distribution.find(d => d.muscle === 'triceps');
 
     assert.ok(shoulders, 'shoulders present');
     assert.ok(triceps, 'triceps present');
@@ -461,4 +486,3 @@ describe('isPointPrForMetric', () => {
     assert.equal(isPointPrForMetric(point, 'max_reps'), false);
   });
 });
-

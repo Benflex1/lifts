@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 
-test('shares one database open between interleaved getDatabase and getStore calls', async (t) => {
+test('shares one database open between interleaved getDatabase and getStore calls', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;
@@ -9,7 +9,7 @@ test('shares one database open between interleaved getDatabase and getStore call
 
   let openCalls = 0;
   let releaseOpen: (() => void) | undefined;
-  const openGate = new Promise<void>((resolve) => {
+  const openGate = new Promise<void>(resolve => {
     releaseOpen = resolve;
   });
   const database = {};
@@ -34,7 +34,8 @@ test('shares one database open between interleaved getDatabase and getStore call
     },
   });
 
-  const { getDatabase, getStore } = await import('../../src/database/db.native?database-store-interleaving');
+  const { getDatabase, getStore } =
+    await import('../../src/database/db.native?database-store-interleaving');
   const databasePromise = getDatabase();
   const storePromise = getStore();
   releaseOpen!();
@@ -47,7 +48,7 @@ test('shares one database open between interleaved getDatabase and getStore call
   assert.equal(resolvedStore, store);
 });
 
-test('clears a failed database open so a later store request retries', async (t) => {
+test('clears a failed database open so a later store request retries', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;
@@ -72,7 +73,8 @@ test('clears a failed database open so a later store request retries', async (t)
     },
   });
 
-  const { getDatabase, getStore } = await import('../../src/database/db.native?database-open-retry');
+  const { getDatabase, getStore } =
+    await import('../../src/database/db.native?database-open-retry');
   const firstDatabase = getDatabase();
   const firstStore = getStore();
 
@@ -85,7 +87,7 @@ test('clears a failed database open so a later store request retries', async (t)
   assert.equal(await getDatabase(), database);
 });
 
-test('coalesces concurrent native store initialization onto one SQLite connection', async (t) => {
+test('coalesces concurrent native store initialization onto one SQLite connection', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;
@@ -93,7 +95,7 @@ test('coalesces concurrent native store initialization onto one SQLite connectio
 
   let openCalls = 0;
   let releaseOpen: (() => void) | undefined;
-  const openGate = new Promise<void>((resolve) => {
+  const openGate = new Promise<void>(resolve => {
     releaseOpen = resolve;
   });
   const database = {};
@@ -124,7 +126,7 @@ test('coalesces concurrent native store initialization onto one SQLite connectio
   assert.equal(first, second);
 });
 
-test('coalesces concurrent initDatabase calls onto one store init', async (t) => {
+test('coalesces concurrent initDatabase calls onto one store init', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;
@@ -132,11 +134,11 @@ test('coalesces concurrent initDatabase calls onto one store init', async (t) =>
 
   let initCalls = 0;
   let signalInitStarted: (() => void) | undefined;
-  const initStarted = new Promise<void>((resolve) => {
+  const initStarted = new Promise<void>(resolve => {
     signalInitStarted = resolve;
   });
   let releaseInit: (() => void) | undefined;
-  const initGate = new Promise<void>((resolve) => {
+  const initGate = new Promise<void>(resolve => {
     releaseInit = resolve;
   });
   const store = {
@@ -170,7 +172,7 @@ test('coalesces concurrent initDatabase calls onto one store init', async (t) =>
   await Promise.all([firstInit, secondInit]);
 });
 
-test('clears failed initDatabase state so a later retry runs store init again', async (t) => {
+test('clears failed initDatabase state so a later retry runs store init again', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;
@@ -179,11 +181,11 @@ test('clears failed initDatabase state so a later retry runs store init again', 
   let initCalls = 0;
   let shouldFail = true;
   let signalInitStarted: (() => void) | undefined;
-  const initStarted = new Promise<void>((resolve) => {
+  const initStarted = new Promise<void>(resolve => {
     signalInitStarted = resolve;
   });
   let releaseInit: (() => void) | undefined;
-  const initGate = new Promise<void>((resolve) => {
+  const initGate = new Promise<void>(resolve => {
     releaseInit = resolve;
   });
   const store = {
@@ -222,7 +224,7 @@ test('clears failed initDatabase state so a later retry runs store init again', 
   assert.equal(initCalls, 2);
 });
 
-test('runs successful sequential initDatabase calls independently', async (t) => {
+test('runs successful sequential initDatabase calls independently', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;
@@ -254,7 +256,7 @@ test('runs successful sequential initDatabase calls independently', async (t) =>
   assert.equal(initCalls, 2);
 });
 
-test('resets a failed native initialization so retry opens a fresh database', async (t) => {
+test('resets a failed native initialization so retry opens a fresh database', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;
@@ -307,7 +309,7 @@ test('resets a failed native initialization so retry opens a fresh database', as
   assert.deepEqual(databases, [databaseOne, databaseTwo]);
 });
 
-test('preserves the init error when failed database cleanup rejects and still retries', async (t) => {
+test('preserves the init error when failed database cleanup rejects and still retries', async t => {
   if (typeof t.mock.module !== 'function') {
     t.skip('Node module mocks are required to isolate expo-sqlite');
     return;

@@ -1,13 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import {
-  ChevronRight,
-  Folder,
-  FolderCog,
-  Play,
-  Plus,
-  Settings2,
-} from 'lucide-react-native';
+import { ChevronRight, Folder, FolderCog, Play, Plus, Settings2 } from 'lucide-react-native';
 import { colors } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader, SectionHeader } from '../components/ui';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
@@ -143,7 +136,9 @@ const WorkoutScreenInner: React.FC = () => {
               <Plus size={22} color={colors.primary} />
             </View>
             <Text style={styles.emptyTitle}>Create your first routine</Text>
-            <Text style={styles.emptyText}>Save your go-to workouts and start them in one tap.</Text>
+            <Text style={styles.emptyText}>
+              Save your go-to workouts and start them in one tap.
+            </Text>
           </TouchableOpacity>
         ) : routines.filtered.length === 0 ? (
           <View style={styles.emptyFolderBox}>

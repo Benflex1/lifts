@@ -72,7 +72,7 @@ function setup(t: TestContext) {
   };
 }
 
-test('useTabRetention mounts tabs on first visit and never releases the visible one', (t) => {
+test('useTabRetention mounts tabs on first visit and never releases the visible one', t => {
   const harness = setup(t);
 
   assert.deepEqual([...harness.state().mountedTabs], ['workout']);
@@ -90,7 +90,7 @@ test('useTabRetention mounts tabs on first visit and never releases the visible 
   harness.unmount();
 });
 
-test('useTabRetention releases a hidden evictable tab once the window has passed', (t) => {
+test('useTabRetention releases a hidden evictable tab once the window has passed', t => {
   const harness = setup(t);
 
   harness.mount('history');
@@ -112,7 +112,7 @@ test('useTabRetention releases a hidden evictable tab once the window has passed
   harness.unmount();
 });
 
-test('useTabRetention keeps non-evictable tabs mounted however long they stay hidden', (t) => {
+test('useTabRetention keeps non-evictable tabs mounted however long they stay hidden', t => {
   const harness = setup(t);
 
   harness.mount('history');
@@ -131,7 +131,7 @@ test('useTabRetention keeps non-evictable tabs mounted however long they stay hi
   harness.unmount();
 });
 
-test('useTabRetention cancels the release when the tab is revisited in time', (t) => {
+test('useTabRetention cancels the release when the tab is revisited in time', t => {
   const harness = setup(t);
 
   harness.mount('history');
@@ -148,7 +148,7 @@ test('useTabRetention cancels the release when the tab is revisited in time', (t
   harness.unmount();
 });
 
-test('useTabRetention also ages out a tab hidden behind the workout logger', (t) => {
+test('useTabRetention also ages out a tab hidden behind the workout logger', t => {
   const harness = setup(t);
 
   harness.mount('history');

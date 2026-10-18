@@ -105,7 +105,9 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
     exercises = workout.exercises.map(exercise => ({
       ...exercise,
       sets: exercise.sets.map(set => {
-        const edit = setEdits.find(item => item.exerciseId === exercise.exerciseId && item.setId === set.id);
+        const edit = setEdits.find(
+          item => item.exerciseId === exercise.exerciseId && item.setId === set.id,
+        );
         if (!edit) return set;
 
         return {
@@ -119,16 +121,19 @@ export function applyWorkoutEdits(workout: Workout, edits: WorkoutEdits): Workou
   }
 
   const totalVolumeKg = exercises.reduce(
-    (workoutVolume, exercise) => workoutVolume + exercise.sets.reduce(
-      (exerciseVolume, set) => exerciseVolume + (set.isCompleted ? set.weightKg * set.reps : 0),
-      0
-    ),
-    0
+    (workoutVolume, exercise) =>
+      workoutVolume +
+      exercise.sets.reduce(
+        (exerciseVolume, set) => exerciseVolume + (set.isCompleted ? set.weightKg * set.reps : 0),
+        0,
+      ),
+    0,
   );
 
-  const nextDuration = edits.durationSeconds !== undefined
-    ? Math.max(0, Math.floor(edits.durationSeconds))
-    : workout.durationSeconds;
+  const nextDuration =
+    edits.durationSeconds !== undefined
+      ? Math.max(0, Math.floor(edits.durationSeconds))
+      : workout.durationSeconds;
 
   const nextStartTime = edits.startTime || workout.startTime;
   let nextEndTime = edits.endTime !== undefined ? edits.endTime : workout.endTime;

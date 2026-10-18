@@ -1,10 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { ActiveExercise, Exercise, WorkoutSet } from '../../src/types';
-import {
-  moveActiveExercise,
-  moveActiveExerciseToIndex,
-} from '../../src/workout/active-exercises';
+import { moveActiveExercise, moveActiveExerciseToIndex } from '../../src/workout/active-exercises';
 import { moveWorkoutSet } from '../../src/workout/sets';
 
 const makeExercise = (id: string, name: string): Exercise => ({
@@ -63,30 +60,41 @@ describe('exercise and set reordering overhaul', () => {
 
   it('moves sets up and down and updates set numbers sequentially', () => {
     const ex = makeActiveExercise('ex1', 'Squat', 4);
-    assert.deepEqual(ex.sets.map(s => s.setNumber), [1, 2, 3, 4]);
-    assert.deepEqual(ex.sets.map(s => s.weightKg), [60, 70, 80, 90]);
+    assert.deepEqual(
+      ex.sets.map(s => s.setNumber),
+      [1, 2, 3, 4],
+    );
+    assert.deepEqual(
+      ex.sets.map(s => s.weightKg),
+      [60, 70, 80, 90],
+    );
 
     // Move set 3 up to position 2
     const movedUp = moveWorkoutSet(ex.sets, 'set-ex1-3', -1);
-    assert.deepEqual(movedUp.map(s => s.id), [
-      'set-ex1-1',
-      'set-ex1-3',
-      'set-ex1-2',
-      'set-ex1-4',
-    ]);
+    assert.deepEqual(
+      movedUp.map(s => s.id),
+      ['set-ex1-1', 'set-ex1-3', 'set-ex1-2', 'set-ex1-4'],
+    );
     // Set numbers should be re-indexed 1, 2, 3, 4
-    assert.deepEqual(movedUp.map(s => s.setNumber), [1, 2, 3, 4]);
-    assert.deepEqual(movedUp.map(s => s.weightKg), [60, 80, 70, 90]);
+    assert.deepEqual(
+      movedUp.map(s => s.setNumber),
+      [1, 2, 3, 4],
+    );
+    assert.deepEqual(
+      movedUp.map(s => s.weightKg),
+      [60, 80, 70, 90],
+    );
 
     // Move set 1 down to position 2
     const movedDown = moveWorkoutSet(movedUp, 'set-ex1-1', 1);
-    assert.deepEqual(movedDown.map(s => s.id), [
-      'set-ex1-3',
-      'set-ex1-1',
-      'set-ex1-2',
-      'set-ex1-4',
-    ]);
-    assert.deepEqual(movedDown.map(s => s.setNumber), [1, 2, 3, 4]);
+    assert.deepEqual(
+      movedDown.map(s => s.id),
+      ['set-ex1-3', 'set-ex1-1', 'set-ex1-2', 'set-ex1-4'],
+    );
+    assert.deepEqual(
+      movedDown.map(s => s.setNumber),
+      [1, 2, 3, 4],
+    );
 
     // Boundary conditions: first set cannot move up, last set cannot move down
     assert.deepEqual(moveWorkoutSet(ex.sets, 'set-ex1-1', -1), ex.sets);

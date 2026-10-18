@@ -10,7 +10,9 @@ describe('Completion & Dialog Lifecycle', () => {
     it(`[${platform}] completes workout: clears drafts, commits history, and calculates accurate summary`, async () => {
       const fixture = await createStoreFixture(platform);
       let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
-      const ctrl = createSessionController(fixture.store, () => currentTime, { maxDirtyTimeMs: 100 });
+      const ctrl = createSessionController(fixture.store, () => currentTime, {
+        maxDirtyTimeMs: 100,
+      });
 
       const initialWorkout: Workout = {
         id: `w-push-${platform}-1`,
@@ -57,7 +59,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const completed = await ctrl.finish();
       assert.ok(completed, 'Completed workout should be returned');
       const syncCalls: Workout[] = [];
-      enqueueCompletedWorkoutSync(completed, true, async (workout) => {
+      enqueueCompletedWorkoutSync(completed, true, async workout => {
         syncCalls.push(workout);
       });
       assert.deepEqual(syncCalls, [completed]);
@@ -69,8 +71,8 @@ describe('Completion & Dialog Lifecycle', () => {
       assert.equal(completed.totalVolumeKg, 100 * 5 + 100 * 5 + 80 * 8); // 500 + 500 + 640 = 1640
       assert.equal(completed.exercises.length, 1);
       const completedSetsCount = completed.exercises.reduce(
-        (sum, e) => sum + e.sets.filter((s) => s.isCompleted).length,
-        0
+        (sum, e) => sum + e.sets.filter(s => s.isCompleted).length,
+        0,
       );
       assert.equal(completedSetsCount, 3);
 
@@ -95,7 +97,7 @@ describe('Completion & Dialog Lifecycle', () => {
         throw new Error('Database write failure');
       };
 
-      let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+      const currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
       const ctrl = createSessionController(fixture.store, () => currentTime);
 
       const initialWorkout: Workout = {
@@ -128,7 +130,9 @@ describe('Completion & Dialog Lifecycle', () => {
     it(`[${platform}] discarding a paused workout clears its draft without adding history`, async () => {
       const fixture = await createStoreFixture(platform);
       let currentTime = new Date('2026-09-07T14:00:00.000Z').getTime();
-      const ctrl = createSessionController(fixture.store, () => currentTime, { maxDirtyTimeMs: 100 });
+      const ctrl = createSessionController(fixture.store, () => currentTime, {
+        maxDirtyTimeMs: 100,
+      });
 
       const pausedWorkout: Workout = {
         id: `w-paused-${platform}-1`,

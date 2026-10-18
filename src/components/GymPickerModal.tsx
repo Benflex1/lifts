@@ -84,7 +84,7 @@ export function GymPickerModal({
 
           <FlatList
             data={gyms}
-            keyExtractor={(gym) => gym.id}
+            keyExtractor={gym => gym.id}
             contentContainerStyle={gyms.length === 0 ? styles.emptyList : undefined}
             ListEmptyComponent={<Text style={styles.emptyText}>No gyms available.</Text>}
             renderItem={({ item: gym }) => {

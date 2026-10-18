@@ -1,7 +1,7 @@
-import type { HealthProvider } from "./contract";
+import type { HealthProvider } from './contract';
 
 function isNodeEnvironment(): boolean {
-  return typeof process !== "undefined" && Boolean(process.versions?.node);
+  return typeof process !== 'undefined' && Boolean(process.versions?.node);
 }
 
 export async function getPlatformHealthProvider(): Promise<HealthProvider | null> {
@@ -9,15 +9,15 @@ export async function getPlatformHealthProvider(): Promise<HealthProvider | null
     return null;
   }
 
-  const { Platform } = await import("react-native");
+  const { Platform } = await import('react-native');
 
-  if (Platform.OS === "ios") {
-    const { createHealthKitProvider } = await import("./healthkit");
+  if (Platform.OS === 'ios') {
+    const { createHealthKitProvider } = await import('./healthkit');
     return createHealthKitProvider();
   }
 
-  if (Platform.OS === "android") {
-    const { createHealthConnectProvider } = await import("./health-connect");
+  if (Platform.OS === 'android') {
+    const { createHealthConnectProvider } = await import('./health-connect');
     return createHealthConnectProvider();
   }
 

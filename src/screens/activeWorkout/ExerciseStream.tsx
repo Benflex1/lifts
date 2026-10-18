@@ -74,7 +74,7 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
       scrollEventThrottle={16}
       scrollEnabled={true}
     >
-      {exercises.map((activeEx) => {
+      {exercises.map(activeEx => {
         const ssMeta = supersetMetaMap.get(activeEx.id);
 
         return (
@@ -145,7 +145,9 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
             <Dumbbell size={26} color={colors.primary} />
           </View>
           <Text style={styles.emptyWorkoutTitle}>Let's get moving</Text>
-          <Text style={styles.emptyWorkoutText}>Add your first exercise to start logging sets.</Text>
+          <Text style={styles.emptyWorkoutText}>
+            Add your first exercise to start logging sets.
+          </Text>
         </View>
       )}
 
@@ -158,10 +160,7 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
         onPress={onAddExercise}
         accessibilityRole="button"
       >
-        <Plus
-          size={20}
-          color={exercises.length === 0 ? colors.onPrimary : colors.primaryLight}
-        />
+        <Plus size={20} color={exercises.length === 0 ? colors.onPrimary : colors.primaryLight} />
         <Text
           style={[
             styles.addExerciseMainBtnText,

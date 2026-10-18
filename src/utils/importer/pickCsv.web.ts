@@ -43,7 +43,7 @@ export async function pickCsvFile(): Promise<{ name: string; content: string } |
           }
         }, 500);
       },
-      { once: true }
+      { once: true },
     );
 
     input.click();

@@ -1,12 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -71,6 +64,8 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
+    // Animation handles are refs; restarting the toast only on a new event is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event]);
 
   const handleDismiss = () => {

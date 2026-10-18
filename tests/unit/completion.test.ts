@@ -23,7 +23,7 @@ describe('completion update use case', () => {
   it('persists the edit and resolves with the updated workout', async () => {
     const saved: Workout[] = [];
 
-    const result = await saveCompletedWorkoutEdit(workout, async (candidate) => {
+    const result = await saveCompletedWorkoutEdit(workout, async candidate => {
       saved.push(candidate);
     });
 

@@ -1,28 +1,26 @@
-import type { Store } from "../database/contract";
-import type { Workout } from "../types";
-import type { HealthProvider } from "./contract";
-import type { HealthSyncRecord } from "./contract";
-import { syncWorkoutWithProvider, retryHealthSyncs } from "./sync";
+import type { Store } from '../database/contract';
+import type { Workout } from '../types';
+import type { HealthProvider } from './contract';
+import type { HealthSyncRecord } from './contract';
+import { syncWorkoutWithProvider, retryHealthSyncs } from './sync';
 
 export async function getPlatformHealthProvider(): Promise<HealthProvider | null> {
-  if (typeof document !== "undefined") {
-    const { getPlatformHealthProvider: getWebProvider } =
-      await import("./provider.web");
+  if (typeof document !== 'undefined') {
+    const { getPlatformHealthProvider: getWebProvider } = await import('./provider.web');
     return getWebProvider();
   }
 
-  const { getPlatformHealthProvider: getNativeProvider } =
-    await import("./provider.native");
+  const { getPlatformHealthProvider: getNativeProvider } = await import('./provider.native');
   return getNativeProvider();
 }
 
 async function getHealthStore(): Promise<Store> {
-  if (typeof document !== "undefined") {
-    const { getStore } = await import("../database/db.web");
+  if (typeof document !== 'undefined') {
+    const { getStore } = await import('../database/db.web');
     return getStore();
   }
 
-  const { getStore } = await import("../database/db.native");
+  const { getStore } = await import('../database/db.native');
   return getStore();
 }
 
@@ -62,7 +60,7 @@ export function enqueueCompletedWorkoutSync(
   sync: (workout: Workout) => Promise<unknown> = syncCompletedWorkout,
 ): void {
   if (!enabled) return;
-  void sync(workout).catch((error) => {
-    console.error("Unable to enqueue health workout sync", error);
+  void sync(workout).catch(error => {
+    console.error('Unable to enqueue health workout sync', error);
   });
 }

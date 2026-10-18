@@ -596,10 +596,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-01 — No lint or formatting tooling
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No ESLint, Prettier, Biome, EditorConfig, husky, or lint-staged configuration exists. `package.json` has no `lint` script. Style is enforced only by prose in `CONTRIBUTING.md`.
 - **Impact:** Hook dependency mistakes and inconsistent formatting reach review. Contributors must infer style from surrounding code.
 - **Required change:** Add ESLint with `react-hooks`, `@typescript-eslint`, and an RN-compatible accessibility subset; add Prettier or Biome; add `lint` and `format:check` scripts and a CI job. Add a pre-commit hook only if it does not slow the core loop.
+- **Implementation (2026-10-18):** `eslint.config.mjs` (flat config) applies `@eslint/js`, the type-unaware `typescript-eslint` recommended set, and `react-hooks` with `rules-of-hooks` and `exhaustive-deps` as errors. `@typescript-eslint/no-explicit-any` is a warning pending `ARCH-11`; tests relax only host-stub-specific rules. The first full run surfaced 236 problems: 49 unused imports/variables, 14 hook-dependency gaps, a dead branch in `resolveInitialAccordionState` (`src/workout/gym-session.ts`, removed as unreachable), a missing rethrow cause in `src/utils/backup.ts`, and stale `require` suppressions replaced with reasons. Real hook fixes landed for `ExercisePickerModal` (memoized loader), `ProgressionCurveView` (memoized accessor), and the logger keyboard effect; the remaining deliberate dependency narrowings carry line-scoped suppressions with rationale. Prettier (single quotes, 100 columns, `arrowParens: avoid`, `trailingComma: all`) baselined the repository; the generated `src/database/defaultExercises.json` catalog is ignored. `npm run lint`, `npm run lint:fix`, `npm run format`, and `npm run format:check` exist, and CI runs lint and the format check on every push (branch filter broadened to `**`) and pull request. No pre-commit hook was added: CI enforces the gates without slowing the core loop. `eslint-plugin-react-native-a11y` was evaluated for the accessibility subset but does not support ESLint 9+; the required-label primitive and scoped import restriction in `A11Y-05` cover that gap. Verification: `npm run lint` exits 0 (0 errors, 124 `any` warnings tracked by `ARCH-11`), `npm run format:check` is clean, and both typechecks plus the 578 + 173 test suites pass on the formatted tree.
 - **Done when:** CI fails on lint errors and formatting drift.
 
 ### DX-02 — No component or UI tests
@@ -804,7 +805,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 ### Phase 3 — Quality gates and accessibility (target: ongoing, start immediately)
 
-- [ ] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
+- [x] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
 - [ ] `DX-02` Add React Native Testing Library and critical-flow tests.
 - [ ] `DX-03` Add coverage reporting and a threshold.
 - [ ] `DX-04` Add one end-to-end smoke journey.

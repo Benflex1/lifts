@@ -47,7 +47,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const persistedHealthSync = parseHealthSyncEnabled(storedHealthSync, Platform.OS);
         setHealthSyncEnabledState(persistedHealthSync);
         if (persistedHealthSync) {
-          void retryPendingHealthSyncs().catch((error) => {
+          void retryPendingHealthSyncs().catch(error => {
             console.error('Unable to retry pending health syncs', error);
           });
         }
@@ -59,48 +59,57 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     })();
   }, []);
 
-  const setUnit = useCallback(async (u: WeightUnit) => {
-    const prev = unit;
-    setUnitState(u);
-    try {
-      await setSetting('unit', u);
-    } catch (err: any) {
-      setUnitState(prev);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save weight unit setting.',
-      });
-      throw err;
-    }
-  }, [unit, notify]);
+  const setUnit = useCallback(
+    async (u: WeightUnit) => {
+      const prev = unit;
+      setUnitState(u);
+      try {
+        await setSetting('unit', u);
+      } catch (err: any) {
+        setUnitState(prev);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save weight unit setting.',
+        });
+        throw err;
+      }
+    },
+    [unit, notify],
+  );
 
-  const setGymTrackingEnabled = useCallback(async (enabled: boolean) => {
-    const previous = gymTrackingEnabled;
-    setGymTrackingEnabledState(enabled);
-    try {
-      await setSetting('gym_tracking_enabled', enabled ? 'true' : 'false');
-    } catch (err: any) {
-      setGymTrackingEnabledState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save gym tracking setting.',
-      });
-      throw err;
-    }
-  }, [gymTrackingEnabled, notify]);
+  const setGymTrackingEnabled = useCallback(
+    async (enabled: boolean) => {
+      const previous = gymTrackingEnabled;
+      setGymTrackingEnabledState(enabled);
+      try {
+        await setSetting('gym_tracking_enabled', enabled ? 'true' : 'false');
+      } catch (err: any) {
+        setGymTrackingEnabledState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save gym tracking setting.',
+        });
+        throw err;
+      }
+    },
+    [gymTrackingEnabled, notify],
+  );
 
-  const setHealthSyncEnabled = useCallback(async (enabled: boolean) => {
-    await updateHealthSyncSetting(enabled, healthSyncEnabled, {
-      loadProvider: getPlatformHealthProvider,
-      persist: (value) => setSetting('health_sync_enabled', value ? 'true' : 'false'),
-      setState: setHealthSyncEnabledState,
-      notify,
-      retryPendingHealthSyncs,
-      logRetryFailure: (error) => {
-        console.error('Unable to retry pending health syncs', error);
-      },
-    });
-  }, [healthSyncEnabled, notify]);
+  const setHealthSyncEnabled = useCallback(
+    async (enabled: boolean) => {
+      await updateHealthSyncSetting(enabled, healthSyncEnabled, {
+        loadProvider: getPlatformHealthProvider,
+        persist: value => setSetting('health_sync_enabled', value ? 'true' : 'false'),
+        setState: setHealthSyncEnabledState,
+        notify,
+        retryPendingHealthSyncs,
+        logRetryFailure: error => {
+          console.error('Unable to retry pending health syncs', error);
+        },
+      });
+    },
+    [healthSyncEnabled, notify],
+  );
 
   return (
     <SettingsContext.Provider

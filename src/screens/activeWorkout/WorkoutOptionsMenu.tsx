@@ -1,6 +1,15 @@
 import React from 'react';
 import { Modal, Text, TouchableOpacity, View } from 'react-native';
-import { ArrowUpDown, ChevronDown, ChevronUp, Clock, Gauge, MapPin, Trash2, X } from 'lucide-react-native';
+import {
+  ArrowUpDown,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Gauge,
+  MapPin,
+  Trash2,
+  X,
+} from 'lucide-react-native';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 
@@ -38,26 +47,14 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
   onDiscard,
 }) => {
   return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        style={styles.modalBackdrop}
-        activeOpacity={1}
-        onPress={onClose}
-      >
+    <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose}>
         <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle} numberOfLines={1}>
               {workoutName}
             </Text>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.modalCloseBtn}
-            >
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -106,10 +103,7 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
             <Text style={styles.menuItemText}>Adjust Workout Time</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onToggleRpeColumn}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onToggleRpeColumn}>
             <Gauge size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>
               {showRpeColumn ? 'Hide RPE Column' : 'Show RPE Column'}

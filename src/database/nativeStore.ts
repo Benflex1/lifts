@@ -15,7 +15,11 @@ import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../he
 import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
-import { BUNDLED_EXERCISE_CATALOG_VERSION, getDefaultExercises, buildDefaultRoutines } from './seedData';
+import {
+  BUNDLED_EXERCISE_CATALOG_VERSION,
+  getDefaultExercises,
+  buildDefaultRoutines,
+} from './seedData';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 import {
@@ -25,7 +29,10 @@ import {
   validateWorkoutGymId,
 } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
-import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
+import {
+  CompletedExerciseOccurrence,
+  resolvePreviousSetsForExercise,
+} from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
 import {
   canonicalizeSnapshotGyms,
@@ -52,13 +59,27 @@ function mapExerciseRow(r: any): Exercise {
     primaryMuscles: JSON.parse(r.primary_muscles || '[]'),
     secondaryMuscles: JSON.parse(r.secondary_muscles || '[]'),
     instructions: JSON.parse(r.instructions || '[]'),
-    ...(r.instruction_url === null || r.instruction_url === undefined ? {} : { instructionUrl: r.instruction_url }),
-    ...(r.instruction_url_type === null || r.instruction_url_type === undefined ? {} : { instructionUrlType: r.instruction_url_type }),
+    ...(r.instruction_url === null || r.instruction_url === undefined
+      ? {}
+      : { instructionUrl: r.instruction_url }),
+    ...(r.instruction_url_type === null || r.instruction_url_type === undefined
+      ? {}
+      : { instructionUrlType: r.instruction_url_type }),
     isCustom: Boolean(r.is_custom),
   });
 }
 
-function mapJoinedExerciseRow(r: any, aliases: { primary: string; secondary: string; instructions: string; url: string; urlType: string; custom: string }): Exercise {
+function mapJoinedExerciseRow(
+  r: any,
+  aliases: {
+    primary: string;
+    secondary: string;
+    instructions: string;
+    url: string;
+    urlType: string;
+    custom: string;
+  },
+): Exercise {
   return normalizeExerciseRecord({
     id: r.exercise_id,
     name: r.ex_name,
@@ -67,8 +88,12 @@ function mapJoinedExerciseRow(r: any, aliases: { primary: string; secondary: str
     primaryMuscles: JSON.parse(r[aliases.primary] || '[]'),
     secondaryMuscles: JSON.parse(r[aliases.secondary] || '[]'),
     instructions: JSON.parse(r[aliases.instructions] || '[]'),
-    ...(r[aliases.url] === null || r[aliases.url] === undefined ? {} : { instructionUrl: r[aliases.url] }),
-    ...(r[aliases.urlType] === null || r[aliases.urlType] === undefined ? {} : { instructionUrlType: r[aliases.urlType] }),
+    ...(r[aliases.url] === null || r[aliases.url] === undefined
+      ? {}
+      : { instructionUrl: r[aliases.url] }),
+    ...(r[aliases.urlType] === null || r[aliases.urlType] === undefined
+      ? {}
+      : { instructionUrlType: r[aliases.urlType] }),
     isCustom: Boolean(r[aliases.custom]),
   });
 }
@@ -87,12 +112,22 @@ function mapSetRow(s: any): WorkoutSet {
 }
 
 function mapGymRow(r: any): Gym {
-  return { id: r.id, name: r.name, isDefault: Boolean(r.is_default), color: r.color, createdAt: r.created_at };
+  return {
+    id: r.id,
+    name: r.name,
+    isDefault: Boolean(r.is_default),
+    color: r.color,
+    createdAt: r.created_at,
+  };
 }
 
 function mapScopeRow(r: any): ExerciseGymScope {
   const linkedGymIds = r.linked_gym_ids ? JSON.parse(r.linked_gym_ids) : undefined;
-  return { exerciseId: r.exercise_id, scopeType: r.scope_type, ...(linkedGymIds ? { linkedGymIds } : {}) };
+  return {
+    exerciseId: r.exercise_id,
+    scopeType: r.scope_type,
+    ...(linkedGymIds ? { linkedGymIds } : {}),
+  };
 }
 
 function mapHealthSyncRow(r: any): HealthSyncRecord {
@@ -119,7 +154,6 @@ function normalizeDraftPayload(data: string): WorkoutDraft | null {
   }
 }
 
-
 export function createNativeStore(driver: SqliteDriver): Store {
   const writeQueue = createWriteQueue();
   let cachedExercises: Exercise[] | null = null;
@@ -130,7 +164,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     // Seed default exercises if not already seeded
     const exSeeded = await driver.getFirstAsync<{ value: string }>(
       'SELECT value FROM app_meta WHERE key = ?',
-      'exercises_seeded'
+      'exercises_seeded',
     );
 
     if (!exSeeded) {
@@ -140,7 +174,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     // Seed default routines if not already seeded
     const rtSeeded = await driver.getFirstAsync<{ value: string }>(
       'SELECT value FROM app_meta WHERE key = ?',
-      'routines_seeded'
+      'routines_seeded',
     );
 
     if (!rtSeeded) {
@@ -151,7 +185,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function getGyms(): Promise<Gym[]> {
-    return (await driver.getAllAsync<any>('SELECT * FROM gyms ORDER BY is_default DESC, name ASC')).map(mapGymRow);
+    return (
+      await driver.getAllAsync<any>('SELECT * FROM gyms ORDER BY is_default DESC, name ASC')
+    ).map(mapGymRow);
   }
 
   async function getDefaultGym(): Promise<Gym> {
@@ -164,8 +200,20 @@ export function createNativeStore(driver: SqliteDriver): Store {
     const validName = validateGymName(name);
     const validColor = validateGymColor(color);
     return writeQueue(async () => {
-      const gym: Gym = { id: createScopedId('gym'), name: validName, isDefault: false, color: validColor, createdAt: new Date().toISOString() };
-      await driver.runAsync('INSERT INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)', gym.id, gym.name, gym.color, gym.createdAt);
+      const gym: Gym = {
+        id: createScopedId('gym'),
+        name: validName,
+        isDefault: false,
+        color: validColor,
+        createdAt: new Date().toISOString(),
+      };
+      await driver.runAsync(
+        'INSERT INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)',
+        gym.id,
+        gym.name,
+        gym.color,
+        gym.createdAt,
+      );
       return gym;
     });
   }
@@ -176,79 +224,124 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return writeQueue(async () => {
       const current = await driver.getFirstAsync<any>('SELECT * FROM gyms WHERE id = ?', id);
       if (!current) throw new Error(`unknown gym: ${id}`);
-      await driver.runAsync('UPDATE gyms SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ?', name ?? null, color ?? null, id);
+      await driver.runAsync(
+        'UPDATE gyms SET name = COALESCE(?, name), color = COALESCE(?, color) WHERE id = ?',
+        name ?? null,
+        color ?? null,
+        id,
+      );
       return mapGymRow(await driver.getFirstAsync<any>('SELECT * FROM gyms WHERE id = ?', id));
     });
   }
 
   async function setDefaultGym(id: string): Promise<void> {
-    return writeQueue(() => driver.withTransactionAsync(async () => {
-      if (!await driver.getFirstAsync<any>('SELECT id FROM gyms WHERE id = ?', id)) throw new Error(`unknown gym: ${id}`);
-      await driver.runAsync('UPDATE gyms SET is_default = 0');
-      await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', id);
-    }));
+    return writeQueue(() =>
+      driver.withTransactionAsync(async () => {
+        if (!(await driver.getFirstAsync<any>('SELECT id FROM gyms WHERE id = ?', id)))
+          throw new Error(`unknown gym: ${id}`);
+        await driver.runAsync('UPDATE gyms SET is_default = 0');
+        await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', id);
+      }),
+    );
   }
 
-  async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> {
-    return writeQueue(() => driver.withTransactionAsync(async () => {
-      const gyms = await getGyms();
-      const drafts = await getWorkoutDrafts();
-      const scopes = await getExerciseGymScopes();
-      const inProgressRows = await driver.getAllAsync<{ id: string }>(
-        'SELECT id FROM workouts WHERE gym_id = ? AND in_progress = 1',
-        id,
-      );
-      const plan = planGymDeletion({
-        gymId: id,
-        replacementGymId,
-        gyms,
-        activeWorkoutGymId,
-        drafts,
-        scopes,
-        inProgressWorkoutIds: inProgressRows.map((row) => row.id),
-      });
+  async function deleteGym(
+    id: string,
+    replacementGymId: string,
+    activeWorkoutGymId?: string | null,
+  ): Promise<void> {
+    return writeQueue(() =>
+      driver.withTransactionAsync(async () => {
+        const gyms = await getGyms();
+        const drafts = await getWorkoutDrafts();
+        const scopes = await getExerciseGymScopes();
+        const inProgressRows = await driver.getAllAsync<{ id: string }>(
+          'SELECT id FROM workouts WHERE gym_id = ? AND in_progress = 1',
+          id,
+        );
+        const plan = planGymDeletion({
+          gymId: id,
+          replacementGymId,
+          gyms,
+          activeWorkoutGymId,
+          drafts,
+          scopes,
+          inProgressWorkoutIds: inProgressRows.map(row => row.id),
+        });
 
-      await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id = ?', replacementGymId, id);
-      for (const { id: draftId, draft } of plan.reassignDrafts) {
-        await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(draft), draftId);
-      }
-      for (const { exerciseId, scope } of plan.scopeWrites) {
-        if (scope) {
+        await driver.runAsync(
+          'UPDATE workouts SET gym_id = ? WHERE gym_id = ?',
+          replacementGymId,
+          id,
+        );
+        for (const { id: draftId, draft } of plan.reassignDrafts) {
           await driver.runAsync(
-            'UPDATE exercise_gym_scopes SET scope_type = ?, linked_gym_ids = ? WHERE exercise_id = ?',
-            scope.scopeType,
-            scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null,
-            exerciseId,
+            'UPDATE workout_drafts SET data = ? WHERE id = ?',
+            JSON.stringify(draft),
+            draftId,
           );
-        } else {
-          await driver.runAsync('DELETE FROM exercise_gym_scopes WHERE exercise_id = ?', exerciseId);
         }
-      }
-      if (plan.makeDefault) {
-        await driver.runAsync('UPDATE gyms SET is_default = 0');
-        await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', replacementGymId);
-      }
-      await driver.runAsync('DELETE FROM gyms WHERE id = ?', id);
-    }));
+        for (const { exerciseId, scope } of plan.scopeWrites) {
+          if (scope) {
+            await driver.runAsync(
+              'UPDATE exercise_gym_scopes SET scope_type = ?, linked_gym_ids = ? WHERE exercise_id = ?',
+              scope.scopeType,
+              scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null,
+              exerciseId,
+            );
+          } else {
+            await driver.runAsync(
+              'DELETE FROM exercise_gym_scopes WHERE exercise_id = ?',
+              exerciseId,
+            );
+          }
+        }
+        if (plan.makeDefault) {
+          await driver.runAsync('UPDATE gyms SET is_default = 0');
+          await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', replacementGymId);
+        }
+        await driver.runAsync('DELETE FROM gyms WHERE id = ?', id);
+      }),
+    );
   }
 
   async function getExerciseGymScopes(): Promise<ExerciseGymScope[]> {
-    return (await driver.getAllAsync<any>('SELECT * FROM exercise_gym_scopes ORDER BY exercise_id')).map(mapScopeRow);
+    return (
+      await driver.getAllAsync<any>('SELECT * FROM exercise_gym_scopes ORDER BY exercise_id')
+    ).map(mapScopeRow);
   }
   async function getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null> {
-    const row = await driver.getFirstAsync<any>('SELECT * FROM exercise_gym_scopes WHERE exercise_id = ?', exerciseId);
+    const row = await driver.getFirstAsync<any>(
+      'SELECT * FROM exercise_gym_scopes WHERE exercise_id = ?',
+      exerciseId,
+    );
     return row ? mapScopeRow(row) : null;
   }
   async function saveExerciseGymScope(scope: ExerciseGymScope): Promise<void> {
-    return writeQueue(() => driver.withTransactionAsync(async () => {
-      if (!await driver.getFirstAsync<any>('SELECT id FROM exercises WHERE id = ?', scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
-      const gyms = new Set((await getGyms()).map(gym => gym.id));
-      validateExerciseGymScope(scope, gyms);
-      await driver.runAsync('INSERT OR REPLACE INTO exercise_gym_scopes (exercise_id, scope_type, linked_gym_ids) VALUES (?, ?, ?)', scope.exerciseId, scope.scopeType, scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null);
-    }));
+    return writeQueue(() =>
+      driver.withTransactionAsync(async () => {
+        if (
+          !(await driver.getFirstAsync<any>(
+            'SELECT id FROM exercises WHERE id = ?',
+            scope.exerciseId,
+          ))
+        )
+          throw new Error(`unknown exercise: ${scope.exerciseId}`);
+        const gyms = new Set((await getGyms()).map(gym => gym.id));
+        validateExerciseGymScope(scope, gyms);
+        await driver.runAsync(
+          'INSERT OR REPLACE INTO exercise_gym_scopes (exercise_id, scope_type, linked_gym_ids) VALUES (?, ?, ?)',
+          scope.exerciseId,
+          scope.scopeType,
+          scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null,
+        );
+      }),
+    );
   }
   async function deleteExerciseGymScope(exerciseId: string): Promise<void> {
-    return writeQueue(async () => { await driver.runAsync('DELETE FROM exercise_gym_scopes WHERE exercise_id = ?', exerciseId); });
+    return writeQueue(async () => {
+      await driver.runAsync('DELETE FROM exercise_gym_scopes WHERE exercise_id = ?', exerciseId);
+    });
   }
 
   async function seedDefaultExercises(): Promise<void> {
@@ -273,7 +366,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       await driver.runAsync(
         'INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)',
         'exercises_seeded',
-        '1'
+        '1',
       );
     });
   }
@@ -287,54 +380,56 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
     // Only now is the bundled catalog parsed (PERF-06).
     const exercises = getDefaultExercises();
-    await writeQueue(() => driver.withTransactionAsync(async () => {
-      for (const ex of exercises) {
-        const existing = await driver.getFirstAsync<{ is_custom: number }>(
-          'SELECT is_custom FROM exercises WHERE id = ?',
-          ex.id,
-        );
-        if (existing?.is_custom) continue;
+    await writeQueue(() =>
+      driver.withTransactionAsync(async () => {
+        for (const ex of exercises) {
+          const existing = await driver.getFirstAsync<{ is_custom: number }>(
+            'SELECT is_custom FROM exercises WHERE id = ?',
+            ex.id,
+          );
+          if (existing?.is_custom) continue;
 
-        if (existing) {
-          await driver.runAsync(
-            `UPDATE exercises
+          if (existing) {
+            await driver.runAsync(
+              `UPDATE exercises
              SET name = ?, category = ?, equipment = ?, primary_muscles = ?, secondary_muscles = ?,
                  instructions = ?, instruction_url = ?, instruction_url_type = ?, is_custom = 0
              WHERE id = ? AND is_custom = 0`,
-            ex.name,
-            ex.category,
-            ex.equipment,
-            JSON.stringify(ex.primaryMuscles),
-            JSON.stringify(ex.secondaryMuscles || []),
-            JSON.stringify(ex.instructions || []),
-            ex.instructionUrl || null,
-            ex.instructionUrlType || null,
-            ex.id,
-          );
-        } else {
-          await driver.runAsync(
-            `INSERT INTO exercises
+              ex.name,
+              ex.category,
+              ex.equipment,
+              JSON.stringify(ex.primaryMuscles),
+              JSON.stringify(ex.secondaryMuscles || []),
+              JSON.stringify(ex.instructions || []),
+              ex.instructionUrl || null,
+              ex.instructionUrlType || null,
+              ex.id,
+            );
+          } else {
+            await driver.runAsync(
+              `INSERT INTO exercises
                (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, instruction_url, instruction_url_type, is_custom)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-            ex.id,
-            ex.name,
-            ex.category,
-            ex.equipment,
-            JSON.stringify(ex.primaryMuscles),
-            JSON.stringify(ex.secondaryMuscles || []),
-            JSON.stringify(ex.instructions || []),
-            ex.instructionUrl || null,
-            ex.instructionUrlType || null,
-          );
+              ex.id,
+              ex.name,
+              ex.category,
+              ex.equipment,
+              JSON.stringify(ex.primaryMuscles),
+              JSON.stringify(ex.secondaryMuscles || []),
+              JSON.stringify(ex.instructions || []),
+              ex.instructionUrl || null,
+              ex.instructionUrlType || null,
+            );
+          }
         }
-      }
 
-      await driver.runAsync(
-        'INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)',
-        'exercise_catalog_version',
-        String(BUNDLED_EXERCISE_CATALOG_VERSION),
-      );
-    }));
+        await driver.runAsync(
+          'INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)',
+          'exercise_catalog_version',
+          String(BUNDLED_EXERCISE_CATALOG_VERSION),
+        );
+      }),
+    );
     cachedExercises = null;
   }
 
@@ -349,7 +444,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           r.name,
           r.folderName || null,
           r.notes || null,
-          r.createdAt || new Date().toISOString()
+          r.createdAt || new Date().toISOString(),
         );
 
         let order = 0;
@@ -364,7 +459,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             re.targetSets,
             re.targetReps,
             re.restTimerSeconds,
-            re.supersetId || null
+            re.supersetId || null,
           );
           order++;
         }
@@ -373,7 +468,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
       await driver.runAsync(
         'INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?)',
         'routines_seeded',
-        '1'
+        '1',
       );
     });
   }
@@ -385,7 +480,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return cachedExercises;
   }
 
-  async function searchExercises(query: string = '', muscle: string = 'All', equipment: string = 'All'): Promise<Exercise[]> {
+  async function searchExercises(
+    query: string = '',
+    muscle: string = 'All',
+    equipment: string = 'All',
+  ): Promise<Exercise[]> {
     const all = await getAllExercises();
     return smartSearchExercises(all, query, muscle, equipment);
   }
@@ -400,7 +499,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return mapExerciseRow(r);
   }
 
-  async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
+  async function createCustomExercise(
+    exercise: Omit<Exercise, 'id' | 'isCustom'>,
+  ): Promise<Exercise> {
     return writeQueue(async () => {
       const newId = (exercise as any).id || createScopedId('custom');
       const customExercise = normalizeExerciseRecord({
@@ -440,13 +541,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
       instructions?: string[];
       instructionUrl?: string;
       instructionUrlType?: 'website' | 'youtube';
-    }
+    },
   ): Promise<Exercise> {
     return writeQueue(async () => {
-      const existing = await driver.getFirstAsync<any>(
-        'SELECT * FROM exercises WHERE id = ?',
-        id
-      );
+      const existing = await driver.getFirstAsync<any>('SELECT * FROM exercises WHERE id = ?', id);
       if (!existing) {
         throw new Error(`Exercise with id "${id}" not found`);
       }
@@ -460,22 +558,26 @@ export function createNativeStore(driver: SqliteDriver): Store {
       }
 
       const updatedCategory = updates.category !== undefined ? updates.category : existing.category;
-      const updatedEquipment = updates.equipment !== undefined ? updates.equipment.toLowerCase() : existing.equipment;
-      const updatedPrimary = updates.primaryMuscles !== undefined
-        ? updates.primaryMuscles
-        : JSON.parse(existing.primary_muscles || '[]');
-      const updatedSecondary = updates.secondaryMuscles !== undefined
-        ? updates.secondaryMuscles
-        : JSON.parse(existing.secondary_muscles || '[]');
-      const updatedInstructions = updates.instructions !== undefined
-        ? updates.instructions
-        : JSON.parse(existing.instructions || '[]');
-      const updatedInstructionUrl = updates.instructionUrl !== undefined
-        ? updates.instructionUrl
-        : existing.instruction_url;
-      const updatedInstructionUrlType = updates.instructionUrlType !== undefined
-        ? updates.instructionUrlType
-        : existing.instruction_url_type;
+      const updatedEquipment =
+        updates.equipment !== undefined ? updates.equipment.toLowerCase() : existing.equipment;
+      const updatedPrimary =
+        updates.primaryMuscles !== undefined
+          ? updates.primaryMuscles
+          : JSON.parse(existing.primary_muscles || '[]');
+      const updatedSecondary =
+        updates.secondaryMuscles !== undefined
+          ? updates.secondaryMuscles
+          : JSON.parse(existing.secondary_muscles || '[]');
+      const updatedInstructions =
+        updates.instructions !== undefined
+          ? updates.instructions
+          : JSON.parse(existing.instructions || '[]');
+      const updatedInstructionUrl =
+        updates.instructionUrl !== undefined ? updates.instructionUrl : existing.instruction_url;
+      const updatedInstructionUrlType =
+        updates.instructionUrlType !== undefined
+          ? updates.instructionUrlType
+          : existing.instruction_url_type;
 
       await driver.runAsync(
         `UPDATE exercises
@@ -490,7 +592,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         JSON.stringify(updatedInstructions),
         updatedInstructionUrl ?? null,
         updatedInstructionUrlType ?? null,
-        id
+        id,
       );
 
       const updatedExercise = normalizeExerciseRecord({
@@ -501,13 +603,19 @@ export function createNativeStore(driver: SqliteDriver): Store {
         primaryMuscles: updatedPrimary,
         secondaryMuscles: updatedSecondary,
         instructions: updatedInstructions,
-        ...(updatedInstructionUrl === null || updatedInstructionUrl === undefined ? {} : { instructionUrl: updatedInstructionUrl }),
-        ...(updatedInstructionUrlType === null || updatedInstructionUrlType === undefined ? {} : { instructionUrlType: updatedInstructionUrlType }),
+        ...(updatedInstructionUrl === null || updatedInstructionUrl === undefined
+          ? {}
+          : { instructionUrl: updatedInstructionUrl }),
+        ...(updatedInstructionUrlType === null || updatedInstructionUrlType === undefined
+          ? {}
+          : { instructionUrlType: updatedInstructionUrlType }),
         isCustom: true,
       });
 
       // Update any drafts that embed this exercise
-      const draftRows = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
+      const draftRows = await driver.getAllAsync<{ id: string; data: string }>(
+        'SELECT id, data FROM workout_drafts',
+      );
       for (const row of draftRows) {
         try {
           const draft: WorkoutDraft = JSON.parse(row.data);
@@ -521,7 +629,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
             }
           }
           if (modified) {
-            await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(draft), row.id);
+            await driver.runAsync(
+              'UPDATE workout_drafts SET data = ? WHERE id = ?',
+              JSON.stringify(draft),
+              row.id,
+            );
           }
         } catch {
           // ignore corrupted draft
@@ -534,7 +646,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function getRoutines(): Promise<Routine[]> {
-    const routines = await driver.getAllAsync<any>('SELECT * FROM routines ORDER BY created_at DESC');
+    const routines = await driver.getAllAsync<any>(
+      'SELECT * FROM routines ORDER BY created_at DESC',
+    );
     const result: Routine[] = [];
 
     for (const r of routines) {
@@ -547,7 +661,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
          JOIN exercises e ON re.exercise_id = e.id
          WHERE re.routine_id = ?
          ORDER BY re.order_index ASC`,
-        r.id
+        r.id,
       );
 
       result.push({
@@ -560,7 +674,14 @@ export function createNativeStore(driver: SqliteDriver): Store {
         exercises: reRows.map(row => ({
           id: row.id,
           exerciseId: row.exercise_id,
-          exercise: mapJoinedExerciseRow(row, { primary: 'ex_primary', secondary: 'ex_secondary', instructions: 'ex_inst', url: 'ex_instruction_url', urlType: 'ex_instruction_url_type', custom: 'ex_is_custom' }),
+          exercise: mapJoinedExerciseRow(row, {
+            primary: 'ex_primary',
+            secondary: 'ex_secondary',
+            instructions: 'ex_inst',
+            url: 'ex_instruction_url',
+            urlType: 'ex_instruction_url_type',
+            custom: 'ex_is_custom',
+          }),
           orderIndex: row.order_index,
           targetSets: row.target_sets,
           targetReps: row.target_reps,
@@ -586,7 +707,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
        JOIN exercises e ON re.exercise_id = e.id
        WHERE re.routine_id = ?
        ORDER BY re.order_index ASC`,
-      r.id
+      r.id,
     );
 
     return {
@@ -599,7 +720,14 @@ export function createNativeStore(driver: SqliteDriver): Store {
       exercises: reRows.map(row => ({
         id: row.id,
         exerciseId: row.exercise_id,
-        exercise: mapJoinedExerciseRow(row, { primary: 'ex_primary', secondary: 'ex_secondary', instructions: 'ex_inst', url: 'ex_instruction_url', urlType: 'ex_instruction_url_type', custom: 'ex_is_custom' }),
+        exercise: mapJoinedExerciseRow(row, {
+          primary: 'ex_primary',
+          secondary: 'ex_secondary',
+          instructions: 'ex_inst',
+          url: 'ex_instruction_url',
+          urlType: 'ex_instruction_url_type',
+          custom: 'ex_is_custom',
+        }),
         orderIndex: row.order_index,
         targetSets: row.target_sets,
         targetReps: row.target_reps,
@@ -612,9 +740,15 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function saveRoutine(
     name: string,
     folderName: string,
-    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number; supersetId?: string }[],
+    exercises: {
+      exerciseId: string;
+      targetSets: number;
+      targetReps: string;
+      restTimerSeconds: number;
+      supersetId?: string;
+    }[],
     notes?: string,
-    existingId?: string
+    existingId?: string,
   ): Promise<string> {
     return writeQueue(async () => {
       for (const item of exercises) {
@@ -633,7 +767,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             name,
             folderName || null,
             notes || null,
-            routineId
+            routineId,
           );
         } else {
           await driver.runAsync(
@@ -642,7 +776,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             name,
             folderName || null,
             notes || null,
-            new Date().toISOString()
+            new Date().toISOString(),
           );
         }
 
@@ -661,7 +795,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             item.targetSets,
             item.targetReps,
             item.restTimerSeconds,
-            item.supersetId || null
+            item.supersetId || null,
           );
           order++;
         }
@@ -679,12 +813,15 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function duplicateRoutine(routineId: string): Promise<string> {
     return writeQueue(async () => {
-      const original = await driver.getFirstAsync<any>('SELECT * FROM routines WHERE id = ?', routineId);
+      const original = await driver.getFirstAsync<any>(
+        'SELECT * FROM routines WHERE id = ?',
+        routineId,
+      );
       if (!original) throw new Error('Routine not found');
 
       const exRows = await driver.getAllAsync<any>(
         'SELECT * FROM routine_exercises WHERE routine_id = ? ORDER BY order_index ASC',
-        routineId
+        routineId,
       );
 
       const newId = createScopedId('routine');
@@ -695,7 +832,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           `${original.name} (Copy)`,
           original.folder_name,
           original.notes,
-          new Date().toISOString()
+          new Date().toISOString(),
         );
 
         const supersetMap = new Map<string, string>();
@@ -718,7 +855,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             e.target_sets,
             e.target_reps,
             e.rest_timer_seconds,
-            remappedSupersetId
+            remappedSupersetId,
           );
         }
       });
@@ -742,7 +879,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           workout.durationSeconds,
           workout.totalVolumeKg,
           workout.notes || null,
-          gymId
+          gymId,
         );
 
         await driver.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', workout.id);
@@ -751,7 +888,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
           await driver.runAsync(
             `UPDATE routines SET last_performed_at = ? WHERE id = ?`,
             workout.endTime || workout.startTime,
-            workout.routineId
+            workout.routineId,
           );
         }
 
@@ -768,7 +905,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             ex.notes || null,
             ex.restTimerSeconds ?? 0,
             ex.targetReps || null,
-            ex.supersetId || null
+            ex.supersetId || null,
           );
 
           for (const s of ex.sets) {
@@ -783,7 +920,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
                 s.weightKg,
                 s.reps,
                 s.rpe || null,
-                s.completedAt || new Date().toISOString()
+                s.completedAt || new Date().toISOString(),
               );
             }
           }
@@ -810,7 +947,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
        LEFT JOIN exercise_sets s ON we.id = s.workout_exercise_id AND s.is_completed = 1
        WHERE w.in_progress = 0
        GROUP BY w.id
-       ORDER BY w.start_time DESC, w.id DESC`
+       ORDER BY w.start_time DESC, w.id DESC`,
     );
 
     const namesByWorkout = new Map<string, string[]>();
@@ -824,7 +961,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
        INNER JOIN workouts w ON w.id = we.workout_id AND w.in_progress = 0
        INNER JOIN exercises e ON we.exercise_id = e.id
        GROUP BY we.workout_id, e.name
-       ORDER BY we.workout_id ASC, first_order ASC`
+       ORDER BY we.workout_id ASC, first_order ASC`,
     );
 
     for (const row of exerciseNameRows) {
@@ -852,11 +989,19 @@ export function createNativeStore(driver: SqliteDriver): Store {
   // SQLite caps bound parameters per statement; stay well below the lowest common limit.
   const MAX_SQL_PARAMS = 500;
 
-  async function selectInChunks<T>(sqlForPlaceholders: (placeholders: string) => string, ids: string[]): Promise<T[]> {
+  async function selectInChunks<T>(
+    sqlForPlaceholders: (placeholders: string) => string,
+    ids: string[],
+  ): Promise<T[]> {
     const rows: T[] = [];
     for (let i = 0; i < ids.length; i += MAX_SQL_PARAMS) {
       const chunk = ids.slice(i, i + MAX_SQL_PARAMS);
-      rows.push(...(await driver.getAllAsync<T>(sqlForPlaceholders(chunk.map(() => '?').join(', ')), ...chunk)));
+      rows.push(
+        ...(await driver.getAllAsync<T>(
+          sqlForPlaceholders(chunk.map(() => '?').join(', ')),
+          ...chunk,
+        )),
+      );
     }
     return rows;
   }
@@ -902,7 +1047,17 @@ export function createNativeStore(driver: SqliteDriver): Store {
         targetReps: we.target_reps || undefined,
         restTimerSeconds: we.rest_timer_seconds ?? 0,
         supersetId: we.superset_id || undefined,
-        exercise: mapJoinedExerciseRow({ ...we, exercise_id: we.exercise_id, ex_category: we.ex_cat, ex_equipment: we.ex_equip }, { primary: 'ex_pm', secondary: 'ex_sm', instructions: 'ex_inst', url: 'ex_instruction_url', urlType: 'ex_instruction_url_type', custom: 'ex_is_custom' }),
+        exercise: mapJoinedExerciseRow(
+          { ...we, exercise_id: we.exercise_id, ex_category: we.ex_cat, ex_equipment: we.ex_equip },
+          {
+            primary: 'ex_pm',
+            secondary: 'ex_sm',
+            instructions: 'ex_inst',
+            url: 'ex_instruction_url',
+            urlType: 'ex_instruction_url_type',
+            custom: 'ex_is_custom',
+          },
+        ),
         sets: setsByExercise.get(we.id) || [],
       };
       const list = exercisesByWorkout.get(we.workout_id);
@@ -925,7 +1080,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {
-    const w = await driver.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ? AND in_progress = 0', workoutId);
+    const w = await driver.getFirstAsync<any>(
+      'SELECT * FROM workouts WHERE id = ? AND in_progress = 0',
+      workoutId,
+    );
     if (!w) return null;
     const [workout] = await loadWorkoutDetails([w]);
     return workout;
@@ -937,7 +1095,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
     });
   }
 
-  async function getHealthSyncRecord(workoutId: string, provider: HealthProviderId): Promise<HealthSyncRecord | null> {
+  async function getHealthSyncRecord(
+    workoutId: string,
+    provider: HealthProviderId,
+  ): Promise<HealthSyncRecord | null> {
     const row = await driver.getFirstAsync<any>(
       'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records WHERE workout_id = ? AND provider = ?',
       workoutId,
@@ -947,14 +1108,15 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function getHealthSyncRecords(status?: HealthSyncStatus): Promise<HealthSyncRecord[]> {
-    const rows = status === undefined
-      ? await driver.getAllAsync<any>(
-        'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records ORDER BY attempted_at ASC, workout_id ASC, provider ASC'
-      )
-      : await driver.getAllAsync<any>(
-        'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records WHERE status = ? ORDER BY attempted_at ASC, workout_id ASC, provider ASC',
-        status,
-      );
+    const rows =
+      status === undefined
+        ? await driver.getAllAsync<any>(
+            'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records ORDER BY attempted_at ASC, workout_id ASC, provider ASC',
+          )
+        : await driver.getAllAsync<any>(
+            'SELECT workout_id, provider, payload_fingerprint, status, attempted_at, synced_at, last_error FROM health_sync_records WHERE status = ? ORDER BY attempted_at ASC, workout_id ASC, provider ASC',
+            status,
+          );
     return rows.map(mapHealthSyncRow);
   }
 
@@ -991,12 +1153,15 @@ export function createNativeStore(driver: SqliteDriver): Store {
       exerciseId,
     );
 
-    const byWorkout = new Map<string, {
-      startTime: string;
-      gymId: string;
-      gymName: string;
-      occurrences: Array<{ id: string; sets: Array<{ weightKg: number; reps: number }> }>;
-    }>();
+    const byWorkout = new Map<
+      string,
+      {
+        startTime: string;
+        gymId: string;
+        gymName: string;
+        occurrences: Array<{ id: string; sets: Array<{ weightKg: number; reps: number }> }>;
+      }
+    >();
     for (const row of rows) {
       const workoutId = row.workout_id as string;
       let workout = byWorkout.get(workoutId);
@@ -1014,18 +1179,23 @@ export function createNativeStore(driver: SqliteDriver): Store {
         occurrence = { id: row.occurrence_id, sets: [] };
         workout.occurrences.push(occurrence);
       }
-      if (row.weight_kg !== null && row.reps !== null) occurrence.sets.push({ weightKg: row.weight_kg, reps: row.reps });
+      if (row.weight_kg !== null && row.reps !== null)
+        occurrence.sets.push({ weightKg: row.weight_kg, reps: row.reps });
     }
 
     return Array.from(byWorkout.entries()).map(([workoutId, workout]) => {
       const requested = workout.occurrences[occurrenceIndex];
-      const selected = requested?.sets.length ? requested : workout.occurrences.find(occurrence => occurrence.sets.length);
+      const selected = requested?.sets.length
+        ? requested
+        : workout.occurrences.find(occurrence => occurrence.sets.length);
       return {
         workoutId,
         startTime: workout.startTime,
         gymId: workout.gymId,
         gymName: workout.gymName,
-        occurrenceIndex: requested?.sets.length ? occurrenceIndex : Math.max(0, workout.occurrences.indexOf(selected!)),
+        occurrenceIndex: requested?.sets.length
+          ? occurrenceIndex
+          : Math.max(0, workout.occurrences.indexOf(selected!)),
         sets: selected?.sets || [],
       };
     });
@@ -1049,7 +1219,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
    * read, instead of one join query per exercise. Results preserve the previous per-exercise
    * ordering (newest workout first, then exercise order, then set number).
    */
-  async function loadCompletedWorkoutsForExerciseIds(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
+  async function loadCompletedWorkoutsForExerciseIds(
+    exerciseIds: string[],
+  ): Promise<Record<string, Workout[]>> {
     const uniqueIds = Array.from(new Set(exerciseIds));
     const result: Record<string, Workout[]> = {};
     if (uniqueIds.length === 0) return result;
@@ -1145,11 +1317,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return result[exerciseId] || [];
   }
 
-  async function getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
+  async function getCompletedWorkoutsForExercises(
+    exerciseIds: string[],
+  ): Promise<Record<string, Workout[]>> {
     return loadCompletedWorkoutsForExerciseIds(exerciseIds);
   }
 
-  async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
+  async function getExerciseStats(
+    exerciseId: string,
+    currentGymId?: string,
+  ): Promise<DualExerciseStats> {
     const workouts = await loadCompletedWorkoutsForExercise(exerciseId);
     const scope = await getExerciseGymScope(exerciseId);
     const gymId = currentGymId || (await getDefaultGym()).id;
@@ -1158,7 +1335,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function reassignExerciseHistory(
     sourceExerciseId: string,
-    targetExerciseId: string
+    targetExerciseId: string,
   ): Promise<{ updatedWorkouts: number; updatedSets: number }> {
     if (!sourceExerciseId || !targetExerciseId || sourceExerciseId === targetExerciseId) {
       return { updatedWorkouts: 0, updatedSets: 0 };
@@ -1167,7 +1344,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return writeQueue(async () => {
       const targetRows = await driver.getAllAsync<{ id: string }>(
         'SELECT id FROM exercises WHERE id = ?',
-        targetExerciseId
+        targetExerciseId,
       );
       if (targetRows.length === 0) {
         throw new Error(`Target exercise ${targetExerciseId} does not exist.`);
@@ -1182,7 +1359,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
            FROM exercise_sets s
            JOIN workout_exercises we ON s.workout_exercise_id = we.id
            WHERE we.exercise_id = ?`,
-          sourceExerciseId
+          sourceExerciseId,
         );
         updatedSets = setRows[0]?.count || 0;
 
@@ -1190,20 +1367,20 @@ export function createNativeStore(driver: SqliteDriver): Store {
           `SELECT COUNT(DISTINCT workout_id) AS count
            FROM workout_exercises
            WHERE exercise_id = ?`,
-          sourceExerciseId
+          sourceExerciseId,
         );
         updatedWorkouts = workoutRows[0]?.count || 0;
 
         await driver.runAsync(
           'UPDATE workout_exercises SET exercise_id = ? WHERE exercise_id = ?',
           targetExerciseId,
-          sourceExerciseId
+          sourceExerciseId,
         );
 
         await driver.runAsync(
           'UPDATE routine_exercises SET exercise_id = ? WHERE exercise_id = ?',
           targetExerciseId,
-          sourceExerciseId
+          sourceExerciseId,
         );
       });
 
@@ -1228,14 +1405,14 @@ export function createNativeStore(driver: SqliteDriver): Store {
         normalizedDraft.savedAt,
         normalizedDraft.restTimer ? normalizedDraft.restTimer.endsAt : null,
         normalizedDraft.restTimer ? normalizedDraft.restTimer.totalSeconds : null,
-        JSON.stringify(normalizedDraft)
+        JSON.stringify(normalizedDraft),
       );
     });
   }
 
   async function getWorkoutDrafts(): Promise<WorkoutDraft[]> {
     const rows = await driver.getAllAsync<{ data: string }>(
-      'SELECT data FROM workout_drafts ORDER BY saved_at DESC'
+      'SELECT data FROM workout_drafts ORDER BY saved_at DESC',
     );
     const drafts: WorkoutDraft[] = [];
     for (const r of rows) {
@@ -1253,7 +1430,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     if (id) {
       const row = await driver.getFirstAsync<{ data: string }>(
         'SELECT data FROM workout_drafts WHERE id = ?',
-        id
+        id,
       );
       if (!row) return null;
       try {
@@ -1264,7 +1441,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
     }
 
     const row = await driver.getFirstAsync<{ data: string }>(
-      'SELECT data FROM workout_drafts ORDER BY saved_at DESC LIMIT 1'
+      'SELECT data FROM workout_drafts ORDER BY saved_at DESC LIMIT 1',
     );
     if (!row) return null;
     try {
@@ -1283,7 +1460,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function getSetting(key: string): Promise<string | null> {
     const row = await driver.getFirstAsync<{ value: string }>(
       'SELECT value FROM settings WHERE key = ?',
-      key
+      key,
     );
     return row?.value ?? null;
   }
@@ -1293,14 +1470,18 @@ export function createNativeStore(driver: SqliteDriver): Store {
       await driver.runAsync(
         'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
         key,
-        value
+        value,
       );
     });
   }
 
   async function renameFolder(oldName: string, newName: string): Promise<void> {
     return writeQueue(async () => {
-      await driver.runAsync('UPDATE routines SET folder_name = ? WHERE folder_name = ?', newName, oldName);
+      await driver.runAsync(
+        'UPDATE routines SET folder_name = ? WHERE folder_name = ?',
+        newName,
+        oldName,
+      );
     });
   }
 
@@ -1316,7 +1497,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
    */
   async function getDataRevision(): Promise<number> {
     const row = await driver.getFirstAsync<{ total_changes: number }>(
-      'SELECT total_changes() AS total_changes'
+      'SELECT total_changes() AS total_changes',
     );
     return row?.total_changes ?? 0;
   }
@@ -1324,7 +1505,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function readSnapshot(): Promise<DataSnapshot> {
     // Same order as getWorkoutHistory (newest first), loaded in bulk.
     const workoutRows = await driver.getAllAsync<any>(
-      'SELECT * FROM workouts WHERE in_progress = 0 ORDER BY start_time DESC, id DESC'
+      'SELECT * FROM workouts WHERE in_progress = 0 ORDER BY start_time DESC, id DESC',
     );
     const workouts = await loadWorkoutDetails(workoutRows);
 
@@ -1332,7 +1513,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
     const exercises = await getAllExercises();
     const drafts = await getWorkoutDrafts();
 
-    const settingRows = await driver.getAllAsync<{ key: string; value: string }>('SELECT key, value FROM settings');
+    const settingRows = await driver.getAllAsync<{ key: string; value: string }>(
+      'SELECT key, value FROM settings',
+    );
     const settings: Record<string, string> = {};
     for (const r of settingRows) {
       settings[r.key] = r.value;
@@ -1358,7 +1541,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
         for (const gym of plan.gymsToInsert) {
           await driver.runAsync(
             `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)`,
-            gym.id, gym.name, gym.color, gym.createdAt
+            gym.id,
+            gym.name,
+            gym.color,
+            gym.createdAt,
           );
         }
 
@@ -1382,14 +1568,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
             JSON.stringify(exercise.instructions),
             exercise.instructionUrl || null,
             exercise.instructionUrlType || null,
-            exercise.isCustom ? 1 : 0
+            exercise.isCustom ? 1 : 0,
           );
         }
 
         for (const scope of plan.scopesToInsert) {
           await driver.runAsync(
             'INSERT OR REPLACE INTO exercise_gym_scopes (exercise_id, scope_type, linked_gym_ids) VALUES (?, ?, ?)',
-            scope.exerciseId, scope.scopeType, scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null
+            scope.exerciseId,
+            scope.scopeType,
+            scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null,
           );
         }
 
@@ -1403,7 +1591,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             rt.folderName || null,
             rt.notes || null,
             rt.createdAt,
-            rt.lastPerformedAt || null
+            rt.lastPerformedAt || null,
           );
           await driver.runAsync('DELETE FROM routine_exercises WHERE routine_id = ?', rt.id);
           for (const re of rt.exercises) {
@@ -1417,7 +1605,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
               re.targetSets,
               re.targetReps,
               re.restTimerSeconds,
-              re.supersetId || null
+              re.supersetId || null,
             );
           }
         }
@@ -1435,7 +1623,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
             w.durationSeconds,
             w.totalVolumeKg,
             w.notes || null,
-            w.gymId || 'gym-default'
+            w.gymId || 'gym-default',
           );
           await driver.runAsync('DELETE FROM workout_exercises WHERE workout_id = ?', w.id);
           let ord = 0;
@@ -1451,7 +1639,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
               we.notes || null,
               we.restTimerSeconds ?? 0,
               we.targetReps || null,
-              we.supersetId || null
+              we.supersetId || null,
             );
             for (const s of we.sets) {
               await driver.runAsync(
@@ -1465,7 +1653,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
                 s.reps,
                 s.rpe || null,
                 s.isCompleted ? 1 : 0,
-                s.completedAt || null
+                s.completedAt || null,
               );
             }
             ord++;
@@ -1482,12 +1670,16 @@ export function createNativeStore(driver: SqliteDriver): Store {
             draft.savedAt,
             draft.restTimer ? draft.restTimer.endsAt : null,
             draft.restTimer ? draft.restTimer.totalSeconds : null,
-            JSON.stringify(draft)
+            JSON.stringify(draft),
           );
         }
 
         for (const { key, value } of plan.settingsToInsert) {
-          await driver.runAsync('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', key, value);
+          await driver.runAsync(
+            'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
+            key,
+            value,
+          );
         }
       });
       cachedExercises = null;

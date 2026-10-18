@@ -26,8 +26,12 @@ import { styles } from './activeWorkoutStyles';
  * ARCH-01: composition only. Screen state and handlers live in `useActiveWorkoutController`;
  * the header, exercise stream, option menus, and modals are the extracted children.
  */
-export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
-  const { activeWorkout, header, stream, overlays, modals } = useActiveWorkoutController({ onFinish });
+export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({
+  onFinish,
+}) => {
+  const { activeWorkout, header, stream, overlays, modals } = useActiveWorkoutController({
+    onFinish,
+  });
 
   if (!activeWorkout) {
     return null;
@@ -43,10 +47,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       <ExerciseStream {...stream} />
 
       {/* Floating Rest Timer Overlay */}
-      <RestTimerOverlay
-        nextUpText={overlays.nextUpCue}
-        bottomOffset={overlays.bottomOffset}
-      />
+      <RestTimerOverlay nextUpText={overlays.nextUpCue} bottomOffset={overlays.bottomOffset} />
 
       {/* Non-blocking Floating Superset Cue when timer is not active */}
       {!overlays.isRestTimerActive && overlays.nextUpCue && (

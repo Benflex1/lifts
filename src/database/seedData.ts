@@ -14,6 +14,7 @@ let bundledExerciseMap: Map<string, Exercise> | null = null;
  */
 export function getDefaultExercises(): Exercise[] {
   if (!defaultExercisesCache) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- PERF-06: the 758 KB catalog must not load at module scope
     const sourceExercises: Exercise[] = require('./defaultExercises.json');
     defaultExercisesCache = sourceExercises.map(exercise => {
       const instructionUrl = getMuscleWikiGuideUrl(exercise.id);
@@ -91,12 +92,7 @@ export const SEED_ROUTINE_DEFS: SeedRoutineDef[] = [
     name: 'Leg Day (Quads/Hamstrings/Calves)',
     folderName: 'PPL Split',
     notes: 'Complete lower body development.',
-    exerciseIds: [
-      'Barbell_Full_Squat',
-      'Leg_Press',
-      'Lying_Leg_Curls',
-      'Standing_Calf_Raises',
-    ],
+    exerciseIds: ['Barbell_Full_Squat', 'Leg_Press', 'Lying_Leg_Curls', 'Standing_Calf_Raises'],
     targetSets: 3,
     targetReps: '8-12',
     restTimerSeconds: 90,

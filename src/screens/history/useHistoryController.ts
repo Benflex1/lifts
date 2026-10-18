@@ -64,6 +64,9 @@ export function useHistoryController({ workoutUpdate = null }: { workoutUpdate?:
     if (!workoutUpdate) return;
 
     void updateWorkout(workoutUpdate);
+    // updateWorkout is recreated per render but only refreshes the cache; keying on the incoming
+    // workout avoids re-firing the effect on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workoutUpdate]);
 
   const filteredHistory = useMemo(
@@ -107,7 +110,10 @@ export function useHistoryController({ workoutUpdate = null }: { workoutUpdate?:
     try {
       const detail = await loadDetail(item.id);
       if (!detail || !detail.exercises || detail.exercises.length === 0) {
-        await notify({ title: 'Workout Unavailable', message: 'Could not load details for this workout.' });
+        await notify({
+          title: 'Workout Unavailable',
+          message: 'Could not load details for this workout.',
+        });
         return;
       }
 

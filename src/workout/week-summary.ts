@@ -38,7 +38,10 @@ export function startOfLocalWeek(date: Date): Date {
 }
 
 /** Summarizes the current Monday-to-Sunday week (local time) for the home screen. */
-export function buildWeekSnapshot(history: WorkoutHistorySummary[], now: Date = new Date()): WeekSnapshot {
+export function buildWeekSnapshot(
+  history: WorkoutHistorySummary[],
+  now: Date = new Date(),
+): WeekSnapshot {
   const weekStart = startOfLocalWeek(now);
   const todayKey = localDateKey(now);
   const trainedDays = new Set<string>();

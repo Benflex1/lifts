@@ -17,7 +17,8 @@ describe('readNativeFileAsString', () => {
   });
 
   it('falls back to fetch when FileSystem throws "Location ... isn\'t readable" on Android content:// URI', async () => {
-    const contentUri = 'content://com.android.externalstorage.documents/document/primary:Download/lyfta.csv';
+    const contentUri =
+      'content://com.android.externalstorage.documents/document/primary:Download/lyfta.csv';
 
     const mockFs = {
       readAsStringAsync: async () => {
@@ -31,7 +32,8 @@ describe('readNativeFileAsString', () => {
       return {
         ok: true,
         status: 200,
-        text: async () => 'Date,Workout Name,Exercise Name,Set Order,Weight,Reps\n"2024-06-10","Leg Day","Squat",1,100,5',
+        text: async () =>
+          'Date,Workout Name,Exercise Name,Set Order,Weight,Reps\n"2024-06-10","Leg Day","Squat",1,100,5',
       } as any;
     };
 
@@ -81,15 +83,12 @@ describe('readNativeFileAsString', () => {
       EncodingType: { UTF8: 'utf8' },
     };
 
-    await assert.rejects(
-      async () => {
-        await readNativeFileAsString('file:///large.csv', {
-          fileSystem: mockFs,
-          maxSizeBytes: 50,
-        });
-      },
-      /size limit/
-    );
+    await assert.rejects(async () => {
+      await readNativeFileAsString('file:///large.csv', {
+        fileSystem: mockFs,
+        maxSizeBytes: 50,
+      });
+    }, /size limit/);
   });
 
   it('throws descriptive error when all read strategies fail', async () => {
@@ -104,19 +103,16 @@ describe('readNativeFileAsString', () => {
       throw new Error('Network error');
     };
 
-    await assert.rejects(
-      async () => {
-        await readNativeFileAsString('test.csv', {
-          fileSystem: mockFs,
-          fetchFn: mockFetch,
-          fileConstructor: class {
-            async text() {
-              throw new Error('File api error');
-            }
-          } as any,
-        });
-      },
-      /Unable to read file/
-    );
+    await assert.rejects(async () => {
+      await readNativeFileAsString('test.csv', {
+        fileSystem: mockFs,
+        fetchFn: mockFetch,
+        fileConstructor: class {
+          async text() {
+            throw new Error('File api error');
+          }
+        } as any,
+      });
+    }, /Unable to read file/);
   });
 });

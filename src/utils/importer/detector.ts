@@ -7,7 +7,7 @@ import { DetectedTrackerFormat } from './types';
 export function normalizeHeader(header: string): string {
   return header
     .toLowerCase()
-    .replace(/[_\-]+/g, ' ')
+    .replace(/[_-]+/g, ' ')
     .replace(/[^a-z0-9\s()]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -24,11 +24,9 @@ export interface FormatDetectionResult {
  */
 export function detectTrackerFormat(headerRow: string[]): FormatDetectionResult {
   const normalized = headerRow.map(normalizeHeader);
-  const headerSet = new Set(normalized);
 
   // Helper check
-  const has = (keyword: string) =>
-    normalized.some(h => h === keyword || h.includes(keyword));
+  const has = (keyword: string) => normalized.some(h => h === keyword || h.includes(keyword));
 
   // 1. HEVY: Signature columns
   // Specifically: "exercise title", "set index", "weight kg" / "weight lbs", "superset id"
@@ -71,12 +69,12 @@ export function detectTrackerFormat(headerRow: string[]): FormatDetectionResult 
 
   // 5. GENERIC / FALLBACK:
   // Can we find columns for Exercise, Reps, Weight, Date?
-  const hasExercise = normalized.some(h =>
-    h.includes('exercise') || h.includes('movement') || h.includes('lift')
+  const hasExercise = normalized.some(
+    h => h.includes('exercise') || h.includes('movement') || h.includes('lift'),
   );
   const hasReps = normalized.some(h => h.includes('rep'));
-  const hasWeight = normalized.some(h =>
-    h.includes('weight') || h.includes('load') || h.includes('kg') || h.includes('lb')
+  const hasWeight = normalized.some(
+    h => h.includes('weight') || h.includes('load') || h.includes('kg') || h.includes('lb'),
   );
 
   if (hasExercise && hasReps && hasWeight) {

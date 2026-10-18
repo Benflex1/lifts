@@ -16,7 +16,7 @@ function getNotificationsModule(): NotificationsModule | null {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazily loaded so Node tests can stub expo-notifications
     notificationsModule = require('expo-notifications');
   } catch (error) {
     if ((globalThis as any).__DEV__) {
@@ -69,7 +69,7 @@ export async function initRestNotifications(): Promise<void> {
 
 export async function scheduleRestNotification(
   endsAtMs: number,
-  exerciseName?: string
+  exerciseName?: string,
 ): Promise<string | null> {
   const Notifications = getNotificationsModule();
   if (!Notifications) {

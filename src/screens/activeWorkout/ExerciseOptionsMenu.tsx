@@ -70,28 +70,18 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.modalBackdrop}
-        activeOpacity={1}
-        onPress={onClose}
-      >
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose}>
         <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle} numberOfLines={1}>
               {exercise?.exercise?.name}
             </Text>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.modalCloseBtn}
-            >
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onViewDetails}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onViewDetails}>
             <Info size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>View Exercise Details</Text>
           </TouchableOpacity>
@@ -110,7 +100,10 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
             disabled={moveDownDisabled}
             onPress={onMoveDown}
           >
-            <ArrowDown size={18} color={moveDownDisabled ? colors.textFaint : colors.textSecondary} />
+            <ArrowDown
+              size={18}
+              color={moveDownDisabled ? colors.textFaint : colors.textSecondary}
+            />
             <Text style={styles.menuItemText}>Move Down</Text>
           </TouchableOpacity>
 
@@ -124,50 +117,32 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
             <Text style={styles.menuItemText}>Reorder All Exercises</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onSwap}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onSwap}>
             <Repeat size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Swap Exercise</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onSetRestTimer}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onSetRestTimer}>
             <Timer size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Set Rest Timer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onOpenPlateCalculator}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onOpenPlateCalculator}>
             <Calculator size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Plate Calculator</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onQuickWarmup}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onQuickWarmup}>
             <Flame size={18} color="#F97316" />
             <Text style={styles.menuItemText}>Add Warm-up Set</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onWarmupCalculator}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onWarmupCalculator}>
             <Calculator size={18} color="#F97316" />
             <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onEditSuperset}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onEditSuperset}>
             <Layers size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>
               {exercise?.supersetId ? 'Edit Superset' : 'Create Superset'}
@@ -175,19 +150,13 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
           </TouchableOpacity>
 
           {exercise?.supersetId && (
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={onUngroupSuperset}
-            >
+            <TouchableOpacity style={styles.menuItem} onPress={onUngroupSuperset}>
               <Layers size={18} color={colors.danger} />
               <Text style={[styles.menuItemText, { color: colors.danger }]}>Ungroup Superset</Text>
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onEditNote}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={onEditNote}>
             <FileText size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Add / Edit Note</Text>
           </TouchableOpacity>

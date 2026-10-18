@@ -1,20 +1,10 @@
 import React from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Trash2, X, Clock, Dumbbell } from 'lucide-react-native';
 import { WorkoutDraft } from '../database/contract';
 import { formatDuration } from '../utils/calculator';
-import {
-  getPausedWorkoutModalSubtitle,
-  PAUSED_WORKOUT_MODAL_TITLE,
-} from '../workout/session-copy';
+import { getPausedWorkoutModalSubtitle, PAUSED_WORKOUT_MODAL_TITLE } from '../workout/session-copy';
 import { colors } from '../theme';
 
 interface DraftRecoveryModalProps {
@@ -55,9 +45,7 @@ export function DraftRecoveryModal({
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>{PAUSED_WORKOUT_MODAL_TITLE}</Text>
-              <Text style={styles.subtitle}>
-                {getPausedWorkoutModalSubtitle(drafts.length)}
-              </Text>
+              <Text style={styles.subtitle}>{getPausedWorkoutModalSubtitle(drafts.length)}</Text>
             </View>
             <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
               <X size={20} color={colors.textSecondary} />
@@ -66,22 +54,23 @@ export function DraftRecoveryModal({
 
           <FlatList
             data={drafts}
-            keyExtractor={(item) => item.workout.id}
+            keyExtractor={item => item.workout.id}
             contentContainerStyle={styles.list}
             renderItem={({ item }) => {
               const exerciseCount = item.workout.exercises?.length || 0;
-              const completedSetsCount = item.workout.exercises?.reduce(
-                (acc, ex) => acc + (ex.sets?.filter((s) => s.isCompleted).length || 0),
-                0
-              ) || 0;
+              const completedSetsCount =
+                item.workout.exercises?.reduce(
+                  (acc, ex) => acc + (ex.sets?.filter(s => s.isCompleted).length || 0),
+                  0,
+                ) || 0;
 
               return (
                 <View style={styles.card}>
                   <View style={styles.cardInfo}>
-                    <Text style={styles.workoutName}>{item.workout.name || 'Untitled Workout'}</Text>
-                    <Text style={styles.cardMeta}>
-                      Saved {formatDate(item.savedAt)}
+                    <Text style={styles.workoutName}>
+                      {item.workout.name || 'Untitled Workout'}
                     </Text>
+                    <Text style={styles.cardMeta}>Saved {formatDate(item.savedAt)}</Text>
                     <View style={styles.badgeRow}>
                       <View style={styles.badge}>
                         <Clock size={12} color={colors.textSecondary} />
@@ -92,7 +81,8 @@ export function DraftRecoveryModal({
                       <View style={styles.badge}>
                         <Dumbbell size={12} color={colors.textSecondary} />
                         <Text style={styles.badgeText}>
-                          {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} • {completedSetsCount} sets
+                          {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} •{' '}
+                          {completedSetsCount} sets
                         </Text>
                       </View>
                     </View>

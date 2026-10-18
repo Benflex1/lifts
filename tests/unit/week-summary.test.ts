@@ -59,7 +59,10 @@ describe('buildWeekSnapshot', () => {
   });
 
   it('includes the current week in the streak once trained', () => {
-    const snapshot = buildWeekSnapshot([summary('a', at(2026, 9, 22)), summary('b', at(2026, 9, 15))], now);
+    const snapshot = buildWeekSnapshot(
+      [summary('a', at(2026, 9, 22)), summary('b', at(2026, 9, 15))],
+      now,
+    );
     assert.equal(snapshot.streakWeeks, 2);
   });
 

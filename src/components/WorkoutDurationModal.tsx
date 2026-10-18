@@ -1,12 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Clock, Sparkles, AlertCircle, X, Check } from 'lucide-react-native';
 import { Workout } from '../types';
 import { formatDuration } from '../utils/calculator';
@@ -86,7 +79,10 @@ export const WorkoutDurationModal: React.FC<Props> = ({
             </View>
             <View style={styles.headerText}>
               <Text style={styles.title}>
-                {title || (showSafetyPrompt ? 'Did this workout really take this long?' : 'Adjust Workout Time')}
+                {title ||
+                  (showSafetyPrompt
+                    ? 'Did this workout really take this long?'
+                    : 'Adjust Workout Time')}
               </Text>
               <Text style={styles.subtitle}>
                 {subtitle ||
@@ -95,7 +91,10 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                     : 'Set how long this workout lasted.')}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -150,7 +149,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                   <TextInput
                     style={styles.timeInput}
                     value={hours}
-                    onChangeText={(text) => setHours(text.replace(/[^0-9]/g, ''))}
+                    onChangeText={text => setHours(text.replace(/[^0-9]/g, ''))}
                     placeholder="0"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"
@@ -165,7 +164,7 @@ export const WorkoutDurationModal: React.FC<Props> = ({
                   <TextInput
                     style={styles.timeInput}
                     value={minutes}
-                    onChangeText={(text) => setMinutes(text.replace(/[^0-9]/g, ''))}
+                    onChangeText={text => setMinutes(text.replace(/[^0-9]/g, ''))}
                     placeholder="0"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="number-pad"

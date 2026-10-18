@@ -47,7 +47,11 @@ describe('Android rest notifications', () => {
     assert.equal(id, 'rest-alarm');
     assert.deepEqual(calls.slice(-2), ['cancel', 'schedule']);
     assert.deepEqual(scheduled, [
-      { triggerAtMs: NOW + 90_000, title: 'Rest Finished!', body: 'Time for your next set of Bench Press.' },
+      {
+        triggerAtMs: NOW + 90_000,
+        title: 'Rest Finished!',
+        body: 'Time for your next set of Bench Press.',
+      },
     ]);
   });
 
@@ -66,7 +70,7 @@ describe('Android rest notifications', () => {
     const notifications = createAndroidRestNotifications(off.native, () => NOW);
     await notifications.initRestNotifications();
     await notifications.scheduleRestNotification(NOW + 60_000);
-    assert.equal(off.calls.filter((c) => c === 'requestNotificationPermission').length, 1);
+    assert.equal(off.calls.filter(c => c === 'requestNotificationPermission').length, 1);
 
     const on = fakeNative({ areNotificationsEnabled: () => true });
     await createAndroidRestNotifications(on.native, () => NOW).initRestNotifications();
@@ -143,8 +147,8 @@ describe('Firebase-free Android build', () => {
     files.push(join(root, 'App.tsx'));
 
     const importers = files
-      .filter((file) => /['"]expo-notifications['"]/.test(readFileSync(file, 'utf8')))
-      .map((file) => relative(root, file));
+      .filter(file => /['"]expo-notifications['"]/.test(readFileSync(file, 'utf8')))
+      .map(file => relative(root, file));
     assert.deepEqual(importers, ['src/utils/restNotifications.ios.ts']);
   });
 });

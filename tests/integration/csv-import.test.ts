@@ -116,7 +116,9 @@ describe('CSV Importer End-to-End Integration', () => {
         assert.equal(plan.newCustomExercisesCount, 0);
         assert.equal(plan.snapshotToMerge.exercises.length, 0);
 
-        const assignment = plan.exerciseAssignments.find(ea => ea.rawName === 'Custom Belt Squat Machine');
+        const assignment = plan.exerciseAssignments.find(
+          ea => ea.rawName === 'Custom Belt Squat Machine',
+        );
         assert.ok(assignment);
         assert.equal(assignment?.isCustom, false);
         assert.equal(assignment?.confidence, 'manual');

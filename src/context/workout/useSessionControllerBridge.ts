@@ -40,7 +40,7 @@ export function useSessionControllerBridge(): SessionControllerBridge {
         const ctrl = createSessionController(store, () => Date.now(), { maxDirtyTimeMs: 3000 });
         controllerRef.current = ctrl;
 
-        unsubscribe = ctrl.subscribe((newState) => {
+        unsubscribe = ctrl.subscribe(newState => {
           if (isMounted) {
             setSessionState(newState);
           }
@@ -73,13 +73,15 @@ export function useSessionControllerBridge(): SessionControllerBridge {
     return () => {
       if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
     };
+    // Deliberately narrowed to the start time: other workout mutations must not restart the clock.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionState.phase, sessionState.workout?.startTime]);
 
   // AppState background flush
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
       if (state === 'background' && controllerRef.current && sessionState.phase === 'active') {
-        controllerRef.current.flush().catch((error) => {
+        controllerRef.current.flush().catch(error => {
           reportError(error, { scope: 'workout.autosave.background' });
         });
       }

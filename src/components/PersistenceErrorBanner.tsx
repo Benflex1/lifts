@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Share,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Share } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 import { usePersistenceError, useWorkoutActions } from '../context/WorkoutContext';
 import { useDialog } from '../context/DialogContext';
@@ -64,11 +57,7 @@ export function PersistenceErrorBanner({ workout }: PersistenceErrorBannerProps)
   };
 
   return (
-    <View
-      style={styles.banner}
-      accessibilityRole="alert"
-      accessibilityLiveRegion="assertive"
-    >
+    <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="assertive">
       <View style={styles.messageRow}>
         <AlertTriangle size={18} color={colors.danger} style={styles.icon} />
         <View style={styles.textContainer}>

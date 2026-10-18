@@ -26,8 +26,16 @@ interface Props {
 
 const SCOPE_OPTIONS: Array<{ type: ExerciseScopeType; label: string; description: string }> = [
   { type: 'global', label: 'Global', description: 'Use completed sets from every gym.' },
-  { type: 'gym_specific', label: 'Gym-specific', description: 'Use completed sets from the current gym.' },
-  { type: 'linked_group', label: 'Linked gyms', description: 'Use completed sets from selected gyms.' },
+  {
+    type: 'gym_specific',
+    label: 'Gym-specific',
+    description: 'Use completed sets from the current gym.',
+  },
+  {
+    type: 'linked_group',
+    label: 'Linked gyms',
+    description: 'Use completed sets from selected gyms.',
+  },
 ];
 
 export const ExerciseScopeModal: React.FC<Props> = ({
@@ -51,9 +59,9 @@ export const ExerciseScopeModal: React.FC<Props> = ({
   }, [visible, exercise, scope]);
 
   const toggleLinkedGym = (gymId: string) => {
-    setLinkedGymIds(previous => previous.includes(gymId)
-      ? previous.filter(id => id !== gymId)
-      : [...previous, gymId]);
+    setLinkedGymIds(previous =>
+      previous.includes(gymId) ? previous.filter(id => id !== gymId) : [...previous, gymId],
+    );
   };
 
   const handleSave = async () => {
@@ -86,7 +94,9 @@ export const ExerciseScopeModal: React.FC<Props> = ({
       await onSaved(null);
       onClose();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Unable to remove exercise scope.');
+      setError(
+        deleteError instanceof Error ? deleteError.message : 'Unable to remove exercise scope.',
+      );
     } finally {
       setSaving(false);
     }
@@ -106,7 +116,9 @@ export const ExerciseScopeModal: React.FC<Props> = ({
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>Exercise Scope</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>{exercise?.name}</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {exercise?.name}
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.closeButton}
@@ -135,7 +147,9 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                   accessibilityState={{ selected }}
                 >
                   <View style={styles.scopeOptionText}>
-                    <Text style={[styles.scopeLabel, selected && styles.scopeLabelSelected]}>{option.label}</Text>
+                    <Text style={[styles.scopeLabel, selected && styles.scopeLabelSelected]}>
+                      {option.label}
+                    </Text>
                     <Text style={styles.scopeDescription}>{option.description}</Text>
                   </View>
                   {selected && <Check size={20} color={colors.primary} />}
@@ -159,7 +173,9 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                       accessibilityState={{ checked: selected }}
                     >
                       <View style={[styles.swatch, { backgroundColor: gym.color }]} />
-                      <Text style={[styles.gymName, selected && styles.gymNameSelected]}>{gym.name}</Text>
+                      <Text style={[styles.gymName, selected && styles.gymNameSelected]}>
+                        {gym.name}
+                      </Text>
                       {selected && <Check size={18} color={colors.primary} />}
                     </TouchableOpacity>
                   );
@@ -237,7 +253,13 @@ const styles = StyleSheet.create({
   scopeLabelSelected: { color: colors.text },
   scopeDescription: { color: colors.textSecondary, fontSize: 12, marginTop: 3 },
   linkedSection: { marginTop: 8, marginBottom: 4 },
-  sectionLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 7 },
+  sectionLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 7,
+  },
   gymOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -263,8 +285,25 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  cancelButton: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.control, paddingVertical: 12 },
+  cancelButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.control,
+    paddingVertical: 12,
+  },
   cancelText: { color: colors.textSoft, fontSize: 14, fontWeight: '700' },
-  saveButton: { flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, backgroundColor: colors.success, paddingVertical: 12 },
+  saveButton: {
+    flex: 1.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 12,
+    backgroundColor: colors.success,
+    paddingVertical: 12,
+  },
   saveText: { color: colors.black, fontSize: 14, fontWeight: '800' },
 });

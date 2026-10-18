@@ -14,15 +14,18 @@ export function resolvePreviousSetsForExercise(
   exercise: Exercise,
   occurrences: CompletedExerciseOccurrence[],
   currentGymId: string,
-  scope?: ExerciseGymScope
+  scope?: ExerciseGymScope,
 ): PreviousSetSuggestion[] {
   const allowedGymIds = getAllowedGymIds(exercise, scope, currentGymId);
-  const selected = occurrences.find((occurrence) =>
-    occurrence.sets.length > 0 && (allowedGymIds === null || allowedGymIds.has(occurrence.gymId))
+  const selected = occurrences.find(
+    occurrence =>
+      occurrence.sets.length > 0 && (allowedGymIds === null || allowedGymIds.has(occurrence.gymId)),
   );
-  const fallback = selected ?? (allowedGymIds === null
-    ? undefined
-    : occurrences.find((occurrence) => occurrence.sets.length > 0));
+  const fallback =
+    selected ??
+    (allowedGymIds === null
+      ? undefined
+      : occurrences.find(occurrence => occurrence.sets.length > 0));
   if (!fallback || fallback.sets.length === 0) return [];
 
   const isForeignFallback = selected === undefined && allowedGymIds !== null;

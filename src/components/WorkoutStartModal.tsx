@@ -38,7 +38,7 @@ export function WorkoutStartModal({
     setSelectedId(selectedGymId || resolveInitialStartGymId(gyms));
   }, [gyms, selectedGymId, visible]);
 
-  const selectedGym = gyms.find((gym) => gym.id === selectedId);
+  const selectedGym = gyms.find(gym => gym.id === selectedId);
 
   const handleClose = () => {
     if (!isStarting) onClose();
@@ -100,7 +100,7 @@ export function WorkoutStartModal({
           </View>
 
           <View style={styles.gymList}>
-            {gyms.map((gym) => {
+            {gyms.map(gym => {
               const selected = gym.id === selectedId;
               return (
                 <TouchableOpacity
@@ -122,9 +122,7 @@ export function WorkoutStartModal({
                 </TouchableOpacity>
               );
             })}
-            {gyms.length === 0 && (
-              <Text style={styles.emptyText}>No gyms are available yet.</Text>
-            )}
+            {gyms.length === 0 && <Text style={styles.emptyText}>No gyms are available yet.</Text>}
           </View>
 
           <TouchableOpacity
