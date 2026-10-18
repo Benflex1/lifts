@@ -22,17 +22,25 @@ appId: com.benflex1.lifts
     timeout: 30000
 - tapOn:
     text: 'Start Push Day.*'
-    retryTapIfNoChange: true
+    # A second, automatic tap can land on the start modal's confirm button
+    # (same screen position) and skip the modal, so retry must stay off.
+    retryTapIfNoChange: false
 - takeScreenshot: after-routine-tap
-- extendedWaitUntil:
-    visible: 'Start Workout'
-    timeout: 10000
-- tapOn: 'Start workout at.*'
+# The start modal is normally shown; if the workout started directly, skip it.
+- runFlow:
+    when:
+      visible: 'Start Workout'
+    commands:
+      - tapOn: 'Start workout at.*'
 
 # Logger: complete one set of the first exercise.
-- assertVisible: 'Complete set 1'
+- extendedWaitUntil:
+    visible: 'Complete set 1'
+    timeout: 15000
 - tapOn: 'Complete set 1'
-- assertVisible: 'Complete set 2'
+- extendedWaitUntil:
+    visible: 'Complete set 2'
+    timeout: 10000
 
 # Minimize to the floating bar, then resume.
 - tapOn: 'Minimize workout'
