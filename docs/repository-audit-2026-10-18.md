@@ -640,10 +640,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-04 — No end-to-end flow tests
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `scripts/android-smoke-test.sh` installs and launches the APK and fails on a crash, but it does not exercise a flow.
 - **Impact:** Lifecycle bugs that only appear in a real app (backgrounding, permissions, navigation) are not covered.
 - **Required change:** Add Maestro or Detox for a small smoke journey: start workout, log a set, minimize, resume, finish.
+- **Implementation (2026-10-18):** `.maestro/smoke-journey.yml` covers the journey: start the seeded Push Day routine (scroll to it; a single tap with retry disabled; confirm the start modal when shown), complete a set, minimize to the floating bar, resume, finish, and assert the completion summary. Selectors come from the accessibility labels added in `A11Y-01`/`A11Y-02` plus visible text. `.github/workflows/e2e.yml` builds the debug-signed preview APK, installs Maestro, enables KVM, and runs the journey on an Android 14 (API 34) emulator through the existing crash-checking install script; the JUnit report, logcat, and screenshots upload as artifacts. CONTRIBUTING documents the local `maestro test` command and the release checklist treats a green journey as a release gate. Verified green on GitHub Actions run `39159356942` (16m51s), including the completion screenshot. Two flow bugs surfaced and were fixed during verification: Maestro treats patterns as regexes (routine names with parentheses), and its automatic tap retry could press the start modal's confirm button at the same screen position.
 - **Done when:** The journey runs in CI on an emulator.
 
 ### DX-05 — Tests are excluded from typechecking
@@ -827,7 +828,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
 - [x] `DX-02` Add React Native Testing Library and critical-flow tests.
 - [x] `DX-03` Add coverage reporting and a threshold.
-- [ ] `DX-04` Add one end-to-end smoke journey.
+- [x] `DX-04` Add one end-to-end smoke journey.
 - [x] `DX-06` Add dependency automation and an audit policy.
 - [x] `DX-08` Fix version and documentation drift.
 - [x] `DX-09` Add collaboration and security templates.
@@ -838,6 +839,8 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `A11Y-05` Add a required-label primitive.
 
 **Exit criteria:** CI enforces lint, types, tests, and coverage; the core flows have UI tests; the logger and rest controls are screen-reader operable.
+
+**Verification note (2026-10-18):** All Phase 3 findings are Done. CI enforces lint, format, version sync, the dependency audit policy, the dead-code scan, both typechecks, coverage thresholds (91.39% lines / 83.66% branches / 89.40% functions on the 598 + 173 test suite), and the Maestro emulator journey. The logger and rest surfaces are labelled with automated enforcement, and the deferred `PERF-03`/`PERF-09` renderer checks landed with `DX-02`.
 
 ### Phase 4 — Product follow-through (target: after Phase 1-2)
 
