@@ -74,7 +74,7 @@ The coverage thresholds measure modules executed by the Node tests, not all appl
 
 ### End-to-end smoke journey
 
-The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). The journey runs for relevant pull requests into `main`/`develop` and pushes to `main`, `develop`, or phase branches. Branch protection must require `emulator-journey` for it to block merging.
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). The journey runs for relevant pull requests into `main`/`develop` and pushes to `main` or `develop`. Branch protection must require `emulator-journey` for it to block merging.
 
 With a device or emulator connected and the app installed, run it locally:
 
