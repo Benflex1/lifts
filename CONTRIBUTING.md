@@ -119,3 +119,4 @@ When contributing code, adhere strictly to these core principles:
 3. Run the full verification suite (`npm run lint && npm run format:check && npm run typecheck && npm run typecheck:tests && npm test && npm run test:integration`).
 4. Push your branch to GitHub and open a Pull Request against `main`.
 5. Clearly describe the motivation, test evidence, and verified platforms in your PR description.
+6. Use the repository templates for issues and pull requests (the PR checklist mirrors the verification suite). Report vulnerabilities privately through `SECURITY.md`, never in a public issue.

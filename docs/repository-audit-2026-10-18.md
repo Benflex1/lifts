@@ -689,10 +689,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-09 — Missing open-source collaboration templates
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No `SECURITY.md`, issue templates, pull-request template, or `CODEOWNERS`.
 - **Impact:** Security reports and contribution quality depend on ad hoc communication.
 - **Required change:** Add a security policy, issue/PR templates, and a lightweight review checklist that references this audit.
+- **Implementation (2026-10-18):** Added `SECURITY.md` (private GitHub advisory reporting, scope for local storage, the web lease, and the opt-in health export, and a pointer at the accepted build-tooling advisories), issue forms for bugs and feature requests plus `config.yml` that routes security reports to the private flow, a pull-request template whose checklist mirrors the verification suite and asks for the audit finding ID, and `.github/CODEOWNERS` covering the maintainer on release and CI metadata. CONTRIBUTING now links the templates and the security policy.
 - **Done when:** The templates are present and linked from CONTRIBUTING.
 
 ### DX-10 — Web export artifacts break the typecheck
@@ -829,7 +830,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `DX-04` Add one end-to-end smoke journey.
 - [x] `DX-06` Add dependency automation and an audit policy.
 - [x] `DX-08` Fix version and documentation drift.
-- [ ] `DX-09` Add collaboration and security templates.
+- [x] `DX-09` Add collaboration and security templates.
 - [x] `A11Y-01` Label the core logger controls.
 - [x] `A11Y-02` Label rest controls, mini bar, and read-only banner.
 - [x] `A11Y-03` Add live regions and value semantics.
