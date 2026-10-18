@@ -475,6 +475,28 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Required change:** Type SQL row shapes explicitly, replace `catch (err: any)` with `unknown` plus a normalizer, add `noUncheckedIndexedAccess`, and replace cluster non-null assertions with an `invariant`/`requireDefined` helper.
 - **Done when:** The store contract is checked structurally and the dead cast is removed.
 
+### ARCH-12 — HistoryScreen is a 903-line component
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `src/screens/HistoryScreen.tsx` is 903 lines: the component spans lines 57-601 (five `useState` calls, two effects, seven handlers) and the style sheet spans 603-902. The history card markup, including the expanded set-detail tree and PR badges, is inlined into the `FlatList` `renderItem` at lines 297-538.
+- **Impact:** The last remaining oversized screen after Phase 2 requires touching a single 545-line component for any history change, and the card tree cannot be rendered or tested in isolation.
+- **Required change:** Extract a controller hook for screen state, a `HistoryCard` component for the list row, and the pure helpers (repeat-draft building, date formatting, totals, PR notification payloads). Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Done when:**
+  - [ ] The screen is under 600 lines and the extracted modules have focused tests.
+  - [ ] No behavior regressions in the history, repeat, and edit integration tests.
+
+### ARCH-13 — WorkoutScreen is a 703-line component
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `src/screens/WorkoutScreen.tsx` is 703 lines: the component spans lines 40-441 (seven `useState` calls, one effect, seven handlers) and the style sheet spans 443-702. The week summary card (lines 190-238) and each routine card (lines 299-358) are inline JSX.
+- **Impact:** Routine list changes and start-flow changes share one component, and the cards cannot be rendered or tested in isolation.
+- **Required change:** Extract a controller hook for screen state, a `WeekSummaryCard` and a `RoutineCard` component, and the pure helpers (folder collection/filtering, routine summary metrics, week labels). Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Done when:**
+  - [ ] The screen is under 600 lines and the extracted modules have focused tests.
+  - [ ] No behavior regressions in the routine, folder, and start integration tests.
+
 ---
 
 ## 7. Correctness and platform-parity findings
@@ -763,6 +785,8 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-05` Deduplicate custom-exercise UI.
 - [x] `ARCH-06` Add repository/domain hooks.
 - [x] `ARCH-07` Add a store revision counter and invalidation.
+- [ ] `ARCH-12` Decompose `HistoryScreen`.
+- [ ] `ARCH-13` Decompose `WorkoutScreen`.
 - [x] `PERF-06` Lazy-load the exercise catalog.
 - [x] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
 - [x] `PERF-14` Add IndexedDB indexes and indexed history reads.
@@ -772,7 +796,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 **Exit criteria:** No screen exceeds roughly 600 lines; shared domain rules live in one module; both stores pass the same contract suite; cold-start catalog work is eliminated once seeded.
 
-**Residual note (2026-10-18):** All Phase 2 findings are `Done`. Two screens still exceed the 600-line guideline but are not covered by any finding, so no Phase 2 item targeted them: `src/screens/HistoryScreen.tsx` (903 lines, ~300 of which are the styles block) and `src/screens/WorkoutScreen.tsx` (703 lines, ~260 styles). Both were converted to the ARCH-06 domain hooks. Recommend a dedicated decomposition finding for `HistoryScreen` if the size rule is enforced file-wide.
+**Residual note (2026-10-18):** All Phase 2 findings are `Done`. Two screens exceed the 600-line guideline and carry no original finding: `src/screens/HistoryScreen.tsx` (903 lines) and `src/screens/WorkoutScreen.tsx` (703 lines). Both were scheduled as `ARCH-12` and `ARCH-13` and completed on the same branch (see their findings for implementation and verification notes).
 
 ### Phase 3 — Quality gates and accessibility (target: ongoing, start immediately)
 
