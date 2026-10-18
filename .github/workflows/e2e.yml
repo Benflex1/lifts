@@ -81,10 +81,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: |
             bash scripts/android-smoke-test.sh "$(ls android/app/build/outputs/apk/release/*.apk | head -n 1)"
-            maestro test .maestro/smoke-journey.yml --format junit --output maestro-report.xml --debug-output maestro-debug || {
-              adb logcat -d -t 300 > maestro-logcat.txt
-              exit 1
-            }
+            maestro test .maestro/smoke-journey.yml --format junit --output maestro-report.xml || { adb logcat -d -t 300 > maestro-logcat.txt; exit 1; }
 
       - name: Upload Maestro report and screenshots
         if: always()
@@ -93,8 +90,7 @@ jobs:
           name: maestro-e2e-${{ github.sha }}
           path: |
             maestro-report.xml
-            maestro-debug/**
             maestro-logcat.txt
             *.png
-            $HOME/.maestro/tests/**
+            /home/runner/.maestro/tests/**
           if-no-files-found: warn
