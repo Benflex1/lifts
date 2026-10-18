@@ -75,7 +75,7 @@ Run `npm run format` before committing to apply the shared Prettier configuratio
 
 ### End-to-end smoke journey
 
-The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). It runs for relevant pull requests into `main` or `develop`, and relevant pushes to those branches and the phase branches. Branch protection must require `emulator-journey` to make it a merge gate.
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). It runs for relevant pull requests into `main` or `develop`, and relevant pushes to those branches. Branch protection must require `emulator-journey` to make it a merge gate.
 
 With a device or emulator connected and the app installed, run it locally:
 

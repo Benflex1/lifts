@@ -5,7 +5,7 @@ name: End-to-end smoke journey
 on:
   workflow_dispatch:
   push:
-    branches: [main, develop, 'phase-*']
+    branches: [main, develop]
     paths:
       - 'src/**'
       - 'App.tsx'

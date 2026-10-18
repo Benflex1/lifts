@@ -21,5 +21,5 @@ This follow-up supersedes the completion claims in the initial remediation audit
 
 - LCOV output is generated locally and uploaded by CI, not tracked in Git.
 - Node coverage percentages describe executed modules, not every application source file. Phase 3 recalibrates function coverage to 88% when the controller enters the measured denominator; this final phase retains the existing 90% lines / 83% branches / 89% functions policy. Passing thresholds do not establish app-shell coverage or device-level correctness.
-- The Android journey runs on relevant pull requests into main/develop and relevant main/develop/phase pushes. Repository branch protection still decides whether its check is required for merging.
+- The Android journey runs on relevant pull requests into main/develop and relevant main/develop pushes (avoiding duplicate emulator runs for phase pull requests). Repository branch protection still decides whether its check is required for merging.
 - Renderer, worker-lifecycle and storage regressions cover the reported failures. They do not substitute for physical-device performance profiling, VoiceOver/TalkBack testing, or store publishing verification.
