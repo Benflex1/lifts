@@ -30,6 +30,11 @@ mockModule('../../src/components/RepsInput', { RepsInput: 'RepsInput' });
 mockModule('../../src/components/PRBadge', { PRBadge: 'PRBadge' });
 mockModule('../../src/components/ExerciseNoteInput', { ExerciseNoteInput: 'ExerciseNoteInput' });
 mockModule('../../src/components/MemoizedExerciseVisual', { ExerciseVisual: 'ExerciseVisual' });
+mockModule('../../src/context/SettingsContext', { useSettings: () => ({ unit: 'kg' }) });
+mockModule('../../src/components/TrackedValueInput', {
+  DistanceInput: 'DistanceInput',
+  DurationInput: 'DurationInput',
+});
 
 const noop = () => {};
 
@@ -76,7 +81,7 @@ function makeActiveExercise(id: string): ActiveExercise {
 function toggleSet(exercise: ActiveExercise, setId: string): ActiveExercise {
   return {
     ...exercise,
-    sets: exercise.sets.map((set) => (set.id === setId ? { ...set, isCompleted: true } : set)),
+    sets: exercise.sets.map(set => (set.id === setId ? { ...set, isCompleted: true } : set)),
   };
 }
 
@@ -140,11 +145,17 @@ const rowRenders: string[] = [];
 let CountedCard: React.ComponentType<any>;
 let CountedRow: React.ComponentType<any>;
 
-function CardHarness({ exercises, prSummary }: { exercises: ActiveExercise[]; prSummary?: WorkoutPRSummary | null }) {
+function CardHarness({
+  exercises,
+  prSummary,
+}: {
+  exercises: ActiveExercise[];
+  prSummary?: WorkoutPRSummary | null;
+}) {
   return React.createElement(
     React.Fragment,
     null,
-    exercises.map((exercise) =>
+    exercises.map(exercise =>
       React.createElement(CountedCard, {
         key: exercise.id,
         ...cardProps(exercise, prSummary !== undefined ? { prSummary } : {}),
@@ -153,11 +164,19 @@ function CardHarness({ exercises, prSummary }: { exercises: ActiveExercise[]; pr
   );
 }
 
-function RowHarness({ sets, exerciseId, setPR }: { sets: WorkoutSet[]; exerciseId: string; setPR?: SetPRResult }) {
+function RowHarness({
+  sets,
+  exerciseId,
+  setPR,
+}: {
+  sets: WorkoutSet[];
+  exerciseId: string;
+  setPR?: SetPRResult;
+}) {
   return React.createElement(
     React.Fragment,
     null,
-    sets.map((set) =>
+    sets.map(set =>
       React.createElement(CountedRow, {
         key: set.id,
         ...rowProps(set, exerciseId, setPR !== undefined ? { setPR } : {}),
@@ -202,7 +221,9 @@ test('toggling a set re-renders only the affected card', async () => {
 
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = TestRenderer.create(React.createElement(CardHarness, { exercises: [exerciseA, exerciseB] }));
+    renderer = TestRenderer.create(
+      React.createElement(CardHarness, { exercises: [exerciseA, exerciseB] }),
+    );
   });
   assert.deepEqual(cardRenders, ['we-a', 'we-b']);
 
@@ -230,7 +251,9 @@ test('committing a note re-renders only that card', async () => {
 
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = TestRenderer.create(React.createElement(CardHarness, { exercises: [exerciseA, exerciseB] }));
+    renderer = TestRenderer.create(
+      React.createElement(CardHarness, { exercises: [exerciseA, exerciseB] }),
+    );
   });
 
   cardRenders.length = 0;
@@ -300,7 +323,7 @@ test('toggling a set re-renders only that set row', async () => {
   assert.deepEqual(rowRenders, ['s1', 's2', 's3']);
 
   rowRenders.length = 0;
-  const toggled = sets.map((set) => (set.id === 's2' ? { ...set, isCompleted: true } : set));
+  const toggled = sets.map(set => (set.id === 's2' ? { ...set, isCompleted: true } : set));
   act(() => {
     renderer.update(React.createElement(RowHarness, { sets: toggled, exerciseId: 'a' }));
   });
@@ -313,25 +336,43 @@ test('a rebuilt PR object with equal content does not re-render the row', async 
   await loadRow();
 
   const set = makeSet('s1', 1);
-  const before: SetPRResult = { setId: 's1', primary: makeAchievement(100), achievements: [makeAchievement(100)] };
-  const after: SetPRResult = { setId: 's1', primary: makeAchievement(100), achievements: [makeAchievement(100)] };
+  const before: SetPRResult = {
+    setId: 's1',
+    primary: makeAchievement(100),
+    achievements: [makeAchievement(100)],
+  };
+  const after: SetPRResult = {
+    setId: 's1',
+    primary: makeAchievement(100),
+    achievements: [makeAchievement(100)],
+  };
 
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
-    renderer = TestRenderer.create(React.createElement(RowHarness, { sets: [set], exerciseId: 'a', setPR: before }));
+    renderer = TestRenderer.create(
+      React.createElement(RowHarness, { sets: [set], exerciseId: 'a', setPR: before }),
+    );
   });
 
   rowRenders.length = 0;
   act(() => {
-    renderer.update(React.createElement(RowHarness, { sets: [set], exerciseId: 'a', setPR: after }));
+    renderer.update(
+      React.createElement(RowHarness, { sets: [set], exerciseId: 'a', setPR: after }),
+    );
   });
 
   assert.deepEqual(rowRenders, [], 'equal badge content skips the row render');
 
   rowRenders.length = 0;
-  const changed: SetPRResult = { setId: 's1', primary: makeAchievement(130), achievements: [makeAchievement(130)] };
+  const changed: SetPRResult = {
+    setId: 's1',
+    primary: makeAchievement(130),
+    achievements: [makeAchievement(130)],
+  };
   act(() => {
-    renderer.update(React.createElement(RowHarness, { sets: [set], exerciseId: 'a', setPR: changed }));
+    renderer.update(
+      React.createElement(RowHarness, { sets: [set], exerciseId: 'a', setPR: changed }),
+    );
   });
 
   assert.deepEqual(rowRenders, ['s1'], 'a changed badge re-renders the row');

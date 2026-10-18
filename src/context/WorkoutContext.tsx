@@ -1,13 +1,32 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import { Platform, AppState, AppStateStatus, Vibration } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as Crypto from 'expo-crypto';
-import { ActiveExercise, Exercise, Gym, Routine, SetType, Workout, WorkoutSet } from '../types';
-import { getStore } from '../database/db';
+import {
+  ActiveExercise,
+  Exercise,
+  Gym,
+  Routine,
+  SetType,
+  TrackingType,
+  Workout,
+  WorkoutSet,
+} from '../types';
+import { getSetting, getStore, setSetting } from '../database/db';
+import { addDeloadWorkoutId, DELOAD_WORKOUTS_KEY } from '../workout/programs';
+import { getExactAlarmStatus, openExactAlarmSettings } from '../utils/exactAlarms';
 import { WorkoutDraft } from '../database/contract';
 import { computeElapsedSeconds, computeRemaining, nextRemainingTickDelay } from '../utils/timer';
 import { createSessionController, SessionController, SessionState } from '../workout/session';
-import { initialReps, moveWorkoutSet, resolveRestTimerSeconds, validateCompletedSet } from '../workout/sets';
+import { initialReps, moveWorkoutSet, resolveRestTimerSeconds } from '../workout/sets';
 import {
   moveActiveExercise,
   moveActiveExerciseToIndex,
@@ -27,6 +46,7 @@ import {
   createWorkoutSetsFromSuggestions,
 } from '../workout/gym-session';
 import { resolveActiveGymAfterRefresh } from '../workout/gym-profile';
+import { runAutomaticBackup } from '../utils/automaticBackup';
 import { useDialog } from './DialogContext';
 import { useSettings } from './SettingsContext';
 import {
@@ -38,6 +58,7 @@ import {
   initRestNotifications,
   scheduleRestNotification,
   cancelRestNotification,
+  isRestCueNative,
 } from '../utils/restNotifications';
 import {
   linkExercisesInGroup,
@@ -46,12 +67,37 @@ import {
 } from '../workout/supersets';
 import { enqueueCompletedWorkoutSync } from '../health';
 import { reportError } from '../utils/errorReporting';
+import { RestCountdown, restAlarmForAppState, shiftRestCountdown } from '../utils/restTimer';
+import {
+  fillTrackedSetFromPrevious,
+  getTrackingType,
+  resolveTrackingTypeForExercise,
+  usesWeight,
+  validateTrackedSet,
+  withTrackingType,
+  workoutVolumeKg,
+} from '../workout/tracking';
+
+const EXACT_ALARM_PROMPTED_KEY = 'exact_alarm_prompted';
 
 interface RestTimerState {
   isActive: boolean;
   remainingSeconds: number;
   totalSeconds: number;
   endsAt: number | null;
+  exerciseName?: string;
+}
+
+// Two taps 120ms apart, so each count reads as a pulse. Skipped off screen, where the rest alarm alerts instead,
+// and where the native rest cue plays the countdown itself.
+function pulseCountdown(style: Haptics.ImpactFeedbackStyle) {
+  if (Platform.OS === 'web' || AppState.currentState !== 'active' || isRestCueNative()) return;
+  try {
+    Haptics.impactAsync(style);
+    setTimeout(() => {
+      Haptics.impactAsync(style);
+    }, 120);
+  } catch (_) {}
 }
 
 interface WorkoutContextType {
@@ -87,7 +133,7 @@ interface WorkoutContextType {
   insertWarmupSets: (
     activeExerciseId: string,
     warmupSets: { weightKg: number; reps: number }[],
-    replaceExisting?: boolean
+    replaceExisting?: boolean,
   ) => void;
   linkSuperset: (firstExerciseId: string, secondExerciseId: string) => void;
   unlinkSuperset: (exerciseId: string) => void;
@@ -97,6 +143,7 @@ interface WorkoutContextType {
   updateSet: (activeExerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   updateExerciseNotes: (activeExerciseId: string, notes: string) => void;
   updateExerciseRestTimer: (activeExerciseId: string, seconds: number) => void;
+  setExerciseTrackingType: (activeExerciseId: string, type: TrackingType) => void;
   updateWorkoutDuration: (seconds: number) => void;
   toggleSetComplete: (activeExerciseId: string, setId: string) => void;
   startRestTimer: (seconds: number, exerciseName?: string) => void;
@@ -133,7 +180,12 @@ const WorkoutContext = createContext<WorkoutContextType | undefined>(undefined);
 // contexts so that only the components displaying them re-render on each tick, instead of every
 // consumer of the (large) workout context.
 const WorkoutClockContext = createContext<number>(0);
-const IDLE_REST_TIMER: RestTimerState = { isActive: false, remainingSeconds: 0, totalSeconds: 0, endsAt: null };
+const IDLE_REST_TIMER: RestTimerState = {
+  isActive: false,
+  remainingSeconds: 0,
+  totalSeconds: 0,
+  endsAt: null,
+};
 const RestTimerContext = createContext<RestTimerState>(IDLE_REST_TIMER);
 const RestTimerActiveContext = createContext<boolean>(false);
 
@@ -152,7 +204,10 @@ type WorkoutActions = Omit<
   | 'expandedExercises'
 >;
 const WorkoutActionsContext = createContext<WorkoutActions | undefined>(undefined);
-const WorkoutGymsContext = createContext<{ gyms: Gym[]; activeGym: Gym | null }>({ gyms: [], activeGym: null });
+const WorkoutGymsContext = createContext<{
+  gyms: Gym[];
+  activeGym: Gym | null;
+}>({ gyms: [], activeGym: null });
 const IsWorkingOutContext = createContext<boolean>(false);
 // Persistence failures are rare and urgent; a dedicated context keeps the whole app from
 // re-rendering every time the autosave health changes.
@@ -175,7 +230,26 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
   const { confirm, notify } = useDialog();
-  const { healthSyncEnabled, loading: settingsLoading } = useSettings();
+  const {
+    healthSyncEnabled,
+    loading: settingsLoading,
+    trackingTypesEnabled,
+    trackingTypeOverrides,
+  } = useSettings();
+  const trackingSettingsRef = useRef({
+    enabled: trackingTypesEnabled,
+    overrides: trackingTypeOverrides,
+  });
+  trackingSettingsRef.current = {
+    enabled: trackingTypesEnabled,
+    overrides: trackingTypeOverrides,
+  };
+  const trackingTypeFor = (exercise: Exercise): TrackingType =>
+    resolveTrackingTypeForExercise(
+      exercise,
+      trackingSettingsRef.current.enabled,
+      trackingSettingsRef.current.overrides,
+    );
 
   const [restTimer, setRestTimer] = useState<RestTimerState>({
     isActive: false,
@@ -188,10 +262,26 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const workoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gymSwitchRequestRef = useRef(0);
   const lastBuzzedSecondRef = useRef<number | null>(null);
+  // Read by AppState and adjust handlers, which must see the latest countdown without re-subscribing.
+  const restCountdownRef = useRef<RestCountdown | null>(null);
+  restCountdownRef.current =
+    restTimer.isActive && restTimer.endsAt !== null
+      ? {
+          endsAt: restTimer.endsAt,
+          totalSeconds: restTimer.totalSeconds,
+          exerciseName: restTimer.exerciseName,
+        }
+      : null;
   const [expandedExercises, setExpandedExercises] = useState<Record<string, boolean>>({});
   const pendingHealthSyncsRef = useRef<Workout[]>([]);
-  const healthSyncSettingsRef = useRef({ enabled: healthSyncEnabled, loading: settingsLoading });
-  healthSyncSettingsRef.current = { enabled: healthSyncEnabled, loading: settingsLoading };
+  const healthSyncSettingsRef = useRef({
+    enabled: healthSyncEnabled,
+    loading: settingsLoading,
+  });
+  healthSyncSettingsRef.current = {
+    enabled: healthSyncEnabled,
+    loading: settingsLoading,
+  };
 
   useEffect(() => {
     if (settingsLoading) return;
@@ -203,14 +293,14 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [healthSyncEnabled, settingsLoading]);
 
   const toggleExerciseExpanded = useCallback((activeExerciseId: string) => {
-    setExpandedExercises((prev) => ({
+    setExpandedExercises(prev => ({
       ...prev,
       [activeExerciseId]: !(prev[activeExerciseId] ?? false),
     }));
   }, []);
 
   const setExerciseExpanded = useCallback((activeExerciseId: string, expanded: boolean) => {
-    setExpandedExercises((prev) => ({
+    setExpandedExercises(prev => ({
       ...prev,
       [activeExerciseId]: expanded,
     }));
@@ -220,7 +310,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const workout = controllerRef.current?.getState().workout;
     if (!workout) return;
     const all: Record<string, boolean> = {};
-    workout.exercises.forEach((e) => {
+    workout.exercises.forEach(e => {
       all[e.id] = true;
     });
     setExpandedExercises(all);
@@ -230,7 +320,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const workout = controllerRef.current?.getState().workout;
     if (!workout) return;
     const all: Record<string, boolean> = {};
-    workout.exercises.forEach((e) => {
+    workout.exercises.forEach(e => {
       all[e.id] = false;
     });
     setExpandedExercises(all);
@@ -248,10 +338,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const refreshGyms = useCallback(async () => {
     const store = await getStore();
-    const [loadedGyms, defaultGym] = await Promise.all([
-      store.getGyms(),
-      store.getDefaultGym(),
-    ]);
+    const [loadedGyms, defaultGym] = await Promise.all([store.getGyms(), store.getDefaultGym()]);
     const currentWorkout = controllerRef.current?.getState().workout;
     setGyms(loadedGyms);
     setActiveGymState(resolveActiveGymAfterRefresh(loadedGyms, defaultGym, currentWorkout?.gymId));
@@ -266,10 +353,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       try {
         void initRestNotifications();
         const store = await getStore();
-        const ctrl = createSessionController(store, () => Date.now(), { maxDirtyTimeMs: 3000 });
+        const ctrl = createSessionController(store, () => Date.now(), {
+          maxDirtyTimeMs: 3000,
+        });
         controllerRef.current = ctrl;
 
-        unsubscribe = ctrl.subscribe((newState) => {
+        unsubscribe = ctrl.subscribe(newState => {
           if (isMounted) {
             setSessionState(newState);
           }
@@ -313,14 +402,20 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [sessionState.phase, sessionState.workout?.startTime]);
 
-  // AppState background flush & foreground notification cleanup
+  // AppState background flush, and the OS rest alarm: armed when the app leaves the screen, cancelled on return
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
       if (state === 'background' && controllerRef.current && sessionState.phase === 'active') {
-        controllerRef.current.flush().catch((error) => {
+        controllerRef.current.flush().catch(error => {
           reportError(error, { scope: 'workout.autosave.background' });
         });
-      } else if (state === 'active') {
+      }
+      // The native rest cue is armed for the whole rest (see below), so it does not follow app visibility.
+      if (isRestCueNative()) return;
+      const alarm = restAlarmForAppState(state, restCountdownRef.current, Date.now());
+      if (alarm.kind === 'arm') {
+        void scheduleRestNotification(alarm.endsAt, alarm.exerciseName);
+      } else if (alarm.kind === 'cancel') {
         void cancelRestNotification();
       }
     };
@@ -349,7 +444,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const remaining = computeRemaining(endsAt, now);
       if (remaining <= 0) {
         const expiredRecently = Math.abs(now - endsAt) < 1500;
-        setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
+        setRestTimer(prev => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
         const ctrl = controllerRef.current;
         if (ctrl) {
           const state = ctrl.getState();
@@ -357,11 +452,18 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ctrl.update(state.workout, null);
           }
         }
-        void cancelRestNotification();
+        // No cancel here: a running OS alarm is only armed while the app is backgrounded, and cancelling
+        // at expiry could dismiss the notification the alarm has just posted.
 
         // Intense countdown finish buzzer (triple pulse)
-        // Only buzz if timer reached 0 in foreground / just now (< 1.5s), avoiding false alarm on app resume
-        if (lastBuzzedSecondRef.current !== 0 && expiredRecently) {
+        // Only buzz if the timer reached 0 in the foreground / just now (< 1.5s), avoiding a false alarm on resume.
+        // In the background the OS rest alarm alerts instead.
+        if (
+          lastBuzzedSecondRef.current !== 0 &&
+          expiredRecently &&
+          AppState.currentState === 'active' &&
+          !isRestCueNative()
+        ) {
           lastBuzzedSecondRef.current = 0;
           if (Platform.OS !== 'web') {
             try {
@@ -381,39 +483,19 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           lastBuzzedSecondRef.current = 0;
         }
       } else {
-        // Intense 3-2-1 countdown haptics
-        if (remaining === 3 && lastBuzzedSecondRef.current !== 3) {
-          lastBuzzedSecondRef.current = 3;
-          if (Platform.OS !== 'web') {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch {
-              // Best-effort countdown haptics; failure must not interrupt the workout.
-            }
-          }
-        } else if (remaining === 2 && lastBuzzedSecondRef.current !== 2) {
-          lastBuzzedSecondRef.current = 2;
-          if (Platform.OS !== 'web') {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch {
-              // Best-effort countdown haptics; failure must not interrupt the workout.
-            }
-          }
-        } else if (remaining === 1 && lastBuzzedSecondRef.current !== 1) {
-          lastBuzzedSecondRef.current = 1;
-          if (Platform.OS !== 'web') {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            } catch {
-              // Best-effort countdown haptics; failure must not interrupt the workout.
-            }
-          }
+        // Intense 3-2-1 countdown haptics: a double pulse on each of the last three seconds
+        if (remaining <= 3 && lastBuzzedSecondRef.current !== remaining) {
+          lastBuzzedSecondRef.current = remaining;
+          pulseCountdown(
+            remaining === 1
+              ? Haptics.ImpactFeedbackStyle.Heavy
+              : Haptics.ImpactFeedbackStyle.Medium,
+          );
         } else if (remaining > 3) {
           lastBuzzedSecondRef.current = null;
         }
 
-        setRestTimer((prev) => {
+        setRestTimer(prev => {
           if (prev.remainingSeconds === remaining) return prev;
           return { ...prev, remainingSeconds: remaining };
         });
@@ -430,16 +512,46 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return clearScheduledTick;
   }, [restTimer.isActive, restTimer.endsAt, sessionState.phase]);
 
+  // Android: the native rest cue (3-2-1 pulses, then a harder buzz at the end) is armed for every rest
+  // start, adjustment and resumed draft, in and out of the app. It is only disarmed by stopRestTimer,
+  // never at expiry, which would cut off the end buzz while it plays.
+  useEffect(() => {
+    if (!isRestCueNative() || !restTimer.isActive || restTimer.endsAt === null) return;
+    void scheduleRestNotification(restTimer.endsAt, restTimer.exerciseName);
+  }, [restTimer.isActive, restTimer.endsAt]);
+
+  // Without exact alarms (denied by default from Android 14) the cue can fire seconds or minutes late,
+  // so ask once, on the first rest. Settings keeps a button for later.
+  const exactAlarmPromptedRef = useRef(false);
+  useEffect(() => {
+    if (!restTimer.isActive || exactAlarmPromptedRef.current || !isRestCueNative()) return;
+    if (getExactAlarmStatus() !== 'denied') return;
+    exactAlarmPromptedRef.current = true;
+    (async () => {
+      if ((await getSetting(EXACT_ALARM_PROMPTED_KEY)) === 'true') return;
+      await setSetting(EXACT_ALARM_PROMPTED_KEY, 'true');
+      const allow = await confirm({
+        title: 'On-time rest buzz',
+        message:
+          'To buzz 3, 2, 1 exactly when your rest ends, even with the phone locked, Lifts needs permission to set alarms. Android may delay the buzz without it.',
+        confirmLabel: 'Allow',
+        cancelLabel: 'Not now',
+      });
+      if (allow) openExactAlarmSettings();
+    })().catch(console.error);
+  }, [restTimer.isActive]);
+
   const startRestTimer = (seconds: number, exerciseName?: string) => {
     if (seconds <= 0) return;
     const endsAt = Date.now() + seconds * 1000;
     lastBuzzedSecondRef.current = null;
-    void scheduleRestNotification(endsAt, exerciseName);
+    // The OS alarm is armed by the native cue effect above on Android, elsewhere when the app leaves the screen.
     setRestTimer({
       isActive: true,
       remainingSeconds: seconds,
       totalSeconds: seconds,
       endsAt,
+      exerciseName,
     });
     const ctrl = controllerRef.current;
     if (ctrl) {
@@ -451,33 +563,30 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const adjustRestTimer = (deltaSeconds: number) => {
-    setRestTimer((prev) => {
-      if (!prev.endsAt) return prev;
-      const newEndsAt = prev.endsAt + deltaSeconds * 1000;
-      const remaining = computeRemaining(newEndsAt, Date.now());
-      if (remaining > 0) {
-        void scheduleRestNotification(newEndsAt);
-      } else {
-        void cancelRestNotification();
-      }
-      const updatedTimer = {
-        ...prev,
-        endsAt: newEndsAt,
-        remainingSeconds: remaining,
-        isActive: remaining > 0,
-      };
-      const ctrl = controllerRef.current;
-      if (ctrl) {
-        const state = ctrl.getState();
-        if (state.phase === 'active' && state.workout) {
-          ctrl.update(
-            state.workout,
-            remaining > 0 ? { endsAt: newEndsAt, totalSeconds: prev.totalSeconds } : null
-          );
-        }
-      }
-      return updatedTimer;
+    const countdown = restCountdownRef.current;
+    if (!countdown) return;
+    const shifted = shiftRestCountdown(countdown, deltaSeconds, Date.now());
+    if (!shifted) {
+      stopRestTimer();
+      return;
+    }
+    setRestTimer({
+      isActive: true,
+      remainingSeconds: computeRemaining(shifted.endsAt, Date.now()),
+      totalSeconds: shifted.totalSeconds,
+      endsAt: shifted.endsAt,
+      exerciseName: shifted.exerciseName,
     });
+    const ctrl = controllerRef.current;
+    if (ctrl) {
+      const state = ctrl.getState();
+      if (state.phase === 'active' && state.workout) {
+        ctrl.update(state.workout, {
+          endsAt: shifted.endsAt,
+          totalSeconds: shifted.totalSeconds,
+        });
+      }
+    }
   };
 
   const stopRestTimer = () => {
@@ -515,28 +624,25 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const workoutId = `wo-${Crypto.randomUUID()}`;
     const name = customName || (routine ? routine.name : 'Quick Workout');
     const store = await getStore();
-    const [loadedGyms, defaultGym] = await Promise.all([
-      store.getGyms(),
-      store.getDefaultGym(),
-    ]);
+    const [loadedGyms, defaultGym] = await Promise.all([store.getGyms(), store.getDefaultGym()]);
     const gymId = resolveStartGymId(defaultGym, options);
-    const selectedGym = loadedGyms.find((gym) => gym.id === gymId);
+    const selectedGym = loadedGyms.find(gym => gym.id === gymId);
     if (!selectedGym) {
       throw new Error(`Cannot start workout: unknown gym ${gymId}`);
     }
-    const gymNames = new Map(loadedGyms.map((gym) => [gym.id, gym.name]));
+    const gymNames = new Map(loadedGyms.map(gym => [gym.id, gym.name]));
 
     let exercises: ActiveExercise[] = [];
 
     if (initialExercises && initialExercises.length > 0) {
-      exercises = initialExercises.map((exercise) => ({
+      exercises = initialExercises.map(exercise => ({
         ...exercise,
-        sets: exercise.sets.map((set) => {
+        sets: exercise.sets.map(set => {
           const normalizedSet = clearSameGymProvenance(set, gymId);
           return {
             ...normalizedSet,
             previousGymName: normalizedSet.previousGymId
-              ? (normalizedSet.previousGymName || gymNames.get(normalizedSet.previousGymId))
+              ? normalizedSet.previousGymName || gymNames.get(normalizedSet.previousGymId)
               : normalizedSet.previousGymName,
           };
         }),
@@ -555,19 +661,24 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           targetReps: item.targetReps,
           suggestions: prevSets,
           currentGymId: gymId,
-          idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+          idGenerator: i => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
         });
 
-        exercises.push({
-          id: activeExId,
-          exerciseId: item.exerciseId,
-          exercise: item.exercise,
-          sets,
-          notes: '',
-          targetReps: item.targetReps,
-          restTimerSeconds: resolveRestTimerSeconds(item.restTimerSeconds),
-          supersetId: item.supersetId,
-        });
+        exercises.push(
+          withTrackingType<ActiveExercise>(
+            {
+              id: activeExId,
+              exerciseId: item.exerciseId,
+              exercise: item.exercise,
+              sets,
+              notes: '',
+              targetReps: item.targetReps,
+              restTimerSeconds: resolveRestTimerSeconds(item.restTimerSeconds),
+              supersetId: item.supersetId,
+            },
+            trackingTypeFor(item.exercise),
+          ),
+        );
       }
     }
 
@@ -580,6 +691,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       durationSeconds: 0,
       totalVolumeKg: 0,
       exercises,
+      ...(options?.deload ? { isDeload: true } : {}),
     };
 
     await ctrl.start(newWorkout);
@@ -642,11 +754,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!targetDraft) return;
 
     ctrl.resume(targetDraft);
-    setActiveGymState(gyms.find((gym) => gym.id === targetDraft.workout.gymId) || null);
+    setActiveGymState(gyms.find(gym => gym.id === targetDraft.workout.gymId) || null);
     setIsMinimized(false);
     setIsDraftModalOpen(false);
 
-    setExpandedExercises((prev) => {
+    setExpandedExercises(prev => {
       if (Object.keys(prev).length > 0) return prev;
       return resolveInitialAccordionState(targetDraft.workout.exercises);
     });
@@ -704,7 +816,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
     }
-    
+
     if (availableDrafts.length > 0) {
       const store = await getStore();
       await store.discardDraft(availableDrafts[0].workout.id);
@@ -716,26 +828,29 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     discardDraft().catch(console.error);
   };
 
-  const updateWorkoutDuration = useCallback((seconds: number) => {
-    const ctrl = controllerRef.current;
-    if (!ctrl) return;
-    const state = ctrl.getState();
-    if (state.phase !== 'active' || !state.workout) return;
-    const validSeconds = Math.max(0, Math.floor(seconds));
-    const newStartTime = new Date(Date.now() - validSeconds * 1000).toISOString();
-    const updated: Workout = {
-      ...state.workout,
-      startTime: newStartTime,
-      durationSeconds: validSeconds,
-    };
-    ctrl.update(
-      updated,
-      restTimer.isActive && restTimer.endsAt
-        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
-    );
-    setElapsedSeconds(validSeconds);
-  }, [restTimer]);
+  const updateWorkoutDuration = useCallback(
+    (seconds: number) => {
+      const ctrl = controllerRef.current;
+      if (!ctrl) return;
+      const state = ctrl.getState();
+      if (state.phase !== 'active' || !state.workout) return;
+      const validSeconds = Math.max(0, Math.floor(seconds));
+      const newStartTime = new Date(Date.now() - validSeconds * 1000).toISOString();
+      const updated: Workout = {
+        ...state.workout,
+        startTime: newStartTime,
+        durationSeconds: validSeconds,
+      };
+      ctrl.update(
+        updated,
+        restTimer.isActive && restTimer.endsAt
+          ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+          : null,
+      );
+      setElapsedSeconds(validSeconds);
+    },
+    [restTimer],
+  );
 
   const finishWorkout = async (durationSecondsOverride?: number): Promise<Workout | null> => {
     const ctrl = controllerRef.current;
@@ -747,6 +862,15 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     try {
       const finished = await ctrl.finish(durationSecondsOverride);
+      if (finished.isDeload) {
+        // Keep deload numbers out of "last time", so the next targets pick up where they left off.
+        void getSetting(DELOAD_WORKOUTS_KEY)
+          .then(stored => setSetting(DELOAD_WORKOUTS_KEY, addDeloadWorkoutId(stored, finished.id)))
+          .catch(error => console.warn('Unable to record the deload workout', error));
+      }
+      void runAutomaticBackup().catch(error => {
+        console.warn('Automatic workout backup failed', error);
+      });
       const settings = healthSyncSettingsRef.current;
       if (settings.loading) {
         pendingHealthSyncsRef.current.push(finished);
@@ -802,23 +926,27 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         targetReps: '10',
         suggestions: prevSets,
         currentGymId: currentWorkout.gymId,
-        idGenerator: (i) => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
+        idGenerator: i => `set-${activeExId}-${i}-${Crypto.randomUUID().slice(0, 6)}`,
       });
 
-
-      newActiveExercises.push({
-        id: activeExId,
-        exerciseId: exercise.id,
-        exercise,
-        sets: initialSets,
-        notes: '',
-        targetReps: '10',
-        restTimerSeconds: 0,
-      });
+      newActiveExercises.push(
+        withTrackingType<ActiveExercise>(
+          {
+            id: activeExId,
+            exerciseId: exercise.id,
+            exercise,
+            sets: initialSets,
+            notes: '',
+            targetReps: '10',
+            restTimerSeconds: 0,
+          },
+          trackingTypeFor(exercise),
+        ),
+      );
     }
 
     appendExercisesToCurrentWorkout(ctrl, expectedVersion, newActiveExercises);
-    setExpandedExercises((prev) => {
+    setExpandedExercises(prev => {
       const next = { ...prev };
       for (const ex of newActiveExercises) {
         next[ex.id] = true;
@@ -837,20 +965,25 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    setExpandedExercises((prev) => {
+    setExpandedExercises(prev => {
       const next = { ...prev };
       delete next[activeExerciseId];
       return next;
     });
 
-    const updatedExercises = state.workout.exercises.filter((e) => e.id !== activeExerciseId);
+    const updatedExercises = state.workout.exercises.filter(e => e.id !== activeExerciseId);
     const totalVol = calculateTotalVolume(updatedExercises);
     const updated: Workout = {
       ...state.workout,
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const moveExercise = (activeExerciseId: string, direction: -1 | 1) => {
@@ -859,7 +992,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = moveActiveExercise(state.workout.exercises, activeExerciseId, direction);
+    const updatedExercises = moveActiveExercise(
+      state.workout.exercises,
+      activeExerciseId,
+      direction,
+    );
     if (updatedExercises === state.workout.exercises) return;
 
     const updated: Workout = {
@@ -870,7 +1007,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -883,7 +1020,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updatedExercises = moveActiveExerciseToIndex(
       state.workout.exercises,
       activeExerciseId,
-      targetIndex
+      targetIndex,
     );
     if (updatedExercises === state.workout.exercises) return;
 
@@ -895,7 +1032,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -925,13 +1062,14 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const latestState = ctrl.getState();
     if (latestState.phase !== 'active' || !latestState.workout) return;
 
+    const replacementType = trackingTypeFor(exercise);
     const updatedExercises = replaceActiveExercise(
       latestState.workout.exercises,
       activeExerciseId,
       exercise,
       prevSets,
       currentWorkout.gymId,
-    );
+    ).map(ex => (ex.id === activeExerciseId ? withTrackingType(ex, replacementType) : ex));
 
     const totalVol = calculateTotalVolume(updatedExercises);
     const updated: Workout = {
@@ -943,7 +1081,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -953,7 +1091,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       const nextNum = ex.sets.length + 1;
       const ghostStats = resolveAddedSetGhostStats(ex.sets);
@@ -970,6 +1108,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isWeightEdited: false,
         previousWeightKg: ghostStats.previousWeightKg,
         previousReps: ghostStats.previousReps,
+        ...(ghostStats.previousDurationSeconds !== undefined
+          ? { previousDurationSeconds: ghostStats.previousDurationSeconds }
+          : {}),
+        ...(ghostStats.previousDistanceM !== undefined
+          ? { previousDistanceM: ghostStats.previousDistanceM }
+          : {}),
         ...copyPreviousSetProvenance(ghostStats.provenanceSet),
       };
       return { ...ex, sets: [...ex.sets, newSet] };
@@ -981,24 +1125,29 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const insertWarmupSets = (
     activeExerciseId: string,
     warmupSets: { weightKg: number; reps: number }[],
-    replaceExisting: boolean = true
+    replaceExisting: boolean = true,
   ) => {
     const ctrl = controllerRef.current;
     if (!ctrl) return;
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
 
-      const completedWarmupSets = ex.sets.filter((s) => s.type === 'warmup' && s.isCompleted);
-      const nonWarmupSets = ex.sets.filter((s) => s.type !== 'warmup');
+      const completedWarmupSets = ex.sets.filter(s => s.type === 'warmup' && s.isCompleted);
+      const nonWarmupSets = ex.sets.filter(s => s.type !== 'warmup');
 
       const newWarmupSets: WorkoutSet[] = warmupSets.map((ws, i) => ({
         id: `set-${ex.id}-w${i + 1}-${Crypto.randomUUID().slice(0, 6)}`,
@@ -1016,7 +1165,10 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ? [...completedWarmupSets, ...newWarmupSets, ...nonWarmupSets]
         : [...newWarmupSets, ...ex.sets];
 
-      const renumbered = combinedSets.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+      const renumbered = combinedSets.map((s, idx) => ({
+        ...s,
+        setNumber: idx + 1,
+      }));
       return { ...ex, sets: renumbered };
     });
 
@@ -1026,7 +1178,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const linkSuperset = (firstExerciseId: string, secondExerciseId: string) => {
@@ -1035,8 +1192,8 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const idx1 = state.workout.exercises.findIndex((e) => e.id === firstExerciseId);
-    const idx2 = state.workout.exercises.findIndex((e) => e.id === secondExerciseId);
+    const idx1 = state.workout.exercises.findIndex(e => e.id === firstExerciseId);
+    const idx2 = state.workout.exercises.findIndex(e => e.id === secondExerciseId);
     if (idx1 === -1 || idx2 === -1) return;
 
     const fallbackId = `ss-${Crypto.randomUUID().slice(0, 8)}`;
@@ -1046,7 +1203,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...state.workout,
       exercises: updatedExercises,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const unlinkSuperset = (exerciseId: string) => {
@@ -1055,7 +1217,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const targetIdx = state.workout.exercises.findIndex((e) => e.id === exerciseId);
+    const targetIdx = state.workout.exercises.findIndex(e => e.id === exerciseId);
     if (targetIdx === -1) return;
 
     const updatedExercises = unlinkExerciseFromGroup(state.workout.exercises, targetIdx);
@@ -1064,7 +1226,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...state.workout,
       exercises: updatedExercises,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const setSupersetGroup = (selectedExerciseIds: string[]) => {
@@ -1077,7 +1244,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updatedExercises = setSupersetGroupInList(
       state.workout.exercises,
       selectedExerciseIds,
-      fallbackId
+      fallbackId,
     );
 
     const updated: Workout = {
@@ -1088,7 +1255,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -1098,10 +1265,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
-      const filtered = ex.sets.filter((s) => s.id !== setId);
-      const renumbered = filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+      const filtered = ex.sets.filter(s => s.id !== setId);
+      const renumbered = filtered.map((s, idx) => ({
+        ...s,
+        setNumber: idx + 1,
+      }));
       return { ...ex, sets: renumbered };
     });
 
@@ -1111,7 +1281,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const moveSet = (activeExerciseId: string, setId: string, direction: -1 | 1) => {
@@ -1120,7 +1295,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       return {
         ...ex,
@@ -1136,7 +1311,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updated,
       restTimer.isActive && restTimer.endsAt
         ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
-        : null
+        : null,
     );
   };
 
@@ -1146,11 +1321,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       return {
         ...ex,
-        sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...updates } : s)),
+        sets: ex.sets.map(s => (s.id === setId ? { ...s, ...updates } : s)),
       };
     });
 
@@ -1160,7 +1335,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       exercises: updatedExercises,
       totalVolumeKg: totalVol,
     };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const updateExerciseNotes = (activeExerciseId: string, notes: string) => {
@@ -1169,11 +1349,16 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) =>
-      ex.id === activeExerciseId ? { ...ex, notes } : ex
+    const updatedExercises = state.workout.exercises.map(ex =>
+      ex.id === activeExerciseId ? { ...ex, notes } : ex,
     );
     const updated: Workout = { ...state.workout, exercises: updatedExercises };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const updateExerciseRestTimer = (activeExerciseId: string, seconds: number) => {
@@ -1182,11 +1367,52 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const updatedExercises = state.workout.exercises.map((ex) =>
-      ex.id === activeExerciseId ? { ...ex, restTimerSeconds: seconds } : ex
+    const updatedExercises = state.workout.exercises.map(ex =>
+      ex.id === activeExerciseId ? { ...ex, restTimerSeconds: seconds } : ex,
     );
     const updated: Workout = { ...state.workout, exercises: updatedExercises };
-    ctrl.update(updated, restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null);
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
+  };
+
+  const setExerciseTrackingType = (activeExerciseId: string, type: TrackingType) => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    const state = ctrl.getState();
+    if (state.phase !== 'active' || !state.workout) return;
+
+    // Completed sets that don't hold the new type's values go back to unchecked, so the
+    // workout never stores a completed set that later edits would reject.
+    const updatedExercises = state.workout.exercises.map(ex =>
+      ex.id === activeExerciseId
+        ? withTrackingType(
+            {
+              ...ex,
+              sets: ex.sets.map(s =>
+                s.isCompleted && validateTrackedSet(s, type)
+                  ? { ...s, isCompleted: false, completedAt: undefined }
+                  : s,
+              ),
+            },
+            type,
+          )
+        : ex,
+    );
+    const updated: Workout = {
+      ...state.workout,
+      exercises: updatedExercises,
+      totalVolumeKg: calculateTotalVolume(updatedExercises),
+    };
+    ctrl.update(
+      updated,
+      restTimer.isActive && restTimer.endsAt
+        ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+        : null,
+    );
   };
 
   const toggleSetComplete = (activeExerciseId: string, setId: string) => {
@@ -1195,23 +1421,28 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const state = ctrl.getState();
     if (state.phase !== 'active' || !state.workout) return;
 
-    const targetEx = state.workout.exercises.find((e) => e.id === activeExerciseId);
-    const targetSet = targetEx?.sets.find((s) => s.id === setId);
+    const targetEx = state.workout.exercises.find(e => e.id === activeExerciseId);
+    const targetSet = targetEx?.sets.find(s => s.id === setId);
     if (!targetSet || !targetEx) return;
 
+    const trackingType = getTrackingType(targetEx);
     let effectiveSet = targetSet;
     if (!targetSet.isCompleted) {
-      const isWeightEdited = targetSet.isWeightEdited ?? (targetSet.weightKg > 0);
+      const isWeightEdited = targetSet.isWeightEdited ?? targetSet.weightKg > 0;
       const needsReps = targetSet.reps <= 0;
-      const needsWeight = !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
-      if (needsReps || needsWeight) {
-        const setIdx = targetEx.sets.findIndex((s) => s.id === setId);
+      const needsWeight =
+        usesWeight(trackingType) &&
+        !isWeightEdited &&
+        targetSet.weightKg <= 0 &&
+        (targetSet.previousWeightKg ?? 0) > 0;
+      if (trackingType === 'duration' || trackingType === 'distance_duration') {
+        effectiveSet = fillTrackedSetFromPrevious(targetSet, trackingType);
+      } else if (needsReps || needsWeight) {
+        const setIdx = targetEx.sets.findIndex(s => s.id === setId);
         const fallbackReps = needsReps
           ? initialReps(targetEx.targetReps, setIdx >= 0 ? setIdx : 0, targetSet.previousReps)
           : targetSet.reps;
-        const fallbackWeight = needsWeight
-          ? (targetSet.previousWeightKg ?? 0)
-          : targetSet.weightKg;
+        const fallbackWeight = needsWeight ? (targetSet.previousWeightKg ?? 0) : targetSet.weightKg;
         effectiveSet = {
           ...targetSet,
           reps: fallbackReps,
@@ -1220,7 +1451,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
       }
 
-      const validationError = validateCompletedSet(effectiveSet);
+      const validationError = validateTrackedSet(effectiveSet, trackingType);
       if (validationError) {
         notify({
           title: 'Invalid Set',
@@ -1234,11 +1465,11 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let justCompleted = false;
     let completedExerciseName: string | undefined;
 
-    const updatedExercises = state.workout.exercises.map((ex) => {
+    const updatedExercises = state.workout.exercises.map(ex => {
       if (ex.id !== activeExerciseId) return ex;
       return {
         ...ex,
-        sets: ex.sets.map((s) => {
+        sets: ex.sets.map(s => {
           if (s.id !== setId) return s;
           const nextCompleted = !s.isCompleted;
           if (nextCompleted) {
@@ -1250,6 +1481,12 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             ...s,
             reps: nextCompleted ? effectiveSet.reps : s.reps,
             weightKg: nextCompleted ? effectiveSet.weightKg : s.weightKg,
+            ...(nextCompleted && effectiveSet.durationSeconds !== undefined
+              ? { durationSeconds: effectiveSet.durationSeconds }
+              : {}),
+            ...(nextCompleted && effectiveSet.distanceM !== undefined
+              ? { distanceM: effectiveSet.distanceM }
+              : {}),
             isWeightEdited: nextCompleted ? true : s.isWeightEdited,
             isCompleted: nextCompleted,
             completedAt: nextCompleted ? new Date().toISOString() : undefined,
@@ -1276,29 +1513,26 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       if (targetRestSeconds) {
         startRestTimer(targetRestSeconds, completedExerciseName);
-        timerMeta = { endsAt: Date.now() + targetRestSeconds * 1000, totalSeconds: targetRestSeconds };
+        timerMeta = {
+          endsAt: Date.now() + targetRestSeconds * 1000,
+          totalSeconds: targetRestSeconds,
+        };
       }
     } else {
-      timerMeta = restTimer.isActive && restTimer.endsAt ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds } : null;
+      timerMeta =
+        restTimer.isActive && restTimer.endsAt
+          ? { endsAt: restTimer.endsAt, totalSeconds: restTimer.totalSeconds }
+          : null;
     }
 
     ctrl.update(updated, timerMeta);
     // Flush immediately on completed-set changes as required by spec
-    ctrl.flush().catch((error) => {
+    ctrl.flush().catch(error => {
       reportError(error, { scope: 'workout.autosave.set-complete' });
     });
   };
 
-  const calculateTotalVolume = (exercises: ActiveExercise[]): number => {
-    return exercises.reduce((sum, ex) => {
-      return (
-        sum +
-        ex.sets
-          .filter((s) => s.isCompleted)
-          .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0)
-      );
-    }, 0);
-  };
+  const calculateTotalVolume = (exercises: ActiveExercise[]): number => workoutVolumeKg(exercises);
 
   /** Retry the draft write that failed, driven by the persistence warning banner. */
   const retryPersistence = async (): Promise<void> => {
@@ -1333,6 +1567,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     updateSet,
     updateExerciseNotes,
     updateExerciseRestTimer,
+    setExerciseTrackingType,
     updateWorkoutDuration,
     toggleSetComplete,
     startRestTimer,
@@ -1353,7 +1588,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // reaches the latest implementation (and therefore the latest state it closes over).
   const stableActions = useMemo(() => {
     const proxies = {} as typeof actions;
-    (Object.keys(actionsRef.current) as (keyof typeof actions)[]).forEach((key) => {
+    (Object.keys(actionsRef.current) as (keyof typeof actions)[]).forEach(key => {
       (proxies as Record<string, unknown>)[key] = (...args: unknown[]) =>
         (actionsRef.current[key] as (...a: unknown[]) => unknown)(...args);
     });

@@ -1,3 +1,4 @@
+import { isDeviceLocalSetting } from '../utils/settings';
 import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
@@ -18,6 +19,8 @@ import {
 } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
+import { DELOAD_WORKOUTS_KEY, parseDeloadWorkoutIds } from '../workout/programs';
+import { isMergedOnRestore } from '../utils/settings';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -1076,10 +1079,11 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     currentGymId?: string,
   ): Promise<PreviousSetSuggestion[]> {
     const database = await openDb();
-    const [gyms, exerciseScope, exercise] = await Promise.all([
+    const [gyms, exerciseScope, exercise, storedDeloadIds] = await Promise.all([
       getGyms(),
       getExerciseGymScope(exerciseId),
       getExerciseById(exerciseId),
+      getSetting(DELOAD_WORKOUTS_KEY),
     ]);
     if (!exercise) return [];
     const gymNames = new Map(gyms.map(gym => [gym.id, gym.name]));
@@ -1107,10 +1111,23 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
             sets: selected?.sets
               .filter(set => set.isCompleted)
               .sort((a, b) => a.setNumber - b.setNumber || compareBinaryStrings(a.id, b.id))
-              .map(set => ({ weightKg: set.weightKg, reps: set.reps })) || [],
+              .map(set => ({
+                weightKg: set.weightKg,
+                reps: set.reps,
+                ...(set.durationSeconds !== undefined ? { durationSeconds: set.durationSeconds } : {}),
+                ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+                type: set.type,
+                ...(set.rpe !== undefined && set.rpe !== null ? { rpe: set.rpe } : {}),
+              })) || [],
           };
         });
-        resolve(resolvePreviousSetsForExercise(exercise, occurrences, currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id, exerciseScope || undefined));
+        resolve(resolvePreviousSetsForExercise(
+          exercise,
+          occurrences,
+          currentGymId || (gyms.find(gym => gym.isDefault) || DEFAULT_GYM).id,
+          exerciseScope || undefined,
+          new Set(parseDeloadWorkoutIds(storedDeloadIds)),
+        ));
       };
       req.onerror = () => reject(req.error);
     });
@@ -1413,8 +1430,13 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const gymStore = tx.objectStore('gyms');
       const destinationGymIds = new Set(destinationGyms.map((gym) => gym.id));
+      const destinationDefaultGym = destinationGyms.find((gym) => gym.isDefault);
       for (const gym of incomingGyms) {
-        if (!destinationGymIds.has(gym.id)) gymStore.put({ ...gym, isDefault: false });
+        if (gym.isDefault && destinationDefaultGym && gym.id === destinationDefaultGym.id) {
+          gymStore.put({ ...destinationDefaultGym, name: gym.name, color: gym.color });
+        } else if (!destinationGymIds.has(gym.id)) {
+          gymStore.put({ ...gym, isDefault: false });
+        }
       }
       const scopeStore = tx.objectStore('exercise_gym_scopes');
       for (const scope of snapshot.exerciseGymScopes || []) {
@@ -1446,10 +1468,11 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const sStore = tx.objectStore('settings');
       for (const [k, v] of Object.entries(snapshot.settings)) {
-        if (k === 'health_sync_enabled') continue;
+        if (isDeviceLocalSetting(k)) continue;
         const getReq = sStore.get(k);
         getReq.onsuccess = () => {
-          if (!getReq.result) {
+          // Keyed settings (tracking types, rotations) arrive already merged with this device's.
+          if (!getReq.result || isMergedOnRestore(k)) {
             sStore.put({ key: k, value: v });
           }
         };

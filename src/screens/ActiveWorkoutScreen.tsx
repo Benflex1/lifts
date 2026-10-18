@@ -34,6 +34,10 @@ import {
   Info,
   Flame,
   Layers,
+  GripVertical,
+  SlidersHorizontal,
+  TrendingUp,
+  Feather,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -56,8 +60,17 @@ import { useDialog } from '../context/DialogContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
 import { formatPreviousMetric } from '../workout/gym-display';
-import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
-import { evaluateWorkoutPRsWithSource, formatPRDescription, PRHistoryIndex, WorkoutPRSummary } from '../workout/pr';
+import {
+  getCompletedWorkoutsForExercise,
+  getCompletedWorkoutsForExercises,
+  getExerciseGymScope,
+} from '../database/db';
+import {
+  buildActiveWorkoutRecordIndex,
+  evaluateActiveWorkoutPRs,
+  formatPRDescription,
+  WorkoutPRSummary,
+} from '../workout/pr';
 import { PRBadge } from '../components/PRBadge';
 import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { WarmupModal } from '../components/WarmupModal';
@@ -67,10 +80,26 @@ import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
+import { isOverloadFillTarget, OverloadSuggestion, suggestNextTarget } from '../workout/overload';
 import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
 import { isExcessiveDuration } from '../workout/duration';
 import { colors } from '../theme';
 import { styles } from './activeWorkoutStyles';
+import {
+  distanceUnitFor,
+  formatSetDuration,
+  countsLoad,
+  getTrackingType,
+  metersToDisplay,
+  trackingTypeLabel,
+  setVolumeKg,
+  usesDistance,
+  usesDuration,
+  usesReps,
+  usesWeight,
+} from '../workout/tracking';
+import { DistanceInput, DurationInput } from '../components/TrackedValueInput';
+import { TrackingTypeModal } from '../components/TrackingTypeModal';
 
 /** Renders the ticking workout duration without re-rendering the whole logger every second. */
 const LiveWorkoutClock: React.FC = () => {
@@ -78,7 +107,9 @@ const LiveWorkoutClock: React.FC = () => {
   return <>{formatTimer(elapsedSeconds)}</>;
 };
 
-export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
+export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({
+  onFinish,
+}) => {
   useKeepAwake();
   const insets = useSafeAreaInsets();
 
@@ -101,6 +132,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     updateSet,
     updateExerciseNotes,
     updateExerciseRestTimer,
+    setExerciseTrackingType,
     updateWorkoutDuration,
     toggleSetComplete,
     finishWorkout,
@@ -116,13 +148,22 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     setActiveGym,
   } = useWorkout();
   const isRestTimerActive = useIsRestTimerActive();
-  const { unit, gymTrackingEnabled } = useSettings();
+  const {
+    unit,
+    gymTrackingEnabled,
+    trackingTypesEnabled,
+    overloadEnabled,
+    setExerciseTrackingType: saveExerciseTrackingType,
+  } = useSettings();
+  const [trackingTypeExercise, setTrackingTypeExercise] = useState<ActiveExercise | null>(null);
   const { confirm, notify } = useDialog();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [showGymPicker, setShowGymPicker] = useState(false);
   const [swapExerciseId, setSwapExerciseId] = useState<string | null>(null);
-  const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(null);
+  const [restWheelActiveExercise, setRestWheelActiveExercise] = useState<ActiveExercise | null>(
+    null,
+  );
   const [plateCalcWeight, setPlateCalcWeight] = useState<number | null>(null);
   const [activeSetForPlateCalc, setActiveSetForPlateCalc] = useState<{
     exerciseId: string;
@@ -157,7 +198,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   }, [activeWorkout, supersetMetaMap]);
 
   const supersetModalExercises = useMemo(() => {
-    return (activeWorkout?.exercises || []).map((e) => ({
+    return (activeWorkout?.exercises || []).map(e => ({
       id: e.id,
       name: e.exercise?.name || 'Exercise',
       category: e.exercise?.category,
@@ -171,15 +212,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     const defaultBar = getDefaultBarWeight(
       activeEx.exercise?.equipment,
       activeEx.exercise?.category,
-      unit
+      unit,
     );
 
     let targetWorkingWeight = 0;
-    const workingSet = activeEx.sets.find((s) => s.type !== 'warmup' && s.weightKg > 0);
+    const workingSet = activeEx.sets.find(s => s.type !== 'warmup' && s.weightKg > 0);
     if (workingSet) {
       targetWorkingWeight = workingSet.weightKg;
     } else {
-      const ghostSet = activeEx.sets.find((s) => (s.previousWeightKg || 0) > 0);
+      const ghostSet = activeEx.sets.find(s => (s.previousWeightKg || 0) > 0);
       targetWorkingWeight =
         ghostSet?.previousWeightKg ||
         (defaultBar > 0 ? (unit === 'lb' ? displayToKg(135, 'lb') : 60) : 0);
@@ -187,17 +228,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
     const inc = getDefaultIncrement(unit);
     const displayWorking = kgToDisplay(targetWorkingWeight, unit);
-    const displayWarmup = Math.max(
-      roundToIncrement(displayWorking * 0.5, inc),
-      defaultBar
-    );
+    const displayWarmup = Math.max(roundToIncrement(displayWorking * 0.5, inc), defaultBar);
     const warmupWeightKg = displayToKg(displayWarmup, unit);
 
-    insertWarmupSets(
-      activeEx.id,
-      [{ weightKg: warmupWeightKg, reps: 8 }],
-      false
-    );
+    insertWarmupSets(activeEx.id, [{ weightKg: warmupWeightKg, reps: 8 }], false);
 
     if (Platform.OS !== 'web') {
       bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
@@ -229,28 +263,30 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   // PR Tracking & Historical baseline cache
   const [exerciseWorkouts, setExerciseWorkouts] = useState<Record<string, Workout[]>>({});
-  const [exerciseScopes, setExerciseScopes] = useState<Record<string, ExerciseGymScope | undefined>>({});
+  const [exerciseScopes, setExerciseScopes] = useState<
+    Record<string, ExerciseGymScope | undefined>
+  >({});
   const [prCelebrationEvent, setPrCelebrationEvent] = useState<PRCelebrationEvent | null>(null);
 
   useEffect(() => {
     if (!activeWorkout) return;
-    const missingIds = Array.from(
-      new Set(activeWorkout.exercises.map((ex) => ex.exerciseId))
-    ).filter((id) => !(id in exerciseWorkouts));
+    const missingIds = Array.from(new Set(activeWorkout.exercises.map(ex => ex.exerciseId))).filter(
+      id => !(id in exerciseWorkouts),
+    );
 
     if (missingIds.length === 0) return;
 
     let mounted = true;
     Promise.all([
       getCompletedWorkoutsForExercises(missingIds),
-      Promise.all(missingIds.map((id) => getExerciseGymScope(id))),
+      Promise.all(missingIds.map(id => getExerciseGymScope(id))),
     ]).then(([workoutsByEx, scopes]) => {
       if (!mounted) return;
-      setExerciseWorkouts((prev) => ({
+      setExerciseWorkouts(prev => ({
         ...prev,
         ...workoutsByEx,
       }));
-      setExerciseScopes((prev) => {
+      setExerciseScopes(prev => {
         const next = { ...prev };
         missingIds.forEach((id, idx) => {
           next[id] = scopes[idx] || undefined;
@@ -266,26 +302,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   // Prior records are indexed once per loaded history, so re-ranking after each set change only
   // looks at this workout's sets instead of rescanning every past workout.
-  const activeStartTime = activeWorkout?.startTime;
-  const priorRecordIndex = useMemo(() => {
-    const index = new PRHistoryIndex();
-    const loadedExerciseIds = new Set(Object.keys(exerciseWorkouts));
-    const added = new Set<string>();
-    for (const list of Object.values(exerciseWorkouts)) {
-      for (const workout of list) {
-        if (added.has(workout.id)) continue;
-        if (activeStartTime && workout.startTime >= activeStartTime) continue;
-        added.add(workout.id);
-        index.add(workout, loadedExerciseIds);
-      }
-    }
-    return index;
-  }, [exerciseWorkouts, activeStartTime]);
+  const activeWorkoutId = activeWorkout?.id;
+  const priorRecordIndex = useMemo(
+    () => buildActiveWorkoutRecordIndex(exerciseWorkouts, activeWorkoutId),
+    [exerciseWorkouts, activeWorkoutId],
+  );
 
   const prSummary = useMemo(() => {
     if (!activeWorkout) return null;
-    return evaluateWorkoutPRsWithSource(activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes);
-  }, [activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
+    return evaluateActiveWorkoutPRs(
+      activeWorkout,
+      exerciseWorkouts,
+      priorRecordIndex,
+      gyms,
+      gymTrackingEnabled,
+      exerciseScopes,
+    );
+  }, [activeWorkout, exerciseWorkouts, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
 
   const previousCompletedSetIdsRef = useRef<Set<string> | null>(null);
 
@@ -314,14 +347,19 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       if (!previousCompletedSetIdsRef.current.has(setId)) {
         const pr = prSummary?.setPRs.get(setId);
         if (pr?.primary) {
-          bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+          bestEffortHaptic(() =>
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+          );
           for (const ex of activeWorkout.exercises) {
-            const foundSet = ex.sets.find((s) => s.id === setId);
+            const foundSet = ex.sets.find(s => s.id === setId);
             if (foundSet) {
               setPrCelebrationEvent({
                 exerciseName: ex.exercise?.name || 'Exercise',
                 weightKg: foundSet.weightKg,
                 reps: foundSet.reps,
+                durationSeconds: foundSet.durationSeconds,
+                distanceM: foundSet.distanceM,
+                trackingType: ex.trackingType,
                 achievement: pr.primary,
                 secondaryCount: Math.max(0, pr.achievements.length - 1),
               });
@@ -335,43 +373,67 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     previousCompletedSetIdsRef.current = currentCompleted;
   }, [activeWorkout, prSummary]);
 
-  const handleToggleSetWithHaptics = useCallback((exerciseId: string, setId: string) => {
-    const workout = activeWorkoutRef.current;
-    const currentEx = workout?.exercises.find((e) => e.id === exerciseId);
-    const targetSet = currentEx?.sets.find((s) => s.id === setId);
-    const isBecomingCompleted = targetSet ? !targetSet.isCompleted : false;
+  const handleToggleSetWithHaptics = useCallback(
+    (exerciseId: string, setId: string) => {
+      const workout = activeWorkoutRef.current;
+      const currentEx = workout?.exercises.find(e => e.id === exerciseId);
+      const targetSet = currentEx?.sets.find(s => s.id === setId);
+      const isBecomingCompleted = targetSet ? !targetSet.isCompleted : false;
 
-    toggleSetComplete(exerciseId, setId);
+      toggleSetComplete(exerciseId, setId);
 
-    if (isBecomingCompleted && currentEx?.supersetId && workout) {
-      const nextTarget = resolveNextSupersetTarget(workout, exerciseId, setId);
-      if (nextTarget && !nextTarget.isRoundComplete) {
-        setExerciseExpanded(nextTarget.nextExerciseId, true);
-        const meta = supersetMetaMapRef.current.get(exerciseId);
-        const groupLabel = meta?.label || 'SUPERSET';
-        setSupersetNextUpCue(`${groupLabel}: ${nextTarget.nextExerciseName} · Set ${nextTarget.nextSetNumber}`);
-      } else {
+      if (isBecomingCompleted && currentEx?.supersetId && workout) {
+        const nextTarget = resolveNextSupersetTarget(workout, exerciseId, setId);
+        if (nextTarget && !nextTarget.isRoundComplete) {
+          setExerciseExpanded(nextTarget.nextExerciseId, true);
+          const meta = supersetMetaMapRef.current.get(exerciseId);
+          const groupLabel = meta?.label || 'SUPERSET';
+          setSupersetNextUpCue(
+            `${groupLabel}: ${nextTarget.nextExerciseName} · Set ${nextTarget.nextSetNumber}`,
+          );
+        } else {
+          setSupersetNextUpCue(null);
+        }
+      } else if (!isBecomingCompleted) {
         setSupersetNextUpCue(null);
       }
-    } else if (!isBecomingCompleted) {
-      setSupersetNextUpCue(null);
-    }
-  }, [toggleSetComplete, setExerciseExpanded]);
+    },
+    [toggleSetComplete, setExerciseExpanded],
+  );
 
-  const handleApplyPreviousStats = useCallback((exerciseId: string, set: WorkoutSet, targetReps?: string) => {
-    if (set.isCompleted) return;
-    if (set.previousWeightKg === undefined && set.previousReps === undefined) return;
+  const handleApplyPreviousStats = useCallback(
+    (exerciseId: string, set: WorkoutSet, targetReps?: string) => {
+      if (set.isCompleted) return;
+      if (set.previousWeightKg === undefined && set.previousReps === undefined) return;
+      if (Platform.OS !== 'web') {
+        bestEffortHaptic(() => Haptics.selectionAsync());
+      }
+      const fallbackReps = parseInt(targetReps || '10', 10) || 10;
+      const applied = applyPreviousSetStats(set, fallbackReps);
+      updateSet(exerciseId, set.id, {
+        weightKg: applied.weightKg,
+        reps: applied.reps,
+        isWeightEdited: true,
+      });
+    },
+    [updateSet],
+  );
+
+  const handleApplyOverload = (activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
     if (Platform.OS !== 'web') {
-      bestEffortHaptic(() => Haptics.selectionAsync());
+      try {
+        Haptics.selectionAsync();
+      } catch (_) {}
     }
-    const fallbackReps = parseInt(targetReps || '10', 10) || 10;
-    const applied = applyPreviousSetStats(set, fallbackReps);
-    updateSet(exerciseId, set.id, {
-      weightKg: applied.weightKg,
-      reps: applied.reps,
-      isWeightEdited: true,
-    });
-  }, [updateSet]);
+    for (const set of activeEx.sets) {
+      if (!isOverloadFillTarget(set)) continue;
+      updateSet(activeEx.id, set.id, {
+        weightKg: suggestion.weightKg,
+        reps: suggestion.reps,
+        isWeightEdited: true,
+      });
+    }
+  };
 
   // Handle hardware back press on Android to minimize instead of exiting
   useEffect(() => {
@@ -417,10 +479,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     }
   }, []);
 
-  const handleInputFocus = useCallback((event: any, inputRef?: React.RefObject<any>) => {
-    activeInputRef.current = inputRef?.current || event?.target;
-    setTimeout(ensureInputVisible, 120);
-  }, [ensureInputVisible]);
+  const handleInputFocus = useCallback(
+    (event: any, inputRef?: React.RefObject<any>) => {
+      activeInputRef.current = inputRef?.current || event?.target;
+      setTimeout(ensureInputVisible, 120);
+    },
+    [ensureInputVisible],
+  );
 
   useEffect(() => {
     const onShow = (e: any) => {
@@ -437,11 +502,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
     const showSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      onShow
+      onShow,
     );
     const hideSub = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      onHide
+      onHide,
     );
 
     return () => {
@@ -461,10 +526,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     let total = 0;
 
     for (const ex of activeWorkout.exercises) {
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets) {
         total++;
         if (s.isCompleted) {
-          volume += s.weightKg * s.reps;
+          volume += setVolumeKg(s, trackingType);
           completed++;
         }
       }
@@ -473,7 +539,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     return { liveVolume: volume, completedSetsCount: completed, totalSetsCount: total };
   }, [activeWorkout.exercises]);
 
-  const displayedActiveGym = activeGym || gyms.find((gym) => gym.id === activeWorkout.gymId) || null;
+  const displayedActiveGym = activeGym || gyms.find(gym => gym.id === activeWorkout.gymId) || null;
+
+  const menuHasLoad = countsLoad(getTrackingType(menuActiveExercise ?? undefined));
 
   const menuExerciseIndex = menuActiveExercise
     ? activeWorkout.exercises.findIndex(exercise => exercise.id === menuActiveExercise.id)
@@ -566,23 +634,26 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   };
 
   // Open the instant Set Options / 1-Tap RPE modal
-  const openSetOptions = useCallback((activeExerciseId: string, exerciseName: string, set: WorkoutSet) => {
-    setSetOptionsModal({
-      activeExerciseId,
-      exerciseName,
-      set,
-    });
-  }, []);
+  const openSetOptions = useCallback(
+    (activeExerciseId: string, exerciseName: string, set: WorkoutSet) => {
+      setSetOptionsModal({
+        activeExerciseId,
+        exerciseName,
+        set,
+      });
+    },
+    [],
+  );
 
   const handleSelectSetType = (type: SetType) => {
     if (!setOptionsModal) return;
-    const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
-    const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
+    const modalEx = activeWorkout?.exercises.find(e => e.id === setOptionsModal.activeExerciseId);
+    const setIdx = modalEx?.sets.findIndex(s => s.id === setOptionsModal.set.id) ?? -1;
     // Find the previous working set (ignoring warmups and unweighted sets)
     const prevWorkingSet = modalEx?.sets
       .slice(0, setIdx)
       .reverse()
-      .find((s) => s.type !== 'warmup' && s.weightKg > 0);
+      .find(s => s.type !== 'warmup' && s.weightKg > 0);
 
     let updatedWeightKg = setOptionsModal.set.weightKg;
     let isWeightEdited = setOptionsModal.set.isWeightEdited;
@@ -595,7 +666,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     ) {
       const inc = getDefaultIncrement(unit);
       const prevDisp = kgToDisplay(prevWorkingSet.weightKg, unit);
-      updatedWeightKg = displayToKg(roundToIncrement(prevDisp * 0.80, inc), unit);
+      updatedWeightKg = displayToKg(roundToIncrement(prevDisp * 0.8, inc), unit);
       isWeightEdited = true;
     }
 
@@ -605,7 +676,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         ? { weightKg: updatedWeightKg, isWeightEdited: true }
         : {}),
     });
-    setSetOptionsModal((prev) =>
+    setSetOptionsModal(prev =>
       prev
         ? {
             ...prev,
@@ -616,7 +687,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               isWeightEdited,
             },
           }
-        : null
+        : null,
     );
   };
 
@@ -624,7 +695,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     if (!setOptionsModal) return;
     const updatedRpe = rpe ?? undefined;
     updateSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, { rpe: updatedRpe });
-    setSetOptionsModal((prev) => (prev ? { ...prev, set: { ...prev.set, rpe: updatedRpe } } : null));
+    setSetOptionsModal(prev => (prev ? { ...prev, set: { ...prev.set, rpe: updatedRpe } } : null));
   };
 
   return (
@@ -648,7 +719,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           <Text style={styles.topBarTitle} numberOfLines={1}>
             {activeWorkout.name}
           </Text>
-          {gymTrackingEnabled && displayedActiveGym ? (
+          {activeWorkout.isDeload ? (
+            <Text style={[styles.topBarSubtitle, styles.topBarDeload]} numberOfLines={1}>
+              Deload week
+              {gymTrackingEnabled && displayedActiveGym ? ` · ${displayedActiveGym.name}` : ''}
+            </Text>
+          ) : gymTrackingEnabled && displayedActiveGym ? (
             <Text style={styles.topBarSubtitle} numberOfLines={1}>
               {displayedActiveGym.name}
             </Text>
@@ -711,7 +787,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         <View
           style={[
             styles.progressFill,
-            { width: `${totalSetsCount > 0 ? Math.round((completedSetsCount / totalSetsCount) * 100) : 0}%` },
+            {
+              width: `${totalSetsCount > 0 ? Math.round((completedSetsCount / totalSetsCount) * 100) : 0}%`,
+            },
           ]}
         />
       </View>
@@ -727,13 +805,13 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        onScroll={(e) => {
+        onScroll={e => {
           currentScrollY.current = e.nativeEvent.contentOffset.y;
         }}
         scrollEventThrottle={16}
         scrollEnabled={true}
       >
-        {activeWorkout.exercises.map((activeEx) => {
+        {activeWorkout.exercises.map(activeEx => {
           const ssMeta = supersetMetaMap.get(activeEx.id);
 
           return (
@@ -770,6 +848,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 showRpeColumn={showRpeColumn}
                 gymTrackingEnabled={gymTrackingEnabled}
                 prSummary={prSummary}
+                overloadEnabled={overloadEnabled}
+                isDeload={activeWorkout.isDeload === true}
+                onApplyOverload={handleApplyOverload}
+                onExplainOverload={(label, suggestion) =>
+                  void notify({ title: `Next target: ${label}`, message: suggestion.reason })
+                }
                 onToggleExpanded={toggleExerciseExpanded}
                 onCommitNotes={updateExerciseNotes}
                 onOpenDetail={setSelectedDetailExercise}
@@ -804,7 +888,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Dumbbell size={26} color={colors.primary} />
             </View>
             <Text style={styles.emptyWorkoutTitle}>Let's get moving</Text>
-            <Text style={styles.emptyWorkoutText}>Add your first exercise to start logging sets.</Text>
+            <Text style={styles.emptyWorkoutText}>
+              Add your first exercise to start logging sets.
+            </Text>
           </View>
         )}
 
@@ -843,7 +929,12 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
       {/* Non-blocking Floating Superset Cue when timer is not active */}
       {!isRestTimerActive && supersetNextUpCue && (
-        <View style={[styles.supersetFloatingCue, { bottom: keyboardHeight > 0 ? keyboardHeight + 16 : 24 }]}>
+        <View
+          style={[
+            styles.supersetFloatingCue,
+            { bottom: keyboardHeight > 0 ? keyboardHeight + 16 : 24 },
+          ]}
+        >
           <View style={styles.supersetCueBadge}>
             <Text style={styles.supersetCueBadgeText}>NEXT UP</Text>
           </View>
@@ -888,11 +979,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         currentExerciseId={supersetModalExerciseId}
         exercises={supersetModalExercises}
         onClose={() => setSupersetModalExerciseId(null)}
-        onSaveSuperset={(selectedIds) => {
+        onSaveSuperset={selectedIds => {
           setSupersetGroup(selectedIds);
           setSupersetModalExerciseId(null);
         }}
-        onUngroupSuperset={(exId) => {
+        onUngroupSuperset={exId => {
           unlinkSuperset(exId);
           setSupersetModalExerciseId(null);
         }}
@@ -960,12 +1051,24 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       />
 
       {/* Rest Time Wheel Modal */}
+      <TrackingTypeModal
+        visible={trackingTypeExercise !== null}
+        exerciseName={trackingTypeExercise?.exercise?.name}
+        selectedType={getTrackingType(trackingTypeExercise ?? undefined)}
+        onSelect={type => {
+          if (!trackingTypeExercise) return;
+          setExerciseTrackingType(trackingTypeExercise.id, type);
+          saveExerciseTrackingType(trackingTypeExercise.exerciseId, type).catch(() => {});
+        }}
+        onClose={() => setTrackingTypeExercise(null)}
+      />
+
       <RestTimeWheelModal
         visible={restWheelActiveExercise !== null}
         initialSeconds={restWheelActiveExercise?.restTimerSeconds ?? 0}
         exerciseName={restWheelActiveExercise?.exercise?.name}
         onClose={() => setRestWheelActiveExercise(null)}
-        onSave={(seconds) => {
+        onSave={seconds => {
           if (restWheelActiveExercise) {
             updateExerciseRestTimer(restWheelActiveExercise.id, seconds);
           }
@@ -980,15 +1083,15 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         onRequestClose={() => setSetOptionsModal(null)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.setOptionsSheet, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
+          <View
+            style={[styles.setOptionsSheet, { paddingBottom: Math.max(20, insets.bottom + 12) }]}
+          >
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalHeaderTitle}>
                   Set {setOptionsModal?.set.setNumber} Details
                 </Text>
-                <Text style={styles.modalHeaderSubtitle}>
-                  {setOptionsModal?.exerciseName}
-                </Text>
+                <Text style={styles.modalHeaderSubtitle}>{setOptionsModal?.exerciseName}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setSetOptionsModal(null)}
@@ -1008,8 +1111,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     {prSummary.setPRs.get(setOptionsModal.set.id)!.primary?.rank === 1
                       ? 'PERSONAL RECORD (1ST BEST)'
                       : prSummary.setPRs.get(setOptionsModal.set.id)!.primary?.rank === 2
-                      ? 'SILVER RECORD (2ND BEST)'
-                      : 'BRONZE RECORD (3RD BEST)'}
+                        ? 'SILVER RECORD (2ND BEST)'
+                        : 'BRONZE RECORD (3RD BEST)'}
                   </Text>
                 </View>
                 {prSummary.setPRs.get(setOptionsModal.set.id)!.achievements.map((ach, idx) => (
@@ -1031,7 +1134,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     { type: 'drop', label: 'Drop (D)' },
                     { type: 'failure', label: 'Failure (F)' },
                   ] as const
-                ).map((t) => {
+                ).map(t => {
                   const isSelected = setOptionsModal?.set.type === t.type;
                   return (
                     <TouchableOpacity
@@ -1039,9 +1142,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       style={[styles.typeChip, isSelected && styles.typeChipActive]}
                       onPress={() => handleSelectSetType(t.type)}
                     >
-                      <Text
-                        style={[styles.typeChipText, isSelected && styles.typeChipTextActive]}
-                      >
+                      <Text style={[styles.typeChipText, isSelected && styles.typeChipTextActive]}>
                         {t.label}
                       </Text>
                     </TouchableOpacity>
@@ -1052,20 +1153,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               {/* Quick Drop Set Load Reduction Helper */}
               {(() => {
                 if (setOptionsModal?.set.type !== 'drop') return null;
-                const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal.activeExerciseId);
-                const setIdx = modalEx?.sets.findIndex((s) => s.id === setOptionsModal.set.id) ?? -1;
+                const modalEx = activeWorkout?.exercises.find(
+                  e => e.id === setOptionsModal.activeExerciseId,
+                );
+                const setIdx = modalEx?.sets.findIndex(s => s.id === setOptionsModal.set.id) ?? -1;
                 const prevWorkingSet = modalEx?.sets
                   .slice(0, setIdx)
                   .reverse()
-                  .find((s) => s.type !== 'warmup' && s.weightKg > 0);
-                if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0) return null;
+                  .find(s => s.type !== 'warmup' && s.weightKg > 0);
+                if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0)
+                  return null;
 
                 const inc = getDefaultIncrement(unit);
                 const prevDisplay = kgToDisplay(prevWorkingSet.weightKg, unit);
                 const dropReductions = [
-                  { pct: 20, kg: displayToKg(roundToIncrement(prevDisplay * 0.80, inc), unit) },
+                  { pct: 20, kg: displayToKg(roundToIncrement(prevDisplay * 0.8, inc), unit) },
                   { pct: 25, kg: displayToKg(roundToIncrement(prevDisplay * 0.75, inc), unit) },
-                  { pct: 30, kg: displayToKg(roundToIncrement(prevDisplay * 0.70, inc), unit) },
+                  { pct: 30, kg: displayToKg(roundToIncrement(prevDisplay * 0.7, inc), unit) },
                 ];
 
                 return (
@@ -1075,7 +1179,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       Based on Set #{prevWorkingSet.setNumber} ({prevDisplay} {unit}):
                     </Text>
                     <View style={styles.dropChipsRow}>
-                      {dropReductions.map((r) => {
+                      {dropReductions.map(r => {
                         const isCurrent = Math.abs(setOptionsModal.set.weightKg - r.kg) < 0.05;
                         return (
                           <TouchableOpacity
@@ -1086,20 +1190,27 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                                 weightKg: r.kg,
                                 isWeightEdited: true,
                               });
-                              setSetOptionsModal((prev) =>
+                              setSetOptionsModal(prev =>
                                 prev
                                   ? {
                                       ...prev,
                                       set: { ...prev.set, weightKg: r.kg, isWeightEdited: true },
                                     }
-                                  : null
+                                  : null,
                               );
                             }}
                           >
-                            <Text style={[styles.dropChipPct, isCurrent && styles.dropChipPctActive]}>
+                            <Text
+                              style={[styles.dropChipPct, isCurrent && styles.dropChipPctActive]}
+                            >
                               -{r.pct}%
                             </Text>
-                            <Text style={[styles.dropChipWeight, isCurrent && styles.dropChipWeightActive]}>
+                            <Text
+                              style={[
+                                styles.dropChipWeight,
+                                isCurrent && styles.dropChipWeightActive,
+                              ]}
+                            >
                               {kgToDisplay(r.kg, unit)} {unit}
                             </Text>
                           </TouchableOpacity>
@@ -1119,7 +1230,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               </View>
 
               <View style={styles.rpeChipsGrid}>
-                {RPE_CHIPS.map((val) => {
+                {RPE_CHIPS.map(val => {
                   const isSelected =
                     val === null
                       ? setOptionsModal?.set.rpe == null
@@ -1149,8 +1260,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
             {/* Quick Action Shortcuts: Reorder */}
             {(() => {
-              const modalEx = activeWorkout?.exercises.find((e) => e.id === setOptionsModal?.activeExerciseId);
-              const currentSetIndex = modalEx?.sets.findIndex((s) => s.id === setOptionsModal?.set.id) ?? -1;
+              const modalEx = activeWorkout?.exercises.find(
+                e => e.id === setOptionsModal?.activeExerciseId,
+              );
+              const currentSetIndex =
+                modalEx?.sets.findIndex(s => s.id === setOptionsModal?.set.id) ?? -1;
               const totalSets = modalEx?.sets.length ?? 0;
               const isFirstSet = currentSetIndex <= 0;
               const isLastSet = currentSetIndex >= totalSets - 1;
@@ -1170,7 +1284,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       onPress={() => {
                         if (setOptionsModal && !isFirstSet) {
                           if (Platform.OS !== 'web') {
-                            bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+                            bestEffortHaptic(() =>
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+                            );
                           }
                           moveSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, -1);
                         }
@@ -1178,8 +1294,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       accessibilityRole="button"
                       accessibilityLabel="Move set up"
                     >
-                      <ArrowUp size={16} color={isFirstSet ? colors.textFaint : colors.purpleLight} />
-                      <Text style={[styles.shortcutBtnText, { color: isFirstSet ? colors.textFaint : colors.purpleLight }]}>
+                      <ArrowUp
+                        size={16}
+                        color={isFirstSet ? colors.textFaint : colors.purpleLight}
+                      />
+                      <Text
+                        style={[
+                          styles.shortcutBtnText,
+                          { color: isFirstSet ? colors.textFaint : colors.purpleLight },
+                        ]}
+                      >
                         Move Up {currentSetIndex > 0 ? `(to #${currentSetIndex})` : ''}
                       </Text>
                     </TouchableOpacity>
@@ -1190,7 +1314,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       onPress={() => {
                         if (setOptionsModal && !isLastSet) {
                           if (Platform.OS !== 'web') {
-                            bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+                            bestEffortHaptic(() =>
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+                            );
                           }
                           moveSet(setOptionsModal.activeExerciseId, setOptionsModal.set.id, 1);
                         }
@@ -1198,9 +1324,20 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       accessibilityRole="button"
                       accessibilityLabel="Move set down"
                     >
-                      <ArrowDown size={16} color={isLastSet ? colors.textFaint : colors.purpleLight} />
-                      <Text style={[styles.shortcutBtnText, { color: isLastSet ? colors.textFaint : colors.purpleLight }]}>
-                        Move Down {currentSetIndex >= 0 && currentSetIndex < totalSets - 1 ? `(to #${currentSetIndex + 2})` : ''}
+                      <ArrowDown
+                        size={16}
+                        color={isLastSet ? colors.textFaint : colors.purpleLight}
+                      />
+                      <Text
+                        style={[
+                          styles.shortcutBtnText,
+                          { color: isLastSet ? colors.textFaint : colors.purpleLight },
+                        ]}
+                      >
+                        Move Down{' '}
+                        {currentSetIndex >= 0 && currentSetIndex < totalSets - 1
+                          ? `(to #${currentSetIndex + 2})`
+                          : ''}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1241,10 +1378,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.doneModalBtn}
-              onPress={() => setSetOptionsModal(null)}
-            >
+            <TouchableOpacity style={styles.doneModalBtn} onPress={() => setSetOptionsModal(null)}>
               <Text style={styles.doneModalBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -1263,7 +1397,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           activeOpacity={1}
           onPress={() => setMenuActiveExercise(null)}
         >
-          <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
+          <View
+            style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                 {menuActiveExercise?.exercise?.name}
@@ -1304,16 +1440,23 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }
               }}
             >
-              <ArrowUp size={18} color={menuExerciseIndex <= 0 ? colors.textFaint : colors.textSecondary} />
+              <ArrowUp
+                size={18}
+                color={menuExerciseIndex <= 0 ? colors.textFaint : colors.textSecondary}
+              />
               <Text style={styles.menuItemText}>Move Up</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[
                 styles.menuItem,
-                (menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1) && styles.menuItemDisabled,
+                (menuExerciseIndex < 0 ||
+                  menuExerciseIndex >= activeWorkout.exercises.length - 1) &&
+                  styles.menuItemDisabled,
               ]}
-              disabled={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1}
+              disabled={
+                menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1
+              }
               onPress={() => {
                 if (menuActiveExercise) {
                   if (Platform.OS !== 'web') {
@@ -1327,7 +1470,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             >
               <ArrowDown
                 size={18}
-                color={menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1 ? colors.textFaint : colors.textSecondary}
+                color={
+                  menuExerciseIndex < 0 || menuExerciseIndex >= activeWorkout.exercises.length - 1
+                    ? colors.textFaint
+                    : colors.textSecondary
+                }
               />
               <Text style={styles.menuItemText}>Move Down</Text>
             </TouchableOpacity>
@@ -1373,51 +1520,75 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Text style={styles.menuItemText}>Set Rest Timer</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                if (menuActiveExercise) {
-                  const firstSet = menuActiveExercise.sets[0];
-                  setPlateCalcWeight(firstSet?.weightKg || 60);
-                  setActiveSetForPlateCalc({
-                    exerciseId: menuActiveExercise.id,
-                    setId: firstSet?.id || '',
-                  });
-                  setMenuActiveExercise(null);
-                }
-              }}
-            >
-              <Calculator size={18} color={colors.textSecondary} />
-              <Text style={styles.menuItemText}>Plate Calculator</Text>
-            </TouchableOpacity>
+            {trackingTypesEnabled && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  if (menuActiveExercise) {
+                    const ex = menuActiveExercise;
+                    setMenuActiveExercise(null);
+                    setTrackingTypeExercise(ex);
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Change how sets are tracked"
+              >
+                <SlidersHorizontal size={18} color={colors.textSecondary} />
+                <Text style={styles.menuItemText} numberOfLines={1}>
+                  Track As: {trackingTypeLabel(getTrackingType(menuActiveExercise ?? undefined))}
+                </Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                if (menuActiveExercise) {
-                  const ex = menuActiveExercise;
-                  setMenuActiveExercise(null);
-                  handleAddQuickWarmup(ex);
-                }
-              }}
-            >
-              <Flame size={18} color="#F97316" />
-              <Text style={styles.menuItemText}>Add Warm-up Set</Text>
-            </TouchableOpacity>
+            {menuHasLoad && (
+              <>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    if (menuActiveExercise) {
+                      const firstSet = menuActiveExercise.sets[0];
+                      setPlateCalcWeight(firstSet?.weightKg || 60);
+                      setActiveSetForPlateCalc({
+                        exerciseId: menuActiveExercise.id,
+                        setId: firstSet?.id || '',
+                      });
+                      setMenuActiveExercise(null);
+                    }
+                  }}
+                >
+                  <Calculator size={18} color={colors.textSecondary} />
+                  <Text style={styles.menuItemText}>Plate Calculator</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                if (menuActiveExercise) {
-                  const ex = menuActiveExercise;
-                  setMenuActiveExercise(null);
-                  setWarmupModalExercise(ex);
-                }
-              }}
-            >
-              <Calculator size={18} color="#F97316" />
-              <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    if (menuActiveExercise) {
+                      const ex = menuActiveExercise;
+                      setMenuActiveExercise(null);
+                      handleAddQuickWarmup(ex);
+                    }
+                  }}
+                >
+                  <Flame size={18} color="#F97316" />
+                  <Text style={styles.menuItemText}>Add Warm-up Set</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    if (menuActiveExercise) {
+                      const ex = menuActiveExercise;
+                      setMenuActiveExercise(null);
+                      setWarmupModalExercise(ex);
+                    }
+                  }}
+                >
+                  <Calculator size={18} color="#F97316" />
+                  <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
+                </TouchableOpacity>
+              </>
+            )}
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -1446,7 +1617,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 }}
               >
                 <Layers size={18} color={colors.danger} />
-                <Text style={[styles.menuItemText, { color: colors.danger }]}>Ungroup Superset</Text>
+                <Text style={[styles.menuItemText, { color: colors.danger }]}>
+                  Ungroup Superset
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -1502,7 +1675,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           activeOpacity={1}
           onPress={() => setShowWorkoutMenu(false)}
         >
-          <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
+          <View
+            style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                 {activeWorkout.name}
@@ -1572,7 +1747,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
-                setShowRpeColumn((prev) => !prev);
+                setShowRpeColumn(prev => !prev);
                 setShowWorkoutMenu(false);
               }}
             >
@@ -1601,7 +1776,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
         }
         workout={activeWorkout}
         showSafetyPrompt={durationModalSafetyMode}
-        onSave={(newSeconds) => {
+        onSave={newSeconds => {
           setShowDurationModal(false);
           if (durationModalSafetyMode) {
             setDurationModalSafetyMode(false);

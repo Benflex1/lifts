@@ -27,10 +27,11 @@ import { EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { openExerciseInstructionLink } from '../utils/exercise-links';
 import { getExerciseFormGuideViewModel } from '../utils/exercise-ui';
-import { getExerciseVisual } from '../utils/exercise-media';
+import { getExerciseVisual, resolveExerciseVisual } from '../utils/exercise-media';
 import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { colors } from '../theme';
+import { countsLoad, DEFAULT_TRACKING_TYPE, formatTrackedSet, getTrackingType } from '../workout/tracking';
 
 export interface ExerciseDetailModalProps {
   visible: boolean;
@@ -54,7 +55,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   refreshKey,
 }) => {
   const insets = useSafeAreaInsets();
-  const { unit, gymTrackingEnabled } = useSettings();
+  const { unit, gymTrackingEnabled, remoteImagesEnabled } = useSettings();
   const { notify, confirm } = useDialog();
 
   const [exerciseStats, setExerciseStats] = useState<DualExerciseStats | null>(null);
@@ -182,7 +183,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
     return null;
   }
 
-  const visualDescriptor = getExerciseVisual(exercise);
+  const visualDescriptor = resolveExerciseVisual(getExerciseVisual(exercise), remoteImagesEnabled);
   const hasTwoFrames =
     visualDescriptor.kind === 'remote-image' &&
     Array.isArray(visualDescriptor.imageUrls) &&
@@ -412,7 +413,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           )}
 
           {/* Progression Curve */}
-          {progressionSeries && progressionSeries.points.length > 0 && (
+          {progressionSeries &&
+            progressionSeries.points.some((point) => point.maxWeightKg > 0 || point.maxReps > 0) && (
             <View style={styles.progressionSection}>
               <View style={styles.progressionHeaderRow}>
                 <View style={styles.progressionTitleWrap}>
@@ -544,6 +546,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   const exerciseOccurrences = w.exercises.filter((e) => e.exerciseId === exercise.id);
                   const allSets = exerciseOccurrences.flatMap((e) => e.sets).filter((s) => s.isCompleted);
                   if (allSets.length === 0) return null;
+                  const setTypes = new Map(
+                    exerciseOccurrences.flatMap((o) => o.sets.map((set) => [set, getTrackingType(o)] as const))
+                  );
+                  const loadedSets = allSets.filter((set) => countsLoad(setTypes.get(set) ?? DEFAULT_TRACKING_TYPE));
 
                   const dateStr = new Date(w.startTime).toLocaleDateString(undefined, {
                     month: 'short',
@@ -553,11 +559,11 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   const gymName = gymNamesMap.get(w.gymId);
                   const firstOccurrenceNotes = exerciseOccurrences.find((o) => Boolean(o.notes))?.notes;
 
-                  const session1RM = allSets.reduce((max, s) => {
+                  const session1RM = loadedSets.reduce((max, s) => {
                     const calc = calculate1RM(s.weightKg, s.reps);
                     return calc.average > max ? calc.average : max;
                   }, 0);
-                  const sessionVolume = allSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+                  const sessionVolume = loadedSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
                   const isHighlighted = w.id === highlightedWorkoutId;
 
                   return (
@@ -612,7 +618,9 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               <Text style={styles.historySetNum}>{sIdx + 1}</Text>
                             )}
                             <Text style={styles.historySetMetric}>
-                              {s.weightKg > 0 ? formatWeight(s.weightKg, unit) : 'BW'} × {s.reps}
+                              {(setTypes.get(s) ?? DEFAULT_TRACKING_TYPE) === DEFAULT_TRACKING_TYPE
+                                ? `${s.weightKg > 0 ? formatWeight(s.weightKg, unit) : 'BW'} × ${s.reps}`
+                                : formatTrackedSet(s, setTypes.get(s)!, unit)}
                             </Text>
                             {s.rpe !== undefined && s.rpe !== null && (
                               <Text style={styles.historySetRpe}>@{s.rpe}</Text>

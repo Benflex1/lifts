@@ -176,3 +176,11 @@ function computeExerciseVisual(exercise: Exercise): ExerciseVisualDescriptor {
 
   return { kind: 'generated', template: selectTemplate(exercise), alt };
 }
+
+export function resolveExerciseVisual(
+  descriptor: ExerciseVisualDescriptor,
+  remoteImagesEnabled: boolean,
+): ExerciseVisualDescriptor {
+  if (remoteImagesEnabled || descriptor.kind !== 'remote-image') return descriptor;
+  return { kind: 'generated', template: descriptor.fallbackTemplate, alt: descriptor.alt };
+}

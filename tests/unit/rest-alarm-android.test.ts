@@ -9,24 +9,16 @@ const NOW = 1_700_000_000_000;
 
 function fakeNative(overrides: Partial<RestAlarmNativeModule> = {}) {
   const calls: string[] = [];
-  const scheduled: Array<{ triggerAtMs: number; title: string; body: string }> = [];
+  const scheduled: number[] = [];
   const native: RestAlarmNativeModule = {
-    areNotificationsEnabled: () => {
-      calls.push('areNotificationsEnabled');
-      return false;
-    },
-    requestNotificationPermission: async () => {
-      calls.push('requestNotificationPermission');
-      return true;
-    },
     canScheduleExactAlarms: () => true,
     openExactAlarmSettings: () => {
       calls.push('openExactAlarmSettings');
       return true;
     },
-    schedule: async (triggerAtMs, title, body) => {
+    schedule: async (endsAtMs) => {
       calls.push('schedule');
-      scheduled.push({ triggerAtMs, title, body });
+      scheduled.push(endsAtMs);
       return true;
     },
     cancel: async () => {
@@ -37,47 +29,38 @@ function fakeNative(overrides: Partial<RestAlarmNativeModule> = {}) {
   return { native, calls, scheduled };
 }
 
-describe('Android rest notifications', () => {
-  it('cancels the previous alarm, then schedules the new one with the exercise name', async () => {
+describe('Android rest cue', () => {
+  it('arms the native cue for the rest end without cancelling first, so a later cancel always wins', async () => {
     const { native, calls, scheduled } = fakeNative();
     const notifications = createAndroidRestNotifications(native, () => NOW);
 
     const id = await notifications.scheduleRestNotification(NOW + 90_000, 'Bench Press');
 
     assert.equal(id, 'rest-alarm');
-    assert.deepEqual(calls.slice(-2), ['cancel', 'schedule']);
-    assert.deepEqual(scheduled, [
-      { triggerAtMs: NOW + 90_000, title: 'Rest Finished!', body: 'Time for your next set of Bench Press.' },
-    ]);
+    assert.deepEqual(calls, ['schedule']);
+    assert.deepEqual(scheduled, [NOW + 90_000]);
   });
 
-  it('only cancels when the rest ends within a second', async () => {
-    const { native, calls, scheduled } = fakeNative();
+  it('arms short rests too, so the end buzz still plays; skips rests already over', async () => {
+    const { native, scheduled } = fakeNative();
     const notifications = createAndroidRestNotifications(native, () => NOW);
 
-    assert.equal(await notifications.scheduleRestNotification(NOW + 1_000), null);
+    assert.equal(await notifications.scheduleRestNotification(NOW + 1_000), 'rest-alarm');
+    assert.equal(await notifications.scheduleRestNotification(NOW), null);
     assert.equal(await notifications.scheduleRestNotification(NOW - 5_000), null);
-    assert.equal(scheduled.length, 0);
-    assert.ok(calls.includes('cancel'));
+    assert.deepEqual(scheduled, [NOW + 1_000]);
   });
 
-  it('asks for notification permission once, and only when notifications are off', async () => {
-    const off = fakeNative();
-    const notifications = createAndroidRestNotifications(off.native, () => NOW);
+  it('never asks for notification permission', async () => {
+    const { native, calls } = fakeNative();
+    const notifications = createAndroidRestNotifications(native, () => NOW);
     await notifications.initRestNotifications();
     await notifications.scheduleRestNotification(NOW + 60_000);
-    assert.equal(off.calls.filter((c) => c === 'requestNotificationPermission').length, 1);
-
-    const on = fakeNative({ areNotificationsEnabled: () => true });
-    await createAndroidRestNotifications(on.native, () => NOW).initRestNotifications();
-    assert.equal(on.calls.includes('requestNotificationPermission'), false);
+    assert.deepEqual(calls, ['schedule']);
   });
 
   it('never rejects when the native module throws', async () => {
     const failing = fakeNative({
-      areNotificationsEnabled: () => {
-        throw new Error('boom');
-      },
       schedule: async () => {
         throw new Error('boom');
       },
@@ -118,6 +101,28 @@ describe('Android rest notifications', () => {
     assert.equal(notifications.getExactAlarmStatus(), 'denied');
     assert.equal(notifications.openExactAlarmSettings(), true);
     assert.deepEqual(denied.calls, ['openExactAlarmSettings']);
+  });
+});
+
+describe('Rest alarm native bridge', () => {
+  // The Kotlin module cannot be compiled in this repo's test run, so check that its schedule
+  // parameters line up with the TypeScript signature the JS side calls.
+  const root = join(__dirname, '../..');
+
+  it('takes the same schedule arguments in Kotlin as in the TypeScript interface', () => {
+    const kotlin = readFileSync(
+      join(root, 'modules/rest-alarm/android/src/main/java/expo/modules/restalarm/RestAlarmModule.kt'),
+      'utf8'
+    );
+    const types = readFileSync(join(root, 'modules/rest-alarm/RestAlarm.types.ts'), 'utf8');
+
+    const kotlinParams = kotlin.match(/AsyncFunction\("schedule"\)\s*\{([^]*?)->/)?.[1] ?? '';
+    const tsParams = types.match(/schedule\(([^)]*)\)\s*:\s*Promise/)?.[1] ?? '';
+    const names = (params: string) => [...params.matchAll(/(\w+)\s*:/g)].map((m) => m[1]);
+
+    assert.ok(names(kotlinParams).length > 0, 'Kotlin schedule parameters not found');
+    assert.deepEqual(names(kotlinParams).slice(1), names(tsParams).slice(1));
+    assert.equal(names(kotlinParams).length, names(tsParams).length);
   });
 });
 

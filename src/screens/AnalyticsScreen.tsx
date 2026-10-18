@@ -67,6 +67,9 @@ import { getAllowedGymIds } from '../workout/gym-scope';
 import { colors } from '../theme';
 import { ScreenHeader, SegmentedControl } from '../components/ui';
 import { RecordsView } from '../components/RecordsView';
+import { BodyWeightCard } from '../components/BodyWeightCard';
+import { BodyWeightModal } from '../components/BodyWeightModal';
+import { useBodyWeightLog } from '../hooks/useBodyWeightLog';
 
 type ProgressSection = 'overview' | 'records' | 'tools';
 
@@ -77,7 +80,9 @@ const PROGRESS_SECTIONS: { key: ProgressSection; label: string }[] = [
 ];
 
 const AnalyticsScreenInner: React.FC = () => {
-  const { unit, gymTrackingEnabled } = useSettings();
+  const { unit, gymTrackingEnabled, bodyWeightEnabled } = useSettings();
+  const bodyWeight = useBodyWeightLog(bodyWeightEnabled);
+  const [showBodyWeightLog, setShowBodyWeightLog] = useState(false);
   const isWorkingOut = useIsWorkingOut();
   const { confirm, notify } = useDialog();
 
@@ -200,7 +205,10 @@ const AnalyticsScreenInner: React.FC = () => {
     void loadAnalytics();
   }, [loadAnalytics]);
 
-  useReloadOnActivate(() => void loadAnalytics({ skipIfUnchanged: true }));
+  useReloadOnActivate(() => {
+    void loadAnalytics({ skipIfUnchanged: true });
+    void bodyWeight.reload();
+  });
 
   const progressionExercise = useMemo(() => {
     if (!selectedProgressionExerciseId) {
@@ -333,6 +341,7 @@ const AnalyticsScreenInner: React.FC = () => {
       const message =
         `Backup Summary:\n` +
         `• ${preview.gymsCount} gyms to import\n` +
+        (preview.defaultGymUpdated ? `• Default gym name and color restored\n` : '') +
         `• ${preview.scopeOverridesCount} exercise scope overrides to import\n` +
         `• ${preview.workoutsCount} workouts to import (${preview.skippedWorkoutsCount} identical skipped)\n` +
         `• ${preview.routinesCount} routines to import (${preview.skippedRoutinesCount} identical skipped)\n` +
@@ -351,6 +360,7 @@ const AnalyticsScreenInner: React.FC = () => {
       if (!proceed) return;
 
       await store.mergeSnapshot(snapshotToMerge);
+      void bodyWeight.reload();
       await notify({
         title: 'Restore Complete',
         message: 'Your backup data has been successfully merged.',
@@ -553,6 +563,10 @@ const AnalyticsScreenInner: React.FC = () => {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+        {bodyWeightEnabled && (
+          <BodyWeightCard entries={bodyWeight.entries} unit={unit} onLog={() => setShowBodyWeightLog(true)} />
+        )}
+
         {/* Progress Charts */}
         {analyticsLoading ? (
           <View style={styles.chartLoading}>
@@ -1279,10 +1293,19 @@ const AnalyticsScreenInner: React.FC = () => {
           </TouchableOpacity>
         </View>
         <Text style={styles.dataFootnote}>
-          Lifts is local-first: everything stays on this device unless you export it.
+          Lifts stores workout data locally. Backups are written only to a folder you choose.
         </Text>
       </ScrollView>
       )}
+
+      <BodyWeightModal
+        visible={showBodyWeightLog}
+        entries={bodyWeight.entries}
+        unit={unit}
+        onSave={bodyWeight.logWeight}
+        onDelete={bodyWeight.deleteWeight}
+        onClose={() => setShowBodyWeightLog(false)}
+      />
 
       <PlateCalculatorModal
         visible={showPlateCalc}

@@ -22,7 +22,7 @@ import {
   Layers,
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
-import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise, ExerciseGymScope } from '../types';
+import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise, ExerciseGymScope, WorkoutSet } from '../types';
 import {
   getStore,
   getWorkoutHistory,
@@ -52,6 +52,7 @@ import { evaluateAllWorkoutPRs, evaluateWorkoutPRs, formatPRDescription, Workout
 import { getSupersetMetadata } from '../workout/supersets';
 import { colors, radii } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader } from '../components/ui';
+import { formatTrackedSet, getTrackingType, withPreviousTracked } from '../workout/tracking';
 
 interface HistoryScreenProps {
   workoutUpdate?: Workout | null;
@@ -273,7 +274,8 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
           targetReps: resolveHistoricalTargetReps(ex.targetReps, ex.sets[0]?.targetReps),
           restTimerSeconds: ex.restTimerSeconds ?? 90,
           supersetId: ex.supersetId,
-          sets: ex.sets.map((s, sIdx) => ({
+          ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
+          sets: ex.sets.map((s, sIdx) => withPreviousTracked<WorkoutSet>({
             id: `set-${activeExId}-${sIdx + 1}-${Crypto.randomUUID().slice(0, 6)}`,
             setNumber: sIdx + 1,
             type: s.type || 'normal',
@@ -286,7 +288,9 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
             previousReps: s.reps,
             previousGymId: sourceGym?.id,
             previousGymName: sourceGym?.name,
-          })),
+            ...(s.durationSeconds !== undefined ? { durationSeconds: s.durationSeconds } : {}),
+            ...(s.distanceM !== undefined ? { distanceM: s.distanceM } : {}),
+          }, s.isCompleted ? s : { ...s, type: undefined, rpe: undefined })),
         };
       });
 
@@ -570,7 +574,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
                                       <View key={sIdx} style={styles.detailSetPill}>
                                         <Text style={styles.detailSetNum}>#{s.setNumber}</Text>
                                         <Text style={styles.detailSetWeight}>
-                                          {formatWeight(s.weightKg, unit)} × {s.reps}
+                                          {formatTrackedSet(s, getTrackingType(ex), unit)}
                                         </Text>
                                         {setPR?.primary && (
                                           <PRBadge
