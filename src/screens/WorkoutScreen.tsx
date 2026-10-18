@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { AppTouchable } from '../components/ui';
 import { ChevronRight, Folder, FolderCog, Play, Plus, Settings2 } from 'lucide-react-native';
 import { colors } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader, SectionHeader } from '../components/ui';
@@ -54,7 +55,7 @@ const WorkoutScreenInner: React.FC = () => {
         {weekCard && <WeekSummaryCard week={weekCard.week} unit={weekCard.unit} />}
 
         {/* Quick Start */}
-        <TouchableOpacity
+        <AppTouchable
           style={styles.quickStartCard}
           onPress={quickStart.onStartEmpty}
           activeOpacity={0.85}
@@ -69,7 +70,7 @@ const WorkoutScreenInner: React.FC = () => {
             <Text style={styles.quickStartSubtitle}>Log exercises as you go</Text>
           </View>
           <ChevronRight size={20} color={colors.onPrimary} />
-        </TouchableOpacity>
+        </AppTouchable>
 
         {/* Routines */}
         <SectionHeader
@@ -126,11 +127,12 @@ const WorkoutScreenInner: React.FC = () => {
         ))}
 
         {routines.count === 0 ? (
-          <TouchableOpacity
+          <AppTouchable
             style={styles.emptyRoutinesBox}
             onPress={routines.onCreate}
             activeOpacity={0.8}
             accessibilityRole="button"
+            accessibilityLabel="Create your first routine"
           >
             <View style={styles.emptyIcon}>
               <Plus size={22} color={colors.primary} />
@@ -139,7 +141,7 @@ const WorkoutScreenInner: React.FC = () => {
             <Text style={styles.emptyText}>
               Save your go-to workouts and start them in one tap.
             </Text>
-          </TouchableOpacity>
+          </AppTouchable>
         ) : routines.filtered.length === 0 ? (
           <View style={styles.emptyFolderBox}>
             <Text style={styles.emptyText}>No routines in this folder.</Text>

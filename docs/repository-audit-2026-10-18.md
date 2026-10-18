@@ -597,10 +597,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-06 — Unlabelled controls remain outside the logger and rest surfaces
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** After the logger (`A11Y-01`) and rest (`A11Y-02`) migrations, a brace-aware scan for `TouchableOpacity` openings without an `accessibilityLabel` still reports 49 controls in shared modals, shared primitives whose accessible name currently comes from child text, and secondary screens: `RoutineEditorModal` (21), `CsvImportModal` (6), `FolderManageModal` (4), `WorkoutEditModal` (4), `CustomExerciseModal` (3), `ExerciseScopeModal` (3), `ui.tsx` (4), and one each in `AnalyticsScreen`, `ExercisesScreen`, `WorkoutScreen`, and `history/HistoryCard`. These are outside the Phase 3 exit criteria (logger and rest controls) and are logged as residual instead of being skipped.
 - **Impact:** Outside the logging flow, screen readers fall back to child text or announce icon-only controls incompletely.
 - **Required change:** Migrate the remaining interactive components to `AppTouchable`, adding labels/roles/state and extending the scoped `no-restricted-imports` list; give the shared primitives (`SegmentedControl`, `Chip`, `ActionSheet`, header actions) explicit labels where child text is not a full description.
+- **Implementation (2026-10-18):** All 49 controls were labelled and migrated to `AppTouchable` across `RoutineEditorModal` (21), `CsvImportModal` (6), `FolderManageModal` (4), `WorkoutEditModal` (4), `CustomExerciseModal` (3), `ExerciseScopeModal` (3), the shared `ui.tsx` primitives (`SegmentedControl` segments, the `SectionHeader` action, the `ActionSheet` cancel button, and the menu scrim now `accessible={false}`), and one control each in `AnalyticsScreen`, `ExercisesScreen`, `WorkoutScreen`, and `history/HistoryCard`; the two `Pressable` dismiss scrims in `GymPickerModal`/`WorkoutStartModal` opt out with `accessible={false}`. The scoped `no-restricted-imports` list now covers every migrated file. `tests/unit/accessibility-touchable-scan.test.ts` walks `src/` with a brace- and quote-aware scan and fails on any raw `TouchableOpacity`/`TouchableHighlight`/`Pressable` without a label and role (scrims and the `AppTouchable` primitive's prop spread excepted), so the standard stays enforced in CI.
 - **Done when:** The scan reports zero unlabelled touchables outside explicit `accessibilityViewIsModal`/`accessible={false}` dismiss scrims.
 
 ---
@@ -851,7 +852,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `ARCH-09` Decide and document the navigation model.
 - [ ] `ARCH-10` Remove dead code.
 - [ ] `ARCH-11` Tighten storage-boundary types.
-- [ ] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
+- [x] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
 
 ---
 

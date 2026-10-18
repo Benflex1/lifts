@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { Modal, View, Text, StyleSheet, TextInput } from 'react-native';
+import { AppTouchable } from './ui';
 import { X, Edit2, Trash2, Check } from 'lucide-react-native';
 import { renameFolder, deleteFolder } from '../database/db';
 import { useDialog } from '../context/DialogContext';
@@ -64,9 +65,13 @@ export const FolderManageModal: React.FC<Props> = ({
         <View style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>Manage Folders</Text>
-            <TouchableOpacity onPress={onClose}>
+            <AppTouchable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close folder manager"
+            >
               <X color={colors.textSecondary} size={22} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           {folders.length === 0 ? (
@@ -83,26 +88,38 @@ export const FolderManageModal: React.FC<Props> = ({
                       autoFocus
                       onSubmitEditing={() => handleRename(f)}
                     />
-                    <TouchableOpacity onPress={() => handleRename(f)} style={styles.confirmBtn}>
+                    <AppTouchable
+                      onPress={() => handleRename(f)}
+                      style={styles.confirmBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Save new name for ${f}`}
+                    >
                       <Check size={18} color={colors.success} />
-                    </TouchableOpacity>
+                    </AppTouchable>
                   </>
                 ) : (
                   <>
                     <Text style={styles.folderName}>{f}</Text>
                     <View style={styles.actions}>
-                      <TouchableOpacity
+                      <AppTouchable
                         onPress={() => {
                           setEditingFolder(f);
                           setNewName(f);
                         }}
                         style={styles.iconBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Rename folder ${f}`}
                       >
                         <Edit2 size={16} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(f)} style={styles.iconBtn}>
+                      </AppTouchable>
+                      <AppTouchable
+                        onPress={() => handleDelete(f)}
+                        style={styles.iconBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete folder ${f}`}
+                      >
                         <Trash2 size={16} color={colors.danger} />
-                      </TouchableOpacity>
+                      </AppTouchable>
                     </View>
                   </>
                 )}

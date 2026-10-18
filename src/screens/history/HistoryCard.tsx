@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { AppTouchable } from '../../components/ui';
 import {
   ChevronDown,
   ChevronUp,
@@ -55,7 +56,7 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
   return (
     <View style={styles.historyCard}>
       <View style={styles.cardTop}>
-        <TouchableOpacity
+        <AppTouchable
           style={styles.cardToggle}
           onPress={() => onToggleExpand(item.id)}
           activeOpacity={0.75}
@@ -97,7 +98,7 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
               </View>
             )}
           </View>
-        </TouchableOpacity>
+        </AppTouchable>
 
         <View style={styles.cardSide}>
           <IconButton
@@ -107,7 +108,7 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
             onPress={() => onOpenMenu(item)}
             accessibilityLabel={`${item.name} options`}
           />
-          <TouchableOpacity
+          <AppTouchable
             style={styles.expandIndicator}
             onPress={() => onToggleExpand(item.id)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -119,7 +120,7 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
             ) : (
               <ChevronDown size={18} color={colors.textMuted} />
             )}
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
 
@@ -246,14 +247,15 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
           )}
 
           {detail && (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.editWorkoutButton}
               onPress={() => onEditWorkout(detail)}
               accessibilityRole="button"
+              accessibilityLabel={`Edit ${detail.name || 'workout'}`}
             >
               <Edit2 size={15} color={colors.textSoft} />
               <Text style={styles.editWorkoutButtonText}>Edit Workout</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           )}
         </View>
       )}

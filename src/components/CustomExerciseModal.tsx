@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, View, Text, TextInput, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { X } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { createCustomExercise, updateCustomExercise } from '../database/db';
@@ -89,9 +90,9 @@ export const CustomExerciseModal: React.FC<Props> = ({
             <Text style={styles.headerTitle}>
               {exercise ? 'Edit Custom Exercise' : 'New Custom Exercise'}
             </Text>
-            <TouchableOpacity onPress={onClose} accessibilityLabel="Close custom exercise form">
+            <AppTouchable onPress={onClose} accessibilityLabel="Close custom exercise form">
               <X color={colors.textSecondary} size={22} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <Text style={styles.fieldLabel}>Exercise Name</Text>
@@ -108,40 +109,48 @@ export const CustomExerciseModal: React.FC<Props> = ({
           <Text style={styles.fieldLabel}>Primary Muscle</Text>
           <View style={styles.pills}>
             {CUSTOM_MUSCLE_OPTIONS.map(m => (
-              <TouchableOpacity
+              <AppTouchable
                 key={m}
                 testID={`custom-muscle-${m.toLowerCase()}`}
                 style={[styles.pill, muscle === m && styles.pillActive]}
                 onPress={() => setMuscle(m)}
+                accessibilityRole="button"
+                accessibilityLabel={`Muscle group ${m}`}
+                accessibilityState={{ selected: muscle === m }}
               >
                 <Text style={[styles.pillText, muscle === m && styles.pillTextActive]}>{m}</Text>
-              </TouchableOpacity>
+              </AppTouchable>
             ))}
           </View>
 
           <Text style={styles.fieldLabel}>Equipment</Text>
           <View style={styles.pills}>
             {CUSTOM_EQUIPMENT_OPTIONS.map(eq => (
-              <TouchableOpacity
+              <AppTouchable
                 key={eq}
                 testID={`custom-equipment-${eq.toLowerCase()}`}
                 style={[styles.pill, equipment === eq && styles.pillActive]}
                 onPress={() => setEquipment(eq)}
+                accessibilityRole="button"
+                accessibilityLabel={`Equipment ${eq}`}
+                accessibilityState={{ selected: equipment === eq }}
               >
                 <Text style={[styles.pillText, equipment === eq && styles.pillTextActive]}>
                   {eq}
                 </Text>
-              </TouchableOpacity>
+              </AppTouchable>
             ))}
           </View>
 
-          <TouchableOpacity
+          <AppTouchable
             testID="custom-exercise-save"
             style={styles.saveButton}
             onPress={handleSave}
+            accessibilityRole="button"
+            accessibilityLabel={exercise ? 'Save exercise changes' : 'Create exercise'}
           >
             <Text style={styles.saveButtonText}>{exercise ? 'Save Changes' : 'Save Exercise'}</Text>
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
     </Modal>

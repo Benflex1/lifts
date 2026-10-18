@@ -70,7 +70,7 @@ export function WorkoutStartModal({
       onRequestClose={handleClose}
       accessibilityViewIsModal
     >
-      <Pressable style={styles.overlay} onPress={handleClose}>
+      <Pressable style={styles.overlay} onPress={handleClose} accessible={false}>
         <View
           ref={modalA11yRef}
           accessibilityViewIsModal

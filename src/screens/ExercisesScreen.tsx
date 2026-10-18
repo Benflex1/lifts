@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TextInput, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { AppTouchable } from '../components/ui';
 import { Search, X, Plus } from 'lucide-react-native';
 import { Exercise, ExerciseGymScope } from '../types';
 import { reportError } from '../utils/errorReporting';
@@ -134,12 +127,14 @@ const ExercisesScreenInner: React.FC = () => {
           clearButtonMode="while-editing"
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity
+          <AppTouchable
             onPress={() => setSearchQuery('')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
           >
             <X size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
+          </AppTouchable>
         )}
       </View>
 

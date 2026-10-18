@@ -1,13 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppTouchable } from './ui';
 import { Check, X } from 'lucide-react-native';
 import { deleteExerciseGymScope, saveExerciseGymScope } from '../database/db';
 import { Exercise, ExerciseGymScope, ExerciseScopeType, Gym } from '../types';
@@ -124,7 +117,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                 {exercise?.name}
               </Text>
             </View>
-            <TouchableOpacity
+            <AppTouchable
               style={styles.closeButton}
               onPress={onClose}
               disabled={saving}
@@ -134,14 +127,14 @@ export const ExerciseScopeModal: React.FC<Props> = ({
               accessibilityState={{ disabled: saving }}
             >
               <X size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {SCOPE_OPTIONS.map(option => {
               const selected = scopeType === option.type;
               return (
-                <TouchableOpacity
+                <AppTouchable
                   key={option.type}
                   style={[styles.scopeOption, selected && styles.scopeOptionSelected]}
                   onPress={() => setScopeType(option.type)}
@@ -157,7 +150,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                     <Text style={styles.scopeDescription}>{option.description}</Text>
                   </View>
                   {selected && <Check size={20} color={colors.primary} />}
-                </TouchableOpacity>
+                </AppTouchable>
               );
             })}
 
@@ -167,7 +160,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                 {gyms.map(gym => {
                   const selected = linkedGymIds.includes(gym.id);
                   return (
-                    <TouchableOpacity
+                    <AppTouchable
                       key={gym.id}
                       style={[styles.gymOption, selected && styles.gymOptionSelected]}
                       onPress={() => toggleLinkedGym(gym.id)}
@@ -181,7 +174,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
                         {gym.name}
                       </Text>
                       {selected && <Check size={18} color={colors.primary} />}
-                    </TouchableOpacity>
+                    </AppTouchable>
                   );
                 })}
               </View>
@@ -189,24 +182,38 @@ export const ExerciseScopeModal: React.FC<Props> = ({
 
             {error && <Text style={styles.error}>{error}</Text>}
 
-            <TouchableOpacity
+            <AppTouchable
               style={styles.defaultButton}
               onPress={handleUseDefault}
               disabled={saving}
               accessibilityRole="button"
+              accessibilityLabel="Use equipment default"
             >
               <Text style={styles.defaultButtonText}>Use equipment default</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </ScrollView>
 
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose} disabled={saving}>
+            <AppTouchable
+              style={styles.cancelButton}
+              onPress={onClose}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel scope editing"
+            >
               <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
+            </AppTouchable>
+            <AppTouchable
+              style={styles.saveButton}
+              onPress={handleSave}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save exercise scope"
+              accessibilityState={{ busy: saving, disabled: saving }}
+            >
               {saving && <ActivityIndicator size="small" color={colors.black} />}
               <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Scope'}</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
         </View>
       </View>

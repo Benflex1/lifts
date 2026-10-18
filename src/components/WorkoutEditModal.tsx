@@ -6,9 +6,9 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { AppTouchable } from './ui';
 import { Check, X, Plus, Trash2, Clock, Sparkles } from 'lucide-react-native';
 import { ActiveExercise, Exercise, Gym, SetType, Workout, WorkoutSet } from '../types';
 import { WeightUnit, displayToKg, kgToDisplay } from '../utils/units';
@@ -317,13 +317,15 @@ export const WorkoutEditModal: React.FC<Props> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Edit Workout</Text>
-            <TouchableOpacity
+            <AppTouchable
               onPress={onClose}
               disabled={saving}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close edit workout"
             >
               <X size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -380,7 +382,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   <Text style={styles.durationUnitLabel}>m</Text>
                 </View>
 
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.autoEstimateBtn}
                   onPress={handleAutoEstimateDuration}
                   disabled={saving}
@@ -389,7 +391,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                 >
                   <Sparkles size={14} color={colors.warning} />
                   <Text style={styles.autoEstimateBtnText}>Auto</Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             </View>
 
@@ -414,7 +416,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                 <Text style={styles.label}>GYM</Text>
                 <View style={styles.gymOptions}>
                   {gyms.map(gym => (
-                    <TouchableOpacity
+                    <AppTouchable
                       key={gym.id}
                       style={[
                         styles.gymOption,
@@ -435,7 +437,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                       >
                         {gym.name}
                       </Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   ))}
                 </View>
               </>
@@ -444,7 +446,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
             {/* Exercises Section */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>EXERCISES & SETS</Text>
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.addExerciseHeaderBtn}
                 onPress={() => setShowExercisePicker(true)}
                 disabled={saving}
@@ -453,20 +455,22 @@ export const WorkoutEditModal: React.FC<Props> = ({
               >
                 <Plus size={14} color={colors.primary} />
                 <Text style={styles.addExerciseHeaderBtnText}>Add Exercise</Text>
-              </TouchableOpacity>
+              </AppTouchable>
             </View>
 
             {exercises.length === 0 ? (
               <View style={styles.emptyExercisesBlock}>
                 <Text style={styles.emptyExercisesText}>No exercises in this workout.</Text>
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.addExercisePrimaryBtn}
                   onPress={() => setShowExercisePicker(true)}
                   disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add exercise"
                 >
                   <Plus size={16} color={colors.black} />
                   <Text style={styles.addExercisePrimaryBtnText}>Add Exercise</Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             ) : (
               exercises.map(exercise => (
@@ -478,7 +482,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         {exercise.exercise.equipment} · {exercise.exercise.category}
                       </Text>
                     </View>
-                    <TouchableOpacity
+                    <AppTouchable
                       onPress={() => handleRemoveExercise(exercise.id)}
                       disabled={saving}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -486,7 +490,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                       accessibilityLabel={`Remove ${exercise.exercise.name} from workout`}
                     >
                       <Trash2 size={16} color={colors.danger} />
-                    </TouchableOpacity>
+                    </AppTouchable>
                   </View>
 
                   {/* Sets header */}
@@ -512,7 +516,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         <Text style={styles.setNumber}>#{set.setNumber}</Text>
 
                         {/* Set Type Pill */}
-                        <TouchableOpacity
+                        <AppTouchable
                           style={[
                             styles.setTypePill,
                             set.type === 'warmup' && styles.setTypeWarmup,
@@ -533,7 +537,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                                   ? 'DROP'
                                   : 'FAIL'}
                           </Text>
-                        </TouchableOpacity>
+                        </AppTouchable>
 
                         {/* Weight input */}
                         <TextInput
@@ -562,7 +566,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         />
 
                         {/* Completed Toggle */}
-                        <TouchableOpacity
+                        <AppTouchable
                           style={[
                             styles.completeToggle,
                             set.isCompleted && styles.completeToggleActive,
@@ -576,10 +580,10 @@ export const WorkoutEditModal: React.FC<Props> = ({
                             size={14}
                             color={set.isCompleted ? colors.black : colors.textMuted}
                           />
-                        </TouchableOpacity>
+                        </AppTouchable>
 
                         {/* Delete Set */}
-                        <TouchableOpacity
+                        <AppTouchable
                           onPress={() => handleRemoveSet(exercise.id, set.id)}
                           disabled={saving}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -587,13 +591,13 @@ export const WorkoutEditModal: React.FC<Props> = ({
                           accessibilityLabel={`Delete set ${set.setNumber}`}
                         >
                           <X size={16} color={colors.textMuted} />
-                        </TouchableOpacity>
+                        </AppTouchable>
                       </View>
                     );
                   })}
 
                   {/* Add Set Button */}
-                  <TouchableOpacity
+                  <AppTouchable
                     style={styles.addSetButton}
                     onPress={() => handleAddSet(exercise.id)}
                     disabled={saving}
@@ -602,7 +606,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   >
                     <Plus size={14} color={colors.primary} />
                     <Text style={styles.addSetButtonText}>Add Set</Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 </View>
               ))
             )}
@@ -612,17 +616,30 @@ export const WorkoutEditModal: React.FC<Props> = ({
 
           {/* Footer */}
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose} disabled={saving}>
+            <AppTouchable
+              style={styles.cancelButton}
+              onPress={onClose}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel workout edits"
+            >
               <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
+            </AppTouchable>
+            <AppTouchable
+              style={styles.saveButton}
+              onPress={handleSave}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save workout changes"
+              accessibilityState={{ busy: saving, disabled: saving }}
+            >
               {saving ? (
                 <ActivityIndicator size="small" color={colors.black} />
               ) : (
                 <Check size={18} color={colors.black} />
               )}
               <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
         </View>
 

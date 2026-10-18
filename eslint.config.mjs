@@ -52,6 +52,16 @@ export default tseslint.config(
       'src/components/ReadOnlyBanner.tsx',
       'src/components/RestTimeWheelModal.tsx',
       'src/components/PRCelebrationToast.tsx',
+      'src/components/CsvImportModal.tsx',
+      'src/components/CustomExerciseModal.tsx',
+      'src/components/ExerciseScopeModal.tsx',
+      'src/components/FolderManageModal.tsx',
+      'src/components/RoutineEditorModal.tsx',
+      'src/components/WorkoutEditModal.tsx',
+      'src/screens/AnalyticsScreen.tsx',
+      'src/screens/ExercisesScreen.tsx',
+      'src/screens/WorkoutScreen.tsx',
+      'src/screens/history/HistoryCard.tsx',
     ],
     rules: {
       'no-restricted-imports': [

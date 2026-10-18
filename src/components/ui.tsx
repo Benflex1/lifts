@@ -179,6 +179,7 @@ export function SegmentedControl<T extends string>({
             onPress={() => onChange(option.key)}
             activeOpacity={0.8}
             accessibilityRole="tab"
+            accessibilityLabel={option.label}
             accessibilityState={{ selected }}
           >
             <Text
@@ -267,6 +268,7 @@ export function SectionHeader({ title, meta, actionLabel, onAction, style }: Sec
           onPress={onAction}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
+          accessibilityLabel={actionLabel}
         >
           <Text style={styles.sectionAction}>{actionLabel}</Text>
         </TouchableOpacity>
@@ -359,7 +361,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={onClose}
-            accessibilityLabel="Close menu"
+            accessible={false}
           />
         </Animated.View>
         <Animated.View
@@ -417,6 +419,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
             onPress={onClose}
             activeOpacity={0.7}
             accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
             <Text style={styles.sheetCancelText}>Cancel</Text>
           </TouchableOpacity>

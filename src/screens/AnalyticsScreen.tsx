@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppTouchable } from '../components/ui';
 import { Award, Calculator, Dumbbell } from 'lucide-react-native';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
 import { ScreenHeader, SegmentedControl } from '../components/ui';
@@ -145,10 +146,15 @@ const AnalyticsScreenInner: React.FC = () => {
               Determine the exact Olympic plates to slide on each side of the barbell.
             </Text>
 
-            <TouchableOpacity style={styles.actionBtn} onPress={() => setShowPlateCalc(true)}>
+            <AppTouchable
+              style={styles.actionBtn}
+              onPress={() => setShowPlateCalc(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Open plate calculator"
+            >
               <Calculator size={18} color={colors.black} />
               <Text style={styles.actionBtnText}>Open Plate Calculator</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           {/* Strength Standards Guide */}
