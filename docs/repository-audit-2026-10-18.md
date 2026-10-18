@@ -459,13 +459,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### COR-01 — Web completed-workout filter is dead
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `webStore.ts:1112` filters with `!(workout as any).inProgress`, but `Workout` has no `inProgress` field (`src/types/index.ts:67-78`) and `normalizeWorkout` does not preserve one. Native filters with SQL `WHERE w.in_progress = 0` at `nativeStore.ts:1119`. Web `getWorkoutDetail` also returns any stored record (`webStore.ts:991-1000`), while native requires completion (`nativeStore.ts:987`).
 - **Impact:** In-progress or otherwise unintended records can appear in web history and PR calculations, and web behavior differs from native.
 - **Required change:** Model completion state explicitly in the stored record and filter it consistently, or remove the dead check and guarantee that only completed workouts enter the store.
+- **Implementation (2026-10-18):** Stored completion is now explicit on both platforms. New `src/database/workoutRecord.ts` owns the rule (`isInProgressRecord`, `asCompletedRecord`): native persists `in_progress = 0`, web stamps `inProgress: false` on `finishWorkout` and snapshot merges (mirroring native's merge insert). Every web read path — `getAllWorkoutsSorted` (history + snapshot), `getWorkoutDetail`, `getPreviousSetsForExercise`, `getCompletedWorkoutsForExercises`, `getExerciseStats`, and history reassignment — filters raw records through `isInProgressRecord` before normalization (the old check ran after `normalizeWorkout`, which could drop the field). `getWorkoutDetail` now returns `null` for in-progress records like native. Legacy records without the marker stay visible (absent = completed).
+- **Verification:** `tests/integration/completion-parity.test.ts` — per-platform tests plus a cross-platform `deepEqual` parity test covering a completed and an injected in-progress record across history, detail, snapshot, PR inputs, previous sets, and stats. Pre-fix run failed on web exactly as expected (in-progress record leaked into history, detail, snapshot, previous sets, stats); post-fix all 3 tests pass. Fixture gained `insertRawWorkoutRecord` to write foreign records on both platforms.
 - **Done when:**
-  - [ ] Both platforms return the same records for the same fixture.
-  - [ ] A parity test covers completed and in-progress records.
+  - [x] Both platforms return the same records for the same fixture.
+  - [x] A parity test covers completed and in-progress records.
 
 ### COR-02 — Gym deletion policy diverges between native and web
 
@@ -737,7 +739,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `PERF-06` Lazy-load the exercise catalog.
 - [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
 - [ ] `PERF-14` Add IndexedDB indexes and indexed history reads.
-- [ ] `COR-01` Fix the web completion filter.
+- [x] `COR-01` Fix the web completion filter.
 - [ ] `COR-02` Unify gym deletion policy.
 - [ ] `COR-03` Replace partial signatures with the revision counter.
 

@@ -18,6 +18,7 @@ import {
 } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
+import { asCompletedRecord, isInProgressRecord } from './workoutRecord';
 
 export interface WebStoreOptions {
   idbFactory?: IDBFactory;
@@ -943,7 +944,10 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         try {
           const gymId = validateWorkoutGymId(workout.gymId, gymRequest.result as Gym[]);
           const validatedWorkout = normalizeWorkout({ ...workout, gymId });
-          tx.objectStore('workouts').put(validatedWorkout);
+          // Only completed workouts belong in the workouts store; the explicit
+          // marker mirrors native's `in_progress = 0` write and lets every read
+          // path filter foreign records with the same rule.
+          tx.objectStore('workouts').put(asCompletedRecord(validatedWorkout));
 
           if (validatedWorkout.routineId) {
             const rtStore = tx.objectStore('routines');
@@ -978,7 +982,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
-        const workouts = (req.result as Workout[]).map(normalizeWorkout);
+        const workouts = (req.result as Workout[])
+          .filter(record => !isInProgressRecord(record))
+          .map(normalizeWorkout);
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         resolve(workouts);
       };
@@ -1009,7 +1015,11 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').get(workoutId);
-      req.onsuccess = () => resolve(req.result ? normalizeWorkout(req.result as Workout) : null);
+      req.onsuccess = () => {
+        const record = req.result as Workout | undefined;
+        // Mirrors native's `AND in_progress = 0` guard on the detail query.
+        resolve(record && !isInProgressRecord(record) ? normalizeWorkout(record) : null);
+      };
       req.onerror = () => reject(req.error);
     });
   }
@@ -1087,7 +1097,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
-        const workouts = (req.result as Workout[]).map(normalizeWorkout)
+        const workouts = (req.result as Workout[])
+          .filter(record => !isInProgressRecord(record))
+          .map(normalizeWorkout)
           .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         const occurrences: CompletedExerciseOccurrence[] = workouts.map(workout => {
@@ -1124,8 +1136,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
         const allWorkouts = (req.result as Workout[])
-          .map(normalizeWorkout)
-          .filter(workout => !(workout as any).inProgress);
+          .filter(record => !isInProgressRecord(record))
+          .map(normalizeWorkout);
         allWorkouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
         const result: Record<string, Workout[]> = {};
         for (const id of idSet) {
@@ -1150,7 +1162,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       const tx = database.transaction('workouts', 'readonly');
       const req = tx.objectStore('workouts').getAll();
       req.onsuccess = () => {
-        const workouts = (req.result as Workout[]).map(normalizeWorkout)
+        const workouts = (req.result as Workout[])
+          .filter(record => !isInProgressRecord(record))
+          .map(normalizeWorkout)
           .filter(workout => workout.exercises.some(item => item.exerciseId === exerciseId));
         resolve(calculateDualExerciseStats(workouts, exerciseId, gymId, scope || undefined));
       };
@@ -1184,7 +1198,11 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const workoutReq = workoutStore.getAll();
       workoutReq.onsuccess = () => {
-        const workouts = ((workoutReq.result as Workout[]) || []).map(normalizeWorkout);
+        // In-progress records are excluded from every history read, so history
+        // reassignment must not rewrite them either.
+        const workouts = ((workoutReq.result as Workout[]) || [])
+          .filter(record => !isInProgressRecord(record))
+          .map(normalizeWorkout);
         for (const w of workouts) {
           let hasMatch = false;
           let workoutSetCount = 0;
@@ -1433,7 +1451,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
 
       const wStore = tx.objectStore('workouts');
       for (const w of snapshot.workouts) {
-        wStore.put(normalizeWorkout(w));
+        // Mirrors native's merge, which inserts every snapshot workout with
+        // `in_progress = 0`, so a legacy backup cannot import in-progress rows.
+        wStore.put(asCompletedRecord(normalizeWorkout(w)));
       }
 
       const dStore = tx.objectStore('workout_drafts');
