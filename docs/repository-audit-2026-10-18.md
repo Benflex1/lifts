@@ -772,6 +772,8 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 **Exit criteria:** No screen exceeds roughly 600 lines; shared domain rules live in one module; both stores pass the same contract suite; cold-start catalog work is eliminated once seeded.
 
+**Residual note (2026-10-18):** All Phase 2 findings are `Done`. Two screens still exceed the 600-line guideline but are not covered by any finding, so no Phase 2 item targeted them: `src/screens/HistoryScreen.tsx` (903 lines, ~300 of which are the styles block) and `src/screens/WorkoutScreen.tsx` (703 lines, ~260 styles). Both were converted to the ARCH-06 domain hooks. Recommend a dedicated decomposition finding for `HistoryScreen` if the size rule is enforced file-wide.
+
 ### Phase 3 — Quality gates and accessibility (target: ongoing, start immediately)
 
 - [ ] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
