@@ -26,11 +26,10 @@ import {
   PieChart,
 } from 'lucide-react-native';
 import { calculate1RM } from '../utils/calculator';
-import { reportError } from '../utils/errorReporting';
 import { PlateCalculatorModal } from '../components/PlateCalculatorModal';
-import { getStore, getAllExercises } from '../database/db';
+import { getStore } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
-import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { useAnalyticsSnapshot } from '../hooks/useAnalyticsSnapshot';
 import { useIsWorkingOut } from '../context/WorkoutContext';
 import { formatWeight, displayToKg, kgToDisplay } from '../utils/units';
 import { exportBackup } from '../utils/export';
@@ -41,10 +40,6 @@ import { computeRestorePlan } from '../utils/restore';
 import { useDialog } from '../context/DialogContext';
 import { Exercise, ExerciseGymScope, Gym, Workout } from '../types';
 import {
-  MuscleFrequencyPoint,
-  WeeklyVolumePoint,
-  buildMuscleFrequency,
-  buildWeeklyVolume,
   extractExerciseProgression,
   buildTrainingDistribution,
   buildRepRangeDistribution,
@@ -81,13 +76,23 @@ const AnalyticsScreenInner: React.FC = () => {
   const isWorkingOut = useIsWorkingOut();
   const { confirm, notify } = useDialog();
 
+  const {
+    loading: analyticsLoading,
+    workouts: allWorkouts,
+    gyms: allGyms,
+    exercises: allExerciseList,
+    scopes: exerciseScopes,
+    hasWorkoutData,
+    weeklyVolume,
+    muscleFrequency,
+    suggestedProgressionExerciseId,
+    reload: loadAnalytics,
+  } = useAnalyticsSnapshot();
+
   // Navigation section: Analytics charts vs Trophy Room
   const [activeSection, setActiveSection] = useState<ProgressSection>('overview');
 
   // Trophy room states
-  const [allWorkouts, setAllWorkouts] = useState<Workout[]>([]);
-  const [allExerciseList, setAllExerciseList] = useState<Exercise[]>([]);
-  const [exerciseScopes, setExerciseScopes] = useState<Record<string, ExerciseGymScope | undefined>>({});
   const [trophyGymId, setTrophyGymId] = useState<string | null>(null);
   const [trophyCategory, setTrophyCategory] = useState<string>('all');
   const [trophySearch, setTrophySearch] = useState<string>('');
@@ -100,10 +105,6 @@ const AnalyticsScreenInner: React.FC = () => {
   const [weight, setWeight] = useState('100');
   const [reps, setReps] = useState('5');
   const [showPlateCalc, setShowPlateCalc] = useState(false);
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
-  const [hasWorkoutData, setHasWorkoutData] = useState(false);
-  const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolumePoint[]>([]);
-  const [muscleFrequency, setMuscleFrequency] = useState<MuscleFrequencyPoint[]>([]);
 
   // Progression states
   const [selectedProgressionExerciseId, setSelectedProgressionExerciseId] = useState<string | null>(null);
@@ -111,6 +112,13 @@ const AnalyticsScreenInner: React.FC = () => {
   const [progressionMetric, setProgressionMetric] = useState<ProgressionMetric>('e1rm');
   const [progressionGymFilter, setProgressionGymFilter] = useState<string | null>(null);
   const [showProgressionPicker, setShowProgressionPicker] = useState(false);
+
+  // Preselect the newest logged exercise until the user picks one.
+  useEffect(() => {
+    if (suggestedProgressionExerciseId) {
+      setSelectedProgressionExerciseId(prev => prev || suggestedProgressionExerciseId);
+    }
+  }, [suggestedProgressionExerciseId]);
 
   // CSV Import State
   const [csvPreview, setCsvPreview] = useState<CsvImportPreview | null>(null);
@@ -120,71 +128,6 @@ const AnalyticsScreenInner: React.FC = () => {
   const [csvSkipDuplicates, setCsvSkipDuplicates] = useState(true);
   const [csvExerciseOverrides, setCsvExerciseOverrides] = useState<Record<string, Exercise>>({});
   const [isCsvImporting, setIsCsvImporting] = useState(false);
-  const [allGyms, setAllGyms] = useState<Gym[]>([]);
-
-  const analyticsRevisionRef = React.useRef<number | null>(null);
-
-  const loadAnalytics = React.useCallback(async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
-    try {
-      const store = await getStore();
-
-      // Cheap revision check first: with no writes since the last load there is
-      // nothing to recompute, so return before hydrating the snapshot. Stores
-      // without a revision counter always reload.
-      const revision = (await store.getDataRevision?.()) ?? null;
-      if (skipIfUnchanged && revision !== null && revision === analyticsRevisionRef.current) {
-        return;
-      }
-      analyticsRevisionRef.current = revision;
-
-      const snapshot = await store.readSnapshot();
-
-      const workouts: Workout[] = snapshot.workouts || [];
-      const gymsList: Gym[] = snapshot.gyms || [];
-      // The snapshot already carries the exercise catalog; no second full read.
-      const allExercisesList = snapshot.exercises;
-
-      setAllWorkouts(workouts);
-      setAllGyms(gymsList);
-      setAllExerciseList(allExercisesList);
-
-      const scopesMap: Record<string, ExerciseGymScope | undefined> = {};
-      (snapshot.exerciseGymScopes || []).forEach((s) => {
-        scopesMap[s.exerciseId] = s;
-      });
-      setExerciseScopes(scopesMap);
-
-      setHasWorkoutData(workouts.length > 0);
-      setWeeklyVolume(buildWeeklyVolume(workouts));
-      setMuscleFrequency(buildMuscleFrequency(workouts, { exerciseCatalog: allExercisesList }));
-
-      if (workouts.length > 0) {
-        let foundExerciseId: string | null = null;
-        for (const w of workouts) {
-          for (const ex of w.exercises || []) {
-            if ((ex.sets || []).some((s) => s.isCompleted)) {
-              foundExerciseId = ex.exerciseId;
-              break;
-            }
-          }
-          if (foundExerciseId) break;
-        }
-        if (foundExerciseId) {
-          setSelectedProgressionExerciseId((prev) => prev || foundExerciseId);
-        }
-      }
-    } catch (error) {
-      reportError(error, { scope: 'analytics.load' });
-    } finally {
-      setAnalyticsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadAnalytics();
-  }, [loadAnalytics]);
-
-  useReloadOnActivate(() => void loadAnalytics({ skipIfUnchanged: true }));
 
   const progressionExercise = useMemo(() => {
     if (!selectedProgressionExerciseId) {
@@ -368,7 +311,6 @@ const AnalyticsScreenInner: React.FC = () => {
       ]);
 
       const targetGym = defaultGym.id || gymsList[0]?.id || 'gym-default';
-      setAllGyms(gymsList);
       setCsvGymId(targetGym);
       setCsvFileName(picked.name);
       setCsvRawText(picked.content);
@@ -481,13 +423,7 @@ const AnalyticsScreenInner: React.FC = () => {
     try {
       const store = await getStore();
       await store.mergeSnapshot(csvPreview.snapshotToMerge);
-      const snapshot = await store.readSnapshot();
-      const workouts: Workout[] = snapshot.workouts || [];
-      setHasWorkoutData(workouts.length > 0);
-      setWeeklyVolume(buildWeeklyVolume(workouts));
-      const allExercisesList = await getAllExercises();
-      setAllExerciseList(allExercisesList);
-      setMuscleFrequency(buildMuscleFrequency(workouts, { exerciseCatalog: allExercisesList }));
+      await loadAnalytics();
 
       const importedCount = csvSkipDuplicates ? csvPreview.newWorkoutsCount : csvPreview.totalWorkouts;
       setCsvPreview(null);

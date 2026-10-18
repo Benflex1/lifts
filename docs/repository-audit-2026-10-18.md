@@ -403,11 +403,14 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-06 — No repository/query layer; screens fetch directly
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The audit found roughly 29 direct `getStore()`/database calls in screens and modals, including `AnalyticsScreen.tsx:128,321,370,405,435,453,471,489`, `HistoryScreen.tsx:165`, `ExercisesScreen.tsx:186`, and `WorkoutScreen.tsx:65-85`.
 - **Impact:** Loading, caching, error policy, and invalidation are reimplemented per screen, so cross-screen consistency depends on remembering to refresh.
 - **Required change:** Introduce domain hooks or a repository layer (`useWorkoutHistory`, `useAnalyticsSnapshot`, `useExerciseCatalog`) that own caching, invalidation, and errors. Keep `Store` as the persistence adapter.
-- **Done when:** Screens consume domain hooks rather than the raw store.
+- **Implementation (2026-10-18):** Five domain hooks now own all screen query state: `useWorkoutHistory` (history list, gyms, lazily cached details, eager PR badges plus per-workout PR refresh, and an `updateWorkout` cache upsert), `useAnalyticsSnapshot` (workouts, catalog, gyms, scopes, weekly volume, muscle frequency, suggested progression pick), `useExerciseCatalog` (filtered catalog that preserves array identity when a result set is unchanged), `useRoutines` (routines + week snapshot), and `useGymProfiles` (lazily loaded gym list for scope dialogs). Each hook owns its loading/error policy, request ordering, and reload-on-activation with a revision-gated skip. `HistoryScreen`, `AnalyticsScreen`, `ExercisesScreen`, and `WorkoutScreen` were converted to consume them. Remaining direct `getStore()` calls in `AnalyticsScreen` are imperative command flows (backup export/restore, CSV import planning) that move into command modules with the ARCH-02 decomposition; one-off pre-action reads (fresh gym list before starting a workout, per-exercise scope before opening the scope dialog) also stay imperative.
+- **Verification:** `tests/unit/domain-hooks.test.ts` mounts each hook through a test-renderer harness and asserts load counts, revision-gated activation skips, post-write refreshes, detail caching, filter re-queries, and catalog array-identity preservation (6 tests). Full suites: 170 integration / 532 unit.
+- **Done when:**
+  - [x] Screens consume domain hooks rather than the raw store.
 
 ### ARCH-07 — No store revision or reliable cache invalidation
 
@@ -742,7 +745,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `ARCH-03` Split `WorkoutProvider` into focused hooks.
 - [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
 - [ ] `ARCH-05` Deduplicate custom-exercise UI.
-- [ ] `ARCH-06` Add repository/domain hooks.
+- [x] `ARCH-06` Add repository/domain hooks.
 - [x] `ARCH-07` Add a store revision counter and invalidation.
 - [ ] `PERF-06` Lazy-load the exercise catalog.
 - [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.

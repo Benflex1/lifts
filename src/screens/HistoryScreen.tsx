@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,33 +22,24 @@ import {
   Layers,
 } from 'lucide-react-native';
 import * as Crypto from 'expo-crypto';
-import { Gym, Workout, WorkoutHistorySummary, Routine, ActiveExercise, ExerciseGymScope } from '../types';
+import { Workout, WorkoutHistorySummary, Routine, ActiveExercise } from '../types';
 import {
-  getStore,
-  getWorkoutHistory,
-  getWorkoutDetail,
   deleteWorkout,
   getRoutineById,
-  getGyms,
   saveCompletedWorkout,
-  getCompletedWorkoutsForExercise,
-  getCompletedWorkoutsForExercises,
-  getExerciseGymScope,
 } from '../database/db';
 import { formatDuration } from '../utils/calculator';
-import { reportError } from '../utils/errorReporting';
 import { useWorkoutActions } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import { useDialog } from '../context/DialogContext';
-import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { useWorkoutHistory } from '../hooks/useWorkoutHistory';
 import { resolveHistoricalTargetReps } from '../workout/sets';
 import { resolveInitialStartGymId, resolveRepeatSourceGym } from '../workout/gym-session';
-import { updateWorkoutHistorySummary } from '../workout/history-summary';
 import { WorkoutEditModal } from '../components/WorkoutEditModal';
 import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { PRBadge } from '../components/PRBadge';
-import { evaluateAllWorkoutPRs, evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
+import { formatPRDescription } from '../workout/pr';
 import { getSupersetMetadata } from '../workout/supersets';
 import { colors, radii } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader } from '../components/ui';
@@ -67,26 +58,22 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
   const { startWorkout } = useWorkoutActions();
   const { unit, gymTrackingEnabled } = useSettings();
   const { confirm, notify } = useDialog();
-  const [history, setHistory] = useState<WorkoutHistorySummary[]>([]);
-  const [gyms, setGyms] = useState<Gym[]>([]);
+  const {
+    history,
+    gyms,
+    loading,
+    details: workoutDetails,
+    prs: workoutPRs,
+    loadingDetailId,
+    reload: loadHistory,
+    loadDetail,
+    updateWorkout,
+  } = useWorkoutHistory();
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [menuWorkout, setMenuWorkout] = useState<WorkoutHistorySummary | null>(null);
-  const [workoutDetails, setWorkoutDetails] = useState<Record<string, Workout>>({});
-  const [workoutPRs, setWorkoutPRs] = useState<Record<string, WorkoutPRSummary>>({});
-  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [pendingRepeat, setPendingRepeat] = useState<PendingRepeatWorkout | null>(null);
-  const historyLoadRequestRef = useRef(0);
-  const hasLoadedHistoryRef = useRef(false);
-  const historyRevisionRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    loadHistory();
-  }, []);
-
-  useReloadOnActivate(() => void loadHistory({ skipIfUnchanged: true }));
 
   useEffect(() => {
     if (!gymTrackingEnabled) {
@@ -98,93 +85,10 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
     }
   }, [gymTrackingEnabled, gyms, selectedGymId]);
 
-  const loadWorkoutPRs = async (targetWorkout: Workout, currentGyms: Gym[]) => {
-    try {
-      const distinctExerciseIds = Array.from(
-        new Set(targetWorkout.exercises.map((ex) => ex.exerciseId))
-      );
-      if (distinctExerciseIds.length === 0) return null;
-
-      const [workoutsByEx, scopes] = await Promise.all([
-        getCompletedWorkoutsForExercises(distinctExerciseIds),
-        Promise.all(distinctExerciseIds.map((id) => getExerciseGymScope(id))),
-      ]);
-
-      const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
-      distinctExerciseIds.forEach((id, idx) => {
-        scopesByEx[id] = scopes[idx] || undefined;
-      });
-
-      const summary = evaluateWorkoutPRs(
-        targetWorkout,
-        workoutsByEx,
-        currentGyms,
-        gymTrackingEnabled,
-        scopesByEx
-      );
-      setWorkoutPRs((prev) => ({ ...prev, [targetWorkout.id]: summary }));
-      return summary;
-    } catch (e) {
-      reportError(e, { scope: 'history.pr-summary' });
-      return null;
-    }
-  };
-
-  const loadHistory = async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
-    const requestId = ++historyLoadRequestRef.current;
-    // Only show the spinner on the first load; later refreshes keep the current list on screen.
-    if (!hasLoadedHistoryRef.current) setLoading(true);
-    try {
-      const store = await getStore();
-
-      // Cheap revision check first: any write that affects history, PR badges,
-      // or analytics advances the revision, so an unchanged revision means the
-      // expensive reload (list + snapshot + PR pass) can be skipped entirely.
-      // Stores without a revision counter always reload.
-      const revision = (await store.getDataRevision?.()) ?? null;
-      if (skipIfUnchanged && revision !== null && revision === historyRevisionRef.current) return;
-
-      const [list, gymList] = await Promise.all([getWorkoutHistory(), getGyms()]);
-      if (requestId !== historyLoadRequestRef.current) return;
-      historyRevisionRef.current = revision;
-
-      hasLoadedHistoryRef.current = true;
-      setHistory(list);
-      setGyms(gymList);
-
-      // Eagerly compute PRs for all historical workouts so PR badges always show
-      const snapshot = await store.readSnapshot();
-      if (requestId !== historyLoadRequestRef.current) return;
-
-      const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
-      (snapshot.exerciseGymScopes || []).forEach((s) => {
-        scopesByEx[s.exerciseId] = s;
-      });
-
-      // One chronological pass over the whole history (linear), instead of re-scanning the
-      // history for every workout.
-      const prMap = evaluateAllWorkoutPRs(snapshot.workouts || [], gymList, gymTrackingEnabled, scopesByEx);
-      const detailsMap: Record<string, Workout> = {};
-      for (const w of snapshot.workouts || []) {
-        detailsMap[w.id] = w;
-      }
-
-      setWorkoutDetails((prev) => ({ ...detailsMap, ...prev }));
-      setWorkoutPRs(prMap);
-    } catch (e) {
-      reportError(e, { scope: 'history.load' });
-    } finally {
-      if (requestId === historyLoadRequestRef.current) setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!workoutUpdate) return;
 
-    setHistory(previous => updateWorkoutHistorySummary(previous, workoutUpdate));
-    setWorkoutDetails(previous => ({ ...previous, [workoutUpdate.id]: workoutUpdate }));
-    void loadWorkoutPRs(workoutUpdate, gyms);
-    void loadHistory();
+    void updateWorkout(workoutUpdate);
   }, [workoutUpdate]);
 
   const filteredHistory = useMemo(
@@ -201,25 +105,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
     }
 
     setExpandedId(workoutId);
-    let detail: Workout | null = workoutDetails[workoutId] || null;
-    if (!detail) {
-      setLoadingDetailId(workoutId);
-      try {
-        const loaded = await getWorkoutDetail(workoutId);
-        if (loaded) {
-          detail = loaded;
-          setWorkoutDetails(prev => ({ ...prev, [workoutId]: loaded }));
-        }
-      } catch (e) {
-        reportError(e, { scope: 'history.detail' });
-      } finally {
-        setLoadingDetailId(null);
-      }
-    }
-
-    if (detail && !workoutPRs[workoutId]) {
-      void loadWorkoutPRs(detail, gyms);
-    }
+    await loadDetail(workoutId);
   };
 
   const handleDelete = async (item: WorkoutHistorySummary) => {
@@ -242,15 +128,14 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
 
   const handlePerformAgain = async (item: WorkoutHistorySummary) => {
     try {
-      const detail = await getWorkoutDetail(item.id);
+      const detail = await loadDetail(item.id);
       if (!detail || !detail.exercises || detail.exercises.length === 0) {
         await notify({ title: 'Workout Unavailable', message: 'Could not load details for this workout.' });
         return;
       }
 
       const newWorkoutPrefix = `wo-again-${Crypto.randomUUID().slice(0, 8)}`;
-      const loadedGyms = await getGyms();
-      setGyms(loadedGyms);
+      const loadedGyms = gyms;
       const sourceGym = resolveRepeatSourceGym(detail, loadedGyms);
       const initialExercises: ActiveExercise[] = detail.exercises.map((ex, exIdx) => {
         const activeExId = `ae-${newWorkoutPrefix}-${ex.exerciseId}-occ${exIdx}-${Crypto.randomUUID().slice(0, 6)}`;
@@ -330,9 +215,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
         throw new Error('Unknown gym selected for workout.');
       }
       await saveCompletedWorkout(updated);
-      setWorkoutDetails(previous => ({ ...previous, [updated.id]: updated }));
-      void loadWorkoutPRs(updated, gyms);
-      await loadHistory();
+      await updateWorkout(updated);
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to save workout changes.' });
       throw e;

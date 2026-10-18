@@ -23,8 +23,7 @@ import {
 } from 'lucide-react-native';
 import { useWorkoutActions, useWorkoutGyms } from '../context/WorkoutContext';
 import { Routine } from '../types';
-import { getRoutines, deleteRoutine, duplicateRoutine, getGyms, getWorkoutHistory } from '../database/db';
-import { buildWeekSnapshot, WeekSnapshot } from '../workout/week-summary';
+import { deleteRoutine, duplicateRoutine, getGyms } from '../database/db';
 import { formatWeight } from '../utils/units';
 import { RoutineEditorModal } from '../components/RoutineEditorModal';
 import { FolderManageModal } from '../components/FolderManageModal';
@@ -33,7 +32,7 @@ import { WorkoutStartModal } from '../components/WorkoutStartModal';
 import { resolveInitialStartGymId } from '../workout/gym-session';
 import { useSettings } from '../context/SettingsContext';
 import { useDialog } from '../context/DialogContext';
-import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { useRoutines } from '../hooks/useRoutines';
 import { getSupersetMetadata } from '../workout/supersets';
 import { colors, radii } from '../theme';
 import { ActionSheet, Chip, IconButton, ScreenHeader, SectionHeader } from '../components/ui';
@@ -43,30 +42,17 @@ const WorkoutScreenInner: React.FC = () => {
   const { gyms } = useWorkoutGyms();
   const { gymTrackingEnabled, unit } = useSettings();
   const { confirm, notify } = useDialog();
-  const [routines, setRoutines] = useState<Routine[]>([]);
+  const { routines, week, reload: loadRoutines } = useRoutines();
   const [selectedFolder, setSelectedFolder] = useState('All');
   const [showEditor, setShowEditor] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [routineToEdit, setRoutineToEdit] = useState<Routine | null>(null);
   const [showFolderManage, setShowFolderManage] = useState(false);
   const [menuRoutine, setMenuRoutine] = useState<Routine | null>(null);
-  const [week, setWeek] = useState<WeekSnapshot | null>(null);
   const [pendingStart, setPendingStart] = useState<{
     routine?: Routine;
     customName: string;
   } | null>(null);
-
-  useEffect(() => {
-    loadRoutines();
-  }, []);
-
-  useReloadOnActivate(() => void loadRoutines());
-
-  const loadRoutines = async () => {
-    const [list, history] = await Promise.all([getRoutines(), getWorkoutHistory()]);
-    setRoutines(list);
-    setWeek(buildWeekSnapshot(history));
-  };
 
   const openStartModal = async (routine?: Routine, customName = 'Empty Workout') => {
     if (!gymTrackingEnabled) {

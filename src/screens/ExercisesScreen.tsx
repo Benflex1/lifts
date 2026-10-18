@@ -11,17 +11,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Search, X, Plus } from 'lucide-react-native';
-import { Exercise, ExerciseGymScope, Gym } from '../types';
+import { Exercise, ExerciseGymScope } from '../types';
 import { reportError } from '../utils/errorReporting';
 import {
-  searchExercises,
   createCustomExercise,
   updateCustomExercise,
   getExerciseGymScope,
-  getGyms,
 } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
-import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { useExerciseCatalog } from '../hooks/useExerciseCatalog';
+import { useGymProfiles } from '../hooks/useGymProfiles';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 
@@ -127,8 +126,15 @@ const ExercisesScreenInner: React.FC = () => {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
   const [selectedEquipment, setSelectedEquipment] = useState('All');
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const {
+    exercises,
+    loading: initialLoading,
+    reload: reloadExercises,
+  } = useExerciseCatalog({
+    query: debouncedQuery,
+    muscle: selectedMuscle,
+    equipment: selectedEquipment,
+  });
 
   // Selected exercise for detail view
   const [activeDetail, setActiveDetail] = useState<Exercise | null>(null);
@@ -141,7 +147,7 @@ const ExercisesScreenInner: React.FC = () => {
   const [customEquipment, setCustomEquipment] = useState('Barbell');
 
   // Exercise scope management
-  const [gyms, setGyms] = useState<Gym[]>([]);
+  const { gyms, reload: reloadGyms } = useGymProfiles();
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
   const [showScopeModal, setShowScopeModal] = useState(false);
   const [scopeRefreshKey, setScopeRefreshKey] = useState(0);
@@ -149,11 +155,10 @@ const ExercisesScreenInner: React.FC = () => {
   const handleOpenScope = async () => {
     if (!activeDetail) return;
     try {
-      const [gymList, scope] = await Promise.all([
-        getGyms(),
+      const [, scope] = await Promise.all([
+        reloadGyms(),
         getExerciseGymScope(activeDetail.id),
       ]);
-      setGyms(gymList);
       setExerciseScope(scope);
       setShowScopeModal(true);
     } catch (e) {
@@ -176,30 +181,6 @@ const ExercisesScreenInner: React.FC = () => {
     }, 120);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  useEffect(() => {
-    loadExercises();
-  }, [debouncedQuery, selectedMuscle, selectedEquipment]);
-
-  // Custom exercises can be created from the workout picker, so refresh when returning here.
-  useReloadOnActivate(() => void loadExercises());
-
-  const loadExercises = async () => {
-    try {
-      const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
-      // Keep the current array when nothing changed so the long list does not re-render.
-      setExercises(previous =>
-        previous.length === results.length &&
-        previous.every((ex, idx) => ex === results[idx] || (ex.id === results[idx].id && ex.name === results[idx].name && ex.equipment === results[idx].equipment && ex.primaryMuscles.join() === results[idx].primaryMuscles.join()))
-          ? previous
-          : results,
-      );
-    } catch (e) {
-      reportError(e, { scope: 'exercises.load' });
-    } finally {
-      setInitialLoading(false);
-    }
-  };
 
   const handleOpenAddCustom = () => {
     setEditingExercise(null);
@@ -250,7 +231,7 @@ const ExercisesScreenInner: React.FC = () => {
       setShowCustomModal(false);
       setEditingExercise(null);
       setCustomName('');
-      await loadExercises();
+      await reloadExercises();
       if (activeDetail && activeDetail.id === editingExercise.id) {
         setActiveDetail(updated);
       }
@@ -263,7 +244,7 @@ const ExercisesScreenInner: React.FC = () => {
       });
       setShowCustomModal(false);
       setCustomName('');
-      await loadExercises();
+      await reloadExercises();
       setActiveDetail(created);
     }
   };
@@ -343,7 +324,7 @@ const ExercisesScreenInner: React.FC = () => {
         }}
         onEditCustom={handleOpenEditCustom}
         onEditScope={handleOpenScope}
-        onHistoryTransferred={loadExercises}
+        onHistoryTransferred={reloadExercises}
         refreshKey={scopeRefreshKey}
       />
 
