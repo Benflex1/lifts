@@ -1,3 +1,9 @@
+// Node/fallback entry point. Metro resolves restNotifications.android.ts on
+// Android, restNotifications.ios.ts on iOS, and restNotifications.web.ts on web.
+// The base file keeps the detection helper (a test seam) and no-op scheduling so
+// Node tests and unsupported platforms never touch native modules. See
+// docs/platform-dispatch.md.
+
 function isNodeEnvironment(): boolean {
   return (
     typeof (globalThis as any).__DEV__ === 'undefined' &&
@@ -42,40 +48,16 @@ export function isExpoGoAndroid(): boolean {
 }
 
 export async function initRestNotifications(): Promise<void> {
-  if (typeof document !== 'undefined') {
-    const { initRestNotifications } = await import('./restNotifications.web');
-    return initRestNotifications();
-  }
-  if (isNodeEnvironment() || isExpoGoAndroid()) {
-    return;
-  }
-  const { initRestNotifications } = await import('./restNotifications.ios');
-  return initRestNotifications();
+  // No-op on Node and unsupported platforms.
 }
 
 export async function scheduleRestNotification(
-  endsAtMs: number,
-  exerciseName?: string,
+  _endsAtMs: number,
+  _exerciseName?: string,
 ): Promise<string | null> {
-  if (typeof document !== 'undefined') {
-    const { scheduleRestNotification } = await import('./restNotifications.web');
-    return scheduleRestNotification(endsAtMs, exerciseName);
-  }
-  if (isNodeEnvironment() || isExpoGoAndroid()) {
-    return null;
-  }
-  const { scheduleRestNotification } = await import('./restNotifications.ios');
-  return scheduleRestNotification(endsAtMs, exerciseName);
+  return null;
 }
 
 export async function cancelRestNotification(): Promise<void> {
-  if (typeof document !== 'undefined') {
-    const { cancelRestNotification } = await import('./restNotifications.web');
-    return cancelRestNotification();
-  }
-  if (isNodeEnvironment() || isExpoGoAndroid()) {
-    return;
-  }
-  const { cancelRestNotification } = await import('./restNotifications.ios');
-  return cancelRestNotification();
+  // No-op on Node and unsupported platforms.
 }

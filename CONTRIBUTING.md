@@ -104,6 +104,10 @@ When contributing code, adhere strictly to these core principles:
    - Ensure all touch targets are at least 44x44 pt.
    - Provide appropriate `accessibilityRole` and `accessibilityLabel` attributes on all touchable elements.
 
+6. **Platform Dispatch**:
+   - Select platform-specific modules with Metro file extensions (`*.native.ts`, `*.android.ts`, `*.ios.ts`, `*.web.ts`); base `.ts` files are Node/test fallbacks only.
+   - Reserve `Platform.OS` for in-module behavior differences. See [docs/platform-dispatch.md](docs/platform-dispatch.md).
+
 ---
 
 ## 5. Submitting Pull Requests

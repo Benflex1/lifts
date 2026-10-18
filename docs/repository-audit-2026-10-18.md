@@ -442,10 +442,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-08 — Three platform-dispatch mechanisms coexist
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The codebase uses Metro extensions (`db.native.ts`/`db.web.ts`, `saveBackup.*`, `restNotifications.*`), runtime `typeof document` with dynamic imports (`saveBackup.ts:10-15`, `health/index.ts:8-26`), and `Platform.OS` checks (`pickBackup.ts:4-8`, `SettingsContext.tsx:47-48`).
 - **Impact:** The resolution matrix is hard to reason about, and the fallback branches in `restNotifications.ts` are effectively test-only on real devices.
 - **Required change:** Standardize on Metro platform extensions for module selection and reserve `Platform.OS` for genuine in-module behavior differences. Document the matrix and add a test that asserts selection per platform.
+- **Implementation (2026-10-18):** Base dispatch files no longer select variants at runtime. `saveBackup.ts`, `pickBackup.ts`, and `pickCsv.ts` are explicit Node/test re-exports (web variant plus shared helpers), `health/index.ts` keeps only the native path (its web branch was unreachable because `health/index.web.ts` wins resolution), and `restNotifications.ts` is a documented no-op fallback with the Expo Go detection seam (the dead web branches and the test-only iOS fallback are gone; `.android.ts`/`.ios.ts`/`.web.ts` provide the real implementations). `export.ts` documents its DOM check as the one capability-check exception. `docs/platform-dispatch.md` records the rules and the full family matrix, CONTRIBUTING links it, ESLint rejects runtime `typeof document` selection outside `*.web.ts`, and `tests/unit/platform-dispatch.test.ts` asserts entry-point parity across each family plus the absence of runtime platform selection in base files.
 - **Done when:** A single documented mechanism covers module selection.
 
 ### ARCH-09 — Hand-rolled navigation limits deep links and back behavior
@@ -849,7 +850,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `PROD-04` Add i18n scaffolding.
 - [ ] `PROD-05` Decide and document deep-link scope.
 - [ ] `PROD-06` Add the web manifest/service worker or document the limitation.
-- [ ] `ARCH-08` Standardize platform dispatch.
+- [x] `ARCH-08` Standardize platform dispatch.
 - [ ] `ARCH-09` Decide and document the navigation model.
 - [x] `ARCH-10` Remove dead code.
 - [ ] `ARCH-11` Tighten storage-boundary types.

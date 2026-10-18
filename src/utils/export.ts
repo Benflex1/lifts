@@ -28,6 +28,9 @@ export async function buildBackupJson(): Promise<string> {
 export async function exportBackup(): Promise<void> {
   const json = await buildBackupJson();
 
+  // ARCH-08 exception: this is a capability check (a browser download needs the
+  // DOM), not module selection; web and native builds share this module. See
+  // docs/platform-dispatch.md.
   if (typeof document !== 'undefined') {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

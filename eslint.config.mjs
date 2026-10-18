@@ -80,6 +80,23 @@ export default tseslint.config(
     },
   },
   {
+    // ARCH-08: module selection uses Metro platform extensions. DOM capability
+    // checks belong in *.web.ts modules; export.ts is the documented exception
+    // (browser download path shared by every platform).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/**/*.web.ts', 'src/utils/export.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'UnaryExpression[operator="typeof"][argument.name="document"]',
+          message:
+            'Use a Metro platform extension (*.web.ts) instead of runtime DOM detection (see docs/platform-dispatch.md).',
+        },
+      ],
+    },
+  },
+  {
     // Tests exercise host-component stubs and legacy fixtures; loose typing is
     // expected there and is checked by tsconfig.test.json instead.
     files: ['tests/**/*.{ts,tsx}'],

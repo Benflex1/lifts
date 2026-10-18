@@ -1,10 +1,4 @@
-import { Platform } from 'react-native';
-
-export async function pickCsvFile(): Promise<{ name: string; content: string } | null> {
-  if (Platform.OS === 'web') {
-    const { pickCsvFile: pickWeb } = await import('./pickCsv.web');
-    return pickWeb();
-  }
-  const { pickCsvFile: pickNative } = await import('./pickCsv.native');
-  return pickNative();
-}
+// Node/test fallback entry point. Metro resolves pickCsv.native.ts on
+// Android/iOS and pickCsv.web.ts on web; the base file never selects a variant
+// at runtime. See docs/platform-dispatch.md.
+export { pickCsvFile } from './pickCsv.web';
