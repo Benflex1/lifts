@@ -460,10 +460,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-10 — Dead code and unnecessarily public exports
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `DraggableExerciseCard.tsx` (176 lines) has no production import. `computeExerciseLayouts` in `active-exercises.ts:47` has no callers. `restoreBackup` and `shapeBackup` are used only by tests. Several helpers are exported but used only inside their own module.
 - **Impact:** Future dead-code scans are noisy, and unused UI code suggests unfinished work.
 - **Required change:** Delete genuinely dead modules or wire them in deliberately. Move test-only helpers to test utilities or mark them as such.
+- **Implementation (2026-10-18):** Removed the unimported `DraggableExerciseCard` (182 lines), the uncalled `computeExerciseLayouts`, and the unreferenced `BackupV2`, `BackupData`, `RawCsvSetRow`, `SupersetGroupInfo`, and `Stat`/`StatProps` declarations (with their unused styles); unexported internal-only helpers (`formatRelativeDay`, `NOTE_COMMIT_DEBOUNCE_MS`, `PRRankLevel`, `PR_RANK_LABELS`, `summarizeStatsForEntries`, `isSamePRAchievement`, `extractLeaderboard`, `compareAchievements`, `MUSCLE_GROUP_MAP`, `matchesCategory`, `MUSCLE_ALIAS_MAP`, `EQUIPMENT_ALIAS_MAP`). `scripts/dead-code-scan.mjs` (`npm run check:dead-code`, wired into CI) walks `src/`, `tests/`, `App.tsx`, and `index.ts` and fails on exports with no reference anywhere while reporting test-only (deliberate seams such as the exported memo comparators and renderer helpers) and internal-only exports as informational categories. `restoreBackup`/`shapeBackup` have production callers after review (restore flow and `DataTransferSection`), so they stay.
 - **Done when:** The dead-code scan is clean and every remaining export has a caller.
 
 ### ARCH-11 — Type-safety gaps at storage boundaries
@@ -850,7 +851,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `PROD-06` Add the web manifest/service worker or document the limitation.
 - [ ] `ARCH-08` Standardize platform dispatch.
 - [ ] `ARCH-09` Decide and document the navigation model.
-- [ ] `ARCH-10` Remove dead code.
+- [x] `ARCH-10` Remove dead code.
 - [ ] `ARCH-11` Tighten storage-boundary types.
 - [x] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
 

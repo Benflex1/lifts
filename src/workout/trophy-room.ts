@@ -3,7 +3,7 @@ import { calculate1RM } from '../utils/calculator';
 import { getAllowedGymIds, resolveExerciseScope } from './gym-scope';
 import { extractExercisePodium } from './pr';
 
-export const MUSCLE_GROUP_MAP: Record<string, string[]> = {
+const MUSCLE_GROUP_MAP: Record<string, string[]> = {
   chest: ['chest', 'pectorals', 'pecs'],
   back: ['back', 'lats', 'lat', 'middle back', 'lower back', 'traps', 'trap', 'rhomboids', 'spine'],
   legs: [
@@ -26,7 +26,7 @@ export const MUSCLE_GROUP_MAP: Record<string, string[]> = {
   core: ['core', 'abdominals', 'abs', 'obliques', 'waist'],
 };
 
-export function matchesCategory(
+function matchesCategory(
   record: { category: string; primaryMuscles: string[]; exerciseName: string },
   categoryFilter: string,
 ): boolean {

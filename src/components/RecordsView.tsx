@@ -39,7 +39,7 @@ interface RecordsViewProps {
 }
 
 /** "Today", "Yesterday", "3 days ago", "2 weeks ago", otherwise a short date. */
-export function formatRelativeDay(iso: string, now: Date = new Date()): string {
+function formatRelativeDay(iso: string, now: Date = new Date()): string {
   const date = new Date(iso);
   const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const days = Math.round((startOf(now) - startOf(date)) / DAY_MS);

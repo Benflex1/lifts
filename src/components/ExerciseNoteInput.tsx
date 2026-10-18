@@ -3,7 +3,7 @@ import { TextInput, TextInputProps } from 'react-native';
 import { createDebouncer } from '../utils/debounce';
 
 /** Long enough to absorb typing bursts, short enough to feel committed. */
-export const NOTE_COMMIT_DEBOUNCE_MS = 250;
+const NOTE_COMMIT_DEBOUNCE_MS = 250;
 
 interface ExerciseNoteInputProps {
   exerciseId: string;

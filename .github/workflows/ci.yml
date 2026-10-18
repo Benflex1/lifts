@@ -35,6 +35,9 @@ jobs:
       - name: Dependency audit policy
         run: npm run audit:policy
 
+      - name: Dead code scan
+        run: npm run check:dead-code
+
       - name: TypeScript typecheck
         run: npm run typecheck
 

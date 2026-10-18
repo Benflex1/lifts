@@ -1,15 +1,6 @@
 import type { WorkoutHistorySummary, Routine, Exercise } from '../types';
 import { buildBackupJson as buildV3BackupJson } from './backup';
 
-export interface BackupData {
-  version: number;
-  exportedAt: string;
-  workouts: WorkoutHistorySummary[];
-  routines: Routine[];
-  exercises: Exercise[];
-  settings: Record<string, string>;
-}
-
 export function shapeBackup(
   workouts: WorkoutHistorySummary[],
   routines: Routine[],

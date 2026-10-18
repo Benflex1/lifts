@@ -15,15 +15,8 @@ import { validateSnapshotStructure } from '../database/snapshot-validation';
 
 export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 
-export interface BackupV2 {
-  version: 2;
-  exportedAt: string;
-  workouts: Workout[];
-  routines: Routine[];
-  exercises: Exercise[];
-  drafts: import('../database/contract').WorkoutDraft[];
-  settings: Record<string, string>;
-}
+// The Schema v2 backup shape lives in the import path (backup.ts validates v2
+// snapshots); only the current export shape stays declared here.
 
 export interface BackupV3 extends DataSnapshot {
   version: 3;
