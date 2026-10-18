@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Trophy } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { colors, radii, spacing, type, HEADER_TOP_FALLBACK } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 /**
  * Shared building blocks for the Lifts UI. Screens compose these instead of
@@ -339,6 +340,9 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
 
   const sheetTranslate = progress.interpolate({ inputRange: [0, 1], outputRange: [360, 0] });
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal
       visible={visible}
@@ -347,7 +351,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
       onRequestClose={onClose}
       onDismiss={runPendingAction}
     >
-      <View style={styles.sheetRoot}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.sheetRoot}>
         <Animated.View
           style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}
         >

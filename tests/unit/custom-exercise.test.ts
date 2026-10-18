@@ -32,6 +32,10 @@ mockModule('react-native', {
   TextInput: 'TextInput',
   TouchableOpacity: 'TouchableOpacity',
   StyleSheet: { create: (styles: unknown) => styles },
+  Platform: {
+    OS: 'web',
+    select: (options: Record<string, unknown>) => options.web ?? options.default,
+  },
 });
 
 const iconProxy = new Proxy({}, { get: (_target, name) => name }) as Record<string, unknown>;

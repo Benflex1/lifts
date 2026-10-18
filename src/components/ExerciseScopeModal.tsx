@@ -14,6 +14,7 @@ import { Exercise, ExerciseGymScope, ExerciseScopeType, Gym } from '../types';
 import { canDismissExerciseScopeModal } from '../utils/gym-picker';
 import { defaultScopeForEquipment, validateExerciseGymScope } from '../workout/gym-scope';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -102,6 +103,9 @@ export const ExerciseScopeModal: React.FC<Props> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal
       visible={visible}
@@ -111,7 +115,7 @@ export const ExerciseScopeModal: React.FC<Props> = ({
         if (canDismissExerciseScopeModal(saving)) onClose();
       }}
     >
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
             <View>

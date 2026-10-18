@@ -21,6 +21,7 @@ import {
 import { useDialog } from '../context/DialogContext';
 import { GymPickerModal } from './GymPickerModal';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface GymProfilesModalProps {
   visible: boolean;
@@ -172,6 +173,9 @@ export function GymProfilesModal({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <>
       <Modal
@@ -181,7 +185,7 @@ export function GymProfilesModal({
         onRequestClose={onClose}
         accessibilityViewIsModal
       >
-        <View style={styles.overlay}>
+        <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
           <View style={styles.container}>
             <View style={styles.header}>
               <Text style={styles.title}>Manage Gyms</Text>

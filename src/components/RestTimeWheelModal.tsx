@@ -12,6 +12,7 @@ import { AppTouchable } from './ui';
 import { X, Check, Timer } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -159,9 +160,12 @@ export const RestTimeWheelModal: React.FC<Props> = ({
     return `${mm} : ${ss}`;
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>

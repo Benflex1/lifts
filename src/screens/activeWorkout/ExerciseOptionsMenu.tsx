@@ -19,6 +19,7 @@ import { ActiveExercise } from '../../types';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 import { isMoveDownDisabled, isMoveUpDisabled } from './activeWorkoutLogic';
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 export interface ExerciseOptionsMenuProps {
   exercise: ActiveExercise | null;
@@ -64,6 +65,9 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
   const moveUpDisabled = isMoveUpDisabled(exerciseIndex);
   const moveDownDisabled = isMoveDownDisabled(exerciseIndex, exerciseCount);
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(exercise !== null);
   return (
     <Modal
       visible={exercise !== null}
@@ -77,7 +81,11 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
         onPress={onClose}
         accessible={false}
       >
-        <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
+        <View
+          ref={modalA11yRef}
+          accessibilityViewIsModal
+          style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}
+        >
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle} numberOfLines={1}>
               {exercise?.exercise?.name}

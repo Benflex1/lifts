@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveExercise } from '../types';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface ExerciseReorderModalProps {
   visible: boolean;
@@ -217,9 +218,12 @@ export const ExerciseReorderModal: React.FC<ExerciseReorderModalProps> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.modalOverlay}>
         <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
           {/* Header */}
           <View style={styles.header}>

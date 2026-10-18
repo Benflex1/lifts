@@ -42,6 +42,7 @@ import {
 } from '../workout/supersets';
 import { colors } from '../theme';
 import { ActionSheet, IconButton } from './ui';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -355,9 +356,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
   const totalSets = draftExercises.reduce((sum, e) => sum + (e.targetSets || 0), 0);
   const estimatedMins = Math.round(totalSets * 2.2);
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -1054,6 +1058,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
               activeOpacity={1}
               style={styles.dropdownModalCard}
               onPress={e => e.stopPropagation?.()}
+              accessibilityViewIsModal
             >
               <View style={styles.dropdownHeader}>
                 <View style={{ flex: 1 }}>

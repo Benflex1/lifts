@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 import { reportError } from '../utils/errorReporting';
 import { getDialogActionErrorMessage } from '../utils/dialogAction';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface ConfirmOptions {
   title: string;
@@ -114,6 +115,9 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(true);
   return (
     <DialogContext.Provider value={{ confirm, notify }}>
       {children}
@@ -124,7 +128,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
           animationType="fade"
           onRequestClose={() => handleClose(false)}
         >
-          <SafeAreaView style={styles.overlay}>
+          <SafeAreaView ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
             <View
               style={styles.container}
               accessible={true}

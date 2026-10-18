@@ -10,6 +10,7 @@ import {
 } from '../workout/exercise-options';
 import { reportError } from '../utils/errorReporting';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export type CustomExerciseSaveMode = 'created' | 'updated';
 
@@ -77,9 +78,12 @@ export const CustomExerciseModal: React.FC<Props> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>

@@ -27,6 +27,7 @@ import { Exercise, Gym } from '../types';
 import { CsvImportPreview } from '../utils/importer/types';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface CsvImportModalProps {
   visible: boolean;
@@ -61,6 +62,8 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   onAssignExercise,
   onSetCustomExercise,
 }) => {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>('needs_review');
   const [pickerTargetRawName, setPickerTargetRawName] = useState<string | null>(null);
 
@@ -89,7 +92,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
         transparent={true}
         onRequestClose={isImporting ? undefined : onClose}
       >
-        <View style={styles.overlay}>
+        <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
           <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>

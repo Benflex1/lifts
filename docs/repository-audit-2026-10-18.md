@@ -577,10 +577,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-04 — Modal semantics and focus handling are inconsistent
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** Only 4 occurrences of `accessibilityViewIsModal` exist across the app despite many custom modals.
 - **Impact:** Screen-reader users can escape into background content while a modal is open.
 - **Required change:** Standardize modal containers on `accessibilityViewIsModal`, initial focus, and focus return.
+- **Implementation (2026-10-18):** Every custom modal container (26 files, 31 containers including the nested rep-target dropdown in `RoutineEditorModal`) now sets `accessibilityViewIsModal`, so screen readers cannot leave the modal. `src/hooks/useModalAccessibility.ts` standardizes initial focus: the content container takes iOS accessibility focus when the modal opens, and UIKit returns focus to the presenting element on close; Android's native modal window owns focus trapping and restoration, and the hook is a documented no-op there (and for hidden modals). The hook is wired into all 25 modal components through the container ref. Tests: `tests/unit/modal-accessibility.test.ts` covers the focus move, the hidden-modal no-op, and the non-iOS no-op; a repository scan confirms every `<Modal` element is accompanied by `accessibilityViewIsModal`.
 - **Done when:** Every modal traps focus and restores it on close.
 
 ### A11Y-05 — No enforced accessibility primitive or lint rule
@@ -830,7 +831,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `A11Y-01` Label the core logger controls.
 - [x] `A11Y-02` Label rest controls, mini bar, and read-only banner.
 - [x] `A11Y-03` Add live regions and value semantics.
-- [ ] `A11Y-04` Standardize modal semantics.
+- [x] `A11Y-04` Standardize modal semantics.
 - [x] `A11Y-05` Add a required-label primitive.
 
 **Exit criteria:** CI enforces lint, types, tests, and coverage; the core flows have UI tests; the logger and rest controls are screen-reader operable.

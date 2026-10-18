@@ -12,6 +12,7 @@ import { Check, MapPin, X } from 'lucide-react-native';
 import { Gym } from '../types';
 import { resolveInitialStartGymId } from '../workout/gym-session';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface WorkoutStartModalProps {
   visible: boolean;
@@ -58,6 +59,9 @@ export function WorkoutStartModal({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal
       visible={visible}
@@ -67,7 +71,12 @@ export function WorkoutStartModal({
       accessibilityViewIsModal
     >
       <Pressable style={styles.overlay} onPress={handleClose}>
-        <View style={styles.container} onStartShouldSetResponder={() => true}>
+        <View
+          ref={modalA11yRef}
+          accessibilityViewIsModal
+          style={styles.container}
+          onStartShouldSetResponder={() => true}
+        >
           <View style={styles.header}>
             <View style={styles.headerCopy}>
               <Text style={styles.title}>Start Workout</Text>

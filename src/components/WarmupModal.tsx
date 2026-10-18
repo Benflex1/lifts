@@ -18,6 +18,7 @@ import {
 import { WeightInput } from './WeightInput';
 import { BarbellSleeveVisual } from './BarbellSleeveVisual';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface WarmupModalProps {
   visible: boolean;
@@ -37,6 +38,8 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
   onClose,
   onApplyWarmupSets,
 }) => {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   const [selectedPreset, setSelectedPreset] = useState<WarmupPreset>('single');
   const [workingWeightDisplay, setWorkingWeightDisplay] = useState<number>(0);
   const [barWeightDisplay, setBarWeightDisplay] = useState<number>(20);
@@ -199,7 +202,7 @@ export const WarmupModal: React.FC<WarmupModalProps> = ({
 
   return (
     <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.modalOverlay}>
         <View style={styles.modalCard}>
           {/* Header */}
           <View style={styles.header}>

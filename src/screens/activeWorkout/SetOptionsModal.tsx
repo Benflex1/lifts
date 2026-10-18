@@ -9,6 +9,7 @@ import { WorkoutPRSummary, formatPRDescription } from '../../workout/pr';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 import { computeDropSetSuggestions, findPreviousWorkingSet } from './activeWorkoutLogic';
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 export interface SetOptionsTarget {
   activeExerciseId: string;
@@ -60,6 +61,9 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
   const isFirstSet = currentSetIndex <= 0;
   const isLastSet = currentSetIndex >= totalSets - 1;
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(target !== null);
   return (
     <Modal
       visible={target !== null}
@@ -67,7 +71,7 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalBackdrop}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.modalBackdrop}>
         <View style={[styles.setOptionsSheet, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
           <View style={styles.modalHeader}>
             <View>

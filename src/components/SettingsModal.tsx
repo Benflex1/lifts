@@ -21,6 +21,7 @@ import {
   getExactAlarmStatus,
   openExactAlarmSettings,
 } from '../utils/exactAlarms';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -28,6 +29,8 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   const {
     unit,
     setUnit,
@@ -103,7 +106,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
         onRequestClose={handleClose}
         accessibilityViewIsModal={true}
       >
-        <View style={styles.overlay}>
+        <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
           <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>

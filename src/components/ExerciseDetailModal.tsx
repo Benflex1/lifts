@@ -41,6 +41,7 @@ import { getExerciseVisual } from '../utils/exercise-media';
 import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 // PERF-11: the chart stack (react-native-svg path rendering) is code-split so it stays out of the
 // initial bundle; it loads the first time a detail modal shows the progression curve.
@@ -69,6 +70,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   onHistoryTransferred,
   refreshKey,
 }) => {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   const insets = useSafeAreaInsets();
   const { unit, gymTrackingEnabled } = useSettings();
   const { notify, confirm } = useDialog();
@@ -236,7 +239,11 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.detailContainer, { paddingTop: Math.max(50, insets.top + 8) }]}>
+      <View
+        ref={modalA11yRef}
+        accessibilityViewIsModal
+        style={[styles.detailContainer, { paddingTop: Math.max(50, insets.top + 8) }]}
+      >
         <View style={styles.detailHeader}>
           <TouchableOpacity
             onPress={onClose}

@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
 import { getSupersetMetadata } from '../workout/supersets';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface SupersetModalExerciseItem {
   id: string;
@@ -110,9 +111,12 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
   const canSave = selectedIds.size >= 2;
   const isGiant = selectedIds.size >= 3;
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.card}>
           {/* Header */}
           <View style={styles.header}>

@@ -7,6 +7,7 @@ import { WorkoutDraft } from '../database/contract';
 import { formatDuration } from '../utils/calculator';
 import { getPausedWorkoutModalSubtitle, PAUSED_WORKOUT_MODAL_TITLE } from '../workout/session-copy';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface DraftRecoveryModalProps {
   visible: boolean;
@@ -23,6 +24,8 @@ export function DraftRecoveryModal({
   onDiscard,
   onClose,
 }: DraftRecoveryModalProps) {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   if (!visible) return null;
 
   const formatDate = (isoString: string) => {
@@ -41,7 +44,7 @@ export function DraftRecoveryModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <SafeAreaView style={styles.overlay}>
+      <SafeAreaView ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
             <View>

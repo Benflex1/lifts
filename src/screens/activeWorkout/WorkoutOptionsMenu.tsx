@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 export interface WorkoutOptionsMenuProps {
   visible: boolean;
@@ -47,6 +48,9 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
   onToggleRpeColumn,
   onDiscard,
 }) => {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
+
   return (
     <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
       <AppTouchable
@@ -55,7 +59,11 @@ export const WorkoutOptionsMenu: React.FC<WorkoutOptionsMenuProps> = ({
         onPress={onClose}
         accessible={false}
       >
-        <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
+        <View
+          ref={modalA11yRef}
+          accessibilityViewIsModal
+          style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}
+        >
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle} numberOfLines={1}>
               {workoutName}

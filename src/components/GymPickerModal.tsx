@@ -13,6 +13,7 @@ import { Check, X } from 'lucide-react-native';
 import { Gym } from '../types';
 import { canDismissGymPicker } from '../utils/gym-picker';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface GymPickerModalProps {
   visible: boolean;
@@ -56,6 +57,9 @@ export function GymPickerModal({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal
       visible={visible}
@@ -65,7 +69,12 @@ export function GymPickerModal({
       accessibilityViewIsModal
     >
       <Pressable style={styles.overlay} onPress={handleClose}>
-        <View style={styles.container} onStartShouldSetResponder={() => true}>
+        <View
+          ref={modalA11yRef}
+          accessibilityViewIsModal
+          style={styles.container}
+          onStartShouldSetResponder={() => true}
+        >
           <View style={styles.header}>
             <View style={styles.headerCopy}>
               <Text style={styles.title}>{title}</Text>

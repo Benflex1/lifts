@@ -10,6 +10,7 @@ import {
   estimateWorkoutDuration,
 } from '../workout/duration';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -65,9 +66,12 @@ export const WorkoutDurationModal: React.FC<Props> = ({
     onClose();
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.backdrop}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>

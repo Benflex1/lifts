@@ -28,6 +28,7 @@ import { WorkoutDurationModal } from './WorkoutDurationModal';
 import { isExcessiveDuration, estimateWorkoutDuration } from '../workout/duration';
 import { colors } from '../theme';
 import { PRMark } from './ui';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface WorkoutSummaryModalProps {
   workout: Workout | null;
@@ -44,6 +45,8 @@ export function WorkoutSummaryModal({
   onUpdate,
   onDismiss,
 }: WorkoutSummaryModalProps) {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   const { unit, gymTrackingEnabled } = useSettings();
   const { notify } = useDialog();
   const [showGymPicker, setShowGymPicker] = useState(false);
@@ -136,7 +139,7 @@ export function WorkoutSummaryModal({
   return (
     <>
       <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onDismiss}>
-        <SafeAreaView style={styles.overlay}>
+        <SafeAreaView ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
           {prSummary && prSummary.totalCount > 0 && <ConfettiCelebration />}
           <View style={styles.container}>
             {/* Header */}
