@@ -2,11 +2,11 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { indexedDB, IDBObjectStore } from 'fake-indexeddb';
 import { createWebStore } from '../../src/database/webStore';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { Workout } from '../../src/types';
 
 function makeWorkout(index: number): Workout {
-  const exercises = DEFAULT_EXERCISES.slice(index % 4, (index % 4) + 2).map((exercise, exerciseIndex) => ({
+  const exercises = getDefaultExercises().slice(index % 4, (index % 4) + 2).map((exercise, exerciseIndex) => ({
     id: `web-bulk-${index}-ex${exerciseIndex}`,
     exerciseId: exercise.id,
     exercise,

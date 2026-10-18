@@ -3,23 +3,41 @@ import { getMuscleWikiGuideUrl } from './exercise-guides';
 
 export const BUNDLED_EXERCISE_CATALOG_VERSION = 4;
 
-const SOURCE_EXERCISES: Exercise[] = require('./defaultExercises.json');
+let defaultExercisesCache: Exercise[] | null = null;
+let bundledExerciseMap: Map<string, Exercise> | null = null;
 
-export const DEFAULT_EXERCISES: Exercise[] = SOURCE_EXERCISES.map(exercise => {
-  const instructionUrl = getMuscleWikiGuideUrl(exercise.id);
-  return {
-    ...exercise,
-    ...(instructionUrl ? { instructionUrl, instructionUrlType: 'website' as const } : {}),
-  };
-});
+/**
+ * Parses the bundled 758 KB catalog on first use (PERF-06). Store seeding and
+ * catalog sync only call this after their stored catalog-version checks fail,
+ * so launches that already have the current catalog never evaluate the JSON or
+ * rebuild the lookup map.
+ */
+export function getDefaultExercises(): Exercise[] {
+  if (!defaultExercisesCache) {
+    const sourceExercises: Exercise[] = require('./defaultExercises.json');
+    defaultExercisesCache = sourceExercises.map(exercise => {
+      const instructionUrl = getMuscleWikiGuideUrl(exercise.id);
+      return {
+        ...exercise,
+        ...(instructionUrl ? { instructionUrl, instructionUrlType: 'website' as const } : {}),
+      };
+    });
+  }
+  return defaultExercisesCache;
+}
 
-const exerciseMap = new Map<string, Exercise>();
-for (const ex of DEFAULT_EXERCISES) {
-  exerciseMap.set(ex.id, ex);
+function getBundledExerciseMap(): Map<string, Exercise> {
+  if (!bundledExerciseMap) {
+    bundledExerciseMap = new Map();
+    for (const exercise of getDefaultExercises()) {
+      bundledExerciseMap.set(exercise.id, exercise);
+    }
+  }
+  return bundledExerciseMap;
 }
 
 export function getBundledExercise(id: string): Exercise {
-  const found = exerciseMap.get(id);
+  const found = getBundledExerciseMap().get(id);
   if (!found) {
     throw new Error(`Bundled exercise with id "${id}" not found`);
   }

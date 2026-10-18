@@ -128,7 +128,7 @@ describe('ExerciseVisual runtime guard', () => {
     });
 
     const { ExerciseVisual } = await import('../../src/components/ExerciseVisual');
-    const bundled = (await import('../../src/database/seedData')).DEFAULT_EXERCISES[0];
+    const bundled = (await import('../../src/database/seedData')).getDefaultExercises()[0];
     const root = ExerciseVisual({ exercise: bundled }) as unknown as { props: { children: { props: { children: { props: Record<string, unknown>; type: (props: Record<string, unknown>) => unknown } } } } };
     const remoteImage = root.props.children.props.children;
 
@@ -161,7 +161,7 @@ describe('ExerciseVisual runtime guard', () => {
     });
 
     const { ExerciseVisual } = await import('../../src/components/ExerciseVisual');
-    const bundled = (await import('../../src/database/seedData')).DEFAULT_EXERCISES[0];
+    const bundled = (await import('../../src/database/seedData')).getDefaultExercises()[0];
     const root = ExerciseVisual({ exercise: bundled, frameIndex: 1 }) as unknown as { props: { children: { props: { children: { props: Record<string, unknown>; type: (props: Record<string, unknown>) => unknown } } } } };
     const remoteImage = root.props.children.props.children;
 
@@ -219,7 +219,7 @@ describe('ExerciseVisual runtime guard', () => {
     };
 
     const { ExerciseVisual } = await import('../../src/components/ExerciseVisual');
-    const bundled = (await import('../../src/database/seedData')).DEFAULT_EXERCISES[0];
+    const bundled = (await import('../../src/database/seedData')).getDefaultExercises()[0];
     const root = ExerciseVisual({
       exercise: bundled,
       animated: true,

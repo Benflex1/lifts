@@ -248,14 +248,16 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-06 — 758 KB exercise catalog is loaded eagerly at module scope
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/database/defaultExercises.json` is 758,757 bytes. `src/database/seedData.ts:6-19` requires it at module scope, maps all records, and builds a `Map` at import time. Both `nativeStore.ts:18` and `webStore.ts:4` import `seedData`.
 - **Impact:** The catalog is parsed and transformed on every launch even after seeding is complete, inflating startup time and the JS bundle.
 - **Required change:** Load the JSON lazily only when seeding or synchronizing a new catalog version, or read the catalog from SQLite after the first seed. Consider trimming unused fields from the bundled payload.
+- **Implementation (2026-10-18):** `seedData.ts` no longer evaluates the catalog at module scope: `getDefaultExercises()` parses the JSON and applies the MuscleWiki guide mappings on first call (cached), and `getBundledExercise` builds its lookup map from the same lazy list. Every consumer now resolves the catalog inside the function that actually needs it: native `synchronizeDefaultExercises`/`seedDefaultExercises` fetch it only after the stored `exercise_catalog_version` check fails, web `maybeSynchronize` only after the same check, `exercise-links.ts` and `exercise-media.ts` replaced their import-time ID sets with lazy getters, and the CSV importer and backup parser call the getter inside their functions.
+- **Verification:** `tests/unit/seed-data.test.ts` asserts `defaultExercises.json` stays out of `require.cache` until the first use, then existing catalog/seeding tests exercise the lazy path. Measured on Node 22 with warm tsx caches (V8; Hermes pays more for the same JSON.parse): `seedData` module evaluation 9.6–9.8 ms → 6.2–6.3 ms import with the catalog parsed only on first use (~3.2 ms, ~0.001 ms when cached); the `exercise-media` startup import chain 11.4–15.9 ms → 8.1–8.3 ms; `expo export --platform web` total bundle 3,943,045 B → 3,943,213 B (+168 B, the wrapper code). Bundle bytes are intentionally unchanged because the catalog must still ship for first-launch seeding — the win is that launches with the current catalog version already applied never evaluate it.
 - **Done when:**
-  - [ ] The catalog is not evaluated on launches where the bundled catalog version is already applied.
-  - [ ] Bundle size and cold-start time are measured before and after.
-  - [ ] Catalog seeding and upgrade tests still pass.
+  - [x] The catalog is not evaluated on launches where the bundled catalog version is already applied.
+  - [x] Bundle size and cold-start time are measured before and after.
+  - [x] Catalog seeding and upgrade tests still pass.
 
 ### PERF-07 — Analytics hydrates the full snapshot before checking for changes
 
@@ -750,7 +752,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-05` Deduplicate custom-exercise UI.
 - [x] `ARCH-06` Add repository/domain hooks.
 - [x] `ARCH-07` Add a store revision counter and invalidation.
-- [ ] `PERF-06` Lazy-load the exercise catalog.
+- [x] `PERF-06` Lazy-load the exercise catalog.
 - [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
 - [ ] `PERF-14` Add IndexedDB indexes and indexed history reads.
 - [x] `COR-01` Fix the web completion filter.

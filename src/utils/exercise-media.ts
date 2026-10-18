@@ -1,5 +1,5 @@
 import { Exercise } from '../types';
-import { DEFAULT_EXERCISES } from '../database/seedData';
+import { getDefaultExercises } from '../database/seedData';
 import { getFreeExerciseDbImageUrls } from '../database/exercise-source';
 
 export type ExerciseVisualTemplate =
@@ -33,7 +33,15 @@ export const REVIEWED_EXERCISE_ASSETS: Readonly<Record<string, string>> = Object
   Plank: 'workout-guide/plank/frame-1.svg',
 });
 
-const bundledExerciseIds = new Set(DEFAULT_EXERCISES.map(exercise => exercise.id));
+let bundledExerciseIdCache: Set<string> | null = null;
+
+// Built lazily so importing this module never parses the bundled catalog (PERF-06).
+function getBundledExerciseIds(): Set<string> {
+  if (!bundledExerciseIdCache) {
+    bundledExerciseIdCache = new Set(getDefaultExercises().map(exercise => exercise.id));
+  }
+  return bundledExerciseIdCache;
+}
 
 // The upstream image sequence is not consistently ordered as setup then
 // contraction. These reviewed IDs have the contraction image at 0.jpg.
@@ -158,7 +166,7 @@ function computeExerciseVisual(exercise: Exercise): ExerciseVisualDescriptor {
     ? REVIEWED_EXERCISE_ASSETS[exercise.id]
     : undefined;
 
-  if (exercise.isCustom !== true && typeof exercise.id === 'string' && bundledExerciseIds.has(exercise.id)) {
+  if (exercise.isCustom !== true && typeof exercise.id === 'string' && getBundledExerciseIds().has(exercise.id)) {
     const imageUrls = getFreeExerciseDbImageUrls(exercise.id);
     return {
       kind: 'remote-image',

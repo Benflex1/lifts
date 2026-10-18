@@ -9,7 +9,7 @@ import { applyMigrations } from '../../src/database/migrations';
 import { Exercise, Workout } from '../../src/types';
 import { createStoreFixture } from '../helpers/storeFixture';
 import { createSessionController } from '../../src/workout/session';
-import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { BUNDLED_EXERCISE_CATALOG_VERSION, getDefaultExercises } from '../../src/database/seedData';
 
 class FailingCatalogSyncDriver extends NodeSqliteDriver {
   shouldFail = true;
@@ -103,7 +103,7 @@ describe('nativeStore and migration safety', () => {
   it('synchronizes built-ins by ID without replacing a custom row with a bundled ID', async () => {
     const driver = new NodeSqliteDriver();
     await applyMigrations(driver, { maxVersion: 7 });
-    const bundled = DEFAULT_EXERCISES[0];
+    const bundled = getDefaultExercises()[0];
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
@@ -112,7 +112,7 @@ describe('nativeStore and migration safety', () => {
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      DEFAULT_EXERCISES[1].id, 'User Override', 'custom', 'machine', '["arms"]', '["shoulders"]', '["Keep this"]'
+      getDefaultExercises()[1].id, 'User Override', 'custom', 'machine', '["arms"]', '["shoulders"]', '["Keep this"]'
     );
 
     const store = createNativeStore(driver);
@@ -123,16 +123,16 @@ describe('nativeStore and migration safety', () => {
     assert.equal(synchronized.name, bundled.name);
     assert.deepEqual(synchronized.secondaryMuscles, bundled.secondaryMuscles);
     assert.deepEqual(synchronized.instructions, bundled.instructions);
-    assert.equal((await store.getExerciseById(DEFAULT_EXERCISES[1].id))?.name, 'User Override');
-    assert.equal((await store.getAllExercises()).length, DEFAULT_EXERCISES.length);
+    assert.equal((await store.getExerciseById(getDefaultExercises()[1].id))?.name, 'User Override');
+    assert.equal((await store.getAllExercises()).length, getDefaultExercises().length);
     driver.close();
   });
 
   it('replaces a legacy GitHub guide during catalog v4 sync while preserving a custom row', async () => {
     const driver = new NodeSqliteDriver();
     await applyMigrations(driver);
-    const bundled = DEFAULT_EXERCISES.find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
-    const custom = DEFAULT_EXERCISES.find(exercise => exercise.id === 'Incline_Dumbbell_Press')!;
+    const bundled = getDefaultExercises().find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
+    const custom = getDefaultExercises().find(exercise => exercise.id === 'Incline_Dumbbell_Press')!;
     const legacyGuide = 'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json';
 
     await driver.runAsync(
@@ -384,8 +384,8 @@ describe('nativeStore and migration safety', () => {
       `INSERT INTO app_meta (key, value) VALUES (?, ?), (?, ?)`,
       'exercises_seeded', '1', 'routines_seeded', '1',
     );
-    const first = DEFAULT_EXERCISES[0];
-    const second = DEFAULT_EXERCISES[1];
+    const first = getDefaultExercises()[0];
+    const second = getDefaultExercises()[1];
     for (const exercise of [first, second]) {
       await driver.runAsync(
         `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)

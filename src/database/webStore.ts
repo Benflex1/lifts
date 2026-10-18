@@ -1,7 +1,7 @@
 import { DualExerciseStats, Exercise, ExerciseGymScope, Gym, PreviousSetSuggestion, Routine, Workout, WorkoutHistorySummary } from '../types';
 import { DataSnapshot, Store, WorkoutDraft } from './contract';
 import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../health/contract';
-import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
+import { BUNDLED_EXERCISE_CATALOG_VERSION, getDefaultExercises, buildDefaultRoutines } from './seedData';
 import { smartSearchExercises } from '../utils/search';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
@@ -306,8 +306,10 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         }
         if (catalogVersion?.value === String(BUNDLED_EXERCISE_CATALOG_VERSION)) return;
 
+        // Only reaches here when the stored catalog version is stale, so warm
+        // launches never parse the bundled JSON (PERF-06).
         const existingById = new Map(exercises.map((exercise) => [exercise.id, exercise]));
-        for (const exercise of DEFAULT_EXERCISES) {
+        for (const exercise of getDefaultExercises()) {
           const existing = existingById.get(exercise.id);
           if (existing?.isCustom) continue;
           exerciseStore.put({ ...exercise, isCustom: false });

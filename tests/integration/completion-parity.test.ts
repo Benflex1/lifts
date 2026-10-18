@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { createStoreFixture } from '../helpers/storeFixture';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { Workout } from '../../src/types';
 
 /**
@@ -11,7 +11,7 @@ import { Workout } from '../../src/types';
  * workouts for an exercise, previous-set suggestions, exercise stats).
  */
 
-const EXERCISE = DEFAULT_EXERCISES[0];
+const EXERCISE = getDefaultExercises()[0];
 const GYM_ID = 'gym-default';
 const COMPLETED_ID = 'completed-probe';
 const IN_PROGRESS_ID = 'in-progress-probe';

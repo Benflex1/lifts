@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { DataSnapshot, Store, WorkoutDraft } from '../../src/database/contract';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { Exercise, Routine, Workout, WorkoutSet } from '../../src/types';
 import { createStoreFixture, StoreFixture } from './storeFixture';
 
@@ -11,7 +11,7 @@ import { createStoreFixture, StoreFixture } from './storeFixture';
  * adapters fails the same test on both platforms.
  */
 
-const BUNDLED_EXERCISE = DEFAULT_EXERCISES[0];
+const BUNDLED_EXERCISE = getDefaultExercises()[0];
 
 function buildSet(id: string, weightKg = 100, reps = 5): WorkoutSet {
   return { id, setNumber: 1, type: 'normal', weightKg, reps, isCompleted: true, completedAt: '2026-10-01T09:00:00.000Z' };

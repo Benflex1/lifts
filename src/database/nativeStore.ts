@@ -15,7 +15,7 @@ import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../he
 import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
-import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
+import { BUNDLED_EXERCISE_CATALOG_VERSION, getDefaultExercises, buildDefaultRoutines } from './seedData';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 import {
@@ -252,7 +252,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function seedDefaultExercises(): Promise<void> {
-    const exercises = DEFAULT_EXERCISES;
+    const exercises = getDefaultExercises();
     await driver.withTransactionAsync(async () => {
       for (const ex of exercises) {
         await driver.runAsync(
@@ -285,8 +285,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
     );
     if (currentVersion?.value === String(BUNDLED_EXERCISE_CATALOG_VERSION)) return;
 
+    // Only now is the bundled catalog parsed (PERF-06).
+    const exercises = getDefaultExercises();
     await writeQueue(() => driver.withTransactionAsync(async () => {
-      for (const ex of DEFAULT_EXERCISES) {
+      for (const ex of exercises) {
         const existing = await driver.getFirstAsync<{ is_custom: number }>(
           'SELECT is_custom FROM exercises WHERE id = ?',
           ex.id,

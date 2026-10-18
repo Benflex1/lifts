@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { NodeSqliteDriver } from '../helpers/storeFixture';
 import { createNativeStore } from '../../src/database/nativeStore';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { getAllowedGymIds } from '../../src/workout/gym-scope';
 import { loadExerciseDetailData } from '../../src/workout/exercise-detail';
 import { calculateDualExerciseStats } from '../../src/workout/gym-records';
@@ -57,7 +57,7 @@ describe('exercise detail data loading', () => {
     const store = createNativeStore(driver);
     await store.init();
 
-    const exercise = DEFAULT_EXERCISES[0];
+    const exercise = getDefaultExercises()[0];
     const gym = await store.getDefaultGym();
     await store.finishWorkout(makeWorkout(exercise.id, exercise, gym.id));
 
@@ -81,7 +81,7 @@ describe('exercise detail data loading', () => {
     const store = createNativeStore(driver);
     await store.init();
 
-    const exercise = DEFAULT_EXERCISES[0];
+    const exercise = getDefaultExercises()[0];
     const gym = await store.getDefaultGym();
     await store.finishWorkout(makeWorkout(exercise.id, exercise, gym.id));
 

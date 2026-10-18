@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { Exercise } from '../../src/types';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { FREE_EXERCISE_DB_REVISION, getFreeExerciseDbImageUrls } from '../../src/database/exercise-source';
 import { REVIEWED_EXERCISE_ASSETS, getExerciseVisual } from '../../src/utils/exercise-media';
 
@@ -23,7 +23,7 @@ describe('exercise visual resolver', () => {
 
   it('returns remote images for representative bundled exercises', () => {
     const expectedFallbackTemplates = ['core', 'hinge', 'core'] as const;
-    for (const [index, bundled] of DEFAULT_EXERCISES.slice(0, 3).entries()) {
+    for (const [index, bundled] of getDefaultExercises().slice(0, 3).entries()) {
       const descriptor = getExerciseVisual(bundled);
       assert.equal(descriptor.kind, 'remote-image', bundled.id);
       if (descriptor.kind !== 'remote-image') continue;
@@ -34,7 +34,7 @@ describe('exercise visual resolver', () => {
   });
 
   it('returns remote images for every bundled exercise at the pinned revision', () => {
-    for (const bundled of DEFAULT_EXERCISES) {
+    for (const bundled of getDefaultExercises()) {
       const descriptor = getExerciseVisual(bundled);
       assert.equal(descriptor.kind, 'remote-image', bundled.id);
       if (descriptor.kind !== 'remote-image') continue;
@@ -55,7 +55,7 @@ describe('exercise visual resolver', () => {
   });
 
   it('does not use bundled remote media for a custom exercise with a colliding ID', () => {
-    const bundled = DEFAULT_EXERCISES[0];
+    const bundled = getDefaultExercises()[0];
     const descriptor = getExerciseVisual({
       ...bundled,
       isCustom: true,
