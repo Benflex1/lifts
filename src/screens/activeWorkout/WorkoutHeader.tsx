@@ -88,7 +88,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
           </Text>
           {isDeload ? (
             <Text style={[styles.topBarSubtitle, styles.topBarDeload]} numberOfLines={1}>
-              Deload week
+              {t('workout.deloadWeek')}
               {showGym && gymName ? ` · ${gymName}` : ''}
             </Text>
           ) : showGym && gymName ? (

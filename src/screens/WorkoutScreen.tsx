@@ -184,8 +184,8 @@ const WorkoutScreenInner: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel={
               routines.isDormantRotation
-                ? `Edit ${routines.selectedFolder} rotation`
-                : `Make ${routines.selectedFolder} a rotation`
+                ? t('workout.editRotationA11y', { folder: routines.selectedFolder })
+                : t('workout.makeRotationA11y', { folder: routines.selectedFolder })
             }
           >
             <View style={styles.makeRotationIcon}>
@@ -193,12 +193,14 @@ const WorkoutScreenInner: React.FC = () => {
             </View>
             <View style={styles.makeRotationText}>
               <Text style={styles.makeRotationTitle}>
-                {routines.isDormantRotation ? 'Rotation paused' : 'Make this folder a rotation'}
+                {routines.isDormantRotation
+                  ? t('workout.rotationPausedTitle')
+                  : t('workout.makeRotationTitle')}
               </Text>
               <Text style={styles.makeRotationSubtitle}>
                 {routines.isDormantRotation
-                  ? 'Add a routine to resume it, or stop it'
-                  : 'Always know which workout is next'}
+                  ? t('workout.rotationPausedSubtitle')
+                  : t('workout.makeRotationSubtitle')}
               </Text>
             </View>
             <ChevronRight size={18} color={colors.textMuted} />
