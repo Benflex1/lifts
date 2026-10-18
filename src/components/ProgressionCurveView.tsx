@@ -26,6 +26,7 @@ import {
 import { formatWeight, kgToDisplay, WeightUnit } from '../utils/units';
 import { Trophy, TrendingUp, TrendingDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { colors } from '../theme';
 
 export { isPointPrForMetric };
@@ -234,9 +235,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
       }
     });
     if (closestIdx !== selectedIndex) {
-      try {
-        void Haptics.selectionAsync();
-      } catch {}
+      bestEffortHaptic(() => Haptics.selectionAsync());
       setSelectedIndex(closestIdx);
       if (onPointPress) {
         onPointPress(coords[closestIdx].point);

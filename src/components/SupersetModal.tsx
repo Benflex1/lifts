@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { X, Check, Layers, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { getSupersetMetadata, SUPERSET_PALETTE } from '../workout/supersets';
 import { colors } from '../theme';
 
@@ -75,9 +76,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
 
   const toggleExercise = (id: string) => {
     if (Platform.OS !== 'web') {
-      try {
-        void Haptics.selectionAsync();
-      } catch {}
+      bestEffortHaptic(() => Haptics.selectionAsync());
     }
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -93,9 +92,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
   const handleSave = () => {
     if (selectedIds.size < 2) return;
     if (Platform.OS !== 'web') {
-      try {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
+      bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
     }
     onSaveSuperset(Array.from(selectedIds));
     onClose();
@@ -104,9 +101,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
   const handleUngroup = () => {
     if (!currentExerciseId) return;
     if (Platform.OS !== 'web') {
-      try {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch {}
+      bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
     }
     onUngroupSuperset(currentExerciseId);
     onClose();

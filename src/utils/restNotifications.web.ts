@@ -6,7 +6,9 @@ export async function initRestNotifications(): Promise<void> {
   if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
     try {
       await Notification.requestPermission();
-    } catch {}
+    } catch {
+      // Intentional: the in-app timer remains the fallback when permission cannot be requested.
+    }
   }
 }
 
@@ -23,7 +25,9 @@ export async function scheduleRestNotification(
       try {
         const { title, body } = restNotificationContent(exerciseName);
         new Notification(title, { body, icon: '/favicon.png' });
-      } catch {}
+      } catch {
+        // Intentional: a blocked or unsupported notification must not break the timer.
+      }
     }, diffMs);
     return 'web-timer';
   }

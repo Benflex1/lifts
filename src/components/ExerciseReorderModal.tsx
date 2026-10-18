@@ -20,6 +20,7 @@ import {
   GripVertical,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveExercise } from '../types';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
@@ -75,7 +76,7 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
       onPanResponderGrant: () => {
         setIsDragging(true);
         if (Platform.OS !== 'web') {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
         }
       },
       onPanResponderMove: (_, gestureState) => {
@@ -93,7 +94,7 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
           const targetIndex = Math.max(0, Math.min(count - 1, currentIndex + steps));
           if (targetIndex !== currentIndex) {
             if (Platform.OS !== 'web') {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             }
             dropHandler(currentItemId, targetIndex);
@@ -208,7 +209,7 @@ export const ExerciseReorderModal: React.FC<ExerciseReorderModalProps> = ({
 
   const handleMove = (activeExerciseId: string, direction: -1 | 1) => {
     if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      bestEffortHaptic(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }
     onMoveExercise(activeExerciseId, direction);

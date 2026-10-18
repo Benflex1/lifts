@@ -111,9 +111,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
       id: 'custom-pause-squat',
       name: 'Pause Squat',
       category: 'legs',
-      bodyPart: 'quads',
       equipment: 'barbell',
-      targetMuscle: 'quadriceps',
       isCustom: true,
       instructionUrl: 'https://example.com/pause-squat-guide',
       instructionUrlType: 'website',
@@ -165,7 +163,6 @@ describe('Backup Roundtrip & Merge Safety', () => {
         {
           id: 'we-bench-occ0',
           exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
-          orderIndex: 0,
           notes: 'Bench occurrence 1',
           restTimerSeconds: 120,
           targetReps: '8-12',
@@ -174,9 +171,8 @@ describe('Backup Roundtrip & Merge Safety', () => {
             id: 'Barbell_Bench_Press_-_Medium_Grip',
             name: 'Bench Press (Barbell)',
             category: 'chest',
-            bodyPart: 'chest',
             equipment: 'barbell',
-            targetMuscle: 'pectorals',
+            primaryMuscles: ['pectorals'],
           },
           sets: [
             { id: 's1', setNumber: 1, type: 'warmup', weightKg: 20, reps: 15, isCompleted: true, rpe: 5 },
@@ -188,16 +184,14 @@ describe('Backup Roundtrip & Merge Safety', () => {
         {
           id: 'we-bench-occ1',
           exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
-          orderIndex: 1,
           notes: 'Bench occurrence 2 (close grip variation)',
           restTimerSeconds: 90,
           exercise: {
             id: 'Barbell_Bench_Press_-_Medium_Grip',
             name: 'Bench Press (Barbell)',
             category: 'chest',
-            bodyPart: 'chest',
             equipment: 'barbell',
-            targetMuscle: 'pectorals',
+            primaryMuscles: ['pectorals'],
           },
           sets: [
             { id: 's5', setNumber: 1, type: 'normal', weightKg: 0, reps: 20, isCompleted: true },
@@ -225,7 +219,6 @@ describe('Backup Roundtrip & Merge Safety', () => {
           {
             id: 'we-draft-1',
             exerciseId: 'custom-pause-squat',
-            orderIndex: 0,
             exercise: customEx,
             restTimerSeconds: 0,
             supersetId: 'ss-draft-1',

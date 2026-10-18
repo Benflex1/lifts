@@ -144,7 +144,7 @@ function loadWorkoutContext() {
         return type({ ...(props || {}), children: children.length <= 1 ? children[0] : children });
       },
       Fragment: component,
-      default: undefined,
+      default: undefined as unknown,
     };
     fakeReact.default = fakeReact;
     mockModule('react/jsx-runtime', {

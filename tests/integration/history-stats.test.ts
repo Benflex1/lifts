@@ -36,14 +36,13 @@ describe('History-derived stats & previous set suggestions', () => {
             {
               id: 'we-draft-1',
               exerciseId: exId,
-              orderIndex: 0,
+              restTimerSeconds: 90,
               exercise: {
                 id: exId,
                 name: 'Bench Press',
                 category: 'chest',
-                bodyPart: 'chest',
                 equipment: 'barbell',
-                targetMuscle: 'pectorals',
+                primaryMuscles: ['pectorals'],
               },
               sets: [
                 { id: 'ds1', setNumber: 1, type: 'normal', weightKg: 300, reps: 10, isCompleted: true },
@@ -82,14 +81,13 @@ describe('History-derived stats & previous set suggestions', () => {
           {
             id: 'we-occ-0',
             exerciseId: exId,
-            orderIndex: 0,
+            restTimerSeconds: 90,
             exercise: {
               id: exId,
               name: 'Bench Press',
               category: 'chest',
-              bodyPart: 'chest',
               equipment: 'barbell',
-              targetMuscle: 'pectorals',
+              primaryMuscles: ['pectorals'],
             },
             sets: [
               { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
@@ -98,14 +96,13 @@ describe('History-derived stats & previous set suggestions', () => {
           {
             id: 'we-occ-1',
             exerciseId: exId,
-            orderIndex: 1,
+            restTimerSeconds: 90,
             exercise: {
               id: exId,
               name: 'Bench Press',
               category: 'chest',
-              bodyPart: 'chest',
               equipment: 'barbell',
-              targetMuscle: 'pectorals',
+              primaryMuscles: ['pectorals'],
             },
             sets: [
               { id: 's2', setNumber: 1, type: 'normal', weightKg: 80, reps: 8, isCompleted: true },
@@ -139,14 +136,13 @@ describe('History-derived stats & previous set suggestions', () => {
           {
             id: 'we-empty-0',
             exerciseId: exId,
-            orderIndex: 0,
+            restTimerSeconds: 90,
             exercise: {
               id: exId,
               name: 'Bench Press',
               category: 'chest',
-              bodyPart: 'chest',
               equipment: 'barbell',
-              targetMuscle: 'pectorals',
+              primaryMuscles: ['pectorals'],
             },
             sets: [
               { id: 's3', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: false },

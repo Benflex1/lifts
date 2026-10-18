@@ -1,5 +1,6 @@
 import { Store, WorkoutDraft } from '../database/contract';
 import { Workout } from '../types';
+import { reportError } from '../utils/errorReporting';
 
 export type SessionPhase = 'idle' | 'starting' | 'active' | 'finishing' | 'discarding';
 
@@ -54,7 +55,9 @@ export function createSessionController(
     for (const listener of listeners) {
       try {
         listener(snapshot);
-      } catch (_) {}
+      } catch (error) {
+        reportError(error, { scope: 'session.listener' });
+      }
     }
   }
 
@@ -71,7 +74,9 @@ export function createSessionController(
     if (inFlightWrite) {
       try {
         await inFlightWrite;
-      } catch (_) {}
+      } catch {
+        // Best-effort drain: flush() records the failure on state and rethrows it to its caller.
+      }
     }
   }
 
@@ -156,12 +161,16 @@ export function createSessionController(
 
     const elapsedDirty = currentNow - firstDirtyTime;
     if (elapsedDirty >= maxDirtyTimeMs) {
-      flush().catch(() => {});
+      flush().catch(() => {
+        // Failure is recorded on state.persistenceError and surfaced by the persistence banner.
+      });
     } else {
       const waitTime = Math.min(1000, maxDirtyTimeMs - elapsedDirty);
       saveTimer = setTimeout(() => {
         saveTimer = null;
-        flush().catch(() => {});
+        flush().catch(() => {
+          // Failure is recorded on state.persistenceError and surfaced by the persistence banner.
+        });
       }, waitTime);
     }
   }

@@ -1103,25 +1103,53 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return resolvePreviousSetsForExercise(exercise, occurrences, gymId, scope || undefined);
   }
 
-  async function loadCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]> {
-    const exercise = await getExerciseById(exerciseId);
-    if (!exercise) return [];
-    const rows = await driver.getAllAsync<any>(
-      `SELECT w.id, w.name, w.routine_id, w.start_time, w.end_time, w.duration_seconds,
-              w.total_volume_kg, w.notes, w.gym_id, g.name AS gym_name,
+  /**
+   * Loads completed-workout history for many exercises with one chunked query plus one catalog
+   * read, instead of one join query per exercise. Results preserve the previous per-exercise
+   * ordering (newest workout first, then exercise order, then set number).
+   */
+  async function loadCompletedWorkoutsForExerciseIds(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
+    const uniqueIds = Array.from(new Set(exerciseIds));
+    const result: Record<string, Workout[]> = {};
+    if (uniqueIds.length === 0) return result;
+
+    const catalog = await getAllExercises();
+    const exercisesById = new Map(catalog.map(exercise => [exercise.id, exercise]));
+    const knownIds: string[] = [];
+
+    for (const id of uniqueIds) {
+      result[id] = [];
+      if (exercisesById.has(id)) knownIds.push(id);
+    }
+    if (knownIds.length === 0) return result;
+
+    const rows = await selectInChunks<any>(
+      placeholders => `SELECT we.exercise_id AS requested_exercise_id,
+              w.id, w.name, w.routine_id, w.start_time, w.end_time, w.duration_seconds,
+              w.total_volume_kg, w.notes, w.gym_id,
               we.id AS occurrence_id, we.order_index, we.notes AS occurrence_notes,
               we.rest_timer_seconds, we.target_reps, s.id AS set_id, s.set_number,
               s.set_type, s.weight_kg, s.reps, s.rpe, s.completed_at
        FROM workouts w
-       JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ?
+       JOIN workout_exercises we ON we.workout_id = w.id
        JOIN exercise_sets s ON s.workout_exercise_id = we.id AND s.is_completed = 1
-       LEFT JOIN gyms g ON g.id = w.gym_id
-       WHERE w.in_progress = 0
+       WHERE w.in_progress = 0 AND we.exercise_id IN (${placeholders})
        ORDER BY w.start_time DESC, w.id DESC, we.order_index ASC, s.set_number ASC`,
-      exerciseId,
+      knownIds,
     );
-    const workouts = new Map<string, Workout>();
+
+    const workoutsByExercise = new Map<string, Map<string, Workout>>();
     for (const row of rows) {
+      const exerciseId = row.requested_exercise_id as string;
+      const exercise = exercisesById.get(exerciseId);
+      if (!exercise) continue;
+
+      let workouts = workoutsByExercise.get(exerciseId);
+      if (!workouts) {
+        workouts = new Map<string, Workout>();
+        workoutsByExercise.set(exerciseId, workouts);
+      }
+
       let workout = workouts.get(row.id);
       if (!workout) {
         workout = {
@@ -1138,6 +1166,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         };
         workouts.set(row.id, workout);
       }
+
       let occurrence = workout.exercises.find(item => item.id === row.occurrence_id);
       if (!occurrence) {
         occurrence = {
@@ -1151,6 +1180,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         };
         workout.exercises.push(occurrence);
       }
+
       occurrence.sets.push({
         id: row.set_id,
         setNumber: row.set_number,
@@ -1162,16 +1192,20 @@ export function createNativeStore(driver: SqliteDriver): Store {
         completedAt: row.completed_at,
       });
     }
-    return Array.from(workouts.values());
+
+    for (const [exerciseId, workouts] of workoutsByExercise) {
+      result[exerciseId] = Array.from(workouts.values());
+    }
+    return result;
+  }
+
+  async function loadCompletedWorkoutsForExercise(exerciseId: string): Promise<Workout[]> {
+    const result = await loadCompletedWorkoutsForExerciseIds([exerciseId]);
+    return result[exerciseId] || [];
   }
 
   async function getCompletedWorkoutsForExercises(exerciseIds: string[]): Promise<Record<string, Workout[]>> {
-    const idSet = Array.from(new Set(exerciseIds));
-    const result: Record<string, Workout[]> = {};
-    for (const id of idSet) {
-      result[id] = await loadCompletedWorkoutsForExercise(id);
-    }
-    return result;
+    return loadCompletedWorkoutsForExerciseIds(exerciseIds);
   }
 
   async function getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats> {
@@ -1267,7 +1301,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
       try {
         const draft = normalizeDraftPayload(r.data);
         if (draft) drafts.push(draft);
-      } catch (_) {}
+      } catch {
+        // Intentional: skip corrupted draft rows so one bad payload cannot hide the rest.
+      }
     }
     return drafts;
   }

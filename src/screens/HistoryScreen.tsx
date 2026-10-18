@@ -36,6 +36,7 @@ import {
   getExerciseGymScope,
 } from '../database/db';
 import { formatDuration } from '../utils/calculator';
+import { reportError } from '../utils/errorReporting';
 import { useWorkoutActions } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
@@ -124,7 +125,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
       setWorkoutPRs((prev) => ({ ...prev, [targetWorkout.id]: summary }));
       return summary;
     } catch (e) {
-      console.error('Failed to load workout PRs:', e);
+      reportError(e, { scope: 'history.pr-summary' });
       return null;
     }
   };
@@ -182,7 +183,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
       setWorkoutDetails((prev) => ({ ...detailsMap, ...prev }));
       setWorkoutPRs(prMap);
     } catch (e) {
-      console.error(e);
+      reportError(e, { scope: 'history.load' });
     } finally {
       if (requestId === historyLoadRequestRef.current) setLoading(false);
     }
@@ -221,7 +222,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
           setWorkoutDetails(prev => ({ ...prev, [workoutId]: loaded }));
         }
       } catch (e) {
-        console.error('Error fetching workout detail:', e);
+        reportError(e, { scope: 'history.detail' });
       } finally {
         setLoadingDetailId(null);
       }
@@ -362,6 +363,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
         day: 'numeric',
       });
     } catch {
+      // Intentional: an unparseable date falls back to the raw ISO string for display.
       return isoString;
     }
   };

@@ -79,6 +79,27 @@ describe('nativeStore and migration safety', () => {
     driver.close();
   });
 
+  it('rolls back migration 9 indexes when failure is injected', async () => {
+    const driver = new NodeSqliteDriver();
+    await applyMigrations(driver, { maxVersion: 8 });
+
+    await assert.rejects(
+      () => applyMigrations(driver, { failAtVersion: 9 }),
+      /Injected migration failure at version 9/,
+    );
+
+    assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 9'), null);
+    for (const table of ['workouts', 'workout_exercises', 'exercise_sets']) {
+      const indexes = await driver.getAllAsync<{ name: string }>(`PRAGMA index_list(${table})`);
+      assert.equal(
+        indexes.some(index => index.name.startsWith('idx_')),
+        false,
+        `${table} should not keep new indexes after a rolled back migration`,
+      );
+    }
+    driver.close();
+  });
+
   it('synchronizes built-ins by ID without replacing a custom row with a bundled ID', async () => {
     const driver = new NodeSqliteDriver();
     await applyMigrations(driver, { maxVersion: 7 });

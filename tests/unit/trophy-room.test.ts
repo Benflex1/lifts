@@ -54,6 +54,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae1',
           exerciseId: bench.id,
           exercise: bench,
+          restTimerSeconds: 90,
           sets: [
             { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
           ],
@@ -62,6 +63,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae2',
           exerciseId: squat.id,
           exercise: squat,
+          restTimerSeconds: 90,
           sets: [
             { id: 's2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true },
           ],
@@ -70,6 +72,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae3',
           exerciseId: deadlift.id,
           exercise: deadlift,
+          restTimerSeconds: 90,
           sets: [
             { id: 's3', setNumber: 1, type: 'normal', weightKg: 180, reps: 5, isCompleted: true },
           ],
@@ -89,6 +92,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae4',
           exerciseId: bench.id,
           exercise: bench,
+          restTimerSeconds: 90,
           sets: [
             { id: 's4', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: true }, // Gold
           ],
@@ -97,6 +101,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae5',
           exerciseId: pullUps.id,
           exercise: pullUps,
+          restTimerSeconds: 90,
           sets: [
             { id: 's5', setNumber: 1, type: 'normal', weightKg: 0, reps: 15, isCompleted: true },
           ],
@@ -178,18 +183,21 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae1',
           exerciseId: barbellBenchStandard.id,
           exercise: barbellBenchStandard,
+          restTimerSeconds: 90,
           sets: [{ id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true }],
         },
         {
           id: 'ae2',
           exerciseId: barbellSquatStandard.id,
           exercise: barbellSquatStandard,
+          restTimerSeconds: 90,
           sets: [{ id: 's2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true }],
         },
         {
           id: 'ae3',
           exerciseId: barbellDeadliftStandard.id,
           exercise: barbellDeadliftStandard,
+          restTimerSeconds: 90,
           sets: [{ id: 's3', setNumber: 1, type: 'normal', weightKg: 180, reps: 5, isCompleted: true }],
         },
       ],

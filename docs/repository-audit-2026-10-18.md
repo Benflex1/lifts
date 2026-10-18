@@ -1,0 +1,844 @@
+# Repository Audit — Lifts
+
+| Field | Detail |
+| :--- | :--- |
+| Audit date | 2026-10-18 |
+| Baseline commit | `377e12a` (`main`) |
+| Scope | Application source, database layer, tests, CI, documentation, release tooling, and product completeness |
+| Method | Full static review of `src/`, `App.tsx`, `tests/`, `.github/workflows/`, `docs/`, `scripts/`, plus local verification runs |
+| Document status | Working document. All findings are `Open` unless a status is explicitly changed below. |
+
+This document is the working backlog for the audit. It records what was found, why it matters, the evidence, the required change, and the acceptance criteria. Update finding statuses as work lands so the document remains a live source of truth.
+
+---
+
+## How to use this document
+
+1. Pick a finding by ID (for example `PERF-04`).
+2. Change its `Status` from `Open` to `In progress` in the same pull request that starts the work.
+3. Create a focused branch named `fix/<id>-<slug>`, `perf/<id>-<slug>`, or `refactor/<id>-<slug>`.
+4. Add or update automated tests before or alongside the implementation.
+5. Run the verification protocol in section 12.
+6. In the pull request, link the finding ID and record the verification evidence.
+7. Change the status to `Done` only when every acceptance criterion is met.
+
+### Severity definitions
+
+| Severity | Meaning |
+| :--- | :--- |
+| Critical | Directly degrades the core gym-floor interaction or risks losing user data at scale. Fix before new feature work. |
+| High | Significant reliability, performance, quality, or accessibility risk. Schedule in the current cycle. |
+| Medium | Meaningful maintainability or user-experience cost. Schedule after high-priority work. |
+| Low | Hygiene, polish, or opportunistic improvement. Batch with related work. |
+
+### Status definitions
+
+| Status | Meaning |
+| :--- | :--- |
+| `Open` | Confirmed and not yet started. |
+| `In progress` | Actively being implemented. |
+| `Blocked` | Waiting on a decision, dependency, or external service. |
+| `Done` | Acceptance criteria met and verification evidence recorded. |
+| `Deferred` | Intentionally postponed; state the reason and revisit trigger. |
+
+---
+
+## 1. Executive summary
+
+Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 lines of application TypeScript across 142 files, 5 screens, and 40 components. The data layer and release engineering are notably mature. The main risks are concentrated in the UI shell, runtime rendering behavior, missing quality gates, and failure modes that are currently invisible to the user.
+
+### Baseline verification
+
+| Check | Command | Result |
+| :--- | :--- | :--- |
+| TypeScript | `npx tsc --noEmit` | Pass, 0 errors |
+| Unit tests | `npm test` | 478 passed, 0 failed |
+| Integration tests | `npm run test:integration` | 142 passed, 0 failed |
+| Dependency audit | `npm audit --omit=dev` | 29 vulnerabilities: 1 critical, 19 high, 9 moderate (mostly build tooling) |
+| Expo compatibility | `npx expo install --check` | 8 packages behind expected SDK 57 patch versions |
+| Web export | `dist/` from 2026-09-07 | 3.4 MB, main JS chunk 3.3 MB (stale local artifact) |
+
+### Scorecard
+
+| Area | Rating | Summary |
+| :--- | :--- | :--- |
+| Persistence and session core | Strong | Serialized writes, transactional migrations, real session state machine, strong boundary validation |
+| Logic-layer tests | Strong | 68 test files and 620+ passing cases across stores, session, backup, CSV import, analytics, and PR logic |
+| CI and release engineering | Strong | Typecheck and both test suites in CI; reproducible F-Droid builds; signing and smoke-test checks |
+| UI architecture | Needs work | Multiple 1,400-2,900 line files and duplicated platform implementations |
+| Runtime performance | Needs work | One critical re-render path, missing indexes, N+1 queries, eager catalog loading |
+| Accessibility | Needs work | Incomplete labels/roles on core logging controls; no live regions or value semantics |
+| Tooling and quality gates | Weak | No linter, formatter, UI tests, coverage measurement, or dependency automation |
+| Product completeness | On track | Core product is feature-rich; publishing, automatic backups, media, and watch apps remain |
+
+### Top five risks
+
+1. **Silent autosave failures** (`REL-02`). The app can look healthy while drafts are not being persisted.
+2. **Active logger re-render storm** (`PERF-01`). Every set toggle or keystroke rebuilds the 2,904-line workout screen and all of its rows.
+3. **Missing indexes and N+1 history reads** (`PERF-04`, `PERF-05`). Cost grows linearly with history size on every tab activation.
+4. **No crash isolation** (`REL-01`). One render exception can blank the entire app with no diagnostics.
+5. **Forked native/web stores** (`ARCH-04`, `COR-01`, `COR-02`). Domain rules already diverge between platforms.
+
+### Highest-return actions
+
+1. **Reliability bundle:** root error boundary, visible persistence errors, and a `reportError` helper.
+2. **Database bundle:** add indexes and batch the history queries.
+3. **Logger bundle:** split active-workout state, memoize rows, debounce notes.
+4. **Quality bundle:** ESLint/Prettier, test typechecking, UI tests, coverage, dependency automation.
+
+---
+
+## 2. Strengths to preserve
+
+- **Session state machine.** Explicit phases (`idle`, `starting`, `active`, `finishing`, `discarding`), immutable transitions, serialized writes, and revision guards in `src/workout/session.ts`.
+- **Durable write path.** `finishWorkout` writes the workout and deletes the draft in one transaction; writes are serialized by `src/database/writeQueue.ts`.
+- **Transactional migrations.** Numbered, idempotent, rollback-safe migrations in `src/database/migrations.ts`, with injected-failure test hooks.
+- **Defensive backup import.** Size limits, version handling, deep validation, and atomic collision-safe restore in `src/utils/backup.ts`, `src/utils/restore.ts`, and `src/database/snapshot-validation.ts`.
+- **Unusually strong logic tests.** Real SQLite and IndexedDB harnesses in `tests/helpers/storeFixture.ts`; cross-platform backup round trips; full session lifecycle tests.
+- **Release engineering.** Version consistency checks, reproducible per-ABI F-Droid builds, signature-copy verification, non-free dependency rejection, and an APK launch smoke test.
+- **Existing performance patterns.** Tuned `FlatList` rows, memoized exercise rows, debounced weight/reps inputs, isolated clock context, signature guards, and a cached exercise-visual descriptor.
+- **Strict TypeScript.** `strict: true`, zero `@ts-ignore`/`@ts-expect-error`, and zero TODO/FIXME/HACK markers in application code.
+
+---
+
+## 3. Findings summary
+
+| Workstream | Critical | High | Medium | Low | Total |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Reliability (`REL`) | 0 | 2 | 2 | 1 | 5 |
+| Performance (`PERF`) | 1 | 5 | 6 | 2 | 14 |
+| Architecture (`ARCH`) | 0 | 4 | 6 | 1 | 11 |
+| Correctness and parity (`COR`) | 0 | 1 | 2 | 0 | 3 |
+| Accessibility (`A11Y`) | 0 | 2 | 3 | 0 | 5 |
+| Developer experience (`DX`) | 0 | 2 | 5 | 3 | 10 |
+| Product (`PROD`) | 0 | 0 | 4 | 2 | 6 |
+| **Total** | **1** | **16** | **28** | **9** | **54** |
+
+---
+
+## 4. Reliability findings
+
+### REL-01 — No root error boundary or crash capture
+
+- **Severity:** High
+- **Status:** `Done`
+- **Evidence:** The only error boundary is `src/components/ExerciseVisualErrorBoundary.tsx:15-38`, used solely around exercise artwork at `src/components/ExerciseVisual.tsx:303-312`. There is no other `componentDidCatch`, no root boundary, and no crash-reporting dependency.
+- **Impact:** A render exception in `ActiveWorkoutScreen`, `AnalyticsScreen`, or any modal blanks the entire application. There is no in-field signal that a crash happened.
+- **Required change:** Add a root boundary with a recovery screen (reload, and export data when storage is available), per-tab boundaries, and a persisted last-error record. Add an opt-in crash reporter only if it is consistent with the privacy positioning.
+- **Implementation (2026-10-18):** `src/components/AppErrorBoundary.tsx` provides the recovery surface (Try Again, plus Reload App on web) and reports through `reportError` with scope and component-stack context. `App.tsx` wraps the root, each tab pane, and the active logger in boundaries, and installs an error sink that persists the latest record to the `last_app_error` setting (best-effort, deduplicated). Coverage: `tests/unit/app-error-boundary.test.ts` (5 tests), including a real renderer test that throws inside a child and asserts the fallback, and a sink test that captures scope and component stack. A full multi-tab interaction test arrives with the React Native Testing Library harness in Phase 3 (`DX-02`).
+- **Done when:**
+  - [x] A forced render error in any tab leaves the rest of the shell usable.
+  - [x] The error is recorded locally with component and context information.
+  - [x] A regression test renders a throwing child and asserts the fallback.
+
+### REL-02 — Persistence failures are invisible to the user
+
+- **Severity:** High
+- **Status:** `Done`
+- **Evidence:** `SessionState` models `persistenceError` at `src/workout/session.ts:10`, sets it on failed autosave at `src/workout/session.ts:202-215`, and initializes it at `src/context/WorkoutContext.tsx:161`. No UI consumes it. Background flush failures are only logged at `src/context/WorkoutContext.tsx:314` and `:1257`.
+- **Impact:** Storage-full, read-only, or permission failures allow the user to keep logging while nothing is saved. An app kill then loses the workout. This is the most dangerous failure mode in the product.
+- **Required change:** Surface a persistent, non-dismissible warning banner when `persistenceError` is non-null, with retry and an in-memory export/copy fallback. Do not silently continue destructive navigation.
+- **Implementation (2026-10-18):** `retryPersistence` in `WorkoutContext.tsx` re-flushes the draft, and a dedicated `PersistenceErrorContext`/`usePersistenceError` avoids re-rendering the whole provider tree. `src/components/PersistenceErrorBanner.tsx` stays visible above both tabs and the logger, offers Retry plus a copy/share fallback, and is non-dismissible until the flush succeeds. Coverage: `tests/unit/session.test.ts` injects `failDraftSaves`, asserts the error state, and proves a successful retry clears it.
+- **Done when:**
+  - [x] An injected write failure shows a persistent warning with a retry action.
+  - [x] A successful retry clears the warning.
+  - [x] The failure path is covered by a test.
+
+### REL-03 — Silent catch blocks and inconsistent error reporting
+
+- **Severity:** Medium
+- **Status:** `Done`
+- **Evidence:** 33 catch blocks match an empty or log-only pattern. Examples include `src/screens/ActiveWorkoutScreen.tsx:202,318,367`, `src/context/WorkoutContext.tsx:355,367,374,381,1245`, and `src/database/webStore.ts:158,1468`.
+- **Impact:** Persistence and UI failures disappear into `console.error` or are swallowed entirely. Intentional best-effort cleanup is indistinguishable from real failures.
+- **Required change:** Introduce `reportError(error, context)` that logs in development and records a breadcrumb in production. Annotate intentional ignores with a reason.
+- **Implementation (2026-10-18):** `src/utils/errorReporting.ts` centralizes `reportError` (development logging, bounded 20-entry breadcrumbs, optional sink, never throws to callers). Session, storage, backup, screen, dialog, and web-store layers now report through it; `bestEffortHaptic` in `src/utils/haptics.ts` names the intentional haptic no-op. Coverage: `tests/unit/error-reporting.test.ts`; a repository grep confirms no unannotated `catch {}`/`.catch(() => {})` remain in `src/`.
+- **Done when:**
+  - [x] No unannotated empty catch remains in application code.
+  - [x] Error reporting is centralized and used by the session, storage, and backup layers.
+
+### REL-04 — Dialog actions swallow failures and show misleading text
+
+- **Severity:** Low
+- **Status:** `Done`
+- **Evidence:** `src/context/DialogContext.tsx:97-103` logs `"Unable to open health permission settings"` for every action failure and closes the dialog in `finally`, so any thrown error is treated as success.
+- **Impact:** Failed actions dismiss the dialog with no user-visible explanation, and the error text is wrong outside the health flow.
+- **Required change:** Pass an action label/error message into the dialog options, report failures through the shared helper, and close only on success.
+- **Implementation (2026-10-18):** Dialog actions capture failures into `actionError`, keep the dialog open for a retry, and report through `reportError`; `getDialogActionErrorMessage` in `src/utils/dialogAction.ts` produces accurate, action-specific text. Coverage: `tests/unit/dialog-action-error.test.ts`.
+- **Done when:** A failing dialog action keeps the dialog open and displays an accurate message.
+
+### REL-05 — Completion update bypasses the session/use-case layer
+
+- **Severity:** Medium
+- **Status:** `Done`
+- **Evidence:** `App.tsx:97-100` calls `saveCompletedWorkout(updated)` directly from the shell and awaits it without local error handling. The same screen also updates `completedWorkout` state before the persistence failure can be surfaced.
+- **Impact:** A failed post-workout edit leaves the summary modal showing state that was not saved. Cache invalidation and error policy live outside the normal write path.
+- **Required change:** Route the update through a completion use case that owns persistence, error display, and cache invalidation.
+- **Implementation (2026-10-18):** `saveCompletedWorkoutEdit(workout, save)` in `src/workout/completion.ts` owns the write and error reporting; `App.tsx` updates summary and history state only after it resolves, and the summary modal keeps its own error message on failure. Coverage: `tests/unit/completion.test.ts`.
+- **Done when:** A failed update shows an error and does not present unsaved state as saved.
+
+---
+
+## 5. Performance findings
+
+### PERF-01 — Active logger re-renders on every state change
+
+- **Severity:** Critical
+- **Status:** `Open`
+- **Evidence:** `ActiveWorkoutScreen.tsx:91-123` destructures 32 fields from `useWorkout()`. `WorkoutContext.tsx:1328-1353` includes `sessionState.workout` in the default context value. Every mutation calls `controller.update()`, which calls `notify()` synchronously at `src/workout/session.ts:145`, creating a new workout object and context value. The screen renders all exercise cards and set rows with `.map()` at `ActiveWorkoutScreen.tsx:751` and `:971`.
+- **Impact:** Every set toggle, RPE change, weight commit, and note keystroke rebuilds the 2,904-line screen and all nested rows. This is the core gym-floor interaction and the highest-impact performance issue in the app.
+- **Required change:** Move `activeWorkout` into its own context or expose a selector-style subscription. Extract and memoize `ExerciseCard` and `SetRow`, pass primitive props and stable callbacks, and split state from actions.
+- **Done when:**
+  - [ ] Toggling one set re-renders only the affected row and its card, verified with React DevTools Profiler or a render counter.
+  - [ ] Typing in a note does not re-render every exercise card.
+  - [ ] A regression test or documented profiling scenario exists for set toggling.
+
+### PERF-02 — Exercise notes commit on every keystroke
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `ActiveWorkoutScreen.tsx:944-949` calls `updateExerciseNotes(activeEx.id, txt)` from `onChangeText`. That reaches `WorkoutContext.tsx:1138-1149`, then `session.ts:128-167`, marking the draft dirty and triggering a full autosave serialization.
+- **Impact:** Typing is coupled to a full context update and a `JSON.stringify` of the entire workout on the autosave path (`nativeStore.ts:1248-1257`). On lower-end devices this is the classic typing-lag pattern.
+- **Required change:** Keep note text in local component state, debounce the session commit by roughly 250 ms, and flush on blur or unmount. Reuse the pattern already implemented in `WeightInput`/`RepsInput`.
+- **Done when:**
+  - [ ] Keystrokes do not increment the session revision until the debounce fires.
+  - [ ] Blur and unmount always flush the latest value.
+  - [ ] Note persistence is covered by a test.
+
+### PERF-03 — Trophy Room search recomputes all history on every keystroke
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `RecordsView.tsx:199-209` feeds `setTrophySearch` directly at `AnalyticsScreen.tsx:542-543`. The `trophySummary` memo at `AnalyticsScreen.tsx:228-252` includes `trophySearch` in its dependencies and calls `buildTrophyRoomSummary`, which walks every workout, exercise, and set at `src/workout/trophy-room.ts:152-188`.
+- **Impact:** Each typed character re-aggregates the entire training history and re-renders the records subtree.
+- **Required change:** Debounce the search input (150-250 ms) and compute the aggregate once. Filter the precomputed record list by query instead of re-running aggregation.
+- **Done when:**
+  - [ ] Typing only filters an existing record list.
+  - [ ] `buildTrophyRoomSummary` is not called per keystroke, verified with a spy or render-count test.
+
+### PERF-04 — Missing indexes on hot database columns
+
+- **Severity:** High
+- **Status:** `Done`
+- **Evidence:** `src/database/migrations.ts` creates only two indexes: `gyms_one_default` at line 287 and `health_sync_records_status_idx` at line 357. Queries that scan full tables include `nativeStore.ts:1338-1339` (`workouts` ordered by start time), `nativeStore.ts:1109-1120` (join by `exercise_id`), and `nativeStore.ts:927-943` (bulk detail reads).
+- **Impact:** History, PR, and analytics queries degrade as workout history grows. The cost is paid on tab activation and on every exercise-add flow.
+- **Required change:** Add one numbered migration with indexes for `workouts(in_progress, start_time DESC)`, `workout_exercises(workout_id)`, `workout_exercises(exercise_id)`, and `exercise_sets(workout_exercise_id)`. Add equivalent IndexedDB indexes on web where the access pattern warrants it.
+- **Implementation (2026-10-18):** Migration 9 adds `idx_workouts_in_progress_start`, `idx_workout_exercises_workout`, `idx_workout_exercises_exercise`, and `idx_exercise_sets_workout_exercise`. Coverage: rollback-injection test in `tests/integration/native-store.test.ts` and `EXPLAIN QUERY PLAN` assertions in `tests/integration/native-query-performance.test.ts`. Web IndexedDB indexes are deferred to `PERF-14`: current web reads are `getAll`-based, and the `PERF-05` batching already removed the per-workout reads that IndexedDB indexes would accelerate.
+- **Done when:**
+  - [x] The migration applies cleanly and idempotently on both fresh and existing databases.
+  - [x] `EXPLAIN QUERY PLAN` confirms the hot queries use the new indexes.
+  - [x] A migration regression test covers upgrade from the previous version.
+
+### PERF-05 — N+1 history queries and redundant snapshot reads
+
+- **Severity:** High
+- **Status:** `Done`
+- **Evidence:** `nativeStore.ts:1168-1175` loops `loadCompletedWorkoutsForExercise` for each exercise ID; each call runs the full join at `:1109-1122`. `webStore.ts:1345-1351` implements `readSnapshot` by calling `getWorkoutDetail` once per history row. Callers include `ActiveWorkoutScreen.tsx:234-264`, `HistoryScreen.tsx:107-110`, `WorkoutSummaryModal.tsx:79-82`, and `AnalyticsScreen.tsx:129`.
+- **Impact:** Query count grows linearly with the number of exercises or workouts. On web this is an IndexedDB round trip per workout; on native it is a join per exercise.
+- **Required change:** Implement a batched `WHERE exercise_id IN (...)` query chunked with the existing `selectInChunks` helper and group rows in JavaScript. On web, use IDB indexes and a cursor, or one transaction that loads the needed records.
+- **Implementation (2026-10-18):** Native now loads previous sets in one batch per chunk (`selectInChunks`, 500-parameter cap) instead of one join per exercise. Web `readSnapshot`/`getWorkoutHistory` read the workouts store once via `getAllWorkoutsSorted()` instead of one detail read per workout. Coverage: a constant query-count test for the native loader, and `tests/integration/web-snapshot-bulk.test.ts`, which was watched failing with four per-workout detail reads before the change.
+- **Done when:**
+  - [x] One exercise batch produces one query per chunk, not one query per exercise.
+  - [x] Web snapshot reads do not issue one detail read per workout.
+  - [x] A test counts database calls or asserts the batched result matches the previous behavior.
+
+### PERF-06 — 758 KB exercise catalog is loaded eagerly at module scope
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `src/database/defaultExercises.json` is 758,757 bytes. `src/database/seedData.ts:6-19` requires it at module scope, maps all records, and builds a `Map` at import time. Both `nativeStore.ts:18` and `webStore.ts:4` import `seedData`.
+- **Impact:** The catalog is parsed and transformed on every launch even after seeding is complete, inflating startup time and the JS bundle.
+- **Required change:** Load the JSON lazily only when seeding or synchronizing a new catalog version, or read the catalog from SQLite after the first seed. Consider trimming unused fields from the bundled payload.
+- **Done when:**
+  - [ ] The catalog is not evaluated on launches where the bundled catalog version is already applied.
+  - [ ] Bundle size and cold-start time are measured before and after.
+  - [ ] Catalog seeding and upgrade tests still pass.
+
+### PERF-07 — Analytics hydrates the full snapshot before checking for changes
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `AnalyticsScreen.tsx:126-142` calls `store.readSnapshot()` at line 129, then builds a signature and returns early at line 142 if it is unchanged. `AnalyticsScreen.tsx:133` also calls `getAllExercises()` even though the snapshot already contains exercises. `useReloadOnActivate` triggers this on every return to the tab at line 185.
+- **Impact:** The optimization skips recomputation but not the expensive full hydration, so returning to Progress is never cheap.
+- **Required change:** Fetch a cheap revision/count first, or add a store revision counter. Reuse `snapshot.exercises` and share a snapshot cache across tabs.
+- **Done when:**
+  - [ ] A no-change tab activation performs only a cheap revision check.
+  - [ ] No duplicate exercise catalog read occurs during analytics load.
+
+### PERF-08 — Search re-normalizes the entire catalog per query
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `src/utils/search.ts:145-151` normalizes name, muscles, equipment, and category for every exercise on every call, then scores and sorts all candidates at `:180-207`. The empty-query branch sorts the full list at `:121-131`.
+- **Impact:** Four or more regex-based normalizations per exercise per keystroke across 876 exercises. The 120 ms input debounce reduces but does not remove the cost.
+- **Required change:** Precompute a normalized haystack and staple score once per catalog version, and precompute the empty-query top-100 list.
+- **Done when:**
+  - [ ] Search calls do not re-normalize unchanged catalog records.
+  - [ ] A benchmark or test documents the improvement.
+
+### PERF-09 — Records list is not virtualized
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `RecordsView.tsx:255-286` renders `records.map(...)` inside a `ScrollView`, mounted from `AnalyticsScreen.tsx:527-546`.
+- **Impact:** Users with many trained exercises mount every record row at once, and the whole subtree re-renders on each search update.
+- **Required change:** Make the records list a `FlatList` with the header content in `ListHeaderComponent`, or memoize the row component and bound the rendered list.
+- **Done when:**
+  - [ ] Only visible rows are mounted for a 500-record synthetic dataset.
+  - [ ] Search updates do not re-render unrelated rows.
+
+### PERF-10 — Exercise detail runs the same full-history query twice
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `ExerciseDetailModal.tsx:155-163` calls `getExerciseStats`, `getExerciseGymScope`, and `getCompletedWorkoutsForExercise` in parallel. `getExerciseStats` at `nativeStore.ts:1177-1182` already calls `loadCompletedWorkoutsForExercise`.
+- **Impact:** Opening a detail modal doubles the most expensive query, then walks the history a third time for the podium.
+- **Required change:** Return raw workouts from the stats call or compute stats from the already-loaded history.
+- **Done when:** Opening the modal issues one history query and performs one aggregation pass.
+
+### PERF-11 — Eager screen imports and permanently mounted tabs
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `App.tsx:15-19` statically imports all screens. `App.tsx:48-54` mounts a tab on first visit, and `App.tsx:127-138` keeps visited tabs mounted under `display: none`.
+- **Impact:** Analytics and its chart stack are in the initial bundle. Hidden tabs retain state and subscriptions, and memory grows with each visited tab.
+- **Required change:** Use `React.lazy` plus `Suspense` for Analytics and History, and consider unmounting or freezing heavy tabs after a timeout. Keep the fast first-switch behavior where it matters.
+- **Done when:**
+  - [ ] The initial web bundle excludes the Analytics chart module.
+  - [ ] Hidden-tab memory does not grow without bound during a long session.
+
+### PERF-12 — Rest timer wakes the JS thread four times per second for a 1 Hz UI
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `WorkoutContext.tsx:387-393` runs a 250 ms interval and bails out of the state update when the displayed second has not changed.
+- **Impact:** Four wakeups per second while resting, often with the screen dimmed, for a display that only changes once per second.
+- **Required change:** Tick every 1000 ms aligned to `endsAt`, or self-reschedule a timeout to the next integer second.
+- **Done when:** The timer display remains accurate across backgrounding with one update per second.
+
+### PERF-13 — Low-cost render and parsing issues
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `ConfettiCelebration.tsx:53-92` builds particles and assigns `particlesRef.current` during render. `ExerciseVisual.tsx:105-109` parses a 12.7 KB inline SVG on every plank visual mount.
+- **Impact:** Render-phase side effects double under StrictMode; repeated SVG parsing adds avoidable work.
+- **Required change:** Use a lazy `useState`/`useMemo` initializer for particles and hoist or asset-load the SVG.
+- **Done when:** No ref mutation occurs during render and the plank visual parses once per process.
+
+### PERF-14 — Web store scans and sorts full object stores in memory
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `webStore.ts:964-971` calls `getAll()` and sorts workouts in memory; the same pattern appears at `:1072-1113` and in `readSnapshot` at `:1345-1351`. There are no IndexedDB indexes on `startTime` or completion state.
+- **Impact:** Large histories pay a full-store read and sort on web, and the N+1 detail loop compounds it.
+- **Required change:** Add IDB indexes and use cursors or key ranges for history queries; align behavior with the native store.
+- **Done when:** History reads use an index and do not materialize the entire store when only a page is needed.
+
+---
+
+## 6. Architecture and maintainability findings
+
+### ARCH-01 — ActiveWorkoutScreen is a 2,904-line component
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `src/screens/ActiveWorkoutScreen.tsx` spans lines 87-2904, with 24 `useState` calls, 6 effects, and zero `useCallback`. Three inline modals occupy roughly lines 1362-2013.
+- **Impact:** Every feature change touches one of the highest-risk files in the app. Handlers are recreated on every render, defeating child memoization.
+- **Required change:** Extract a controller hook/reducer for screen state, `WorkoutHeader`, `ExerciseStream`/`ExerciseCard`, and the three modals. Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Done when:**
+  - [ ] The screen is under 600 lines and the extracted modules have focused tests.
+  - [ ] No behavior regressions in the session, draft, or completion integration tests.
+
+### ARCH-02 — AnalyticsScreen is a 2,031-line component with 32 state variables
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `src/screens/AnalyticsScreen.tsx` mixes snapshot loading (`:126-179`), backup save/import (`:282-356`), CSV import and remapping (`:357-513`), and charts/records rendering (`:515-1292`).
+- **Impact:** Unrelated features share one state surface and render tree. A backup or CSV change can affect chart rendering and vice versa.
+- **Required change:** Extract `useAnalyticsData`, `useBackupTransfer`, `useCsvImportFlow`, `ProgressCharts`, `RecordsSection`, and `DataTransferSection`.
+- **Done when:** Each domain has a focused hook or component and Analytics composes them.
+
+### ARCH-03 — WorkoutProvider is a 1,404-line application service
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `src/context/WorkoutContext.tsx` owns controller subscription, elapsed ticker, AppState flush, rest timers and notifications, draft recovery, gym switching, health sync, roughly two dozen mutations, and provider composition.
+- **Impact:** It is one of the highest-churn files in the app and any change risks timers, persistence, notifications, or health export.
+- **Required change:** Keep the provider as composition only. Extract `useSessionControllerBridge`, `useRestTimerEngine`, `useDraftRecovery`, `useGymSwitcher`, `useHealthSyncBridge`, and `useWorkoutMutations`.
+- **Done when:** Each concern has a dedicated hook and the provider is primarily wiring.
+
+### ARCH-04 — Native and web stores are forked implementations with behavioral drift
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `nativeStore.ts` (1,569 lines) and `webStore.ts` (1,535 lines) expose 44 identically named methods and duplicate normalization, merge, and deletion logic. Known divergence: native gym deletion rejects in-progress references at `nativeStore.ts:252-294`, while web reassigns workouts at `webStore.ts:534-588`. Web's `(workout as any).inProgress` filter at `webStore.ts:1112` is dead because the field is not in the `Workout` type.
+- **Impact:** Every domain rule must be implemented and tested twice. Platform parity bugs are likely to recur.
+- **Required change:** Extract a storage-agnostic `StoreCore` for normalization, validation, merge planning, and deletion policy. Keep the SQL and IndexedDB files as thin adapters. Add a shared contract suite that runs identical scenarios against both stores.
+- **Done when:**
+  - [ ] Shared domain logic lives in one module.
+  - [ ] The contract suite runs against both stores in integration tests.
+  - [ ] The known gym-deletion divergence is resolved or explicitly documented as intentional.
+
+### ARCH-05 — Exercise picker and Exercises screen duplicate roughly 200 lines
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `src/components/ExercisePickerModal.tsx:32-240` and `src/screens/ExercisesScreen.tsx:33-248` duplicate filter constants, custom-exercise state, and save/edit handlers. Minor differences are limited to the row press behavior.
+- **Impact:** Validation and alias fixes must be made twice and can drift.
+- **Required change:** Extract `CustomExerciseModal` and shared filter options; keep the picker and screen as thin compositions.
+- **Done when:** Custom-exercise behavior is implemented once and covered by shared tests.
+
+### ARCH-06 — No repository/query layer; screens fetch directly
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** The audit found roughly 29 direct `getStore()`/database calls in screens and modals, including `AnalyticsScreen.tsx:128,321,370,405,435,453,471,489`, `HistoryScreen.tsx:165`, `ExercisesScreen.tsx:186`, and `WorkoutScreen.tsx:65-85`.
+- **Impact:** Loading, caching, error policy, and invalidation are reimplemented per screen, so cross-screen consistency depends on remembering to refresh.
+- **Required change:** Introduce domain hooks or a repository layer (`useWorkoutHistory`, `useAnalyticsSnapshot`, `useExerciseCatalog`) that own caching, invalidation, and errors. Keep `Store` as the persistence adapter.
+- **Done when:** Screens consume domain hooks rather than the raw store.
+
+### ARCH-07 — No store revision or reliable cache invalidation
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `useReloadOnActivate` fires a per-tab emitter at `App.tsx:73-83`. Analytics and History use hand-built JSON signatures (`AnalyticsScreen.tsx:136-143`, `HistoryScreen.tsx:142-156`) that omit exercise names and scope contents.
+- **Impact:** Renaming a custom exercise or changing a scope can leave charts and PR badges stale until another data change or a full reload.
+- **Required change:** Add a monotonic `dataVersion` incremented on successful writes, expose it through the store, and invalidate domain queries against it.
+- **Done when:** Any write that affects analytics or PRs increments the version and refreshes dependent views.
+
+### ARCH-08 — Three platform-dispatch mechanisms coexist
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** The codebase uses Metro extensions (`db.native.ts`/`db.web.ts`, `saveBackup.*`, `restNotifications.*`), runtime `typeof document` with dynamic imports (`saveBackup.ts:10-15`, `health/index.ts:8-26`), and `Platform.OS` checks (`pickBackup.ts:4-8`, `SettingsContext.tsx:47-48`).
+- **Impact:** The resolution matrix is hard to reason about, and the fallback branches in `restNotifications.ts` are effectively test-only on real devices.
+- **Required change:** Standardize on Metro platform extensions for module selection and reserve `Platform.OS` for genuine in-module behavior differences. Document the matrix and add a test that asserts selection per platform.
+- **Done when:** A single documented mechanism covers module selection.
+
+### ARCH-09 — Hand-rolled navigation limits deep links and back behavior
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `App.tsx:35-42` defines a static tab array and renders screens via conditionals. No navigation library or linking integration is present. Android back handling exists only inside the active logger.
+- **Impact:** There are no deep links, no browser URL/history state, no back stack, and Android back exits the app from tab screens. Future flows (onboarding, settings, exercise deep links) will need navigation primitives built from scratch.
+- **Required change:** Decide explicitly whether the fixed four-tab model is permanent. If yes, document the constraint and add web history plus shell-level Android back handling. If no, plan an expo-router/React Navigation migration.
+- **Done when:** The product decision is documented and the chosen behavior is covered by tests.
+
+### ARCH-10 — Dead code and unnecessarily public exports
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `DraggableExerciseCard.tsx` (176 lines) has no production import. `computeExerciseLayouts` in `active-exercises.ts:47` has no callers. `restoreBackup` and `shapeBackup` are used only by tests. Several helpers are exported but used only inside their own module.
+- **Impact:** Future dead-code scans are noisy, and unused UI code suggests unfinished work.
+- **Required change:** Delete genuinely dead modules or wire them in deliberately. Move test-only helpers to test utilities or mark them as such.
+- **Done when:** The dead-code scan is clean and every remaining export has a caller.
+
+### ARCH-11 — Type-safety gaps at storage boundaries
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** There are 125 `any` occurrences in `src/`, concentrated in `nativeStore.ts` (42), `backup.ts` (17), and `readNativeFile.ts` (9). The native store is cast `as unknown as Store` at `nativeStore.ts:1521-1568`. Web wrappers use non-null assertions at `db.web.ts:149-158`, and `webStore.ts:1112` uses `(workout as any).inProgress` for a field that does not exist. `tsconfig.json` does not enable `noUncheckedIndexedAccess` or `exactOptionalPropertyTypes`.
+- **Impact:** Contract drift can pass typechecking, and the dead `inProgress` filter is a concrete example of a cast hiding a real bug.
+- **Required change:** Type SQL row shapes explicitly, replace `catch (err: any)` with `unknown` plus a normalizer, add `noUncheckedIndexedAccess`, and replace cluster non-null assertions with an `invariant`/`requireDefined` helper.
+- **Done when:** The store contract is checked structurally and the dead cast is removed.
+
+---
+
+## 7. Correctness and platform-parity findings
+
+### COR-01 — Web completed-workout filter is dead
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `webStore.ts:1112` filters with `!(workout as any).inProgress`, but `Workout` has no `inProgress` field (`src/types/index.ts:67-78`) and `normalizeWorkout` does not preserve one. Native filters with SQL `WHERE w.in_progress = 0` at `nativeStore.ts:1119`. Web `getWorkoutDetail` also returns any stored record (`webStore.ts:991-1000`), while native requires completion (`nativeStore.ts:987`).
+- **Impact:** In-progress or otherwise unintended records can appear in web history and PR calculations, and web behavior differs from native.
+- **Required change:** Model completion state explicitly in the stored record and filter it consistently, or remove the dead check and guarantee that only completed workouts enter the store.
+- **Done when:**
+  - [ ] Both platforms return the same records for the same fixture.
+  - [ ] A parity test covers completed and in-progress records.
+
+### COR-02 — Gym deletion policy diverges between native and web
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** Native rejects deletion when a draft or in-progress workout references the gym (`nativeStore.ts:258-271`). Web rejects only draft references and silently reassigns workouts (`webStore.ts:554-564`).
+- **Impact:** The same user action succeeds on web and fails on native, with different data consequences.
+- **Required change:** Define one policy in `StoreCore` and apply it on both platforms.
+- **Done when:** A parity test exercises gym deletion with drafts and in-progress workouts on both stores.
+
+### COR-03 — Refresh signatures omit relevant fields
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** The Analytics signature at `AnalyticsScreen.tsx:136-143` includes workout IDs/times/gym/volume/counts, gym fields, scope count, and exercise count, but not exercise names or scope contents. The History signature at `HistoryScreen.tsx:142-156` omits `exerciseGymScopes` even though PR evaluation consumes them at `:169-176`.
+- **Impact:** Renames and scope changes can leave analytics and PR displays stale.
+- **Required change:** Replace hand-built signatures with a store revision counter or hash the full relevant inputs.
+- **Done when:** Renaming an exercise and changing a scope both refresh the affected views immediately.
+
+---
+
+## 8. Accessibility findings
+
+### A11Y-01 — Core workout controls have incomplete screen-reader coverage
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `ActiveWorkoutScreen.tsx` contains 55 `TouchableOpacity` elements, 22 `accessibilityRole` attributes, and 23 `accessibilityLabel` attributes. Missing coverage includes the collapsed exercise row at `:763-781`, the compact RPE badge at `:1084-1093`, and the inline RPE cell at `:1097-1106`. The set checkbox at `:1111-1126` shows the correct pattern.
+- **Impact:** A screen-reader user cannot reliably identify or operate the primary set controls.
+- **Required change:** Add roles, labels, hints, and state to every interactive control, starting with the logger set/exercise/RPE surfaces.
+- **Done when:** Every touchable in the logger has a meaningful label and role, verified by a checklist and automated where possible.
+
+### A11Y-02 — Rest controls, mini bar, and read-only banner are unlabeled
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** `RestTimerOverlay.tsx:59-83` has three touchables with no role or label. `ActiveWorkoutMiniBar.tsx:31-35` has one large unlabeled touchable. `ReadOnlyBanner.tsx:35-46` has an unlabeled "Take Over" action.
+- **Impact:** Rest-timer adjustment, resuming a minimized workout, and recovering from read-only mode are difficult or impossible without sight.
+- **Required change:** Add labels/roles to these controls and make the countdown a polite live region.
+- **Done when:** All three surfaces are operable with a screen reader.
+
+### A11Y-03 — No live regions or value semantics for dynamic UI
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** There are zero `accessibilityLiveRegion` and zero `accessibilityValue` occurrences in `src/`. The rest timer, workout clock, PR toast, and 30 text inputs expose no dynamic semantics.
+- **Impact:** Countdowns and record celebrations are silent, and inputs do not announce their current values.
+- **Required change:** Add live regions to timers and toasts, and add label/value semantics to weight, reps, RPE, and notes inputs.
+- **Done when:** Dynamic updates are announced without requiring focus changes.
+
+### A11Y-04 — Modal semantics and focus handling are inconsistent
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** Only 4 occurrences of `accessibilityViewIsModal` exist across the app despite many custom modals.
+- **Impact:** Screen-reader users can escape into background content while a modal is open.
+- **Required change:** Standardize modal containers on `accessibilityViewIsModal`, initial focus, and focus return.
+- **Done when:** Every modal traps focus and restores it on close.
+
+### A11Y-05 — No enforced accessibility primitive or lint rule
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** Accessibility attributes are applied ad hoc. There is no required-label wrapper component and no `jsx-a11y`-style rule in CI.
+- **Impact:** New UI will keep reproducing the same gaps.
+- **Required change:** Add an `AppTouchable`/`IconButton` primitive that requires an accessibility label, and enforce it through review and lint where possible.
+- **Done when:** New interactive components use the primitive by default.
+
+---
+
+## 9. Developer-experience and quality-gate findings
+
+### DX-01 — No lint or formatting tooling
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** No ESLint, Prettier, Biome, EditorConfig, husky, or lint-staged configuration exists. `package.json` has no `lint` script. Style is enforced only by prose in `CONTRIBUTING.md`.
+- **Impact:** Hook dependency mistakes and inconsistent formatting reach review. Contributors must infer style from surrounding code.
+- **Required change:** Add ESLint with `react-hooks`, `@typescript-eslint`, and an RN-compatible accessibility subset; add Prettier or Biome; add `lint` and `format:check` scripts and a CI job. Add a pre-commit hook only if it does not slow the core loop.
+- **Done when:** CI fails on lint errors and formatting drift.
+
+### DX-02 — No component or UI tests
+
+- **Severity:** High
+- **Status:** `Open`
+- **Evidence:** No React renderer dependency exists. The only component-adjacent tests are hand-rolled React fakes in `tests/unit/exercise-visual.test.ts` and `tests/unit/workout-health-sync.test.ts`. `tests/` references 2 of roughly 45 UI files.
+- **Impact:** Regressions in the primary logging flow, modals, and navigation are caught only by manual testing or the APK launch smoke test.
+- **Required change:** Add React Native Testing Library and cover the critical flows: set logging, rest timer, finish/discard, draft recovery, and exercise search. Add one device-level end-to-end flow.
+- **Done when:** Critical UI paths have automated tests that run in CI.
+
+### DX-03 — No coverage measurement or threshold
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** No `c8`, `nyc`, or experimental coverage flag is configured, and no workflow uploads or checks coverage.
+- **Impact:** Coverage can regress silently, and there is no signal for which new modules need tests.
+- **Required change:** Enable coverage for unit and integration runs, publish a report, and set an initial non-regression threshold.
+- **Done when:** CI reports coverage and fails on a configured drop.
+
+### DX-04 — No end-to-end flow tests
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `scripts/android-smoke-test.sh` installs and launches the APK and fails on a crash, but it does not exercise a flow.
+- **Impact:** Lifecycle bugs that only appear in a real app (backgrounding, permissions, navigation) are not covered.
+- **Required change:** Add Maestro or Detox for a small smoke journey: start workout, log a set, minimize, resume, finish.
+- **Done when:** The journey runs in CI on an emulator.
+
+### DX-05 — Tests are excluded from typechecking
+
+- **Severity:** Medium
+- **Status:** `Done`
+- **Evidence:** `tsconfig.json:7` excludes `tests`. CI runs `npx tsc --noEmit`, so 15,784 lines of test code are never typechecked. `@types/node` is not a direct devDependency.
+- **Impact:** Broken fixtures and API drift in tests are invisible until runtime.
+- **Required change:** Add a `tsconfig.test.json` that includes `tests/`, add `@types/node`, and typecheck it in CI.
+- **Implementation (2026-10-18):** `tsconfig.test.json` extends the app config with `types: ["node"]`; `@types/node` is a direct devDependency; latent fixture drift (legacy `bodyPart`/`orderIndex` fields, missing `gymId`, stale mock shapes, module-mock typings) was fixed across the suite; `npm run typecheck:tests` runs locally and in the CI and release workflows.
+- **Done when:** Test type errors fail CI.
+
+### DX-06 — No dependency automation or security gate
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** No Dependabot, Renovate, CodeQL, or `npm audit` step exists. Local audit: 29 vulnerabilities, including a critical `shell-quote` advisory reached through `react-devtools-core` and several high-severity build-tool transitive issues.
+- **Impact:** Security and compatibility drift accumulate silently. Most findings are build-time, but they still affect contributor and CI environments.
+- **Required change:** Add Dependabot/Renovate with grouped Expo updates, run `npm audit --omit=dev` in CI with an agreed policy, and document triage for accepted advisories.
+- **Done when:** Dependency updates and audit results are visible and actionable on every relevant PR.
+
+### DX-07 — No Node/toolchain pinning and incorrect prerequisites
+
+- **Severity:** Medium
+- **Status:** `Done`
+- **Evidence:** `package.json` has no `engines` or `packageManager`; there is no `.nvmrc`. README and CONTRIBUTING state Node 18+, CI uses Node 24, and the test harness requires `node:sqlite` (Node 22.5+) and `--experimental-test-module-mocks` (Node 22.3+).
+- **Impact:** Contributors following the docs can hit confusing failures before running a single test.
+- **Required change:** Add `.nvmrc`, `engines`, and `packageManager`; update README and CONTRIBUTING to Node 22.5+ with CI on the same version.
+- **Implementation (2026-10-18):** Added `.nvmrc` (24), `engines.node >= 22.5.0`, and `packageManager: npm@11.19.1`. README, CONTRIBUTING, and `docs/release-checklist.md` now state Node 22.5+ with Node 24 matching `.nvmrc` and CI.
+- **Done when:** A fresh checkout following the docs runs the verification suite without version workarounds.
+
+### DX-08 — Version and documentation drift
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `package.json` says version 1.0.0 while `app.json` says 1.0.5. `docs/audit-remediation-results.md:76` says 147 tests (current baseline is 620+). The release checklist and README disagree on Node requirements.
+- **Impact:** Small inconsistencies erode trust in the documentation and complicate release checks.
+- **Required change:** Make `app.json` the single version source (or synchronize both), refresh the stale test counts, and update prerequisites.
+- **Done when:** Version and documentation checks are part of the release checklist.
+
+### DX-09 — Missing open-source collaboration templates
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** No `SECURITY.md`, issue templates, pull-request template, or `CODEOWNERS`.
+- **Impact:** Security reports and contribution quality depend on ad hoc communication.
+- **Required change:** Add a security policy, issue/PR templates, and a lightweight review checklist that references this audit.
+- **Done when:** The templates are present and linked from CONTRIBUTING.
+
+### DX-10 — Web export artifacts break the typecheck
+
+- **Severity:** Low
+- **Status:** `Done`
+- **Evidence:** `tsconfig.json` excluded `dist` but not the documented `dist-audit-web` export directory. Because the Expo base config sets `allowJs`, a `tsc --noEmit` run after the documented web export step type-checked the 3.9 MB minified bundle and crashed with `RangeError: Maximum call stack size exceeded` instead of a useful error.
+- **Impact:** Contributors following the verification protocol hit an opaque crash on their next typecheck, and the export could be committed accidentally.
+- **Required change:** Exclude generated export directories from the typecheck and ignore them in git.
+- **Implementation (2026-10-18):** `tsconfig.json` now excludes `dist-*`, and `.gitignore` ignores `dist-*/`. Verified with the export directory present: both typechecks exit 0.
+- **Done when:** Running the verification protocol in order leaves both typechecks clean.
+
+---
+
+## 10. Product findings
+
+### PROD-01 — App Store and F-Droid submissions are pending
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** ROADMAP Phase 4 marks F-Droid and App Store publishing as incomplete. The F-Droid recipe and release pipeline exist, but submission to fdroiddata and iOS device acceptance remain.
+- **Impact:** Distribution is limited to GitHub APK releases, and iOS users cannot install through the App Store.
+- **Required change:** Complete the release checklist, submit to fdroiddata, and finish the iOS custom-build acceptance path.
+- **Done when:** The app is installable from at least one public store per platform.
+
+### PROD-02 — Automatic backups and remote exercise photos are not merged
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `feat/android-automatic-backups` and `feat/remote-exercise-images-setting` contain commits not on `main`. `origin/feat/time-distance-charts` also exists.
+- **Impact:** Users still depend on manual exports for disaster recovery, and completed work sits idle on branches.
+- **Required change:** Review, test, and merge or explicitly defer each branch. Keep branch lifetimes short.
+- **Done when:** Each branch is merged or closed with a documented decision.
+
+### PROD-03 — Rich exercise media and watch companion remain unfinished
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** ROADMAP Phase 4 lists rich media and Wear OS/Apple Watch as incomplete.
+- **Impact:** These are differentiators against paid competitors but not blockers for the core tracker.
+- **Required change:** Keep them behind the reliability and performance work; scope a small media increment before a full animation system.
+- **Done when:** A scoped milestone is agreed and tracked.
+
+### PROD-04 — No localization or i18n infrastructure
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** The app is English-only; no i18n library, message catalog, or locale-aware formatting layer exists.
+- **Impact:** International adoption is limited, and retrofitting strings after more UI work is more expensive.
+- **Required change:** Introduce a minimal message catalog and locale-aware number/date formatting before expanding the string surface.
+- **Done when:** User-facing strings are centralized and a second locale can be added without touching screen logic.
+
+### PROD-05 — No deep links or web URL state
+
+- **Severity:** Medium
+- **Status:** `Open`
+- **Evidence:** `App.tsx` has no linking integration, and no code writes browser history. External links are limited to exercise references in `src/utils/exercise-links.ts`.
+- **Impact:** Web refresh always returns to the Workout tab, and exercises/workouts cannot be linked to or bookmarked.
+- **Required change:** Decide whether deep links are in scope. If yes, add route state and browser history; if no, document the limitation.
+- **Done when:** The chosen behavior is implemented or explicitly documented.
+
+### PROD-06 — Web installability and offline shell are not configured
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `app.json` has no web manifest configuration, and the current export contains no manifest or service worker.
+- **Impact:** The data layer is local-first, but the web shell is not installable and may not reload offline.
+- **Required change:** Add a web manifest and service worker strategy if web is a supported target, or state the limitation in the README.
+- **Done when:** The web behavior matches the documented promise.
+
+---
+
+## 11. Prioritized remediation plan
+
+The plan is ordered by user-data risk, then core interaction performance, then structural drag. Each item references its finding ID. Check items off as they are completed.
+
+### Phase 0 — Reliability and guardrails (target: days)
+
+- [x] `REL-01` Add a root error boundary and per-tab boundaries.
+- [x] `REL-02` Surface persistence failures with retry and export.
+- [x] `REL-03` Add `reportError` and remove silent catches.
+- [x] `REL-04` Fix dialog action error handling.
+- [x] `REL-05` Route completed-workout updates through a use case.
+- [x] `PERF-04` Add database indexes.
+- [x] `PERF-05` Batch history queries and remove N+1 reads.
+- [x] `DX-05` Typecheck the test suite.
+- [x] `DX-07` Pin Node and fix prerequisites.
+
+**Exit criteria:** A simulated storage failure and a simulated render failure are both visible and recoverable; the hot history queries use indexes; a clean checkout runs the documented suite.
+
+### Phase 1 — Logger and analytics responsiveness (target: one to two weeks)
+
+- [ ] `PERF-01` Split active-workout state; memoize exercise cards and set rows.
+- [ ] `PERF-02` Debounce exercise notes.
+- [ ] `PERF-03` Debounce Trophy Room search and filter precomputed records.
+- [ ] `PERF-07` Add a cheap revision check before analytics hydration.
+- [ ] `PERF-08` Precompute search normalization and the staple list.
+- [ ] `PERF-09` Virtualize the records list.
+- [ ] `PERF-10` Remove the duplicate detail query.
+- [ ] `PERF-12` Reduce the rest-timer tick to one update per second.
+- [ ] `PERF-13` Fix confetti and SVG parsing costs.
+
+**Exit criteria:** Toggling a set re-renders only the affected rows; typing does not trigger a full workout re-render; returning to Analytics with no changes does not hydrate the full database; a 500-record dataset scrolls without mounting all rows.
+
+### Phase 2 — Architecture and startup (target: two to four weeks)
+
+- [ ] `ARCH-01` Decompose `ActiveWorkoutScreen`.
+- [ ] `ARCH-02` Decompose `AnalyticsScreen`.
+- [ ] `ARCH-03` Split `WorkoutProvider` into focused hooks.
+- [ ] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
+- [ ] `ARCH-05` Deduplicate custom-exercise UI.
+- [ ] `ARCH-06` Add repository/domain hooks.
+- [ ] `ARCH-07` Add a store revision counter and invalidation.
+- [ ] `PERF-06` Lazy-load the exercise catalog.
+- [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
+- [ ] `PERF-14` Add IndexedDB indexes and indexed history reads.
+- [ ] `COR-01` Fix the web completion filter.
+- [ ] `COR-02` Unify gym deletion policy.
+- [ ] `COR-03` Replace partial signatures with the revision counter.
+
+**Exit criteria:** No screen exceeds roughly 600 lines; shared domain rules live in one module; both stores pass the same contract suite; cold-start catalog work is eliminated once seeded.
+
+### Phase 3 — Quality gates and accessibility (target: ongoing, start immediately)
+
+- [ ] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
+- [ ] `DX-02` Add React Native Testing Library and critical-flow tests.
+- [ ] `DX-03` Add coverage reporting and a threshold.
+- [ ] `DX-04` Add one end-to-end smoke journey.
+- [ ] `DX-06` Add dependency automation and an audit policy.
+- [ ] `DX-08` Fix version and documentation drift.
+- [ ] `DX-09` Add collaboration and security templates.
+- [ ] `A11Y-01` Label the core logger controls.
+- [ ] `A11Y-02` Label rest controls, mini bar, and read-only banner.
+- [ ] `A11Y-03` Add live regions and value semantics.
+- [ ] `A11Y-04` Standardize modal semantics.
+- [ ] `A11Y-05` Add a required-label primitive.
+
+**Exit criteria:** CI enforces lint, types, tests, and coverage; the core flows have UI tests; the logger and rest controls are screen-reader operable.
+
+### Phase 4 — Product follow-through (target: after Phase 1-2)
+
+- [ ] `PROD-01` Complete F-Droid and iOS publishing.
+- [ ] `PROD-02` Merge or close automatic backups, remote photos, and time/distance charts.
+- [ ] `PROD-03` Scope the next media/watch milestone.
+- [ ] `PROD-04` Add i18n scaffolding.
+- [ ] `PROD-05` Decide and document deep-link scope.
+- [ ] `PROD-06` Add the web manifest/service worker or document the limitation.
+- [ ] `ARCH-08` Standardize platform dispatch.
+- [ ] `ARCH-09` Decide and document the navigation model.
+- [ ] `ARCH-10` Remove dead code.
+- [ ] `ARCH-11` Tighten storage-boundary types.
+
+---
+
+## 12. Verification protocol
+
+Every remediation pull request must run:
+
+```bash
+npx tsc --noEmit
+npm run typecheck:tests
+npm test
+npm run test:integration
+npx expo export --platform web --output-dir dist-audit-web
+```
+
+Add the following for the relevant change:
+
+- **Database changes:** migration upgrade test from the previous schema version, plus `EXPLAIN QUERY PLAN` evidence for the hot queries.
+- **Performance changes:** before/after numbers using React DevTools Profiler, a render counter, query counts, or a synthetic dataset. Record the method and result in the pull request.
+- **Store changes:** run the shared contract suite against both native and web stores.
+- **UI/accessibility changes:** a screen-reader checklist and, once available, an automated component test.
+- **Release changes:** the full `docs/release-checklist.md` flow.
+
+### Definition of done
+
+- [ ] The finding's acceptance criteria are met.
+- [ ] New behavior has automated coverage at the appropriate layer.
+- [ ] The verification suite passes locally and in CI.
+- [ ] The finding status is updated in this document.
+- [ ] Any follow-up work discovered is recorded as a new finding rather than left implicit.
+
+---
+
+## 13. Metrics appendix
+
+### Baseline size
+
+| Metric | Value |
+| :--- | :--- |
+| Application TypeScript files | 142 |
+| Application TypeScript lines | 39,801 |
+| Screens | 5 |
+| Components | 40 |
+| Test files | 68 |
+| Test lines | 15,784 |
+| Unit tests passing | 478 |
+| Integration tests passing | 142 |
+
+### Baseline dependency state
+
+- `npx expo install --check` reports 8 packages behind expected SDK 57 versions: `@expo/metro-runtime`, `expo`, `expo-build-properties`, `expo-crypto`, `expo-document-picker`, `expo-notifications`, `expo-sharing`, and `expo-sqlite`.
+- `npm audit --omit=dev` reports 29 vulnerabilities: 1 critical, 19 high, 9 moderate. The critical advisory is in `shell-quote`, reached through `react-devtools-core`. Most high findings are in Metro/Expo build tooling rather than runtime code.
+
+### Recommended measurement additions
+
+- **Startup:** record `performance.now()` marks around store initialization and first screen render; compare across releases.
+- **Render counts:** add a development-only render counter to `ActiveWorkoutScreen`, `ExerciseCard`, and `SetRow` to prove the context split works.
+- **Query counts:** wrap the store in development to log query counts per screen activation; assert budgets in tests where practical.
+- **Bundle:** use Expo Atlas or a bundle analyzer on a production export; track the catalog and chart chunks separately.
+- **Synthetic performance fixture:** generate 500 workouts x 5 exercises x 4 sets (10,000 sets) and use it for web and native history/analytics testing.
+- **Accessibility:** maintain a checklist of the five primary flows and verify each with a screen reader before release.
+
+---
+
+## 14. Out of scope
+
+This audit did not include:
+
+- Device-level profiling on physical low-end hardware.
+- App Store review policy or legal/licensing review beyond the existing provenance documents.
+- Reproduction of the F-Droid build-server output; the release workflow already covers it.
+- Security penetration testing or threat modeling.
+- Visual design critique beyond ergonomics and accessibility.
+- A full review of the 876-exercise content dataset for accuracy.
+
+---
+
+## 15. Document history
+
+| Date | Change | Author |
+| :--- | :--- | :--- |
+| 2026-10-18 | Initial audit at commit `377e12a` | Repository audit |
+| 2026-10-18 | Phase 0 landed on `phase-0-reliability-and-performance`: `REL-01`–`REL-05`, `PERF-04`, `PERF-05`, `DX-05`, `DX-07` moved to `Done` with implementation and test evidence recorded in each finding; `DX-10` added for the export-artifact typecheck crash and fixed. Verification: app and test typechecks clean, 495 unit + 146 integration tests pass, web production export succeeds | Remediation |

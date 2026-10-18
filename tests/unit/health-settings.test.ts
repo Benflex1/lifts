@@ -40,6 +40,9 @@ function dependencies(
 type RetryableDependencies = HealthSyncSettingDependencies & {
   retryPendingHealthSyncs: () => Promise<unknown>;
   logRetryFailure: (error: unknown) => void;
+  states: boolean[];
+  persisted: boolean[];
+  notifications: string[];
 };
 
 function retryableDependencies(): RetryableDependencies {

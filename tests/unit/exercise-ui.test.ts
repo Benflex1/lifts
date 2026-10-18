@@ -16,7 +16,7 @@ const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
 });
 
 before(async (t) => {
-  t.mock.module('react-native', {
+  (t as unknown as { mock: { module: (specifier: string, options: { exports: object }) => void } }).mock.module('react-native', {
     exports: {
       Linking: {
         openURL: async () => {},

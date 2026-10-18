@@ -306,13 +306,13 @@ describe('gym session helpers', () => {
       workout,
       restTimer: { endsAt: 12345, totalSeconds: 90 },
     };
-    let updatedWorkout: Workout | null = null;
     let updatedTimer: { endsAt: number; totalSeconds: number } | null | undefined;
     let flushes = 0;
+    const updatedWorkouts: Workout[] = [];
     const controller = {
       getState: () => state,
       update: (updated: Workout, timer?: { endsAt: number; totalSeconds: number } | null) => {
-        updatedWorkout = updated;
+        updatedWorkouts.push(updated);
         updatedTimer = timer;
         state = { ...state, revision: state.revision + 1, workout: updated };
       },
@@ -323,8 +323,8 @@ describe('gym session helpers', () => {
     const store = {
       getGyms: async () => [workoutGym('gym-default'), selectedGym],
       getPreviousSetsForExercise: async () => [
-        {},
-        {},
+        { weightKg: 40, reps: 10 },
+        { weightKg: 50, reps: 8 },
         { weightKg: 60, reps: 6, sourceGymId: 'gym-new', sourceGymName: 'New Gym' },
       ],
     };
@@ -332,8 +332,8 @@ describe('gym session helpers', () => {
     const result = await switchWorkoutGym(controller, store, 'gym-new');
 
     assert.equal(result.applied, true);
-    assert.equal(updatedWorkout?.gymId, 'gym-new');
-    assert.equal(updatedWorkout?.exercises[0].sets[2].previousWeightKg, 60);
+    assert.equal(updatedWorkouts[0]?.gymId, 'gym-new');
+    assert.equal(updatedWorkouts[0]?.exercises[0].sets[2].previousWeightKg, 60);
     assert.deepEqual(updatedTimer, state.restTimer);
     assert.equal(flushes, 1);
   });

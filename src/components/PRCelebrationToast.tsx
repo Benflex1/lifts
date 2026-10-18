@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PRAchievement, formatPRDescription } from '../workout/pr';
 import { WeightUnit } from '../utils/units';
@@ -44,9 +45,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
     if (!event) return;
 
     if (Platform.OS !== 'web') {
-      try {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
+      bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
     }
 
     // Animate in

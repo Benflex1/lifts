@@ -6,6 +6,7 @@ import { smartSearchExercises } from '../utils/search';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
 import { createScopedId } from '../utils/ids';
+import { reportError } from '../utils/errorReporting';
 import { validateTargetReps } from '../workout/sets';
 import {
   DEFAULT_GYM_COLOR,
@@ -135,7 +136,7 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         try {
           listener(readOnlyMode);
         } catch (err) {
-          console.error('Error notifying readOnly listener:', err);
+          reportError(err, { scope: 'webStore.read-only-listener' });
         }
       }
     }
@@ -155,7 +156,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       if (readOnlyMode || !db) return;
       try {
         await renewLeaseIfOwned();
-      } catch (_) {}
+      } catch {
+        // Best-effort heartbeat; lease loss is surfaced through onReadOnlyChange listeners.
+      }
     }, intervalMs);
     if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
       heartbeatTimer.unref();
@@ -187,7 +190,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         };
         tx.onerror = () => resolve();
         tx.onabort = () => resolve();
-      } catch (_) {
+      } catch {
+        // Intentional: a failed renewal resolves; the next heartbeat or focus check retries.
         resolve();
       }
     });
@@ -961,7 +965,8 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
     return finishWorkout(workout);
   }
 
-  async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
+  /** Reads every stored workout once, newest first. Shared by history and snapshot reads. */
+  async function getAllWorkoutsSorted(): Promise<Workout[]> {
     const database = await openDb();
     return new Promise((resolve, reject) => {
       const tx = database.transaction('workouts', 'readonly');
@@ -969,23 +974,28 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
       req.onsuccess = () => {
         const workouts = (req.result as Workout[]).map(normalizeWorkout);
         workouts.sort((a, b) => b.startTime.localeCompare(a.startTime) || compareBinaryStrings(b.id, a.id));
-        resolve(workouts.map(w => ({
-          id: w.id,
-          name: w.name,
-          routineId: w.routineId,
-          startTime: w.startTime,
-          endTime: w.endTime,
-          durationSeconds: w.durationSeconds,
-          totalVolumeKg: w.totalVolumeKg,
-          totalSets: w.exercises.reduce((acc, e) => acc + e.sets.filter(s => s.isCompleted).length, 0),
-          exerciseNames: w.exercises.map(e => e.exercise.name),
-          notes: w.notes,
-          gymId: w.gymId,
-          hasSupersets: w.exercises.some(e => Boolean(e.supersetId)),
-        })));
+        resolve(workouts);
       };
       req.onerror = () => reject(req.error);
     });
+  }
+
+  async function getWorkoutHistory(): Promise<WorkoutHistorySummary[]> {
+    const workouts = await getAllWorkoutsSorted();
+    return workouts.map(w => ({
+      id: w.id,
+      name: w.name,
+      routineId: w.routineId,
+      startTime: w.startTime,
+      endTime: w.endTime,
+      durationSeconds: w.durationSeconds,
+      totalVolumeKg: w.totalVolumeKg,
+      totalSets: w.exercises.reduce((acc, e) => acc + e.sets.filter(s => s.isCompleted).length, 0),
+      exerciseNames: w.exercises.map(e => e.exercise.name),
+      notes: w.notes,
+      gymId: w.gymId,
+      hasSupersets: w.exercises.some(e => Boolean(e.supersetId)),
+    }));
   }
 
   async function getWorkoutDetail(workoutId: string): Promise<Workout | null> {
@@ -1343,12 +1353,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
   }
 
   async function readSnapshot(): Promise<DataSnapshot> {
-    const history = await getWorkoutHistory();
-    const workouts: Workout[] = [];
-    for (const h of history) {
-      const w = await getWorkoutDetail(h.id);
-      if (w) workouts.push(w);
-    }
+    // Full workout objects live in the `workouts` store, so one read replaces the former
+    // per-history-row detail lookups (N+1 IndexedDB round trips).
+    const workouts = await getAllWorkoutsSorted();
     const routines = await getRoutines();
     const exercises = await getAllExercises();
     const drafts = await getWorkoutDrafts();
@@ -1465,7 +1472,9 @@ export async function createWebStore(name: string = 'lifts_web_db', options?: We
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-    } catch (_) {}
+    } catch {
+      // Best-effort lease release during shutdown; the lease expires on its own if this fails.
+    }
   }
 
   async function close(): Promise<void> {

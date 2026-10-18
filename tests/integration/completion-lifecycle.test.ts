@@ -33,16 +33,14 @@ describe('Completion & Dialog Lifecycle', () => {
           {
             id: exId,
             exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
-            orderIndex: 0,
             notes: 'Felt strong',
             restTimerSeconds: 120,
             exercise: {
               id: 'Barbell_Bench_Press_-_Medium_Grip',
               name: 'Bench Press (Barbell)',
               category: 'chest',
-              bodyPart: 'chest',
               equipment: 'barbell',
-              targetMuscle: 'pectorals',
+              primaryMuscles: ['pectorals'],
             },
             sets: [
               { id: 's1', setNumber: 1, weightKg: 100, reps: 5, type: 'normal', isCompleted: true },
@@ -135,6 +133,7 @@ describe('Completion & Dialog Lifecycle', () => {
       const pausedWorkout: Workout = {
         id: `w-paused-${platform}-1`,
         name: 'Paused Workout',
+        gymId: 'gym-default',
         startTime: new Date(currentTime).toISOString(),
         durationSeconds: 0,
         totalVolumeKg: 0,

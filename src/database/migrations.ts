@@ -390,4 +390,26 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       );
     });
   }
+
+  // Migration 9: indexes for history, analytics, and per-exercise history reads
+  if (!applied.has(9) && (options?.maxVersion === undefined || options.maxVersion >= 9)) {
+    await driver.withTransactionAsync(async () => {
+      await driver.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_workouts_in_progress_start
+          ON workouts(in_progress, start_time DESC);
+        CREATE INDEX IF NOT EXISTS idx_workout_exercises_workout
+          ON workout_exercises(workout_id);
+        CREATE INDEX IF NOT EXISTS idx_workout_exercises_exercise
+          ON workout_exercises(exercise_id);
+        CREATE INDEX IF NOT EXISTS idx_exercise_sets_workout_exercise
+          ON exercise_sets(workout_exercise_id);
+      `);
+
+      if (options?.failAtVersion === 9) throw new Error('Injected migration failure at version 9');
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (9, ?)',
+        new Date().toISOString(),
+      );
+    });
+  }
 }

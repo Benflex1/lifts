@@ -180,7 +180,7 @@ function readLegacyV3Sentinels(name: string): Promise<Record<string, unknown>> {
           ? 'Barbell_Bench_Press_-_Medium_Grip'
           : (LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as { key?: string; id?: string }).key
             || (LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as { key?: string; id?: string }).id;
-      const request = transaction.objectStore(storeName).get(key);
+      const request = transaction.objectStore(storeName).get(key as IDBValidKey);
       request.onsuccess = () => { records[storeName] = request.result; };
       request.onerror = () => reject(request.error);
     }

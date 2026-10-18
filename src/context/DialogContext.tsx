@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme';
+import { reportError } from '../utils/errorReporting';
+import { getDialogActionErrorMessage } from '../utils/dialogAction';
 
 export interface ConfirmOptions {
   title: string;
@@ -24,6 +26,8 @@ export interface NotifyOptions {
   action?: {
     label: string;
     onPress: () => void | Promise<void>;
+    /** Copy shown when `onPress` rejects. Defaults to the error message. */
+    errorMessage?: string;
   };
 }
 
@@ -52,6 +56,8 @@ interface DialogState {
   cancelLabel: string;
   destructive: boolean;
   action?: NotifyOptions['action'];
+  /** Failure copy for the action; non-null keeps the dialog open. */
+  actionError: string | null;
   resolve: (value: any) => void;
 }
 
@@ -67,6 +73,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         confirmLabel: options.confirmLabel || 'Confirm',
         cancelLabel: options.cancelLabel || 'Cancel',
         destructive: Boolean(options.destructive),
+        actionError: null,
         resolve,
       });
     });
@@ -82,6 +89,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         cancelLabel: '',
         destructive: false,
         action: options.action,
+        actionError: null,
         resolve,
       });
     });
@@ -95,13 +103,20 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   };
 
   const handleAction = async () => {
-    if (!currentDialog?.action) return;
+    const dialog = currentDialog;
+    if (!dialog?.action) return;
     try {
-      await currentDialog.action.onPress();
-    } catch (error) {
-      console.error('Unable to open health permission settings', error);
-    } finally {
+      await dialog.action.onPress();
       handleClose(true);
+    } catch (error) {
+      reportError(error, {
+        scope: 'dialog.action',
+        actionLabel: dialog.action.label,
+        title: dialog.title,
+      });
+      const actionError = getDialogActionErrorMessage(error, dialog.action);
+      // Keep the dialog open and replace any previous failure copy so the user can retry.
+      setCurrentDialog((current) => (current ? { ...current, actionError } : current));
     }
   };
 
@@ -124,6 +139,11 @@ export function DialogProvider({ children }: { children: ReactNode }) {
             >
               <Text style={styles.title}>{currentDialog.title}</Text>
               <Text style={styles.message}>{currentDialog.message}</Text>
+              {currentDialog.actionError && (
+                <Text style={styles.actionError} accessibilityLiveRegion="polite">
+                  {currentDialog.actionError}
+                </Text>
+              )}
               <View style={styles.buttonRow}>
                 {currentDialog.action && (
                   <TouchableOpacity
@@ -203,6 +223,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: 24,
+  },
+  actionError: {
+    fontSize: 13,
+    color: colors.danger,
+    lineHeight: 18,
+    marginTop: -16,
+    marginBottom: 20,
   },
   buttonRow: {
     flexDirection: 'row',

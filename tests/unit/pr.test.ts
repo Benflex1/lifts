@@ -421,6 +421,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           id: 'ae1',
           exerciseId: barbellBench.id,
           exercise: barbellBench,
+          restTimerSeconds: 90,
           sets: [
             { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
           ],
@@ -440,6 +441,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           id: 'ae2',
           exerciseId: barbellBench.id,
           exercise: barbellBench,
+          restTimerSeconds: 90,
           sets: [
             { id: 's2', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: true },
           ],
@@ -459,6 +461,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           id: 'ae3',
           exerciseId: barbellBench.id,
           exercise: barbellBench,
+          restTimerSeconds: 90,
           sets: [
             { id: 's3', setNumber: 1, type: 'normal', weightKg: 105, reps: 5, isCompleted: true },
           ],

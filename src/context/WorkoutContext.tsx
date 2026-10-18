@@ -45,6 +45,7 @@ import {
   setSupersetGroupInList,
 } from '../workout/supersets';
 import { enqueueCompletedWorkoutSync } from '../health';
+import { reportError } from '../utils/errorReporting';
 
 interface RestTimerState {
   isActive: boolean;
@@ -103,6 +104,8 @@ interface WorkoutContextType {
   stopRestTimer: () => void;
   finishWorkout: (durationSecondsOverride?: number) => Promise<Workout | null>;
   cancelWorkout: () => void;
+  /** Retries the failed draft write that produced `persistenceError`. Rejects if it fails again. */
+  retryPersistence: () => Promise<void>;
   expandedExercises: Record<string, boolean>;
   toggleExerciseExpanded: (activeExerciseId: string) => void;
   setExerciseExpanded: (activeExerciseId: string, expanded: boolean) => void;
@@ -151,6 +154,9 @@ type WorkoutActions = Omit<
 const WorkoutActionsContext = createContext<WorkoutActions | undefined>(undefined);
 const WorkoutGymsContext = createContext<{ gyms: Gym[]; activeGym: Gym | null }>({ gyms: [], activeGym: null });
 const IsWorkingOutContext = createContext<boolean>(false);
+// Persistence failures are rare and urgent; a dedicated context keeps the whole app from
+// re-rendering every time the autosave health changes.
+const PersistenceErrorContext = createContext<Error | null>(null);
 
 export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const controllerRef = useRef<SessionController | null>(null);
@@ -236,7 +242,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const drafts = await store.getWorkoutDrafts();
       setAvailableDrafts(drafts);
     } catch (e) {
-      console.error('Failed to load workout drafts:', e);
+      reportError(e, { scope: 'workout.drafts.load' });
     }
   }, []);
 
@@ -278,7 +284,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveGymState(defaultGym);
         await refreshDrafts();
       } catch (err) {
-        console.error('Failed to initialize session controller:', err);
+        reportError(err, { scope: 'workout.session.init' });
       }
     })();
 
@@ -311,7 +317,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
       if (state === 'background' && controllerRef.current && sessionState.phase === 'active') {
-        controllerRef.current.flush().catch(console.error);
+        controllerRef.current.flush().catch((error) => {
+          reportError(error, { scope: 'workout.autosave.background' });
+        });
       } else if (state === 'active') {
         void cancelRestNotification();
       }
@@ -352,7 +360,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 setTimeout(() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 }, 320);
-              } catch (_) {}
+              } catch {
+                // Best-effort countdown haptics; failure must not interrupt the workout.
+              }
             }
           } else {
             lastBuzzedSecondRef.current = 0;
@@ -364,21 +374,27 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (Platform.OS !== 'web') {
               try {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              } catch (_) {}
+              } catch {
+                // Best-effort countdown haptics; failure must not interrupt the workout.
+              }
             }
           } else if (remaining === 2 && lastBuzzedSecondRef.current !== 2) {
             lastBuzzedSecondRef.current = 2;
             if (Platform.OS !== 'web') {
               try {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              } catch (_) {}
+              } catch {
+                // Best-effort countdown haptics; failure must not interrupt the workout.
+              }
             }
           } else if (remaining === 1 && lastBuzzedSecondRef.current !== 1) {
             lastBuzzedSecondRef.current = 1;
             if (Platform.OS !== 'web') {
               try {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              } catch (_) {}
+              } catch {
+                // Best-effort countdown haptics; failure must not interrupt the workout.
+              }
             }
           } else if (remaining > 3) {
             lastBuzzedSecondRef.current = null;
@@ -731,7 +747,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await refreshDrafts();
       return finished;
     } catch (e: any) {
-      console.error('Failed to finish workout:', e);
+      reportError(e, { scope: 'workout.finish' });
       notify({
         title: 'Save Error',
         message: 'Failed to save workout. Please try again.',
@@ -1242,7 +1258,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (Platform.OS !== 'web') {
         try {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        } catch (_) {}
+        } catch {
+          // Best-effort completion haptic; failure must not interrupt set logging.
+        }
       }
       if (targetRestSeconds) {
         startRestTimer(targetRestSeconds, completedExerciseName);
@@ -1254,7 +1272,9 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     ctrl.update(updated, timerMeta);
     // Flush immediately on completed-set changes as required by spec
-    ctrl.flush().catch(console.error);
+    ctrl.flush().catch((error) => {
+      reportError(error, { scope: 'workout.autosave.set-complete' });
+    });
   };
 
   const calculateTotalVolume = (exercises: ActiveExercise[]): number => {
@@ -1266,6 +1286,13 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0)
       );
     }, 0);
+  };
+
+  /** Retry the draft write that failed, driven by the persistence warning banner. */
+  const retryPersistence = async (): Promise<void> => {
+    const ctrl = controllerRef.current;
+    if (!ctrl) return;
+    await ctrl.flush();
   };
 
   const actions = {
@@ -1301,6 +1328,7 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
     stopRestTimer,
     finishWorkout,
     cancelWorkout,
+    retryPersistence,
     toggleExerciseExpanded,
     setExerciseExpanded,
     expandAllExercises,
@@ -1357,13 +1385,15 @@ export const WorkoutProvider: React.FC<{ children: React.ReactNode }> = ({ child
       <WorkoutActionsContext.Provider value={stableActions}>
         <WorkoutGymsContext.Provider value={gymsValue}>
           <IsWorkingOutContext.Provider value={isWorkingOut}>
-            <WorkoutClockContext.Provider value={elapsedSeconds}>
-              <RestTimerContext.Provider value={restTimer}>
-                <RestTimerActiveContext.Provider value={restTimer.isActive}>
-                  {children}
-                </RestTimerActiveContext.Provider>
-              </RestTimerContext.Provider>
-            </WorkoutClockContext.Provider>
+            <PersistenceErrorContext.Provider value={sessionState.persistenceError}>
+              <WorkoutClockContext.Provider value={elapsedSeconds}>
+                <RestTimerContext.Provider value={restTimer}>
+                  <RestTimerActiveContext.Provider value={restTimer.isActive}>
+                    {children}
+                  </RestTimerActiveContext.Provider>
+                </RestTimerContext.Provider>
+              </WorkoutClockContext.Provider>
+            </PersistenceErrorContext.Provider>
           </IsWorkingOutContext.Provider>
         </WorkoutGymsContext.Provider>
       </WorkoutActionsContext.Provider>
@@ -1402,3 +1432,6 @@ export const useWorkoutGyms = () => useContext(WorkoutGymsContext);
 
 /** Whether a workout is in progress. Re-renders only when a workout starts or ends. */
 export const useIsWorkingOut = () => useContext(IsWorkingOutContext);
+
+/** The last silent autosave failure, or null while persistence is healthy. */
+export const usePersistenceError = () => useContext(PersistenceErrorContext);

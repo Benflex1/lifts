@@ -117,11 +117,17 @@ export async function cancelRestNotification(): Promise<void> {
 
   try {
     if (lastScheduledId) {
-      await Notifications.cancelScheduledNotificationAsync(lastScheduledId).catch(() => {});
+      await Notifications.cancelScheduledNotificationAsync(lastScheduledId).catch(() => {
+        // Best-effort cancel: the notification may already be delivered or cleared.
+      });
       lastScheduledId = null;
     }
-    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
-    await Notifications.dismissAllNotificationsAsync().catch(() => {});
+    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {
+      // Best-effort cancel: see above.
+    });
+    await Notifications.dismissAllNotificationsAsync().catch(() => {
+      // Best-effort cancel: see above.
+    });
   } catch (e) {
     console.warn('Failed to cancel rest notification:', e);
   }
