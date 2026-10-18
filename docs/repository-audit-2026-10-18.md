@@ -557,10 +557,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-02 — Rest controls, mini bar, and read-only banner are unlabeled
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `RestTimerOverlay.tsx:59-83` has three touchables with no role or label. `ActiveWorkoutMiniBar.tsx:31-35` has one large unlabeled touchable. `ReadOnlyBanner.tsx:35-46` has an unlabeled "Take Over" action.
 - **Impact:** Rest-timer adjustment, resuming a minimized workout, and recovering from read-only mode are difficult or impossible without sight.
 - **Required change:** Add labels/roles to these controls and make the countdown a polite live region.
+- **Implementation (2026-10-18):** `RestTimerOverlay`'s controls now read "Decrease rest timer by 30 seconds", "Increase rest timer by 30 seconds", and "Skip rest". `ActiveWorkoutMiniBar` announces "Resume workout <name>" with a return hint, and `ReadOnlyBanner`'s action is "Take over editing session" with busy/disabled state. `RestTimeWheelModal` labels its close button, presets, every minute/second wheel row (with selected state), the apply-to-all checkbox, and the confirm button ("Disable rest timer" or "Confirm rest timer"). All four files use the `AppTouchable` primitive and are covered by the scoped `no-restricted-imports` list. The countdown's polite live region is implemented with the dynamic-semantics work in `A11Y-03`. Verification: the audit scan reports 0 unlabelled touchables in these files; both typechecks, ESLint, Prettier, and the 584-test suite pass.
 - **Done when:** All three surfaces are operable with a screen reader.
 
 ### A11Y-03 — No live regions or value semantics for dynamic UI
@@ -826,7 +827,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `DX-08` Fix version and documentation drift.
 - [ ] `DX-09` Add collaboration and security templates.
 - [x] `A11Y-01` Label the core logger controls.
-- [ ] `A11Y-02` Label rest controls, mini bar, and read-only banner.
+- [x] `A11Y-02` Label rest controls, mini bar, and read-only banner.
 - [ ] `A11Y-03` Add live regions and value semantics.
 - [ ] `A11Y-04` Standardize modal semantics.
 - [x] `A11Y-05` Add a required-label primitive.

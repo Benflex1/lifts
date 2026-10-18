@@ -47,6 +47,10 @@ export default tseslint.config(
       'src/components/ExercisePickerModal.tsx',
       'src/components/DraftRecoveryModal.tsx',
       'src/components/DraftResumeBanner.tsx',
+      'src/components/RestTimerOverlay.tsx',
+      'src/components/ActiveWorkoutMiniBar.tsx',
+      'src/components/ReadOnlyBanner.tsx',
+      'src/components/RestTimeWheelModal.tsx',
     ],
     rules: {
       'no-restricted-imports': [

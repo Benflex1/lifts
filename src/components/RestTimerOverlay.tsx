@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { Timer, Plus, Minus, X } from 'lucide-react-native';
 import { useRestTimer, useWorkout } from '../context/WorkoutContext';
 import { formatTimer } from '../utils/calculator';
@@ -64,31 +65,37 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
 
         {/* Controls */}
         <View style={styles.controlsRow}>
-          <TouchableOpacity
+          <AppTouchable
             style={styles.adjustButton}
             onPress={() => adjustRestTimer(-30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Decrease rest timer by 30 seconds"
           >
             <Minus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.adjustButton}
             onPress={() => adjustRestTimer(30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Increase rest timer by 30 seconds"
           >
             <Plus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.skipButton}
             onPress={stopRestTimer}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Skip rest"
           >
             <X size={18} color={colors.textSoft} />
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
 

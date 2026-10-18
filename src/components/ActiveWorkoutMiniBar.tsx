@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { ChevronUp, Clock, Dumbbell, Timer } from 'lucide-react-native';
 import { useRestTimer, useWorkout, useWorkoutClock } from '../context/WorkoutContext';
 import { useSettings } from '../context/SettingsContext';
@@ -28,7 +29,14 @@ export const ActiveWorkoutMiniBar: React.FC = () => {
   }
 
   return (
-    <TouchableOpacity style={styles.container} onPress={maximizeWorkout} activeOpacity={0.9}>
+    <AppTouchable
+      style={styles.container}
+      onPress={maximizeWorkout}
+      activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`Resume workout ${activeWorkout.name}`}
+      accessibilityHint="Returns to the active workout"
+    >
       <View style={styles.leftSection}>
         <View style={styles.pulseDot} />
         <View>
@@ -64,7 +72,7 @@ export const ActiveWorkoutMiniBar: React.FC = () => {
         <Text style={styles.resumeBtnText}>Resume</Text>
         <ChevronUp size={16} color={colors.black} />
       </View>
-    </TouchableOpacity>
+    </AppTouchable>
   );
 };
 
