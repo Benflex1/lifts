@@ -17,6 +17,9 @@ interface Props {
   folders: string[];
   onClose: () => void;
   onFoldersChanged: () => void;
+  /** Keeps a folder's rotation attached to it. Failures are reported by the caller. */
+  onFolderRenamed?: (oldName: string, newName: string) => Promise<void>;
+  onFolderDeleted?: (name: string) => Promise<void>;
 }
 
 export const FolderManageModal: React.FC<Props> = ({
@@ -24,6 +27,8 @@ export const FolderManageModal: React.FC<Props> = ({
   folders,
   onClose,
   onFoldersChanged,
+  onFolderRenamed,
+  onFolderDeleted,
 }) => {
   const { confirm, notify } = useDialog();
   const [editingFolder, setEditingFolder] = useState<string | null>(null);
@@ -36,6 +41,7 @@ export const FolderManageModal: React.FC<Props> = ({
     }
     try {
       await renameFolder(oldName, newName.trim());
+      await onFolderRenamed?.(oldName, newName.trim()).catch(() => {});
       onFoldersChanged();
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to rename folder.' });
@@ -55,6 +61,7 @@ export const FolderManageModal: React.FC<Props> = ({
 
     try {
       await deleteFolder(name);
+      await onFolderDeleted?.(name).catch(() => {});
       onFoldersChanged();
     } catch (e) {
       await notify({ title: 'Error', message: 'Failed to delete folder.' });

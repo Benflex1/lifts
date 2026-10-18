@@ -3,7 +3,7 @@ import * as assert from 'node:assert/strict';
 import { Exercise } from '../../src/types';
 import { DEFAULT_EXERCISES } from '../../src/database/seedData';
 import { FREE_EXERCISE_DB_REVISION, getFreeExerciseDbImageUrls } from '../../src/database/exercise-source';
-import { REVIEWED_EXERCISE_ASSETS, getExerciseVisual } from '../../src/utils/exercise-media';
+import { REVIEWED_EXERCISE_ASSETS, getExerciseVisual, resolveExerciseVisual } from '../../src/utils/exercise-media';
 
 const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   id: 'test-exercise',
@@ -119,5 +119,30 @@ describe('exercise visual resolver', () => {
       primaryMuscles: ['unknown muscle'],
       secondaryMuscles: ['another unknown muscle'],
     })));
+  });
+});
+
+describe('remote image preference', () => {
+  it('swaps a remote image for its generated fallback when remote images are off', () => {
+    const descriptor = getExerciseVisual(DEFAULT_EXERCISES[0]);
+    assert.equal(descriptor.kind, 'remote-image');
+    if (descriptor.kind !== 'remote-image') return;
+
+    assert.deepEqual(resolveExerciseVisual(descriptor, false), {
+      kind: 'generated',
+      template: descriptor.fallbackTemplate,
+      alt: descriptor.alt,
+    });
+  });
+
+  it('keeps the remote image when remote images are on', () => {
+    const descriptor = getExerciseVisual(DEFAULT_EXERCISES[0]);
+    assert.equal(resolveExerciseVisual(descriptor, true), descriptor);
+  });
+
+  it('leaves generated visuals unchanged when remote images are off', () => {
+    const generated = getExerciseVisual(exercise({ id: 'custom-unknown', name: 'Something New', primaryMuscles: ['unknown'] }));
+    assert.equal(generated.kind, 'generated');
+    assert.equal(resolveExerciseVisual(generated, false), generated);
   });
 });

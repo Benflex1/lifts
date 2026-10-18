@@ -40,6 +40,9 @@ import {
   Flame,
   Layers,
   GripVertical,
+  SlidersHorizontal,
+  TrendingUp,
+  Feather,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -65,7 +68,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RPE_CHIPS } from '../workout/sets';
 import { formatPreviousMetric } from '../workout/gym-display';
 import { getCompletedWorkoutsForExercise, getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
-import { evaluateWorkoutPRsWithSource, formatPRDescription, PRHistoryIndex, WorkoutPRSummary } from '../workout/pr';
+import { buildActiveWorkoutRecordIndex, evaluateActiveWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
 import { PRBadge } from '../components/PRBadge';
 import { PRCelebrationToast, PRCelebrationEvent } from '../components/PRCelebrationToast';
 import { WarmupModal } from '../components/WarmupModal';
@@ -75,9 +78,25 @@ import { getExerciseRowViewModel } from '../utils/exercise-ui';
 import { roundToIncrement, getDefaultIncrement, getDefaultBarWeight } from '../workout/warmup';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../workout/supersets';
 import { applyPreviousSetStats } from '../workout/gym-session';
+import { isOverloadFillTarget, OverloadSuggestion, suggestNextTarget } from '../workout/overload';
 import { WorkoutDurationModal } from '../components/WorkoutDurationModal';
 import { isExcessiveDuration } from '../workout/duration';
 import { colors } from '../theme';
+import {
+  distanceUnitFor,
+  formatSetDuration,
+  countsLoad,
+  getTrackingType,
+  metersToDisplay,
+  trackingTypeLabel,
+  setVolumeKg,
+  usesDistance,
+  usesDuration,
+  usesReps,
+  usesWeight,
+} from '../workout/tracking';
+import { DistanceInput, DurationInput } from '../components/TrackedValueInput';
+import { TrackingTypeModal } from '../components/TrackingTypeModal';
 
 /** Renders the ticking workout duration without re-rendering the whole logger every second. */
 const LiveWorkoutClock: React.FC = () => {
@@ -108,6 +127,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     updateSet,
     updateExerciseNotes,
     updateExerciseRestTimer,
+    setExerciseTrackingType,
     updateWorkoutDuration,
     toggleSetComplete,
     finishWorkout,
@@ -123,7 +143,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     setActiveGym,
   } = useWorkout();
   const isRestTimerActive = useIsRestTimerActive();
-  const { unit, gymTrackingEnabled } = useSettings();
+  const {
+    unit,
+    gymTrackingEnabled,
+    trackingTypesEnabled,
+    overloadEnabled,
+    setExerciseTrackingType: saveExerciseTrackingType,
+  } = useSettings();
+  const [trackingTypeExercise, setTrackingTypeExercise] = useState<ActiveExercise | null>(null);
   const { confirm, notify } = useDialog();
 
   const [showExercisePicker, setShowExercisePicker] = useState(false);
@@ -264,26 +291,16 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
 
   // Prior records are indexed once per loaded history, so re-ranking after each set change only
   // looks at this workout's sets instead of rescanning every past workout.
-  const activeStartTime = activeWorkout?.startTime;
-  const priorRecordIndex = useMemo(() => {
-    const index = new PRHistoryIndex();
-    const loadedExerciseIds = new Set(Object.keys(exerciseWorkouts));
-    const added = new Set<string>();
-    for (const list of Object.values(exerciseWorkouts)) {
-      for (const workout of list) {
-        if (added.has(workout.id)) continue;
-        if (activeStartTime && workout.startTime >= activeStartTime) continue;
-        added.add(workout.id);
-        index.add(workout, loadedExerciseIds);
-      }
-    }
-    return index;
-  }, [exerciseWorkouts, activeStartTime]);
+  const activeWorkoutId = activeWorkout?.id;
+  const priorRecordIndex = useMemo(
+    () => buildActiveWorkoutRecordIndex(exerciseWorkouts, activeWorkoutId),
+    [exerciseWorkouts, activeWorkoutId]
+  );
 
   const prSummary = useMemo(() => {
     if (!activeWorkout) return null;
-    return evaluateWorkoutPRsWithSource(activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes);
-  }, [activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
+    return evaluateActiveWorkoutPRs(activeWorkout, exerciseWorkouts, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes);
+  }, [activeWorkout, exerciseWorkouts, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
 
   const previousCompletedSetIdsRef = useRef<Set<string> | null>(null);
 
@@ -320,6 +337,9 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                 exerciseName: ex.exercise?.name || 'Exercise',
                 weightKg: foundSet.weightKg,
                 reps: foundSet.reps,
+                durationSeconds: foundSet.durationSeconds,
+                distanceM: foundSet.distanceM,
+                trackingType: ex.trackingType,
                 achievement: pr.primary,
                 secondaryCount: Math.max(0, pr.achievements.length - 1),
               });
@@ -368,6 +388,22 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       reps: applied.reps,
       isWeightEdited: true,
     });
+  };
+
+  const handleApplyOverload = (activeEx: ActiveExercise, suggestion: OverloadSuggestion) => {
+    if (Platform.OS !== 'web') {
+      try {
+        Haptics.selectionAsync();
+      } catch (_) {}
+    }
+    for (const set of activeEx.sets) {
+      if (!isOverloadFillTarget(set)) continue;
+      updateSet(activeEx.id, set.id, {
+        weightKg: suggestion.weightKg,
+        reps: suggestion.reps,
+        isWeightEdited: true,
+      });
+    }
   };
 
   // Handle hardware back press on Android to minimize instead of exiting
@@ -458,10 +494,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
     let total = 0;
 
     for (const ex of activeWorkout.exercises) {
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets) {
         total++;
         if (s.isCompleted) {
-          volume += s.weightKg * s.reps;
+          volume += setVolumeKg(s, trackingType);
           completed++;
         }
       }
@@ -471,6 +508,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
   }, [activeWorkout.exercises]);
 
   const displayedActiveGym = activeGym || gyms.find((gym) => gym.id === activeWorkout.gymId) || null;
+
+  const menuHasLoad = countsLoad(getTrackingType(menuActiveExercise ?? undefined));
 
   const menuExerciseIndex = menuActiveExercise
     ? activeWorkout.exercises.findIndex(exercise => exercise.id === menuActiveExercise.id)
@@ -658,7 +697,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           <Text style={styles.topBarTitle} numberOfLines={1}>
             {activeWorkout.name}
           </Text>
-          {gymTrackingEnabled && displayedActiveGym ? (
+          {activeWorkout.isDeload ? (
+            <Text style={[styles.topBarSubtitle, styles.topBarDeload]} numberOfLines={1}>
+              Deload week{gymTrackingEnabled && displayedActiveGym ? ` · ${displayedActiveGym.name}` : ''}
+            </Text>
+          ) : gymTrackingEnabled && displayedActiveGym ? (
             <Text style={styles.topBarSubtitle} numberOfLines={1}>
               {displayedActiveGym.name}
             </Text>
@@ -749,9 +792,33 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           const totalCount = activeEx.sets.length;
           const isAllCompleted = totalCount > 0 && completedCount === totalCount;
           const ssMeta = supersetMetaMap.get(activeEx.id);
+          const trackingType = getTrackingType(activeEx);
+          const showWeightInput = usesWeight(trackingType);
+          const showRepsInput = usesReps(trackingType);
+          const weightHeader =
+            trackingType === 'weighted_bodyweight'
+              ? `+${unit.toUpperCase()}`
+              : trackingType === 'assisted_bodyweight'
+                ? `−${unit.toUpperCase()}`
+                : unit.toUpperCase();
           const rowViewModel = activeEx.exercise ? getExerciseRowViewModel(activeEx.exercise) : null;
 
           const showNoteInput = editingNoteExId === activeEx.id || Boolean(activeEx.notes && activeEx.notes.length > 0);
+          const isDeload = activeWorkout.isDeload === true;
+          const overload = (overloadEnabled || isDeload) && activeEx.sets.some(isOverloadFillTarget)
+            ? suggestNextTarget({
+                sets: activeEx.sets,
+                targetReps: activeEx.targetReps,
+                trackingType,
+                equipment: activeEx.exercise?.equipment,
+                unit,
+                deload: isDeload,
+              })
+            : null;
+          const isDeloadTarget = overload?.kind === 'deload';
+          const overloadLabel = overload
+            ? `${trackingType === 'weighted_bodyweight' ? '+' : ''}${formatWeight(overload.weightKg, unit)} × ${overload.reps}`
+            : '';
 
           const cardElement = !isExpanded ? (
             // Collapsed Accordion Row - Lyfta Screenshot 1
@@ -876,7 +943,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                         .filter(Boolean)
                         .join(' · ')}
                     </Text>
-                    {activeEx.targetReps ? (
+                    {activeEx.targetReps && showRepsInput ? (
                       <Text style={styles.targetBadge}>{activeEx.targetReps} reps</Text>
                     ) : null}
                     {ssMeta && (
@@ -920,6 +987,21 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                     Rest {activeEx.restTimerSeconds ? formatDuration(activeEx.restTimerSeconds) : 'Off'}
                   </Text>
                 </TouchableOpacity>
+                {overload && (
+                  <TouchableOpacity
+                    style={[styles.overloadPill, isDeloadTarget && styles.deloadPill]}
+                    onPress={() => handleApplyOverload(activeEx, overload)}
+                    onLongPress={() => void notify({ title: `Next target: ${overloadLabel}`, message: overload.reason })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Next target ${overloadLabel}`}
+                    accessibilityHint={`${overload.reason} Tap to fill your remaining sets.`}
+                  >
+                    {isDeloadTarget
+                      ? <Feather size={13} color={colors.warning} />
+                      : <TrendingUp size={13} color={colors.successLight} />}
+                    <Text style={[styles.overloadPillText, isDeloadTarget && styles.deloadPillText]}>{overloadLabel}</Text>
+                  </TouchableOpacity>
+                )}
                 {!showNoteInput && (
                   <TouchableOpacity
                     style={styles.addNotePrompt}
@@ -952,10 +1034,20 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <View style={styles.tableHeader}>
                 <Text style={[styles.colHeader, { width: 38, textAlign: 'center' }]}>SET</Text>
                 <Text style={[styles.colHeader, { flex: 1, paddingLeft: 8 }]}>PREVIOUS</Text>
-                <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>
-                  {unit.toUpperCase()}
-                </Text>
-                <Text style={[styles.colHeader, { width: 70, textAlign: 'center' }]}>REPS</Text>
+                {showWeightInput && (
+                  <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>{weightHeader}</Text>
+                )}
+                {showRepsInput && (
+                  <Text style={[styles.colHeader, { width: 70, textAlign: 'center' }]}>REPS</Text>
+                )}
+                {usesDistance(trackingType) && (
+                  <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>
+                    {distanceUnitFor(unit).toUpperCase()}
+                  </Text>
+                )}
+                {usesDuration(trackingType) && (
+                  <Text style={[styles.colHeader, { width: 78, textAlign: 'center' }]}>TIME</Text>
+                )}
                 {showRpeColumn && (
                   <Text style={[styles.colHeader, { width: 44, textAlign: 'center' }]}>RPE</Text>
                 )}
@@ -1019,8 +1111,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                                 reps: set.previousReps ?? 0,
                                 sourceGymId: set.previousGymId,
                                 sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
+                                durationSeconds: set.previousDurationSeconds,
+                                distanceM: set.previousDistanceM,
                               },
                               unit,
+                              trackingType,
                             )}`}
                           >
                             <Text style={[styles.previousText, !set.isCompleted && styles.previousTextClickable]}>
@@ -1030,8 +1125,11 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                                   reps: set.previousReps ?? 0,
                                   sourceGymId: set.previousGymId,
                                   sourceGymName: gymTrackingEnabled ? set.previousGymName : undefined,
+                                  durationSeconds: set.previousDurationSeconds,
+                                  distanceM: set.previousDistanceM,
                                 },
                                 unit,
+                                trackingType,
                               )}
                             </Text>
                           </TouchableOpacity>
@@ -1041,6 +1139,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                       </View>
 
                       {/* Weight Input */}
+                      {showWeightInput && (
                       <View style={styles.inputWrapWeight}>
                         <WeightInput
                           value={set.weightKg}
@@ -1061,8 +1160,10 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                           onFocus={handleInputFocus}
                         />
                       </View>
+                      )}
 
                       {/* Reps Input */}
+                      {showRepsInput && (
                       <View style={styles.inputWrapReps}>
                         <RepsInput
                           value={set.reps}
@@ -1086,6 +1187,39 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
                           </TouchableOpacity>
                         )}
                       </View>
+                      )}
+
+                      {usesDistance(trackingType) && (
+                        <View style={styles.inputWrapWeight}>
+                          <DistanceInput
+                            value={set.distanceM}
+                            onCommit={(distanceM) => updateSet(activeEx.id, set.id, { distanceM })}
+                            placeholder={
+                              set.previousDistanceM
+                                ? metersToDisplay(set.previousDistanceM, distanceUnitFor(unit)).toString()
+                                : '-'
+                            }
+                            style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+                            onFocus={handleInputFocus}
+                            accessibilityLabel={`Set ${set.setNumber} distance`}
+                          />
+                        </View>
+                      )}
+
+                      {usesDuration(trackingType) && (
+                        <View style={styles.inputWrapWeight}>
+                          <DurationInput
+                            value={set.durationSeconds}
+                            onCommit={(durationSeconds) => updateSet(activeEx.id, set.id, { durationSeconds })}
+                            placeholder={
+                              set.previousDurationSeconds ? formatSetDuration(set.previousDurationSeconds) : '0:00'
+                            }
+                            style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
+                            onFocus={handleInputFocus}
+                            accessibilityLabel={`Set ${set.setNumber} time`}
+                          />
+                        </View>
+                      )}
 
                       {/* Optional Inline RPE Column */}
                       {showRpeColumn && (
@@ -1341,6 +1475,18 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       />
 
       {/* Rest Time Wheel Modal */}
+      <TrackingTypeModal
+        visible={trackingTypeExercise !== null}
+        exerciseName={trackingTypeExercise?.exercise?.name}
+        selectedType={getTrackingType(trackingTypeExercise ?? undefined)}
+        onSelect={(type) => {
+          if (!trackingTypeExercise) return;
+          setExerciseTrackingType(trackingTypeExercise.id, type);
+          saveExerciseTrackingType(trackingTypeExercise.exerciseId, type).catch(() => {});
+        }}
+        onClose={() => setTrackingTypeExercise(null)}
+      />
+
       <RestTimeWheelModal
         visible={restWheelActiveExercise !== null}
         initialSeconds={restWheelActiveExercise?.restTimerSeconds ?? 0}
@@ -1754,6 +1900,28 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Text style={styles.menuItemText}>Set Rest Timer</Text>
             </TouchableOpacity>
 
+            {trackingTypesEnabled && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  if (menuActiveExercise) {
+                    const ex = menuActiveExercise;
+                    setMenuActiveExercise(null);
+                    setTrackingTypeExercise(ex);
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Change how sets are tracked"
+              >
+                <SlidersHorizontal size={18} color={colors.textSecondary} />
+                <Text style={styles.menuItemText} numberOfLines={1}>
+                  Track As: {trackingTypeLabel(getTrackingType(menuActiveExercise ?? undefined))}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {menuHasLoad && (
+            <>
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
@@ -1799,6 +1967,8 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
               <Calculator size={18} color="#F97316" />
               <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
             </TouchableOpacity>
+            </>
+            )}
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -2238,6 +2408,30 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '600',
+  },
+
+  overloadPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.successSoft,
+  },
+  overloadPillText: {
+    color: colors.successLight,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  topBarDeload: {
+    color: colors.warning,
+  },
+  deloadPill: {
+    backgroundColor: colors.warningSoft,
+  },
+  deloadPillText: {
+    color: colors.warning,
   },
 
   // Rest Timer Row (Lyfta style)
@@ -2864,6 +3058,7 @@ const styles = StyleSheet.create({
   exerciseMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 10,
     paddingHorizontal: 2,

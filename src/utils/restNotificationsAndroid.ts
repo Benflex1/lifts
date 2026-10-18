@@ -1,52 +1,32 @@
 import type { RestAlarmNativeModule } from '../../modules/rest-alarm/RestAlarm.types';
-import { restNotificationContent } from './restNotificationContent';
 
 export type ExactAlarmStatus = 'granted' | 'denied' | 'unsupported';
-
-// Matches the other platforms: alarms due within a second are left to the in-app timer.
-const MIN_SCHEDULE_LEAD_MS = 1000;
 
 export function createAndroidRestNotifications(
   native: RestAlarmNativeModule | null,
   now: () => number = Date.now
 ) {
-  let permissionRequested = false;
-
-  async function initRestNotifications(): Promise<void> {
-    if (!native || permissionRequested) return;
-    permissionRequested = true;
-    try {
-      if (!native.areNotificationsEnabled()) {
-        await native.requestNotificationPermission();
-      }
-    } catch (e) {
-      console.warn('Failed to request notification permission:', e);
-    }
-  }
+  // Notification permission is not needed: the rest cue is a vibration, not a notification.
+  async function initRestNotifications(): Promise<void> {}
 
   async function cancelRestNotification(): Promise<void> {
     if (!native) return;
     try {
       await native.cancel();
     } catch (e) {
-      console.warn('Failed to cancel rest notification:', e);
+      console.warn('Failed to cancel rest cue:', e);
     }
   }
 
-  async function scheduleRestNotification(endsAtMs: number, exerciseName?: string): Promise<string | null> {
+  // Arms the native vibration cue. The exercise name is unused: nothing is shown, only felt.
+  async function scheduleRestNotification(endsAtMs: number, _exerciseName?: string): Promise<string | null> {
     if (!native) return null;
-
-    await initRestNotifications();
-    await cancelRestNotification();
-
-    if (endsAtMs - now() <= MIN_SCHEDULE_LEAD_MS) return null;
-
-    const { title, body } = restNotificationContent(exerciseName);
+    if (endsAtMs <= now()) return null;
     try {
-      await native.schedule(endsAtMs, title, body);
+      await native.schedule(endsAtMs);
       return 'rest-alarm';
     } catch (e) {
-      console.warn('Failed to schedule rest notification:', e);
+      console.warn('Failed to schedule rest cue:', e);
       return null;
     }
   }

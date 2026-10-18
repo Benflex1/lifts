@@ -379,6 +379,78 @@ describe('Backup Roundtrip & Merge Safety', () => {
     });
   });
 
+  it('does not import export-excluded internal settings from a restored file', async () => {
+    const sourceFixture = await createStoreFixture('native');
+    const emptyDestination = await createStoreFixture('native');
+    try {
+      await sourceFixture.store.setSetting('unit', 'lb');
+      const exported = JSON.parse(await buildBackupJson(sourceFixture.store));
+
+      await restoreBackup(JSON.stringify({
+        ...exported,
+        settings: {
+          ...exported.settings,
+          automatic_backup_enabled: 'true',
+          automatic_backup_directory_uri: 'content://untrusted/tree',
+          schema_probe: '99',
+          writer_probe: 'lease',
+          migration_probe: 'done',
+          imported_setting: 'kept',
+        },
+      }), emptyDestination.store);
+
+      assert.equal(await emptyDestination.store.getSetting('automatic_backup_enabled'), null);
+      assert.equal(await emptyDestination.store.getSetting('automatic_backup_directory_uri'), null);
+      assert.equal(await emptyDestination.store.getSetting('schema_probe'), null);
+      assert.equal(await emptyDestination.store.getSetting('writer_probe'), null);
+      assert.equal(await emptyDestination.store.getSetting('migration_probe'), null);
+      assert.equal(await emptyDestination.store.getSetting('imported_setting'), 'kept');
+    } finally {
+      await sourceFixture.dispose();
+      await emptyDestination.dispose();
+    }
+  });
+
+  it('keeps the exercise photo preference device-local across backup and restore', async () => {
+    for (const platform of ['native', 'web'] as const) {
+      const sourceFixture = await createStoreFixture(platform);
+      const protectedDestination = await createStoreFixture(platform);
+      const emptyDestination = await createStoreFixture(platform);
+      try {
+        await sourceFixture.store.setSetting('remote_exercise_images', 'false');
+        await sourceFixture.store.setSetting('unit', 'lb');
+
+        const exported = JSON.parse(await buildBackupJson(sourceFixture.store));
+        assert.equal(exported.settings.remote_exercise_images, undefined);
+        assert.equal(exported.settings.unit, 'lb');
+
+        await protectedDestination.store.setSetting('remote_exercise_images', 'true');
+        await restoreBackup(JSON.stringify({
+          ...exported,
+          settings: { ...exported.settings, remote_exercise_images: 'false' },
+        }), protectedDestination.store);
+        assert.equal(await protectedDestination.store.getSetting('remote_exercise_images'), 'true');
+
+        await restoreBackup(JSON.stringify({
+          ...exported,
+          settings: { ...exported.settings, remote_exercise_images: 'false' },
+        }), emptyDestination.store);
+        assert.equal(await emptyDestination.store.getSetting('remote_exercise_images'), null);
+
+        const emptySnapshot = await emptyDestination.store.readSnapshot();
+        await emptyDestination.store.mergeSnapshot({
+          ...emptySnapshot,
+          settings: { ...emptySnapshot.settings, remote_exercise_images: 'false' },
+        });
+        assert.equal(await emptyDestination.store.getSetting('remote_exercise_images'), null);
+      } finally {
+        await sourceFixture.dispose();
+        await protectedDestination.dispose();
+        await emptyDestination.dispose();
+      }
+    }
+  });
+
   it('keeps health sync opt-in device-local across backup and restore', async () => {
     for (const platform of ['native', 'web'] as const) {
       const sourceFixture = await createStoreFixture(platform);
@@ -856,5 +928,93 @@ describe('Backup Roundtrip & Merge Safety', () => {
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
+  });
+});
+
+describe('restore onto a fresh install', () => {
+  for (const [fromPlatform, toPlatform] of [
+    ['native', 'native'],
+    ['web', 'web'],
+    ['native', 'web'],
+    ['web', 'native'],
+  ] as const) {
+    it(`restores the default gym name and color and edited built-in routines [${fromPlatform} -> ${toPlatform}]`, async () => {
+      const source = await createStoreFixture(fromPlatform);
+      const destination = await createStoreFixture(toPlatform);
+
+      const sourceDefault = (await source.store.getGyms()).find((gym) => gym.isDefault)!;
+      await source.store.updateGym(sourceDefault.id, { name: 'Home Gym', color: '#F59E0B' });
+      const push = (await source.store.getRoutineById('routine-push-template'))!;
+      await source.store.saveRoutine(
+        push.name,
+        push.folderName || '',
+        push.exercises.slice(0, 2).map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          targetSets: 5,
+          targetReps: '5',
+          restTimerSeconds: 120,
+        })),
+        push.notes,
+        push.id
+      );
+
+      const backupJson = await buildBackupJson(source.store);
+      const { preview } = await computeRestorePlan(JSON.parse(backupJson), destination.store);
+      assert.equal(preview.defaultGymUpdated, true);
+      assert.equal(preview.routinesCount, 1);
+      assert.equal(preview.skippedRoutinesCount, 2);
+
+      await restoreBackup(backupJson, destination.store);
+
+      const gyms = await destination.store.getGyms();
+      assert.equal(gyms.length, 1);
+      assert.equal(gyms[0].isDefault, true);
+      assert.equal(gyms[0].name, 'Home Gym');
+      assert.equal(gyms[0].color, '#F59E0B');
+
+      const restoredPush = (await destination.store.getRoutineById('routine-push-template'))!;
+      assert.equal(restoredPush.exercises.length, 2);
+      assert.deepEqual(restoredPush.exercises.map((exercise) => exercise.targetSets), [5, 5]);
+      assert.equal((await destination.store.getRoutines()).length, 3);
+
+      // A second import of the same file is a no-op.
+      const { preview: again } = await computeRestorePlan(JSON.parse(backupJson), destination.store);
+      assert.equal(again.defaultGymUpdated, false);
+      assert.equal(again.routinesCount, 0);
+      await restoreBackup(backupJson, destination.store);
+
+      await source.dispose();
+      await destination.dispose();
+    });
+  }
+
+  it('still rejects a built-in routine that was edited on both devices', async () => {
+    const source = await createStoreFixture('native');
+    const destination = await createStoreFixture('native');
+    for (const [store, sets] of [[source.store, 5], [destination.store, 4]] as const) {
+      const push = (await store.getRoutineById('routine-push-template'))!;
+      await store.saveRoutine(
+        push.name,
+        push.folderName || '',
+        push.exercises.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          targetSets: sets,
+          targetReps: '5',
+          restTimerSeconds: 120,
+        })),
+        push.notes,
+        push.id
+      );
+    }
+
+    await assert.rejects(
+      restoreBackup(await buildBackupJson(source.store), destination.store),
+      /Conflicting routine ID: routine-push-template/
+    );
+    const kept = (await destination.store.getRoutineById('routine-push-template'))!;
+    assert.equal(kept.exercises[0].targetSets, 4);
+
+    await source.dispose();
+    await destination.dispose();
   });
 });

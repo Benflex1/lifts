@@ -2,7 +2,8 @@ import * as React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { Circle, G, Line, Path, Rect, Svg, SvgXml } from 'react-native-svg';
 import { Exercise } from '../types';
-import { ExerciseVisualDescriptor, ExerciseVisualTemplate, getExerciseVisual } from '../utils/exercise-media';
+import { ExerciseVisualDescriptor, ExerciseVisualTemplate, getExerciseVisual, resolveExerciseVisual } from '../utils/exercise-media';
+import { useSettings } from '../context/SettingsContext';
 import { WORKOUT_GUIDE_PLANK_FRAME_1 } from './exercise-assets';
 import { ExerciseVisualErrorBoundary } from './ExerciseVisualErrorBoundary';
 import { colors } from '../theme';
@@ -261,7 +262,8 @@ const ExerciseVisualContent: React.FC<{
   onFrameChange?: (index: 0 | 1) => void;
   intervalMs?: number;
 }> = ({ exercise, dimension, animated, frameIndex, onFrameChange, intervalMs }) => {
-  const descriptor = getExerciseVisual(exercise);
+  const { remoteImagesEnabled } = useSettings();
+  const descriptor = resolveExerciseVisual(getExerciseVisual(exercise), remoteImagesEnabled);
   if (descriptor.kind === 'open-asset') {
     return renderAsset(descriptor, dimension) || <GeneratedExerciseSvg exercise={exercise} template="general" dimension={dimension} />;
   }

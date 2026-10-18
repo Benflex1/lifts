@@ -1,6 +1,7 @@
 import { DualExerciseStats, ExerciseGymScope, ExerciseStats, Workout } from '../types';
 import { calculate1RM } from '../utils/calculator';
 import { getAllowedGymIds } from './gym-scope';
+import { countsLoad, getTrackingType } from './tracking';
 
 function emptyStats(): ExerciseStats {
   return {
@@ -19,12 +20,14 @@ function addWorkoutStats(stats: ExerciseStats, workouts: Workout[], exerciseId: 
     let hasCompletedSet = false;
     for (const occurrence of workout.exercises) {
       if (occurrence.exerciseId !== exerciseId) continue;
+      const hasLoad = countsLoad(getTrackingType(occurrence));
       for (const set of occurrence.sets) {
         if (!set.isCompleted) continue;
         hasCompletedSet = true;
+        stats.maxReps = Math.max(stats.maxReps, set.reps);
+        if (!hasLoad) continue;
         stats.maxWeightKg = Math.max(stats.maxWeightKg, set.weightKg);
         stats.maxSetVolumeKg = Math.max(stats.maxSetVolumeKg, set.weightKg * set.reps);
-        stats.maxReps = Math.max(stats.maxReps, set.reps);
         stats.estimated1RM = Math.max(stats.estimated1RM, calculate1RM(set.weightKg, set.reps).average);
       }
     }

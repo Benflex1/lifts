@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { validateGymColor, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
+import { isTrackingType } from '../workout/tracking';
 
 const SET_TYPES = new Set(['normal', 'warmup', 'drop', 'failure']);
 
@@ -125,6 +126,15 @@ export function validateWorkoutSetRecord(value: unknown, label: string): asserts
   requireOptionalTimestamp(value.completedAt, `${label}.completedAt`);
   requireOptionalFiniteNumber(value.previousWeightKg, `${label}.previousWeightKg`, 0);
   requireOptionalFiniteNumber(value.previousReps, `${label}.previousReps`, 0);
+  requireOptionalFiniteNumber(value.durationSeconds, `${label}.durationSeconds`, 0);
+  requireOptionalFiniteNumber(value.distanceM, `${label}.distanceM`, 0);
+  requireOptionalFiniteNumber(value.previousDurationSeconds, `${label}.previousDurationSeconds`, 0);
+  requireOptionalFiniteNumber(value.previousDistanceM, `${label}.previousDistanceM`, 0);
+  if (value.previousType !== undefined && value.previousType !== null
+    && (typeof value.previousType !== 'string' || !SET_TYPES.has(value.previousType))) {
+    throw new Error(`Invalid ${label}.previousType: ${String(value.previousType)}`);
+  }
+  requireOptionalFiniteNumber(value.previousRpe, `${label}.previousRpe`, 0);
   requireOptionalString(value.previousGymId, `${label}.previousGymId`);
   requireOptionalString(value.previousGymName, `${label}.previousGymName`);
   if (value.isWeightEdited !== undefined && value.isWeightEdited !== null && typeof value.isWeightEdited !== 'boolean') {
@@ -156,6 +166,9 @@ function validateActiveExerciseRecord(
   requireOptionalString(value.notes, `${label}.notes`, true);
   if (value.targetReps !== undefined && value.targetReps !== null) requireString(value.targetReps, `${label}.targetReps`, true);
   requireOptionalString(value.supersetId, `${label}.supersetId`);
+  if (value.trackingType !== undefined && value.trackingType !== null && !isTrackingType(value.trackingType)) {
+    throw new Error(`Invalid ${label}.trackingType: ${String(value.trackingType)}`);
+  }
   requireFiniteNumber(value.restTimerSeconds, `${label}.restTimerSeconds`, 0);
   if ('orderIndex' in value) requireInteger(value.orderIndex, `${label}.orderIndex`, 0);
   if (nestedIds.incomingWorkoutExerciseIds.has(value.id)) {
@@ -234,6 +247,9 @@ function validateWorkoutRecord(
   requireString(value.gymId, `${label}.gymId`);
   if (!knownGymIds.has(value.gymId)) throw new Error(`Invalid gym ID in ${label}: ${value.gymId}`);
   requireOptionalString(value.routineId, `${label}.routineId`);
+  if (value.isDeload !== undefined && value.isDeload !== null && typeof value.isDeload !== 'boolean') {
+    throw new Error(`Invalid ${label}.isDeload`);
+  }
   requireTimestamp(value.startTime, `${label}.startTime`);
   requireOptionalTimestamp(value.endTime, `${label}.endTime`);
   requireFiniteNumber(value.durationSeconds, `${label}.durationSeconds`, 0);
