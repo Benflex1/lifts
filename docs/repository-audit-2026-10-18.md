@@ -380,10 +380,12 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-03 — WorkoutProvider is a 1,404-line application service
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/context/WorkoutContext.tsx` owns controller subscription, elapsed ticker, AppState flush, rest timers and notifications, draft recovery, gym switching, health sync, roughly two dozen mutations, and provider composition.
 - **Impact:** It is one of the highest-churn files in the app and any change risks timers, persistence, notifications, or health export.
 - **Required change:** Keep the provider as composition only. Extract `useSessionControllerBridge`, `useRestTimerEngine`, `useDraftRecovery`, `useGymSwitcher`, `useHealthSyncBridge`, and `useWorkoutMutations`.
+- **Implementation (2026-10-18):** `WorkoutContext.tsx` dropped from 1,449 to 286 lines and is composition only. `src/context/workout/` now holds `useSessionControllerBridge` (controller creation/subscription, the 1 s workout clock, AppState background flush), `useRestTimerEngine` (countdown state, second-aligned ticker, 3-2-1 and finish haptics, notification handoff, draft restore), `useGymSwitcher` (list/selection, mid-workout switch, refresh resolution), `useExerciseAccordion` (expansion state), `useDraftRecovery` (draft list, resume/discard flows), `useHealthSyncBridge` (settings-loading buffer and drain), and `useWorkoutMutations` (start/complete, structural exercise and set edits, supersets, completed-set flow). The context slices (`useWorkoutActions`, `useWorkoutClock`, `useRestTimer`, `useWorkoutGyms`, `useIsWorkingOut`, `usePersistenceError`) and the `finishWorkoutWithHealthSync` test seam are unchanged.
+- **Verification:** The provider-level harness test `tests/unit/workout-health-sync.test.ts` (9 tests, including completion ordering and the settings-buffer drain) is green; 173 integration / 543 unit tests pass with both typechecks.
 - **Done when:** Each concern has a dedicated hook and the provider is primarily wiring.
 
 ### ARCH-04 — Native and web stores are forked implementations with behavioral drift
@@ -754,7 +756,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 - [ ] `ARCH-01` Decompose `ActiveWorkoutScreen`.
 - [x] `ARCH-02` Decompose `AnalyticsScreen`.
-- [ ] `ARCH-03` Split `WorkoutProvider` into focused hooks.
+- [x] `ARCH-03` Split `WorkoutProvider` into focused hooks.
 - [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
 - [x] `ARCH-05` Deduplicate custom-exercise UI.
 - [x] `ARCH-06` Add repository/domain hooks.
