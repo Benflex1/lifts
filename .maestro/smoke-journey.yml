@@ -20,8 +20,13 @@ appId: com.benflex1.lifts
       text: 'Start Push Day.*'
     direction: DOWN
     timeout: 30000
-- tapOn: 'Start Push Day.*'
-- assertVisible: 'Start Workout'
+- tapOn:
+    text: 'Start Push Day.*'
+    retryTapIfNoChange: true
+- takeScreenshot: after-routine-tap
+- extendedWaitUntil:
+    visible: 'Start Workout'
+    timeout: 10000
 - tapOn: 'Start workout at.*'
 
 # Logger: complete one set of the first exercise.
