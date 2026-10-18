@@ -38,6 +38,13 @@ appId: com.benflex1.lifts
     visible: 'Complete set 1'
     timeout: 15000
 - tapOn: 'Complete set 1'
+# Android 14 (the CI emulator): the first rest asks once for exact-alarm
+# permission; dismiss it so the rest of the journey runs on the logger.
+- runFlow:
+    when:
+      visible: 'On-time rest buzz'
+    commands:
+      - tapOn: 'Not now'
 - extendedWaitUntil:
     visible: 'Complete set 2'
     timeout: 10000
