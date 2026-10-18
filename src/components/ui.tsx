@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  AccessibilityRole,
   Easing,
   Modal,
   View,
   Text,
   TouchableOpacity,
+  TouchableOpacityProps,
   StyleSheet,
   StyleProp,
   Platform,
@@ -21,6 +23,28 @@ import { colors, radii, spacing, type, HEADER_TOP_FALLBACK } from '../theme';
  * restyling headers, chips and menus individually, which keeps spacing and
  * hierarchy consistent across the app.
  */
+
+// ---------------------------------------------------------------------------
+// AppTouchable
+// ---------------------------------------------------------------------------
+
+export interface AppTouchableProps extends Omit<
+  TouchableOpacityProps,
+  'accessibilityLabel' | 'accessibilityRole'
+> {
+  /** Required: every interactive control must be announceable by a screen reader. */
+  accessibilityLabel: string;
+  accessibilityRole?: AccessibilityRole;
+}
+
+/**
+ * The required-label primitive (A11Y-05). Interactive components compose this
+ * instead of raw TouchableOpacity, so a missing label is a type error, and the
+ * labelled surfaces restrict raw touchables in ESLint.
+ */
+export function AppTouchable({ accessibilityRole = 'button', ...rest }: AppTouchableProps) {
+  return <TouchableOpacity accessibilityRole={accessibilityRole} {...rest} />;
+}
 
 // ---------------------------------------------------------------------------
 // Screen header

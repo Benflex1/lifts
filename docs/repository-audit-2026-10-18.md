@@ -583,10 +583,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-05 — No enforced accessibility primitive or lint rule
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** Accessibility attributes are applied ad hoc. There is no required-label wrapper component and no `jsx-a11y`-style rule in CI.
 - **Impact:** New UI will keep reproducing the same gaps.
 - **Required change:** Add an `AppTouchable`/`IconButton` primitive that requires an accessibility label, and enforce it through review and lint where possible.
+- **Implementation (2026-10-18):** `src/components/ui.tsx` exports `AppTouchable`, whose props require `accessibilityLabel` and default `accessibilityRole` to `button` (`IconButton` already required a label). `tests/unit/app-touchable.test.ts` covers label and role forwarding, press handling, and the type-level requirement (a `@ts-expect-error` proves an omitted label does not compile). Scoped `no-restricted-imports` rules reject raw `TouchableOpacity`/`Pressable`/`TouchableHighlight` imports in the logger and rest surfaces (landed with `A11Y-01` and `A11Y-02`), so new controls there must use the primitive. `eslint-plugin-react-native-a11y` was evaluated first but supports only ESLint 8 and below, so the type-enforced primitive plus scoped import restrictions carry the enforcement.
 - **Done when:** New interactive components use the primitive by default.
 
 ---
@@ -818,7 +819,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `A11Y-02` Label rest controls, mini bar, and read-only banner.
 - [ ] `A11Y-03` Add live regions and value semantics.
 - [ ] `A11Y-04` Standardize modal semantics.
-- [ ] `A11Y-05` Add a required-label primitive.
+- [x] `A11Y-05` Add a required-label primitive.
 
 **Exit criteria:** CI enforces lint, types, tests, and coverage; the core flows have UI tests; the logger and rest controls are screen-reader operable.
 
