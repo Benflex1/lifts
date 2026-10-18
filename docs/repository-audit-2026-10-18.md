@@ -842,6 +842,8 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 **Verification note (2026-10-18):** All Phase 3 findings are Done. CI enforces lint, format, version sync, the dependency audit policy, the dead-code scan, both typechecks, coverage thresholds (91.39% lines / 83.66% branches / 89.40% functions on the 598 + 173 test suite), and the Maestro emulator journey. The logger and rest surfaces are labelled with automated enforcement, and the deferred `PERF-03`/`PERF-09` renderer checks landed with `DX-02`.
 
+**Base update (2026-10-18):** This branch was moved off `main` and onto `develop` (the 1.1 integration line) so every phase opens as its own PR into `develop`. `develop`'s newer work — tracking types, next targets, rotations, body weight, automatic backups, the native rest cue, the exercise-photo switch, and the gym-restore fix — was carried into this branch and brought up to the Phase 3 standards: raw touchables in the new components are labelled for the `A11Y-06` scan, lint/format/typechecks are clean on the merged tree, develop's tests were adapted to the lazy exercise catalog (`getDefaultExercises`) and to the test typechecker, and `tests/unit/tracking-display.test.ts` covers the tracking display helpers. Re-measured on the merged tree: 695 unit + 189 integration tests, coverage 90.71% lines / 84.20% branches / 89.41% functions.
+
 ### Phase 4 — Product follow-through (target: after Phase 1-2)
 
 - [ ] `PROD-01` Complete F-Droid and iOS publishing.
