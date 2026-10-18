@@ -369,10 +369,12 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-02 — AnalyticsScreen is a 2,031-line component with 32 state variables
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/screens/AnalyticsScreen.tsx` mixes snapshot loading (`:126-179`), backup save/import (`:282-356`), CSV import and remapping (`:357-513`), and charts/records rendering (`:515-1292`).
 - **Impact:** Unrelated features share one state surface and render tree. A backup or CSV change can affect chart rendering and vice versa.
 - **Required change:** Extract `useAnalyticsData`, `useBackupTransfer`, `useCsvImportFlow`, `ProgressCharts`, `RecordsSection`, and `DataTransferSection`.
+- **Implementation (2026-10-18):** All six pieces exist and Analytics composes them: `src/hooks/useAnalyticsData.ts` (snapshot query, derived overview aggregates, progression/dashboard filter state), `src/hooks/useBackupTransfer.ts` (save/share/restore commands), `src/hooks/useCsvImportFlow.ts` (file pick, preview recomputation, exercise remapping, confirm), and `src/screens/analytics/{ProgressCharts,RecordsSection,DataTransferSection}.tsx`. `AnalyticsScreen.tsx` dropped from 1,954 to 368 lines and now owns only the section switcher, the 1RM/plate calculator tools, and composition; its per-section state (32 variables) moved into the owning hook or section. Dead trophy-podium imports and the unused `detailPodium` state were removed with the split; the four CSV handlers collapsed into one `recomputePreview` helper with the original log labels preserved.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 173 integration / 543 unit tests green; `npx expo export --platform web` succeeds with the split screen still inside the `AnalyticsScreen` async chunk.
 - **Done when:** Each domain has a focused hook or component and Analytics composes them.
 
 ### ARCH-03 — WorkoutProvider is a 1,404-line application service
@@ -751,7 +753,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 ### Phase 2 — Architecture and startup (target: two to four weeks)
 
 - [ ] `ARCH-01` Decompose `ActiveWorkoutScreen`.
-- [ ] `ARCH-02` Decompose `AnalyticsScreen`.
+- [x] `ARCH-02` Decompose `AnalyticsScreen`.
 - [ ] `ARCH-03` Split `WorkoutProvider` into focused hooks.
 - [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
 - [x] `ARCH-05` Deduplicate custom-exercise UI.
