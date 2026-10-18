@@ -14,9 +14,9 @@ appId: com.benflex1.lifts
 - assertVisible: 'Routines'
 - assertVisible: 'Start Empty Workout'
 
-- tapOn: 'Start Push Day (Chest/Shoulders/Triceps)'
+- tapOn: 'Start Push Day.*'
 - assertVisible: 'Start Workout'
-- tapOn: 'Start Workout'
+- tapOn: 'Start workout at.*'
 
 # Logger: complete one set of the first exercise.
 - assertVisible: 'Complete set 1'
