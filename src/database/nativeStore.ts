@@ -17,7 +17,7 @@ import type { HealthProviderId, HealthSyncRecord, HealthSyncStatus } from '../he
 import { applyMigrations } from './migrations';
 import { createWriteQueue } from './writeQueue';
 import { smartSearchExercises } from '../utils/search';
-import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES, buildDefaultRoutines } from './seedData';
+import { BUNDLED_EXERCISE_CATALOG_VERSION, getDefaultExercises, buildDefaultRoutines } from './seedData';
 import { createScopedId } from '../utils/ids';
 import { validateTargetReps } from '../workout/sets';
 import { DEFAULT_TRACKING_TYPE, isTrackingType } from '../workout/tracking';
@@ -25,16 +25,20 @@ import { DELOAD_WORKOUTS_KEY, parseDeloadWorkoutIds } from '../workout/programs'
 import { isMergedOnRestore } from '../utils/settings';
 import {
   DEFAULT_GYM_COLOR,
-  isActiveWorkoutForGym,
   validateGymColor,
-  validateGymDeletion,
   validateGymName,
   validateWorkoutGymId,
 } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { CompletedExerciseOccurrence, resolvePreviousSetsForExercise } from '../workout/gym-history';
 import { calculateDualExerciseStats } from '../workout/gym-records';
-import { validateSnapshotForMerge as validateSharedSnapshotForMerge } from './snapshot-validation';
+import {
+  canonicalizeSnapshotGyms,
+  normalizeDraftRecord,
+  normalizeExerciseRecord,
+  planGymDeletion,
+  planSnapshotMerge,
+} from './storeCore';
 
 export interface SqliteDriver {
   execAsync(sql: string): Promise<void>;
@@ -44,30 +48,8 @@ export interface SqliteDriver {
   withTransactionAsync(task: () => Promise<void>): Promise<void>;
 }
 
-function normalizeExercise(exercise: Exercise): Exercise {
-  const secondaryMuscles = Array.isArray(exercise.secondaryMuscles) ? exercise.secondaryMuscles : [];
-  const instructions = Array.isArray(exercise.instructions) ? exercise.instructions : [];
-  if (secondaryMuscles === exercise.secondaryMuscles && instructions === exercise.instructions) return exercise;
-  return { ...exercise, secondaryMuscles, instructions };
-}
-
-function normalizeWorkoutExercises(workout: Workout): Workout {
-  if (!Array.isArray(workout.exercises)) return workout;
-  const exercises = workout.exercises.map((activeExercise) => {
-    const exercise = normalizeExercise(activeExercise.exercise);
-    return exercise === activeExercise.exercise ? activeExercise : { ...activeExercise, exercise };
-  });
-  if (exercises.every((exercise, index) => exercise === workout.exercises[index])) return workout;
-  return { ...workout, exercises };
-}
-
-function normalizeDraft(draft: WorkoutDraft): WorkoutDraft {
-  const workout = normalizeWorkoutExercises(draft.workout);
-  return workout === draft.workout ? draft : { ...draft, workout };
-}
-
 function mapExerciseRow(r: any): Exercise {
-  return normalizeExercise({
+  return normalizeExerciseRecord({
     id: r.id,
     name: r.name,
     category: r.category,
@@ -82,7 +64,7 @@ function mapExerciseRow(r: any): Exercise {
 }
 
 function mapJoinedExerciseRow(r: any, aliases: { primary: string; secondary: string; instructions: string; url: string; urlType: string; custom: string }): Exercise {
-  return normalizeExercise({
+  return normalizeExerciseRecord({
     id: r.exercise_id,
     name: r.ex_name,
     category: r.ex_category,
@@ -140,7 +122,7 @@ function normalizeDraftPayload(data: string): WorkoutDraft | null {
   try {
     const draft = JSON.parse(data) as WorkoutDraft;
     if (!draft || !draft.workout || typeof draft.workout !== 'object') return null;
-    const normalized = normalizeDraft(draft);
+    const normalized = normalizeDraftRecord(draft);
     if (normalized.workout.gymId) return normalized;
     return { ...normalized, workout: { ...normalized.workout, gymId: 'gym-default' } };
   } catch (_) {
@@ -148,48 +130,6 @@ function normalizeDraftPayload(data: string): WorkoutDraft | null {
   }
 }
 
-function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
-  return a.exerciseId === b.exerciseId && a.scopeType === b.scopeType
-    && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
-}
-
-function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
-  if (!Array.isArray(snapshot.gyms)) return snapshot;
-  return {
-    ...snapshot,
-    gyms: snapshot.gyms.map((gym) => {
-      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
-      if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
-        throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
-      }
-      return {
-        ...gym,
-        name: validateGymName(gym.name),
-        color: validateGymColor(gym.color),
-      };
-    }),
-  };
-}
-
-function validateSnapshotMergeConflicts(snapshot: DataSnapshot, existing: DataSnapshot): void {
-  const incomingScopes = snapshot.exerciseGymScopes || [];
-  const exerciseIds = new Set([
-    ...existing.exercises.map((exercise) => exercise.id),
-    ...snapshot.exercises.map((exercise) => exercise.id),
-  ]);
-  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
-  const seenScopeIds = new Set<string>();
-  for (const scope of incomingScopes) {
-    if (seenScopeIds.has(scope.exerciseId)) throw new Error(`Snapshot contains duplicate exercise scope IDs: ${scope.exerciseId}`);
-    seenScopeIds.add(scope.exerciseId);
-    if (!exerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
-    const existingScope = existingScopes.get(scope.exerciseId);
-    if (existingScope && !scopesAreIdentical(scope, existingScope)) {
-      throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
-    }
-  }
-
-}
 
 export function createNativeStore(driver: SqliteDriver): Store {
   const writeQueue = createWriteQueue();
@@ -263,40 +203,39 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void> {
     return writeQueue(() => driver.withTransactionAsync(async () => {
       const gyms = await getGyms();
-      validateGymDeletion(id, replacementGymId, gyms, activeWorkoutGymId);
-      const deleted = gyms.find(gym => gym.id === id)!;
-      if (!gyms.some(gym => gym.id === replacementGymId)) throw new Error(`unknown replacement gym: ${replacementGymId}`);
-      const drafts = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
-      if (drafts.some((row) => {
-        const draft = normalizeDraftPayload(row.data);
-        return Boolean(draft && isActiveWorkoutForGym(draft.workout, id));
-      })) {
-        throw new Error('cannot delete the gym used by an active workout draft');
-      }
-      const inProgressWorkout = await driver.getFirstAsync<{ id: string }>(
-        'SELECT id FROM workouts WHERE gym_id = ? AND in_progress = 1 LIMIT 1',
+      const drafts = await getWorkoutDrafts();
+      const scopes = await getExerciseGymScopes();
+      const inProgressRows = await driver.getAllAsync<{ id: string }>(
+        'SELECT id FROM workouts WHERE gym_id = ? AND in_progress = 1',
         id,
       );
-      if (inProgressWorkout) {
-        throw new Error('cannot delete the gym used by an in-progress workout');
-      }
+      const plan = planGymDeletion({
+        gymId: id,
+        replacementGymId,
+        gyms,
+        activeWorkoutGymId,
+        drafts,
+        scopes,
+        inProgressWorkoutIds: inProgressRows.map((row) => row.id),
+      });
+
       await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id = ?', replacementGymId, id);
-      for (const row of drafts) {
-        const draft = normalizeDraftPayload(row.data);
-        if (draft && draft.workout.gymId === id) {
-          draft.workout.gymId = replacementGymId;
-          await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(draft), row.id);
+      for (const { id: draftId, draft } of plan.reassignDrafts) {
+        await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(draft), draftId);
+      }
+      for (const { exerciseId, scope } of plan.scopeWrites) {
+        if (scope) {
+          await driver.runAsync(
+            'UPDATE exercise_gym_scopes SET scope_type = ?, linked_gym_ids = ? WHERE exercise_id = ?',
+            scope.scopeType,
+            scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null,
+            exerciseId,
+          );
+        } else {
+          await driver.runAsync('DELETE FROM exercise_gym_scopes WHERE exercise_id = ?', exerciseId);
         }
       }
-      const scopes = await driver.getAllAsync<any>('SELECT * FROM exercise_gym_scopes');
-      for (const row of scopes) {
-        if (row.scope_type !== 'linked_group') continue;
-        const ids = (row.linked_gym_ids ? JSON.parse(row.linked_gym_ids) : []).filter((gymId: string) => gymId !== id);
-        if (ids.length === 0) await driver.runAsync('DELETE FROM exercise_gym_scopes WHERE exercise_id = ?', row.exercise_id);
-        else if (ids.length < 2) await driver.runAsync('UPDATE exercise_gym_scopes SET scope_type = ?, linked_gym_ids = NULL WHERE exercise_id = ?', 'gym_specific', row.exercise_id);
-        else await driver.runAsync('UPDATE exercise_gym_scopes SET linked_gym_ids = ? WHERE exercise_id = ?', JSON.stringify(ids), row.exercise_id);
-      }
-      if (deleted.isDefault) {
+      if (plan.makeDefault) {
         await driver.runAsync('UPDATE gyms SET is_default = 0');
         await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', replacementGymId);
       }
@@ -324,7 +263,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
   }
 
   async function seedDefaultExercises(): Promise<void> {
-    const exercises = DEFAULT_EXERCISES;
+    const exercises = getDefaultExercises();
     await driver.withTransactionAsync(async () => {
       for (const ex of exercises) {
         await driver.runAsync(
@@ -357,8 +296,10 @@ export function createNativeStore(driver: SqliteDriver): Store {
     );
     if (currentVersion?.value === String(BUNDLED_EXERCISE_CATALOG_VERSION)) return;
 
+    // Only now is the bundled catalog parsed (PERF-06).
+    const exercises = getDefaultExercises();
     await writeQueue(() => driver.withTransactionAsync(async () => {
-      for (const ex of DEFAULT_EXERCISES) {
+      for (const ex of exercises) {
         const existing = await driver.getFirstAsync<{ is_custom: number }>(
           'SELECT is_custom FROM exercises WHERE id = ?',
           ex.id,
@@ -473,7 +414,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
   async function createCustomExercise(exercise: Omit<Exercise, 'id' | 'isCustom'>): Promise<Exercise> {
     return writeQueue(async () => {
       const newId = (exercise as any).id || createScopedId('custom');
-      const customExercise = normalizeExercise({
+      const customExercise = normalizeExerciseRecord({
         ...exercise,
         id: newId,
         isCustom: true,
@@ -563,7 +504,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         id
       );
 
-      const updatedExercise = normalizeExercise({
+      const updatedExercise = normalizeExerciseRecord({
         id,
         name: updatedName,
         category: updatedCategory,
@@ -1302,7 +1243,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
   async function saveDraft(draft: WorkoutDraft): Promise<void> {
     return writeQueue(async () => {
-      let normalizedDraft = normalizeDraft(draft);
+      let normalizedDraft = normalizeDraftRecord(draft);
       if (!normalizedDraft.workout.gymId) {
         normalizedDraft = {
           ...normalizedDraft,
@@ -1442,15 +1383,17 @@ export function createNativeStore(driver: SqliteDriver): Store {
     return writeQueue(async () => {
       snapshot = canonicalizeSnapshotGyms(snapshot);
       const existing = await readSnapshot();
-      validateSharedSnapshotForMerge(snapshot, existing);
-      validateSnapshotMergeConflicts(snapshot, existing);
+      const plan = planSnapshotMerge(snapshot, existing);
       await driver.withTransactionAsync(async () => {
-        const existingDefaultGymId = existing.gyms.find((gym) => gym.isDefault)?.id;
-        for (const gym of snapshot.gyms || []) {
-          if (gym.isDefault && gym.id === existingDefaultGymId) {
-            await driver.runAsync('UPDATE gyms SET name = ?, color = ? WHERE id = ?', gym.name, gym.color, gym.id);
-            continue;
-          }
+        for (const gym of plan.gymsToUpdate) {
+          await driver.runAsync(
+            'UPDATE gyms SET name = ?, color = ? WHERE id = ?',
+            gym.name,
+            gym.color,
+            gym.id,
+          );
+        }
+        for (const gym of plan.gymsToInsert) {
           await driver.runAsync(
             `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 0, ?, ?)`,
             gym.id, gym.name, gym.color, gym.createdAt
@@ -1458,8 +1401,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         }
 
         // Exercises must precede scopes because scopes have an exercise foreign key.
-        for (const ex of snapshot.exercises) {
-          const normalizedExercise = normalizeExercise(ex);
+        for (const exercise of plan.exercisesToUpsert) {
           await driver.runAsync(
             `INSERT INTO exercises
                (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, instruction_url, instruction_url_type, is_custom)
@@ -1469,23 +1411,20 @@ export function createNativeStore(driver: SqliteDriver): Store {
                secondary_muscles = excluded.secondary_muscles, instructions = excluded.instructions,
                instruction_url = excluded.instruction_url, instruction_url_type = excluded.instruction_url_type,
                is_custom = excluded.is_custom`,
-            normalizedExercise.id,
-            normalizedExercise.name,
-            normalizedExercise.category,
-            normalizedExercise.equipment,
-            JSON.stringify(normalizedExercise.primaryMuscles),
-            JSON.stringify(normalizedExercise.secondaryMuscles),
-            JSON.stringify(normalizedExercise.instructions),
-            normalizedExercise.instructionUrl || null,
-            normalizedExercise.instructionUrlType || null,
-            normalizedExercise.isCustom ? 1 : 0
+            exercise.id,
+            exercise.name,
+            exercise.category,
+            exercise.equipment,
+            JSON.stringify(exercise.primaryMuscles),
+            JSON.stringify(exercise.secondaryMuscles),
+            JSON.stringify(exercise.instructions),
+            exercise.instructionUrl || null,
+            exercise.instructionUrlType || null,
+            exercise.isCustom ? 1 : 0
           );
         }
 
-        for (const scope of snapshot.exerciseGymScopes || []) {
-          if ((await driver.getFirstAsync<any>('SELECT exercise_id FROM exercise_gym_scopes WHERE exercise_id = ?', scope.exerciseId))) {
-            continue;
-          }
+        for (const scope of plan.scopesToInsert) {
           await driver.runAsync(
             'INSERT OR REPLACE INTO exercise_gym_scopes (exercise_id, scope_type, linked_gym_ids) VALUES (?, ?, ?)',
             scope.exerciseId, scope.scopeType, scope.linkedGymIds ? JSON.stringify(scope.linkedGymIds) : null
@@ -1493,7 +1432,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         }
 
         // Merge routines
-        for (const rt of snapshot.routines) {
+        for (const rt of plan.routinesToUpsert) {
           await driver.runAsync(
             `INSERT OR REPLACE INTO routines (id, name, folder_name, notes, created_at, last_performed_at)
              VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1522,7 +1461,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
         }
 
         // Merge workouts
-        for (const w of snapshot.workouts) {
+        for (const w of plan.workoutsToUpsert) {
           await driver.runAsync(
             `INSERT OR REPLACE INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress, gym_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
@@ -1575,29 +1514,26 @@ export function createNativeStore(driver: SqliteDriver): Store {
         }
 
         // Merge drafts
-        for (const draft of snapshot.drafts) {
-          const normalizedDraft = normalizeDraft(draft);
+        for (const { id: draftId, draft } of plan.draftsToUpsert) {
           await driver.runAsync(
             `INSERT OR REPLACE INTO workout_drafts (id, revision, saved_at, rest_timer_ends_at, rest_timer_total_seconds, data)
              VALUES (?, ?, ?, ?, ?, ?)`,
-            normalizedDraft.workout.id,
-            normalizedDraft.revision,
-            normalizedDraft.savedAt,
-            normalizedDraft.restTimer ? normalizedDraft.restTimer.endsAt : null,
-            normalizedDraft.restTimer ? normalizedDraft.restTimer.totalSeconds : null,
-            JSON.stringify({ ...normalizedDraft, workout: { ...normalizedDraft.workout, gymId: normalizedDraft.workout.gymId || 'gym-default' } })
+            draftId,
+            draft.revision,
+            draft.savedAt,
+            draft.restTimer ? draft.restTimer.endsAt : null,
+            draft.restTimer ? draft.restTimer.totalSeconds : null,
+            JSON.stringify(draft)
           );
         }
 
-        // Merge settings (only missing keys; keyed settings like tracking types and rotations arrive already merged)
-        for (const [k, v] of Object.entries(snapshot.settings)) {
-          if (isDeviceLocalSetting(k)) continue;
+        for (const { key, value, replace } of plan.settingsToInsert) {
           await driver.runAsync(
-            isMergedOnRestore(k)
+            replace
               ? 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
               : 'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
-            k,
-            v
+            key,
+            value,
           );
         }
       });

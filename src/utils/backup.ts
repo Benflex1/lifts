@@ -1,6 +1,6 @@
 import { isBackupExcludedSetting } from './settings';
 import { DataSnapshot, Store, WorkoutDraft } from '../database/contract';
-import { DEFAULT_EXERCISES } from '../database/seedData';
+import { getDefaultExercises } from '../database/seedData';
 import { ActiveExercise, Exercise, ExerciseGymScope, Gym, Routine, RoutineExercise, Workout, WorkoutSet } from '../types';
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
@@ -279,7 +279,7 @@ export function parseBackup(json: string): BackupV3 {
 
   // Map of available exercises: bundled seed exercises + backup exercises
   const knownExercisesMap = new Map<string, Exercise>();
-  for (const de of DEFAULT_EXERCISES) {
+  for (const de of getDefaultExercises()) {
     knownExercisesMap.set(de.id, de);
   }
   const exerciseIdsInBackup = new Set<string>();
@@ -295,7 +295,7 @@ export function parseBackup(json: string): BackupV3 {
         throw new Error(`Invalid primaryMuscles in exercise: ${ex.id}`);
       }
     }
-    const bundled = DEFAULT_EXERCISES.find((d) => d.id === ex.id);
+    const bundled = getDefaultExercises().find((d) => d.id === ex.id);
     if (!ex.primaryMuscles) {
       if (bundled?.primaryMuscles && bundled.primaryMuscles.length > 0) {
         ex.primaryMuscles = [...bundled.primaryMuscles];
@@ -332,7 +332,7 @@ export function parseBackup(json: string): BackupV3 {
         throw new Error(`Missing exercise definition for routine exercise: ${re.exerciseId}`);
       }
       const def = knownExercisesMap.get(re.exerciseId)!;
-      const bundled = DEFAULT_EXERCISES.find((d) => d.id === re.exerciseId);
+      const bundled = getDefaultExercises().find((d) => d.id === re.exerciseId);
       if (!re.exercise || typeof re.exercise !== 'object') {
         const primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
           ? [...def.primaryMuscles]
@@ -442,7 +442,7 @@ export function parseBackup(json: string): BackupV3 {
       }
 
       const def = knownExercisesMap.get(we.exerciseId)!;
-      const bundled = DEFAULT_EXERCISES.find((d) => d.id === we.exerciseId);
+      const bundled = getDefaultExercises().find((d) => d.id === we.exerciseId);
 
       // Reconstruct or validate embedded exercise object
       if (!we.exercise || typeof we.exercise !== 'object') {

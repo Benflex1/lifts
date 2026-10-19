@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { indexedDB, IDBObjectStore } from 'fake-indexeddb';
+import { indexedDB, IDBIndex, IDBObjectStore } from 'fake-indexeddb';
 import { createWebStore } from '../../src/database/webStore';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { Workout } from '../../src/types';
 
 function makeWorkout(index: number): Workout {
-  const exercises = DEFAULT_EXERCISES.slice(index % 4, (index % 4) + 2).map((exercise, exerciseIndex) => ({
+  const exercises = getDefaultExercises().slice(index % 4, (index % 4) + 2).map((exercise, exerciseIndex) => ({
     id: `web-bulk-${index}-ex${exerciseIndex}`,
     exerciseId: exercise.id,
     exercise,
@@ -47,8 +47,10 @@ describe('web snapshot read performance guarantees', () => {
 
     const originalGet = IDBObjectStore.prototype.get;
     const originalGetAll = IDBObjectStore.prototype.getAll;
+    const originalOpenCursor = IDBIndex.prototype.openCursor;
     const workoutGets: unknown[] = [];
     let workoutGetAlls = 0;
+    let workoutIndexCursors = 0;
 
     IDBObjectStore.prototype.get = function (this: IDBObjectStore, key: unknown) {
       if (this.name === 'workouts') workoutGets.push(key);
@@ -57,6 +59,14 @@ describe('web snapshot read performance guarantees', () => {
     IDBObjectStore.prototype.getAll = function (this: IDBObjectStore) {
       if (this.name === 'workouts') workoutGetAlls++;
       return originalGetAll.call(this);
+    };
+    IDBIndex.prototype.openCursor = function (
+      this: IDBIndex,
+      query?: IDBValidKey | IDBKeyRange | null,
+      direction?: IDBCursorDirection,
+    ) {
+      if (this.name === 'startTime' && this.objectStore.name === 'workouts') workoutIndexCursors++;
+      return originalOpenCursor.call(this, query, direction);
     };
 
     try {
@@ -68,7 +78,8 @@ describe('web snapshot read performance guarantees', () => {
         0,
         `readSnapshot issued ${workoutGets.length} per-workout detail reads`,
       );
-      assert.equal(workoutGetAlls, 1);
+      assert.equal(workoutGetAlls, 0, 'the workouts store is no longer materialized with getAll');
+      assert.equal(workoutIndexCursors, 1, 'readSnapshot walks the startTime index once');
       assert.ok(snapshot.workouts.every(workout => workout.exercises.length > 0));
       assert.ok(
         snapshot.workouts.every(workout =>
@@ -79,6 +90,7 @@ describe('web snapshot read performance guarantees', () => {
     } finally {
       IDBObjectStore.prototype.get = originalGet;
       IDBObjectStore.prototype.getAll = originalGetAll;
+      IDBIndex.prototype.openCursor = originalOpenCursor;
       await store.close();
     }
   });

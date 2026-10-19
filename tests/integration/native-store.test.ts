@@ -9,16 +9,13 @@ import { applyMigrations } from '../../src/database/migrations';
 import { Exercise, Workout } from '../../src/types';
 import { createStoreFixture } from '../helpers/storeFixture';
 import { createSessionController } from '../../src/workout/session';
-import { BUNDLED_EXERCISE_CATALOG_VERSION, DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { BUNDLED_EXERCISE_CATALOG_VERSION, getDefaultExercises } from '../../src/database/seedData';
 
 class FailingCatalogSyncDriver extends NodeSqliteDriver {
   shouldFail = true;
   exerciseUpdates = 0;
 
-  override async runAsync(
-    sql: string,
-    ...params: any[]
-  ): Promise<{ changes: number; lastInsertRowId: number }> {
+  override async runAsync(sql: string, ...params: any[]): Promise<{ changes: number; lastInsertRowId: number }> {
     if (this.shouldFail && sql.trimStart().startsWith('UPDATE exercises')) {
       this.exerciseUpdates++;
       if (this.exerciseUpdates === 2) {
@@ -36,26 +33,12 @@ describe('nativeStore and migration safety', () => {
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      'built-in-id',
-      'Built-in Exercise',
-      'strength',
-      'barbell',
-      '["chest"]',
-      null,
-      null,
-      0,
+      'built-in-id', 'Built-in Exercise', 'strength', 'barbell', '["chest"]', null, null, 0
     );
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      'custom-id',
-      'User Exercise',
-      'strength',
-      'machine',
-      '["back"]',
-      null,
-      null,
-      1,
+      'custom-id', 'User Exercise', 'strength', 'machine', '["back"]', null, null, 1
     );
 
     const store = createNativeStore(driver);
@@ -64,31 +47,18 @@ describe('nativeStore and migration safety', () => {
     const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises)');
     assert.ok(columns.some(column => column.name === 'instruction_url'));
     assert.ok(columns.some(column => column.name === 'instruction_url_type'));
-    assert.equal(
-      (await store.getExerciseById('built-in-id'))?.secondaryMuscles instanceof Array,
-      true,
-    );
+    assert.equal((await store.getExerciseById('built-in-id'))?.secondaryMuscles instanceof Array, true);
     assert.equal((await store.getExerciseById('custom-id'))?.name, 'User Exercise');
     assert.equal(
-      (
-        await driver.getFirstAsync<{ value: string }>(
-          'SELECT value FROM app_meta WHERE key = ?',
-          'exercise_catalog_version',
-        )
-      )?.value,
+      (await driver.getFirstAsync<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'))?.value,
       String(BUNDLED_EXERCISE_CATALOG_VERSION),
     );
 
     await store.init();
     const columnNames = columns.map(column => column.name);
-    const rereadColumns = await driver.getAllAsync<{ name: string }>(
-      'PRAGMA table_info(exercises)',
-    );
+    const rereadColumns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises)');
     assert.equal(rereadColumns.filter(column => column.name === 'instruction_url').length, 1);
-    assert.deepEqual(
-      rereadColumns.map(column => column.name),
-      columnNames,
-    );
+    assert.deepEqual(rereadColumns.map(column => column.name), columnNames);
     driver.close();
   });
 
@@ -102,41 +72,23 @@ describe('nativeStore and migration safety', () => {
     );
 
     const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises)');
-    assert.equal(
-      columns.some(column => column.name === 'instruction_url'),
-      false,
-    );
-    assert.equal(
-      columns.some(column => column.name === 'instruction_url_type'),
-      false,
-    );
-    assert.equal(
-      await driver.getFirstAsync<any>(
-        'SELECT value FROM app_meta WHERE key = ?',
-        'exercise_catalog_version',
-      ),
-      null,
-    );
-    assert.equal(
-      await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 8'),
-      null,
-    );
+    assert.equal(columns.some(column => column.name === 'instruction_url'), false);
+    assert.equal(columns.some(column => column.name === 'instruction_url_type'), false);
+    assert.equal(await driver.getFirstAsync<any>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'), null);
+    assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 8'), null);
     driver.close();
   });
 
-  it('rolls back migration 10 indexes when failure is injected', async () => {
+  it('rolls back migration 9 indexes when failure is injected', async () => {
     const driver = new NodeSqliteDriver();
-    await applyMigrations(driver, { maxVersion: 9 });
+    await applyMigrations(driver, { maxVersion: 8 });
 
     await assert.rejects(
-      () => applyMigrations(driver, { failAtVersion: 10 }),
-      /Injected migration failure at version 10/,
+      () => applyMigrations(driver, { failAtVersion: 9 }),
+      /Injected migration failure at version 9/,
     );
 
-    assert.equal(
-      await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 10'),
-      null,
-    );
+    assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 9'), null);
     for (const table of ['workouts', 'workout_exercises', 'exercise_sets']) {
       const indexes = await driver.getAllAsync<{ name: string }>(`PRAGMA index_list(${table})`);
       assert.equal(
@@ -151,28 +103,16 @@ describe('nativeStore and migration safety', () => {
   it('synchronizes built-ins by ID without replacing a custom row with a bundled ID', async () => {
     const driver = new NodeSqliteDriver();
     await applyMigrations(driver, { maxVersion: 7 });
-    const bundled = DEFAULT_EXERCISES[0];
+    const bundled = getDefaultExercises()[0];
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-      bundled.id,
-      'Stale Built-in Name',
-      'old-category',
-      'old-equipment',
-      '[]',
-      '[]',
-      '[]',
+      bundled.id, 'Stale Built-in Name', 'old-category', 'old-equipment', '[]', '[]', '[]'
     );
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      DEFAULT_EXERCISES[1].id,
-      'User Override',
-      'custom',
-      'machine',
-      '["arms"]',
-      '["shoulders"]',
-      '["Keep this"]',
+      getDefaultExercises()[1].id, 'User Override', 'custom', 'machine', '["arms"]', '["shoulders"]', '["Keep this"]'
     );
 
     const store = createNativeStore(driver);
@@ -183,71 +123,42 @@ describe('nativeStore and migration safety', () => {
     assert.equal(synchronized.name, bundled.name);
     assert.deepEqual(synchronized.secondaryMuscles, bundled.secondaryMuscles);
     assert.deepEqual(synchronized.instructions, bundled.instructions);
-    assert.equal((await store.getExerciseById(DEFAULT_EXERCISES[1].id))?.name, 'User Override');
-    assert.equal((await store.getAllExercises()).length, DEFAULT_EXERCISES.length);
+    assert.equal((await store.getExerciseById(getDefaultExercises()[1].id))?.name, 'User Override');
+    assert.equal((await store.getAllExercises()).length, getDefaultExercises().length);
     driver.close();
   });
 
   it('replaces a legacy GitHub guide during catalog v4 sync while preserving a custom row', async () => {
     const driver = new NodeSqliteDriver();
     await applyMigrations(driver);
-    const bundled = DEFAULT_EXERCISES.find(
-      exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip',
-    )!;
-    const custom = DEFAULT_EXERCISES.find(exercise => exercise.id === 'Incline_Dumbbell_Press')!;
-    const legacyGuide =
-      'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json';
+    const bundled = getDefaultExercises().find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
+    const custom = getDefaultExercises().find(exercise => exercise.id === 'Incline_Dumbbell_Press')!;
+    const legacyGuide = 'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json';
 
     await driver.runAsync(
       `INSERT INTO exercises
         (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, instruction_url, instruction_url_type, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      bundled.id,
-      'Legacy Bench',
-      'legacy',
-      'barbell',
-      '[]',
-      '[]',
-      '[]',
-      legacyGuide,
-      'website',
+      bundled.id, 'Legacy Bench', 'legacy', 'barbell', '[]', '[]', '[]', legacyGuide, 'website',
     );
     await driver.runAsync(
       `INSERT INTO exercises
         (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, instruction_url, instruction_url_type, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      custom.id,
-      'My Custom Incline Press',
-      'custom',
-      'dumbbell',
-      '["chest"]',
-      '[]',
-      '["Keep this"]',
-      'https://example.com/my-custom-guide',
-      'website',
+      custom.id, 'My Custom Incline Press', 'custom', 'dumbbell', '["chest"]', '[]', '["Keep this"]',
+      'https://example.com/my-custom-guide', 'website',
     );
     await driver.runAsync(
       `INSERT OR REPLACE INTO app_meta (key, value) VALUES (?, ?), (?, ?), (?, ?)`,
-      'exercises_seeded',
-      '1',
-      'routines_seeded',
-      '1',
-      'exercise_catalog_version',
-      '3',
+      'exercises_seeded', '1', 'routines_seeded', '1', 'exercise_catalog_version', '3',
     );
 
     const store = createNativeStore(driver);
     await store.init();
 
-    assert.equal(
-      (await store.getExerciseById(bundled.id))?.instructionUrl,
-      'https://musclewiki.com/exercise/barbell-bench-press',
-    );
+    assert.equal((await store.getExerciseById(bundled.id))?.instructionUrl, 'https://musclewiki.com/exercise/barbell-bench-press');
     assert.equal((await store.getExerciseById(custom.id))?.name, 'My Custom Incline Press');
-    assert.equal(
-      (await store.getExerciseById(custom.id))?.instructionUrl,
-      'https://example.com/my-custom-guide',
-    );
+    assert.equal((await store.getExerciseById(custom.id))?.instructionUrl, 'https://example.com/my-custom-guide');
     driver.close();
   });
 
@@ -280,33 +191,18 @@ describe('nativeStore and migration safety', () => {
     assert.equal('instructionUrl' in (directUnlinked || {}), false);
     assert.equal('instructionUrlType' in (directUnlinked || {}), false);
 
-    await store.updateCustomExercise(linked.id, {
-      name: 'Edited Linked Custom Exercise',
-    });
+    await store.updateCustomExercise(linked.id, { name: 'Edited Linked Custom Exercise' });
     const edited = await store.getExerciseById(linked.id);
     assert.equal(edited?.name, 'Edited Linked Custom Exercise');
     assert.equal(edited?.instructionUrl, 'https://example.com/linked-exercise');
     assert.equal(edited?.instructionUrlType, 'website');
 
     const routineId = await store.saveRoutine('Link Mapping Routine', 'Testing', [
-      {
-        exerciseId: linked.id,
-        targetSets: 1,
-        targetReps: '8',
-        restTimerSeconds: 60,
-      },
-      {
-        exerciseId: unlinked.id,
-        targetSets: 1,
-        targetReps: '8',
-        restTimerSeconds: 60,
-      },
+      { exerciseId: linked.id, targetSets: 1, targetReps: '8', restTimerSeconds: 60 },
+      { exerciseId: unlinked.id, targetSets: 1, targetReps: '8', restTimerSeconds: 60 },
     ]);
     const routine = await store.getRoutineById(routineId);
-    assert.equal(
-      routine?.exercises[0].exercise.instructionUrl,
-      'https://example.com/linked-exercise',
-    );
+    assert.equal(routine?.exercises[0].exercise.instructionUrl, 'https://example.com/linked-exercise');
     assert.equal('instructionUrl' in routine!.exercises[1].exercise, false);
     assert.equal('instructionUrlType' in routine!.exercises[1].exercise, false);
 
@@ -319,34 +215,16 @@ describe('nativeStore and migration safety', () => {
       durationSeconds: 3600,
       totalVolumeKg: 0,
       exercises: [
-        {
-          id: 'link-mapping-linked',
-          exerciseId: linked.id,
-          exercise: edited!,
-          sets: [],
-          restTimerSeconds: 60,
-        },
-        {
-          id: 'link-mapping-unlinked',
-          exerciseId: unlinked.id,
-          exercise: directUnlinked!,
-          sets: [],
-          restTimerSeconds: 60,
-        },
+        { id: 'link-mapping-linked', exerciseId: linked.id, exercise: edited!, sets: [], restTimerSeconds: 60 },
+        { id: 'link-mapping-unlinked', exerciseId: unlinked.id, exercise: directUnlinked!, sets: [], restTimerSeconds: 60 },
       ],
     });
     const workout = await store.getWorkoutDetail('link-mapping-workout');
-    assert.equal(
-      workout?.exercises[0].exercise.instructionUrl,
-      'https://example.com/linked-exercise',
-    );
+    assert.equal(workout?.exercises[0].exercise.instructionUrl, 'https://example.com/linked-exercise');
     assert.equal('instructionUrl' in workout!.exercises[1].exercise, false);
     assert.equal('instructionUrlType' in workout!.exercises[1].exercise, false);
 
-    const raw = await driver.getFirstAsync<any>(
-      'SELECT instruction_url, instruction_url_type FROM exercises WHERE id = ?',
-      linked.id,
-    );
+    const raw = await driver.getFirstAsync<any>('SELECT instruction_url, instruction_url_type FROM exercises WHERE id = ?', linked.id);
     assert.equal(raw?.instruction_url, 'https://example.com/linked-exercise');
     assert.equal(raw?.instruction_url_type, 'website');
 
@@ -423,15 +301,13 @@ describe('nativeStore and migration safety', () => {
         startTime: '2026-09-15T08:00:00.000Z',
         durationSeconds: 0,
         totalVolumeKg: 0,
-        exercises: [
-          {
-            id: 'native-legacy-draft-exercise',
-            exerciseId: created.id,
-            exercise: legacyEmbedded,
-            sets: [],
-            restTimerSeconds: 60,
-          },
-        ],
+        exercises: [{
+          id: 'native-legacy-draft-exercise',
+          exerciseId: created.id,
+          exercise: legacyEmbedded,
+          sets: [],
+          restTimerSeconds: 60,
+        }],
       },
     });
 
@@ -462,31 +338,27 @@ describe('nativeStore and migration safety', () => {
       workouts: [],
       routines: [],
       exercises: [mergedExercise],
-      drafts: [
-        {
-          version: 1,
-          savedAt: '2026-09-15T09:00:00.000Z',
-          revision: 1,
-          restTimer: null,
-          workout: {
-            id: 'native-merged-legacy-draft',
-            name: 'Merged Legacy Draft',
-            gymId: 'gym-default',
-            startTime: '2026-09-15T09:00:00.000Z',
-            durationSeconds: 0,
-            totalVolumeKg: 0,
-            exercises: [
-              {
-                id: 'native-merged-legacy-draft-exercise',
-                exerciseId: mergedExercise.id,
-                exercise: mergedExercise,
-                sets: [],
-                restTimerSeconds: 60,
-              },
-            ],
-          },
+      drafts: [{
+        version: 1,
+        savedAt: '2026-09-15T09:00:00.000Z',
+        revision: 1,
+        restTimer: null,
+        workout: {
+          id: 'native-merged-legacy-draft',
+          name: 'Merged Legacy Draft',
+          gymId: 'gym-default',
+          startTime: '2026-09-15T09:00:00.000Z',
+          durationSeconds: 0,
+          totalVolumeKg: 0,
+          exercises: [{
+            id: 'native-merged-legacy-draft-exercise',
+            exerciseId: mergedExercise.id,
+            exercise: mergedExercise,
+            sets: [],
+            restTimerSeconds: 60,
+          }],
         },
-      ],
+      }],
       settings: {},
       gyms: [],
       exerciseGymScopes: [],
@@ -499,9 +371,7 @@ describe('nativeStore and migration safety', () => {
     const draft = await store.getWorkoutDraft('native-merged-legacy-draft');
     assert.deepEqual(draft?.workout.exercises[0].exercise.secondaryMuscles, []);
     assert.deepEqual(draft?.workout.exercises[0].exercise.instructions, []);
-    const snapshotDraft = (await store.readSnapshot()).drafts.find(
-      item => item.workout.id === 'native-merged-legacy-draft',
-    );
+    const snapshotDraft = (await store.readSnapshot()).drafts.find(item => item.workout.id === 'native-merged-legacy-draft');
     assert.deepEqual(snapshotDraft?.workout.exercises[0].exercise.secondaryMuscles, []);
     assert.deepEqual(snapshotDraft?.workout.exercises[0].exercise.instructions, []);
     driver.close();
@@ -512,46 +382,27 @@ describe('nativeStore and migration safety', () => {
     await applyMigrations(driver, { maxVersion: 7 });
     await driver.runAsync(
       `INSERT INTO app_meta (key, value) VALUES (?, ?), (?, ?)`,
-      'exercises_seeded',
-      '1',
-      'routines_seeded',
-      '1',
+      'exercises_seeded', '1', 'routines_seeded', '1',
     );
-    const first = DEFAULT_EXERCISES[0];
-    const second = DEFAULT_EXERCISES[1];
+    const first = getDefaultExercises()[0];
+    const second = getDefaultExercises()[1];
     for (const exercise of [first, second]) {
       await driver.runAsync(
         `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
          VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-        exercise.id,
-        `Stale ${exercise.name}`,
-        'stale',
-        'stale',
-        '[]',
-        '[]',
-        '[]',
+        exercise.id, `Stale ${exercise.name}`, 'stale', 'stale', '[]', '[]', '[]',
       );
     }
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, secondary_muscles, instructions, is_custom)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      'sync-custom-id',
-      'Keep Custom',
-      'custom',
-      'machine',
-      '[]',
-      '[]',
+      'sync-custom-id', 'Keep Custom', 'custom', 'machine', '[]', '[]',
     );
 
     const store = createNativeStore(driver);
     await assert.rejects(() => store.init(), /Injected catalog synchronization failure/);
     assert.equal(
-      (
-        await driver.getFirstAsync<{ value: string }>(
-          'SELECT value FROM app_meta WHERE key = ?',
-          'exercise_catalog_version',
-        )
-      )?.value,
+      (await driver.getFirstAsync<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'))?.value,
       '0',
     );
     assert.equal((await store.getExerciseById(first.id))?.name, `Stale ${first.name}`);
@@ -561,12 +412,7 @@ describe('nativeStore and migration safety', () => {
     driver.shouldFail = false;
     await store.init();
     assert.equal(
-      (
-        await driver.getFirstAsync<{ value: string }>(
-          'SELECT value FROM app_meta WHERE key = ?',
-          'exercise_catalog_version',
-        )
-      )?.value,
+      (await driver.getFirstAsync<{ value: string }>('SELECT value FROM app_meta WHERE key = ?', 'exercise_catalog_version'))?.value,
       String(BUNDLED_EXERCISE_CATALOG_VERSION),
     );
     assert.equal((await store.getExerciseById(first.id))?.name, first.name);
@@ -581,38 +427,18 @@ describe('nativeStore and migration safety', () => {
     await applyMigrations(driver, { maxVersion: 4 });
     await driver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles) VALUES (?, ?, ?, ?, ?)`,
-      'legacy-exercise',
-      'Legacy Exercise',
-      'strength',
-      'machine',
-      '[]',
+      'legacy-exercise', 'Legacy Exercise', 'strength', 'machine', '[]'
     );
     await driver.runAsync(
       `INSERT INTO workouts (id, name, start_time, end_time, in_progress) VALUES (?, ?, ?, ?, 0)`,
-      'legacy-workout',
-      'Legacy Workout',
-      '2026-09-09T08:00:00.000Z',
-      '2026-09-09T09:00:00.000Z',
+      'legacy-workout', 'Legacy Workout', '2026-09-09T08:00:00.000Z', '2026-09-09T09:00:00.000Z'
     );
     await driver.runAsync(
       `INSERT INTO workout_drafts (id, revision, saved_at, data) VALUES (?, ?, ?, ?)`,
-      'legacy-draft',
-      1,
-      '2026-09-09T10:00:00.000Z',
-      JSON.stringify({
-        version: 1,
-        workout: {
-          id: 'legacy-draft',
-          name: 'Draft',
-          startTime: '2026-09-09T10:00:00.000Z',
-          durationSeconds: 0,
-          totalVolumeKg: 0,
-          exercises: [],
-        },
-        savedAt: '2026-09-09T10:00:00.000Z',
-        revision: 1,
-        restTimer: null,
-      }),
+      'legacy-draft', 1, '2026-09-09T10:00:00.000Z', JSON.stringify({
+        version: 1, workout: { id: 'legacy-draft', name: 'Draft', startTime: '2026-09-09T10:00:00.000Z', durationSeconds: 0, totalVolumeKg: 0, exercises: [] },
+        savedAt: '2026-09-09T10:00:00.000Z', revision: 1, restTimer: null,
+      })
     );
     const store = createNativeStore(driver);
     await store.init();
@@ -635,56 +461,21 @@ describe('nativeStore and migration safety', () => {
     await applyMigrations(driver, { maxVersion: 4 });
     await driver.runAsync(
       `INSERT INTO workouts (id, name, start_time, in_progress) VALUES (?, ?, ?, 0)`,
-      'rollback-workout',
-      'Keep Workout',
-      '2026-09-09T08:00:00.000Z',
+      'rollback-workout', 'Keep Workout', '2026-09-09T08:00:00.000Z'
     );
-    const legacyDraft = JSON.stringify({
-      version: 1,
-      workout: { id: 'rollback-draft', name: 'Keep Draft' },
-    });
+    const legacyDraft = JSON.stringify({ version: 1, workout: { id: 'rollback-draft', name: 'Keep Draft' } });
     await driver.runAsync(
       `INSERT INTO workout_drafts (id, revision, saved_at, data) VALUES (?, ?, ?, ?)`,
-      'rollback-draft',
-      1,
-      '2026-09-09T09:00:00.000Z',
-      legacyDraft,
+      'rollback-draft', 1, '2026-09-09T09:00:00.000Z', legacyDraft
     );
-    await assert.rejects(
-      () => applyMigrations(driver, { failAtVersion: 5 }),
-      /Injected migration failure at version 5/,
-    );
-    assert.equal(
-      await driver.getFirstAsync<any>(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='gyms'",
-      ),
-      null,
-    );
-    assert.equal(
-      (await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)')).some(
-        c => c.name === 'gym_id',
-      ),
-      false,
-    );
-    const rollbackWorkout = await driver.getFirstAsync<any>(
-      'SELECT id, name FROM workouts WHERE id = ?',
-      'rollback-workout',
-    );
+    await assert.rejects(() => applyMigrations(driver, { failAtVersion: 5 }), /Injected migration failure at version 5/);
+    assert.equal(await driver.getFirstAsync<any>("SELECT name FROM sqlite_master WHERE type='table' AND name='gyms'"), null);
+    assert.equal((await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts)')).some(c => c.name === 'gym_id'), false);
+    const rollbackWorkout = await driver.getFirstAsync<any>('SELECT id, name FROM workouts WHERE id = ?', 'rollback-workout');
     assert.equal(rollbackWorkout?.id, 'rollback-workout');
     assert.equal(rollbackWorkout?.name, 'Keep Workout');
-    assert.equal(
-      (
-        await driver.getFirstAsync<{ data: string }>(
-          'SELECT data FROM workout_drafts WHERE id = ?',
-          'rollback-draft',
-        )
-      )?.data,
-      legacyDraft,
-    );
-    assert.equal(
-      await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 5'),
-      null,
-    );
+    assert.equal((await driver.getFirstAsync<{ data: string }>('SELECT data FROM workout_drafts WHERE id = ?', 'rollback-draft'))?.data, legacyDraft);
+    assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 5'), null);
     driver.close();
   });
 
@@ -697,55 +488,21 @@ describe('nativeStore and migration safety', () => {
       const exercise = await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip');
       assert.ok(exercise);
       const workout: Workout = {
-        id: 'gym-reassignment-workout',
-        name: 'Gym Reassignment',
-        gymId: first.id,
-        startTime: '2026-09-09T11:00:00.000Z',
-        durationSeconds: 60,
-        totalVolumeKg: 0,
-        exercises: [],
+        id: 'gym-reassignment-workout', name: 'Gym Reassignment', gymId: first.id,
+        startTime: '2026-09-09T11:00:00.000Z', durationSeconds: 60, totalVolumeKg: 0, exercises: [],
       };
       await store.saveCompletedWorkout(workout);
-      await store.saveDraft({
-        version: 1,
-        workout: {
-          ...workout,
-          id: 'gym-reassignment-draft',
-          endTime: '2026-09-09T12:00:00.000Z',
-        },
-        savedAt: workout.startTime,
-        revision: 1,
-        restTimer: null,
-      });
-      await store.saveExerciseGymScope({
-        exerciseId: exercise.id,
-        scopeType: 'linked_group',
-        linkedGymIds: [first.id, second.id],
-      });
+      await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-reassignment-draft', endTime: '2026-09-09T12:00:00.000Z' }, savedAt: workout.startTime, revision: 1, restTimer: null });
+      await store.saveExerciseGymScope({ exerciseId: exercise.id, scopeType: 'linked_group', linkedGymIds: [first.id, second.id] });
       await store.setDefaultGym(first.id);
       assert.equal((await store.getDefaultGym()).id, first.id);
-      assert.equal(
-        (
-          await store.updateGym(first.id, {
-            name: 'Home Gym',
-            color: '#EF4444',
-          })
-        ).name,
-        'Home Gym',
-      );
-      assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.linkedGymIds, [
-        first.id,
-        second.id,
-      ]);
+      assert.equal((await store.updateGym(first.id, { name: 'Home Gym', color: '#EF4444' })).name, 'Home Gym');
+      assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.linkedGymIds, [first.id, second.id]);
       await store.deleteGym(first.id, second.id);
       assert.equal((await store.getGyms()).length, 2);
       assert.equal((await store.getDefaultGym()).id, second.id);
       assert.equal((await store.getWorkoutDetail(workout.id))?.gymId, second.id);
-      assert.equal(
-        (await store.getWorkoutDrafts()).find(d => d.workout.id === 'gym-reassignment-draft')
-          ?.workout.gymId,
-        second.id,
-      );
+      assert.equal((await store.getWorkoutDrafts()).find(d => d.workout.id === 'gym-reassignment-draft')?.workout.gymId, second.id);
       assert.deepEqual((await store.getExerciseGymScope(exercise.id))?.scopeType, 'gym_specific');
       await store.deleteExerciseGymScope(exercise.id);
       assert.equal(await store.getExerciseGymScope(exercise.id), null);
@@ -768,14 +525,8 @@ describe('nativeStore and migration safety', () => {
         totalVolumeKg: 0,
         exercises: [],
       });
-      await assert.rejects(
-        () => fixture.store.saveCompletedWorkout(workout('missing-gym')),
-        /unknown gym/i,
-      );
-      await assert.rejects(
-        () => fixture.store.saveCompletedWorkout(workout('  ')),
-        /gym ID cannot be empty/i,
-      );
+      await assert.rejects(() => fixture.store.saveCompletedWorkout(workout('missing-gym')), /unknown gym/i);
+      await assert.rejects(() => fixture.store.saveCompletedWorkout(workout('  ')), /gym ID cannot be empty/i);
       assert.equal(await fixture.store.getWorkoutDetail('invalid-gym-missing-gym'), null);
       assert.equal(await fixture.store.getWorkoutDetail('invalid-gym-empty'), null);
       assert.deepEqual(await fixture.store.getWorkoutHistory(), []);
@@ -812,10 +563,7 @@ describe('nativeStore and migration safety', () => {
   it('rejects deletion when the default gym is the only gym', async () => {
     const fixture = await createStoreFixture('native');
     try {
-      await assert.rejects(
-        () => fixture.store.deleteGym('gym-default', 'replacement'),
-        /at least two/,
-      );
+      await assert.rejects(() => fixture.store.deleteGym('gym-default', 'replacement'), /at least two/);
     } finally {
       await fixture.dispose();
     }
@@ -839,14 +587,8 @@ describe('nativeStore and migration safety', () => {
         () => fixture.store.deleteGym('gym-default', replacement.id),
         /active workout/i,
       );
-      assert.deepEqual(
-        (await fixture.store.getGyms()).map(gym => gym.id),
-        ['gym-default', replacement.id],
-      );
-      assert.equal(
-        (await fixture.store.getWorkoutDraft('active-native-delete-guard'))?.workout.gymId,
-        'gym-default',
-      );
+      assert.deepEqual((await fixture.store.getGyms()).map((gym) => gym.id), ['gym-default', replacement.id]);
+      assert.equal((await fixture.store.getWorkoutDraft('active-native-delete-guard'))?.workout.gymId, 'gym-default');
       await controller.discard();
     } finally {
       await fixture.dispose();
@@ -871,10 +613,7 @@ describe('nativeStore and migration safety', () => {
         () => fixture.store.deleteGym('gym-default', replacement.id),
         /in-progress|active workout/i,
       );
-      assert.deepEqual(
-        (await fixture.store.getGyms()).map(gym => gym.id),
-        ['gym-default', replacement.id],
-      );
+      assert.deepEqual((await fixture.store.getGyms()).map((gym) => gym.id), ['gym-default', replacement.id]);
     } finally {
       await fixture.dispose();
     }
@@ -941,117 +680,62 @@ describe('nativeStore and migration safety', () => {
     await rawDriver.runAsync(
       `INSERT INTO exercises (id, name, category, equipment, primary_muscles, is_custom)
        VALUES (?, ?, ?, ?, ?, 1)`,
-      'custom-ex-1',
-      'My Custom Exercise',
-      'Chest',
-      'Barbell',
-      JSON.stringify(['Chest']),
+      'custom-ex-1', 'My Custom Exercise', 'Chest', 'Barbell', JSON.stringify(['Chest'])
     );
 
     // Insert setting
-    await rawDriver.runAsync(
-      `INSERT INTO settings (key, value) VALUES (?, ?)`,
-      'weight_unit',
-      'lb',
-    );
+    await rawDriver.runAsync(`INSERT INTO settings (key, value) VALUES (?, ?)`, 'weight_unit', 'lb');
 
     // Insert routine with metadata
     await rawDriver.runAsync(
       `INSERT INTO routines (id, name, folder_name, notes, created_at, last_performed_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      'routine-1',
-      'Heavy Chest',
-      'Chest Splits',
-      'Push hard',
-      '2026-09-01T08:00:00.000Z',
-      '2026-09-05T10:00:00.000Z',
+      'routine-1', 'Heavy Chest', 'Chest Splits', 'Push hard', '2026-09-01T08:00:00.000Z', '2026-09-05T10:00:00.000Z'
     );
     await rawDriver.runAsync(
       `INSERT INTO routine_exercises (id, routine_id, exercise_id, order_index, target_sets, target_reps, rest_timer_seconds)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      're-1',
-      'routine-1',
-      'custom-ex-1',
-      0,
-      4,
-      '6-8',
-      120,
+      're-1', 'routine-1', 'custom-ex-1', 0, 4, '6-8', 120
     );
 
     // Insert completed workout
     await rawDriver.runAsync(
       `INSERT INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      'workout-completed-1',
-      'routine-1',
-      'Heavy Chest Session',
-      '2026-09-05T09:00:00.000Z',
-      '2026-09-05T10:00:00.000Z',
-      3600,
-      1000,
-      'Felt great',
-      0,
+      'workout-completed-1', 'routine-1', 'Heavy Chest Session', '2026-09-05T09:00:00.000Z', '2026-09-05T10:00:00.000Z', 3600, 1000, 'Felt great', 0
     );
     await rawDriver.runAsync(
       `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes)
        VALUES (?, ?, ?, ?, ?)`,
-      'we-comp-1',
-      'workout-completed-1',
-      'custom-ex-1',
-      0,
-      'Used belt',
+      'we-comp-1', 'workout-completed-1', 'custom-ex-1', 0, 'Used belt'
     );
     await rawDriver.runAsync(
       `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, rpe, is_completed, completed_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-      'set-comp-1',
-      'we-comp-1',
-      1,
-      'normal',
-      100,
-      10,
-      8.5,
-      '2026-09-05T09:15:00.000Z',
+      'set-comp-1', 'we-comp-1', 1, 'normal', 100, 10, 8.5, '2026-09-05T09:15:00.000Z'
     );
 
     // Insert two in-progress drafts
     await rawDriver.runAsync(
       `INSERT INTO workouts (id, routine_id, name, start_time, duration_seconds, total_volume_kg, in_progress)
        VALUES (?, ?, ?, ?, ?, ?, 1)`,
-      'draft-old-1',
-      'routine-1',
-      'In Progress Chest',
-      '2026-09-07T08:00:00.000Z',
-      600,
-      200,
+      'draft-old-1', 'routine-1', 'In Progress Chest', '2026-09-07T08:00:00.000Z', 600, 200
     );
     await rawDriver.runAsync(
       `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index)
        VALUES (?, ?, ?, ?)`,
-      'we-draft-1',
-      'draft-old-1',
-      'custom-ex-1',
-      0,
+      'we-draft-1', 'draft-old-1', 'custom-ex-1', 0
     );
     await rawDriver.runAsync(
       `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, is_completed)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      'set-draft-1',
-      'we-draft-1',
-      1,
-      'normal',
-      100,
-      2,
-      1,
+      'set-draft-1', 'we-draft-1', 1, 'normal', 100, 2, 1
     );
 
     await rawDriver.runAsync(
       `INSERT INTO workouts (id, name, start_time, duration_seconds, in_progress)
        VALUES (?, ?, ?, ?, 1)`,
-      'draft-old-2',
-      'Empty Workout Draft',
-      '2026-09-07T09:00:00.000Z',
-      300,
+      'draft-old-2', 'Empty Workout Draft', '2026-09-07T09:00:00.000Z', 300
     );
 
     rawDriver.close();
@@ -1090,11 +774,7 @@ describe('nativeStore and migration safety', () => {
 
     // Verify drafts migrated to dedicated drafts store
     const drafts = await store1.getWorkoutDrafts();
-    assert.equal(
-      drafts.length,
-      2,
-      'Both old in-progress workouts must be migrated to workout_drafts',
-    );
+    assert.equal(drafts.length, 2, 'Both old in-progress workouts must be migrated to workout_drafts');
 
     const draft1 = drafts.find(d => d.workout.id === 'draft-old-1');
     assert.ok(draft1);
@@ -1108,7 +788,7 @@ describe('nativeStore and migration safety', () => {
 
     // Verify old in_progress workouts were removed from workouts table
     const rawOldRows = await storeDriver1.getAllAsync<any>(
-      'SELECT * FROM workouts WHERE in_progress = 1',
+      'SELECT * FROM workouts WHERE in_progress = 1'
     );
     assert.equal(rawOldRows.length, 0, 'No in_progress workouts should remain in workouts table');
 
@@ -1139,9 +819,7 @@ describe('nativeStore and migration safety', () => {
     // Insert test data
     await rawDriver.runAsync(
       `INSERT INTO workouts (id, name, start_time, in_progress) VALUES (?, ?, ?, 1)`,
-      'draft-to-keep',
-      'Important Draft',
-      '2026-09-07T10:00:00.000Z',
+      'draft-to-keep', 'Important Draft', '2026-09-07T10:00:00.000Z'
     );
 
     // Try applying migration 2 with an injected failure
@@ -1150,15 +828,12 @@ describe('nativeStore and migration safety', () => {
     }, /Injected migration failure at version 2/);
 
     // Verify old record remains intact and workout_drafts was not committed
-    const row = await rawDriver.getFirstAsync<any>(
-      'SELECT * FROM workouts WHERE id = ?',
-      'draft-to-keep',
-    );
+    const row = await rawDriver.getFirstAsync<any>('SELECT * FROM workouts WHERE id = ?', 'draft-to-keep');
     assert.ok(row, 'Row in workouts must still exist after rollback');
     assert.equal(row.name, 'Important Draft');
 
     const draftsTable = await rawDriver.getFirstAsync<any>(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='workout_drafts'",
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='workout_drafts'"
     );
     assert.equal(draftsTable, null, 'workout_drafts table should not exist after rollback');
 
@@ -1185,7 +860,7 @@ describe('nativeStore and migration safety', () => {
       '2026-09-05T09:00:00.000Z',
       '2026-09-05T10:00:00.000Z',
       3600,
-      500,
+      500
     );
     rawDriver.close();
 
@@ -1232,12 +907,12 @@ describe('nativeStore and migration safety', () => {
     await rawDriver.runAsync(
       'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
       2,
-      new Date().toISOString(),
+      new Date().toISOString()
     );
     await rawDriver.runAsync(
       'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
       3,
-      new Date().toISOString(),
+      new Date().toISOString()
     );
     await rawDriver.runAsync(
       `INSERT INTO workouts (id, name, start_time, end_time, duration_seconds, total_volume_kg)
@@ -1247,7 +922,7 @@ describe('nativeStore and migration safety', () => {
       '2026-09-06T09:00:00.000Z',
       '2026-09-06T10:00:00.000Z',
       3600,
-      600,
+      600
     );
     rawDriver.close();
 
@@ -1263,7 +938,7 @@ describe('nativeStore and migration safety', () => {
       const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts);');
       assert.ok(columns.some(column => column.name === 'in_progress'));
       const migration = await driver.getFirstAsync<{ version: number }>(
-        'SELECT version FROM schema_migrations WHERE version = 4',
+        'SELECT version FROM schema_migrations WHERE version = 4'
       );
       assert.ok(migration);
     } finally {
@@ -1289,25 +964,21 @@ describe('nativeStore and migration safety', () => {
       endTime: '2026-09-08T10:00:00.000Z',
       durationSeconds: 3600,
       totalVolumeKg: 800,
-      exercises: [
-        {
-          id: 'native-target-reps-exercise',
-          exerciseId: exercise.id,
-          exercise,
-          targetReps: '8-12',
-          restTimerSeconds: 0,
-          sets: [
-            {
-              id: 'native-target-reps-set',
-              setNumber: 1,
-              type: 'normal',
-              weightKg: 80,
-              reps: 10,
-              isCompleted: true,
-            },
-          ],
-        },
-      ],
+      exercises: [{
+        id: 'native-target-reps-exercise',
+        exerciseId: exercise.id,
+        exercise,
+        targetReps: '8-12',
+        restTimerSeconds: 0,
+        sets: [{
+          id: 'native-target-reps-set',
+          setNumber: 1,
+          type: 'normal',
+          weightKg: 80,
+          reps: 10,
+          isCompleted: true,
+        }],
+      }],
     };
 
     await store.saveCompletedWorkout(workout);
@@ -1330,11 +1001,7 @@ describe('nativeStore and migration safety', () => {
       const commaExercises = (await store.getAllExercises())
         .filter(exercise => exercise.name.includes(','))
         .slice(0, 2);
-      assert.equal(
-        commaExercises.length,
-        2,
-        'Seed data must include comma-containing exercise names',
-      );
+      assert.equal(commaExercises.length, 2, 'Seed data must include comma-containing exercise names');
 
       const workout: Workout = {
         id: 'native-history-commas-workout',
@@ -1349,26 +1016,21 @@ describe('nativeStore and migration safety', () => {
           exerciseId: exercise.id,
           exercise,
           restTimerSeconds: 0,
-          sets: [
-            {
-              id: `native-history-commas-set-${index}`,
-              setNumber: 1,
-              type: 'normal',
-              weightKg: 10,
-              reps: 10,
-              isCompleted: true,
-            },
-          ],
+          sets: [{
+            id: `native-history-commas-set-${index}`,
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 10,
+            reps: 10,
+            isCompleted: true,
+          }],
         })),
       };
 
       await store.saveCompletedWorkout(workout);
       const history = await store.getWorkoutHistory();
 
-      assert.deepEqual(
-        history[0].exerciseNames,
-        commaExercises.map(exercise => exercise.name),
-      );
+      assert.deepEqual(history[0].exerciseNames, commaExercises.map(exercise => exercise.name));
     } finally {
       driver.close();
       fs.unlinkSync(tempFile);
@@ -1393,24 +1055,20 @@ describe('nativeStore and migration safety', () => {
         endTime: '2026-09-08T14:00:00.000Z',
         durationSeconds: 3600,
         totalVolumeKg: 100,
-        exercises: [
-          {
-            id: 'native-history-edit-exercise',
-            exerciseId: exercise.id,
-            exercise,
-            restTimerSeconds: 0,
-            sets: [
-              {
-                id: 'native-history-edit-set',
-                setNumber: 1,
-                type: 'normal',
-                weightKg: 10,
-                reps: 10,
-                isCompleted: true,
-              },
-            ],
-          },
-        ],
+        exercises: [{
+          id: 'native-history-edit-exercise',
+          exerciseId: exercise.id,
+          exercise,
+          restTimerSeconds: 0,
+          sets: [{
+            id: 'native-history-edit-set',
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 10,
+            reps: 10,
+            isCompleted: true,
+          }],
+        }],
       };
 
       await store.saveCompletedWorkout(workout);
@@ -1418,12 +1076,10 @@ describe('nativeStore and migration safety', () => {
         ...workout,
         name: 'Corrected Workout',
         totalVolumeKg: 200,
-        exercises: [
-          {
-            ...workout.exercises[0],
-            sets: [{ ...workout.exercises[0].sets[0], weightKg: 20 }],
-          },
-        ],
+        exercises: [{
+          ...workout.exercises[0],
+          sets: [{ ...workout.exercises[0].sets[0], weightKg: 20 }],
+        }],
       });
 
       const history = await store.getWorkoutHistory();
@@ -1482,12 +1138,7 @@ describe('nativeStore and migration safety', () => {
     // Cause a write failure (violating foreign key constraint)
     await assert.rejects(async () => {
       await store.saveRoutine('Broken Routine', 'Folder', [
-        {
-          exerciseId: 'non-existent-exercise-id',
-          targetSets: 3,
-          targetReps: '10',
-          restTimerSeconds: 60,
-        },
+        { exerciseId: 'non-existent-exercise-id', targetSets: 3, targetReps: '10', restTimerSeconds: 60 },
       ]);
     });
 
@@ -1515,11 +1166,7 @@ describe('nativeStore and migration safety', () => {
     const originalCreatedAt = original.createdAt;
 
     // Simulate routine being performed
-    await driver.runAsync(
-      'UPDATE routines SET last_performed_at = ? WHERE id = ?',
-      '2026-09-07T12:00:00.000Z',
-      routineId,
-    );
+    await driver.runAsync('UPDATE routines SET last_performed_at = ? WHERE id = ?', '2026-09-07T12:00:00.000Z', routineId);
 
     // Edit routine
     await store.saveRoutine('Updated Name', 'New Folder', [], 'Note 2', routineId);
@@ -1529,16 +1176,8 @@ describe('nativeStore and migration safety', () => {
     assert.equal(updated.name, 'Updated Name');
     assert.equal(updated.folderName, 'New Folder');
     assert.equal(updated.notes, 'Note 2');
-    assert.equal(
-      updated.createdAt,
-      originalCreatedAt,
-      'createdAt must not be overwritten when editing',
-    );
-    assert.equal(
-      updated.lastPerformedAt,
-      '2026-09-07T12:00:00.000Z',
-      'lastPerformedAt must not be wiped when editing',
-    );
+    assert.equal(updated.createdAt, originalCreatedAt, 'createdAt must not be overwritten when editing');
+    assert.equal(updated.lastPerformedAt, '2026-09-07T12:00:00.000Z', 'lastPerformedAt must not be wiped when editing');
 
     driver.close();
     fs.unlinkSync(tempFile);
@@ -1552,12 +1191,7 @@ describe('nativeStore and migration safety', () => {
 
     await assert.rejects(async () => {
       await store.saveRoutine('Bad Reps Routine', 'Folder', [
-        {
-          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
-          targetSets: 3,
-          targetReps: '7&x-9',
-          restTimerSeconds: 60,
-        },
+        { exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', targetSets: 3, targetReps: '7&x-9', restTimerSeconds: 60 },
       ]);
     }, /Invalid target reps/);
 
@@ -1685,7 +1319,7 @@ describe('nativeStore and migration safety', () => {
           restTimerSeconds: 60,
         },
       ],
-      'Test superset routine',
+      'Test superset routine'
     );
 
     const routine = await store.getRoutineById(routineId);
@@ -1711,10 +1345,7 @@ describe('nativeStore and migration safety', () => {
   });
 
   it('reassignExerciseHistory transfers workout history and routines from source to target exercise', async () => {
-    const tempFile = path.join(
-      os.tmpdir(),
-      `reassign-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
-    );
+    const tempFile = path.join(os.tmpdir(), `reassign-test-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
     const driver = new NodeSqliteDriver(tempFile);
     const store = createNativeStore(driver);
     await store.init();
@@ -1751,22 +1382,8 @@ describe('nativeStore and migration safety', () => {
           exercise: exA,
           restTimerSeconds: 60,
           sets: [
-            {
-              id: 's-1',
-              setNumber: 1,
-              type: 'normal',
-              weightKg: 100,
-              reps: 5,
-              isCompleted: true,
-            },
-            {
-              id: 's-2',
-              setNumber: 2,
-              type: 'normal',
-              weightKg: 100,
-              reps: 5,
-              isCompleted: true,
-            },
+            { id: 's-1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+            { id: 's-2', setNumber: 2, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
           ],
         },
       ],
@@ -1798,7 +1415,7 @@ describe('nativeStore and migration safety', () => {
     // Target not found throws error
     await assert.rejects(
       () => store.reassignExerciseHistory(exB.id, 'non-existent-exercise-id'),
-      /does not exist/,
+      /does not exist/
     );
 
     driver.close();

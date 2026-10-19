@@ -1,4 +1,4 @@
-import { DEFAULT_EXERCISES } from '../../database/seedData';
+import { getDefaultExercises } from '../../database/seedData';
 import { Exercise } from '../../types';
 import { createScopedId } from '../ids';
 import { ExerciseAssignmentItem } from './types';
@@ -397,7 +397,7 @@ export class ExerciseMapper {
     existingExercises: Exercise[] = [],
     overrides?: Record<string, Exercise>
   ) {
-    this.allKnownExercises = [...DEFAULT_EXERCISES, ...existingExercises.filter(e => e.isCustom)];
+    this.allKnownExercises = [...getDefaultExercises(), ...existingExercises.filter(e => e.isCustom)];
 
     for (const ex of this.allKnownExercises) {
       this.bundledMap.set(ex.id, ex);
@@ -446,7 +446,7 @@ export class ExerciseMapper {
   } {
     const trimmed = rawName.trim();
     if (!trimmed) {
-      const fallback = this.bundledMap.get('Barbell_Bench_Press_-_Medium_Grip') || DEFAULT_EXERCISES[0];
+      const fallback = this.bundledMap.get('Barbell_Bench_Press_-_Medium_Grip') || getDefaultExercises()[0];
       return { exercise: fallback, isNew: false, confidence: 'exact', isAutoMatched: true };
     }
 

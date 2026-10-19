@@ -2,7 +2,7 @@ import { before, describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import type { Exercise } from '../../src/types';
 import { getMuscleWikiGuideUrl } from '../../src/database/exercise-guides';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 
 let openURLImplementation: (url: string) => Promise<void> = async () => {};
 let openedUrl: string | undefined;
@@ -89,7 +89,7 @@ describe('exercise instruction links', () => {
   });
 
   it('uses the verified MuscleWiki guide for a mapped bundled exercise with a missing link', () => {
-    const bundled = DEFAULT_EXERCISES.find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
+    const bundled = getDefaultExercises().find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
     const link = getExerciseInstructionLink({ ...bundled, instructionUrl: undefined, instructionUrlType: undefined });
     assert.equal(link.url, 'https://musclewiki.com/exercise/barbell-bench-press');
     assert.equal(link.type, 'website');
@@ -98,7 +98,7 @@ describe('exercise instruction links', () => {
   });
 
   it('uses the verified MuscleWiki guide for a mapped bundled exercise with an invalid link', () => {
-    const bundled = DEFAULT_EXERCISES.find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
+    const bundled = getDefaultExercises().find(exercise => exercise.id === 'Barbell_Bench_Press_-_Medium_Grip')!;
     const link = getExerciseInstructionLink({ ...bundled, instructionUrl: 'not a URL', instructionUrlType: 'website' });
     assert.equal(link.url, 'https://musclewiki.com/exercise/barbell-bench-press');
     assert.equal(link.label, 'Open exercise guide');
@@ -106,7 +106,7 @@ describe('exercise instruction links', () => {
   });
 
   it('uses a deterministic YouTube fallback for an unmapped bundled exercise', () => {
-    const bundled = DEFAULT_EXERCISES.find(exercise => exercise.instructionUrl === undefined)!;
+    const bundled = getDefaultExercises().find(exercise => exercise.instructionUrl === undefined)!;
     const link = getExerciseInstructionLink({ ...bundled, instructionUrl: undefined, instructionUrlType: undefined });
     assert.equal(link.type, 'youtube');
     assert.match(link.url, /^https:\/\/www\.youtube\.com\/results\?search_query=/);
@@ -157,7 +157,7 @@ describe('exercise instruction links', () => {
   });
 
   it('does not use a verified guide for a custom exercise with a colliding ID', () => {
-    const bundled = DEFAULT_EXERCISES[0];
+    const bundled = getDefaultExercises()[0];
     const link = getExerciseInstructionLink({
       ...bundled,
       isCustom: true,

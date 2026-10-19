@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,16 @@ import { WorkoutProvider, useWorkout } from './src/context/WorkoutContext';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { WorkoutScreen } from './src/screens/WorkoutScreen';
 import { ActiveWorkoutScreen } from './src/screens/ActiveWorkoutScreen';
-import { HistoryScreen } from './src/screens/HistoryScreen';
 import { ExercisesScreen } from './src/screens/ExercisesScreen';
-import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
+
+// PERF-11: History and Analytics are code-split, so the analytics stack (including the
+// progression chart) no longer ships in the initial bundle.
+const HistoryScreen = React.lazy(() =>
+  import('./src/screens/HistoryScreen').then(module => ({ default: module.HistoryScreen })),
+);
+const AnalyticsScreen = React.lazy(() =>
+  import('./src/screens/AnalyticsScreen').then(module => ({ default: module.AnalyticsScreen })),
+);
 
 import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
 import { DraftResumeBanner } from './src/components/DraftResumeBanner';
@@ -36,6 +43,7 @@ import {
   TabActivationContext,
   createActivationEmitter,
 } from './src/hooks/useReloadOnActivate';
+import { useTabRetention } from './src/hooks/useTabRetention';
 
 type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
 
@@ -46,21 +54,47 @@ const TABS: { key: Tab; label: string; icon: typeof Dumbbell }[] = [
   { key: 'analytics', label: 'Progress', icon: TrendingUp },
 ];
 
+/** Delay before the code-split tabs are warmed in the background, keeping the first switch fast. */
+const TAB_PREFETCH_DELAY_MS = 1_500;
+
+/** Lightweight placeholder while a code-split tab is downloaded. */
+function TabLoadingFallback() {
+  return (
+    <View style={styles.tabLoadingFallback}>
+      <ActivityIndicator size="small" color={colors.textMuted} />
+    </View>
+  );
+}
+
 function MainAppContent() {
   const { isWorkingOut, isMinimized, gyms, activeWorkout } = useWorkout();
   const insets = useSafeAreaInsets();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
-  // Tabs are mounted on first visit and then kept alive (hidden) so switching back is instant.
-  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<Tab>>(() => new Set<Tab>(['workout']));
+  const showLogger = isWorkingOut && !isMinimized;
+  const visibleTab: Tab | null = showLogger ? null : currentTab;
+
+  // Mount on first visit and preserve UI state across tabs and the logger.
+  const { mountedTabs, mountTab } = useTabRetention<Tab>({
+    initialTab: 'workout',
+  });
 
   const selectTab = (tab: Tab) => {
     setCurrentTab(tab);
-    setVisitedTabs(prev => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+    mountTab(tab);
   };
+
+  // Warm the lazy screens shortly after startup so their first visit does not wait on the
+  // network, without putting them back into the initial bundle.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void import('./src/screens/HistoryScreen');
+      void import('./src/screens/AnalyticsScreen');
+    }, TAB_PREFETCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
   const [historyWorkoutUpdate, setHistoryWorkoutUpdate] = useState<Workout | null>(null);
-
-  const showLogger = isWorkingOut && !isMinimized;
 
   // One stable emitter per tab; firing it asks that tab to refresh its data in the background.
   const tabEmitters = useMemo(
@@ -71,7 +105,6 @@ function MainAppContent() {
       >,
     [],
   );
-  const visibleTab: Tab | null = showLogger ? null : currentTab;
   const previousVisibleTabRef = useRef<Tab | null>(visibleTab);
   const shownTabsRef = useRef<Set<Tab>>(new Set(visibleTab ? [visibleTab] : []));
 
@@ -135,17 +168,19 @@ function MainAppContent() {
         <View style={styles.screenContent}>
           <ReadOnlyBanner />
           {TABS.map(tab =>
-            visitedTabs.has(tab.key) ? (
+            mountedTabs.has(tab.key) ? (
               <View key={tab.key} style={[styles.tabPane, currentTab !== tab.key && styles.hidden]}>
                 <AppErrorBoundary
                   label={tab.label}
                   resetKey={currentTab === tab.key ? `${tab.key}:visible` : `${tab.key}:hidden`}
                 >
                   <TabActivationContext.Provider value={tabEmitters[tab.key]}>
-                    {tab.key === 'workout' && <WorkoutScreen />}
-                    {tab.key === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
-                    {tab.key === 'exercises' && <ExercisesScreen />}
-                    {tab.key === 'analytics' && <AnalyticsScreen />}
+                    <Suspense fallback={<TabLoadingFallback />}>
+                      {tab.key === 'workout' && <WorkoutScreen />}
+                      {tab.key === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
+                      {tab.key === 'exercises' && <ExercisesScreen />}
+                      {tab.key === 'analytics' && <AnalyticsScreen />}
+                    </Suspense>
                   </TabActivationContext.Provider>
                 </AppErrorBoundary>
               </View>
@@ -277,6 +312,11 @@ const styles = StyleSheet.create({
   },
   tabPane: {
     flex: 1,
+  },
+  tabLoadingFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hidden: {
     display: 'none',

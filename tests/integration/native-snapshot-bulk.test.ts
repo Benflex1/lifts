@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { NodeSqliteDriver } from '../helpers/storeFixture';
 import { createNativeStore } from '../../src/database/nativeStore';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { Workout } from '../../src/types';
 
 /** Counts read queries so the test can pin that history loads in bulk. */
@@ -19,7 +19,7 @@ class CountingDriver extends NodeSqliteDriver {
 }
 
 function makeWorkout(i: number): Workout {
-  const exercises = DEFAULT_EXERCISES.slice(i % 5, (i % 5) + 3);
+  const exercises = getDefaultExercises().slice(i % 5, (i % 5) + 3);
   return {
     id: `bulk-${String(i).padStart(3, '0')}`,
     name: `Workout ${i}`,

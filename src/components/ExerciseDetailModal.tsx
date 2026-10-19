@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   View,
   Text,
@@ -20,7 +21,6 @@ import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
 import { loadExerciseDetailData } from '../workout/exercise-detail';
 import { ExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from './ExercisePodiumView';
-import { ProgressionCurveView } from './ProgressionCurveView';
 import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
 import { calculate1RM } from '../utils/calculator';
 import { EXERCISE_VISUAL_SIZES } from './ExerciseVisual';
@@ -32,6 +32,12 @@ import { useDialog } from '../context/DialogContext';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import { colors } from '../theme';
 import { countsLoad, DEFAULT_TRACKING_TYPE, formatTrackedSet, getTrackingType } from '../workout/tracking';
+
+// PERF-11: the chart stack (react-native-svg path rendering) is code-split so it stays out of the
+// initial bundle; it loads the first time a detail modal shows the progression curve.
+const ProgressionCurveView = React.lazy(() =>
+  import('./ProgressionCurveView').then(module => ({ default: module.ProgressionCurveView })),
+);
 
 export interface ExerciseDetailModalProps {
   visible: boolean;
@@ -482,20 +488,28 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 })}
               </View>
 
-              <ProgressionCurveView
-                series={progressionSeries}
-                metric={selectedMetric}
-                unit={unit}
-                height={190}
-                gymTrackingEnabled={gymTrackingEnabled}
-                onPointPress={(p) => {
-                  setHighlightedWorkoutId(p.workoutId);
-                  const isOutsideTop5 = filteredHistoryWorkouts.slice(0, 5).every((w) => w.id !== p.workoutId);
-                  if (isOutsideTop5) {
-                    setShowAllHistory(true);
-                  }
-                }}
-              />
+              <Suspense
+                fallback={
+                  <View style={styles.chartFallback}>
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                  </View>
+                }
+              >
+                <ProgressionCurveView
+                  series={progressionSeries}
+                  metric={selectedMetric}
+                  unit={unit}
+                  height={190}
+                  gymTrackingEnabled={gymTrackingEnabled}
+                  onPointPress={(p) => {
+                    setHighlightedWorkoutId(p.workoutId);
+                    const isOutsideTop5 = filteredHistoryWorkouts.slice(0, 5).every((w) => w.id !== p.workoutId);
+                    if (isOutsideTop5) {
+                      setShowAllHistory(true);
+                    }
+                  }}
+                />
+              </Suspense>
             </View>
           )}
 
@@ -766,6 +780,11 @@ const styles = StyleSheet.create({
   detailContainer: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  chartFallback: {
+    height: 190,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   detailHeader: {
     flexDirection: 'row',

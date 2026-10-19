@@ -226,7 +226,7 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Evidence:** `src/database/migrations.ts` creates only two indexes: `gyms_one_default` at line 287 and `health_sync_records_status_idx` at line 357. Queries that scan full tables include `nativeStore.ts:1338-1339` (`workouts` ordered by start time), `nativeStore.ts:1109-1120` (join by `exercise_id`), and `nativeStore.ts:927-943` (bulk detail reads).
 - **Impact:** History, PR, and analytics queries degrade as workout history grows. The cost is paid on tab activation and on every exercise-add flow.
 - **Required change:** Add one numbered migration with indexes for `workouts(in_progress, start_time DESC)`, `workout_exercises(workout_id)`, `workout_exercises(exercise_id)`, and `exercise_sets(workout_exercise_id)`. Add equivalent IndexedDB indexes on web where the access pattern warrants it.
-- **Implementation (2026-10-18):** Migration 9 adds `idx_workouts_in_progress_start`, `idx_workout_exercises_workout`, `idx_workout_exercises_exercise`, and `idx_exercise_sets_workout_exercise`. Coverage: rollback-injection test in `tests/integration/native-store.test.ts` and `EXPLAIN QUERY PLAN` assertions in `tests/integration/native-query-performance.test.ts`. Web IndexedDB indexes are deferred to `PERF-14`: current web reads are `getAll`-based, and the `PERF-05` batching already removed the per-workout reads that IndexedDB indexes would accelerate.
+- **Implementation (2026-10-18):** Migration 9 adds `idx_workouts_in_progress_start`, `idx_workout_exercises_workout`, `idx_workout_exercises_exercise`, and `idx_exercise_sets_workout_exercise`. Coverage: rollback-injection test in `tests/integration/native-store.test.ts` and `EXPLAIN QUERY PLAN` assertions in `tests/integration/native-query-performance.test.ts`. Web IndexedDB indexes are deferred to `PERF-14` (delivered there: `startTime` index plus cursor-based history reads): current web reads are `getAll`-based, and the `PERF-05` batching already removed the per-workout reads that IndexedDB indexes would accelerate.
 - **Done when:**
   - [x] The migration applies cleanly and idempotently on both fresh and existing databases.
   - [x] `EXPLAIN QUERY PLAN` confirms the hot queries use the new indexes.
@@ -248,14 +248,16 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-06 — 758 KB exercise catalog is loaded eagerly at module scope
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/database/defaultExercises.json` is 758,757 bytes. `src/database/seedData.ts:6-19` requires it at module scope, maps all records, and builds a `Map` at import time. Both `nativeStore.ts:18` and `webStore.ts:4` import `seedData`.
 - **Impact:** The catalog is parsed and transformed on every launch even after seeding is complete, inflating startup time and the JS bundle.
 - **Required change:** Load the JSON lazily only when seeding or synchronizing a new catalog version, or read the catalog from SQLite after the first seed. Consider trimming unused fields from the bundled payload.
+- **Implementation (2026-10-18):** `seedData.ts` no longer evaluates the catalog at module scope: `getDefaultExercises()` parses the JSON and applies the MuscleWiki guide mappings on first call (cached), and `getBundledExercise` builds its lookup map from the same lazy list. Every consumer now resolves the catalog inside the function that actually needs it: native `synchronizeDefaultExercises`/`seedDefaultExercises` fetch it only after the stored `exercise_catalog_version` check fails, web `maybeSynchronize` only after the same check, `exercise-links.ts` and `exercise-media.ts` replaced their import-time ID sets with lazy getters, and the CSV importer and backup parser call the getter inside their functions.
+- **Verification:** `tests/unit/seed-data.test.ts` asserts `defaultExercises.json` stays out of `require.cache` until the first use, then existing catalog/seeding tests exercise the lazy path. Measured on Node 22 with warm tsx caches (V8; Hermes pays more for the same JSON.parse): `seedData` module evaluation 9.6–9.8 ms → 6.2–6.3 ms import with the catalog parsed only on first use (~3.2 ms, ~0.001 ms when cached); the `exercise-media` startup import chain 11.4–15.9 ms → 8.1–8.3 ms; `expo export --platform web` total bundle 3,943,045 B → 3,943,213 B (+168 B, the wrapper code). Bundle bytes are intentionally unchanged because the catalog must still ship for first-launch seeding — the win is that launches with the current catalog version already applied never evaluate it.
 - **Done when:**
-  - [ ] The catalog is not evaluated on launches where the bundled catalog version is already applied.
-  - [ ] Bundle size and cold-start time are measured before and after.
-  - [ ] Catalog seeding and upgrade tests still pass.
+  - [x] The catalog is not evaluated on launches where the bundled catalog version is already applied.
+  - [x] Bundle size and cold-start time are measured before and after.
+  - [x] Catalog seeding and upgrade tests still pass.
 
 ### PERF-07 — Analytics hydrates the full snapshot before checking for changes
 
@@ -307,13 +309,15 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-11 — Eager screen imports and permanently mounted tabs
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `App.tsx:15-19` statically imports all screens. `App.tsx:48-54` mounts a tab on first visit, and `App.tsx:127-138` keeps visited tabs mounted under `display: none`.
 - **Impact:** Analytics and its chart stack are in the initial bundle. Hidden tabs retain state and subscriptions, and memory grows with each visited tab.
 - **Required change:** Use `React.lazy` plus `Suspense` for Analytics and History, and consider unmounting or freezing heavy tabs after a timeout. Keep the fast first-switch behavior where it matters.
+- **Implementation (2026-10-18):** `App.tsx` now loads `HistoryScreen` and `AnalyticsScreen` through `React.lazy` with a shared `Suspense` fallback, and warms both modules 1.5 s after startup so the first visit does not wait on the network while the initial bundle still excludes them. Because `ExerciseDetailModal` (reachable from eager screens) also renders the progression chart, `ProgressionCurveView` is `React.lazy`-loaded inside the detail modal as well. Hidden-tab retention moved to `src/hooks/useTabRetention.ts`: `workout` and `exercises` stay mounted for instant switching, while `history` and `analytics` are unmounted once they have been hidden for five minutes (30 s sweep, clock runs while the workout logger covers the tabs); revisiting a released tab mounts it fresh.
+- **Verification:** `npx expo export --platform web` main JS 3,914,358 B → 3,736,947 B (−177,411 B); new async chunks `AnalyticsScreen-*.js` (129,981 B), `HistoryScreen-*.js` (35,098 B), `__common-*.js` (10,951 B). Analytics-only markers (`No progression data yet`, `RecordsView`, `Trophy room`, `Import workout data`) are absent from the initial bundle and present in the chunks. `tests/unit/tab-retention.test.ts` covers mount-on-visit, release at the retention boundary, cancel-on-return, non-evictable tabs, and eviction while the logger is open. Full suites: 173 integration / 543 unit.
 - **Done when:**
-  - [ ] The initial web bundle excludes the Analytics chart module.
-  - [ ] Hidden-tab memory does not grow without bound during a long session.
+  - [x] The initial web bundle excludes the Analytics chart module.
+  - [x] Hidden-tab memory does not grow without bound during a long session.
 
 ### PERF-12 — Rest timer wakes the JS thread four times per second for a 1 Hz UI
 
@@ -338,11 +342,14 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PERF-14 — Web store scans and sorts full object stores in memory
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `webStore.ts:964-971` calls `getAll()` and sorts workouts in memory; the same pattern appears at `:1072-1113` and in `readSnapshot` at `:1345-1351`. There are no IndexedDB indexes on `startTime` or completion state.
 - **Impact:** Large histories pay a full-store read and sort on web, and the N+1 detail loop compounds it.
 - **Required change:** Add IDB indexes and use cursors or key ranges for history queries; align behavior with the native store.
-- **Done when:** History reads use an index and do not materialize the entire store when only a page is needed.
+- **Implementation (2026-10-18):** IndexedDB schema v5 adds a `startTime` index on `workouts` (created with new stores and added during the upgrade transaction for existing databases). `getAllWorkoutsSorted` — shared by `getWorkoutHistory` and `readSnapshot` — now walks that index with a backwards cursor instead of `getAll()` plus an in-memory sort, and `getCompletedWorkoutsForExercises`, `getPreviousSetsForExercise`, and `getExerciseStats` stream through the same reader. In-progress records are skipped per record while the cursor arrives (legacy rows may lack the marker, so an index on the flag could not be used safely), and equal-timestamp runs are re-sorted with `compareBinaryStrings` so the ID tie-break matches native's `id DESC` (SQLite BINARY) rather than IndexedDB's code-unit key order. Ordering by timestamp now also matches native's `start_time DESC` instead of the previous `localeCompare` sort.
+- **Verification:** New contract scenario "orders completed history by newest start time, then descending workout ID" runs against both stores; `web-store.test.ts` asserts the v5 upgrade adds the index and that `getWorkoutHistory` succeeds with `IDBObjectStore.getAll` patched to throw; `web-snapshot-bulk.test.ts` now asserts the snapshot path opens exactly one `startTime` cursor and issues zero per-workout `get`/`getAll` calls. Full suites: 173 integration / 538 unit.
+- **Done when:**
+  - [x] History reads use an index and do not materialize the entire store when only a page is needed.
 
 ---
 
@@ -351,69 +358,85 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-01 — ActiveWorkoutScreen is a 2,904-line component
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/screens/ActiveWorkoutScreen.tsx` spans lines 87-2904, with 24 `useState` calls, 6 effects, and zero `useCallback`. Three inline modals occupy roughly lines 1362-2013.
 - **Impact:** Every feature change touches one of the highest-risk files in the app. Handlers are recreated on every render, defeating child memoization.
 - **Required change:** Extract a controller hook/reducer for screen state, `WorkoutHeader`, `ExerciseStream`/`ExerciseCard`, and the three modals. Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Implementation (2026-10-18):** `ActiveWorkoutScreen.tsx` dropped from 1,629 (already trimmed by Phases 0-1) to 115 lines and is now pure composition. New `src/screens/activeWorkout/` module: `useActiveWorkoutController.ts` owns all screen state (24 `useState`), derived data (superset metadata, prior-record index, PR summary, live volume/set counts, displayed gym), the 6 effects (PR history load, PR celebration, Android back, gym-tracking reset, keyboard show/hide, ref sync), and every handler, including the ones previously inlined into the menus; `WorkoutHeader.tsx` (131 lines) keeps `LiveWorkoutClock` isolated on the clock context; `ExerciseStream.tsx` (176) owns superset headers/connectors, cards, empty state, and the add button; `SetOptionsModal.tsx` (291), `ExerciseOptionsMenu.tsx` (206), and `WorkoutOptionsMenu.tsx` (130) are the three extracted menus; `activeWorkoutLogic.ts` (122) holds the pure helpers (live stats, completed-set IDs, prior-workout collection/index, displayed-gym resolution, previous working set, drop suggestions, move guards). The unstable `useCallback`s (`handleToggleSetWithHaptics`, `handleApplyPreviousStats`, `openSetOptions`, `handleInputFocus`) were preserved so memoized cards keep their identity guarantees; dead bindings (`linkSuperset`, `startRestTimer`, `menuNextExercise`) were removed with the move.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 559 unit (543 + 16 new focused tests in `tests/unit/active-workout-logic.test.ts` and `tests/unit/active-workout-components.test.ts`) / 173 integration tests green; `npx expo export --platform web` succeeds.
 - **Done when:**
-  - [ ] The screen is under 600 lines and the extracted modules have focused tests.
-  - [ ] No behavior regressions in the session, draft, or completion integration tests.
+  - [x] The screen is under 600 lines and the extracted modules have focused tests.
+  - [x] No behavior regressions in the session, draft, or completion integration tests.
 
 ### ARCH-02 — AnalyticsScreen is a 2,031-line component with 32 state variables
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/screens/AnalyticsScreen.tsx` mixes snapshot loading (`:126-179`), backup save/import (`:282-356`), CSV import and remapping (`:357-513`), and charts/records rendering (`:515-1292`).
 - **Impact:** Unrelated features share one state surface and render tree. A backup or CSV change can affect chart rendering and vice versa.
 - **Required change:** Extract `useAnalyticsData`, `useBackupTransfer`, `useCsvImportFlow`, `ProgressCharts`, `RecordsSection`, and `DataTransferSection`.
+- **Implementation (2026-10-18):** All six pieces exist and Analytics composes them: `src/hooks/useAnalyticsData.ts` (snapshot query, derived overview aggregates, progression/dashboard filter state), `src/hooks/useBackupTransfer.ts` (save/share/restore commands), `src/hooks/useCsvImportFlow.ts` (file pick, preview recomputation, exercise remapping, confirm), and `src/screens/analytics/{ProgressCharts,RecordsSection,DataTransferSection}.tsx`. `AnalyticsScreen.tsx` dropped from 1,954 to 368 lines and now owns only the section switcher, the 1RM/plate calculator tools, and composition; its per-section state (32 variables) moved into the owning hook or section. Dead trophy-podium imports and the unused `detailPodium` state were removed with the split; the four CSV handlers collapsed into one `recomputePreview` helper with the original log labels preserved.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 173 integration / 543 unit tests green; `npx expo export --platform web` succeeds with the split screen still inside the `AnalyticsScreen` async chunk.
 - **Done when:** Each domain has a focused hook or component and Analytics composes them.
 
 ### ARCH-03 — WorkoutProvider is a 1,404-line application service
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/context/WorkoutContext.tsx` owns controller subscription, elapsed ticker, AppState flush, rest timers and notifications, draft recovery, gym switching, health sync, roughly two dozen mutations, and provider composition.
 - **Impact:** It is one of the highest-churn files in the app and any change risks timers, persistence, notifications, or health export.
 - **Required change:** Keep the provider as composition only. Extract `useSessionControllerBridge`, `useRestTimerEngine`, `useDraftRecovery`, `useGymSwitcher`, `useHealthSyncBridge`, and `useWorkoutMutations`.
+- **Implementation (2026-10-18):** `WorkoutContext.tsx` dropped from 1,449 to 286 lines and is composition only. `src/context/workout/` now holds `useSessionControllerBridge` (controller creation/subscription, the 1 s workout clock, AppState background flush), `useRestTimerEngine` (countdown state, second-aligned ticker, 3-2-1 and finish haptics, notification handoff, draft restore), `useGymSwitcher` (list/selection, mid-workout switch, refresh resolution), `useExerciseAccordion` (expansion state), `useDraftRecovery` (draft list, resume/discard flows), `useHealthSyncBridge` (settings-loading buffer and drain), and `useWorkoutMutations` (start/complete, structural exercise and set edits, supersets, completed-set flow). The context slices (`useWorkoutActions`, `useWorkoutClock`, `useRestTimer`, `useWorkoutGyms`, `useIsWorkingOut`, `usePersistenceError`) and the `finishWorkoutWithHealthSync` test seam are unchanged.
+- **Verification:** The provider-level harness test `tests/unit/workout-health-sync.test.ts` (9 tests, including completion ordering and the settings-buffer drain) is green; 173 integration / 543 unit tests pass with both typechecks.
 - **Done when:** Each concern has a dedicated hook and the provider is primarily wiring.
 
 ### ARCH-04 — Native and web stores are forked implementations with behavioral drift
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `nativeStore.ts` (1,569 lines) and `webStore.ts` (1,535 lines) expose 44 identically named methods and duplicate normalization, merge, and deletion logic. Known divergence: native gym deletion rejects in-progress references at `nativeStore.ts:252-294`, while web reassigns workouts at `webStore.ts:534-588`. Web's `(workout as any).inProgress` filter at `webStore.ts:1112` is dead because the field is not in the `Workout` type.
 - **Impact:** Every domain rule must be implemented and tested twice. Platform parity bugs are likely to recur.
 - **Required change:** Extract a storage-agnostic `StoreCore` for normalization, validation, merge planning, and deletion policy. Keep the SQL and IndexedDB files as thin adapters. Add a shared contract suite that runs identical scenarios against both stores.
+- **Implementation (2026-10-18):** New `src/database/storeCore.ts` owns the shared domain logic: record normalizers (`normalizeExerciseRecord`, `normalizeWorkoutRecord`, `normalizeRoutineRecord`, `normalizeDraftRecord`), snapshot canonicalization (`canonicalizeSnapshotGyms`), conflict validation (`validateSnapshotMergeConflicts` — the stricter native checks now also guard web), snapshot merge planning (`planSnapshotMerge`, which returns the exact records to persist in dependency order), and gym deletion policy (`planGymDeletion` + `pruneGymFromScopes`). Both adapters deleted their private copies and now only read/write storage around these plans; `DEFAULT_GYM_ID` now lives in `gym-profile.ts`. The COR-01 completion marker is applied inside the merge plan so imported records are completed on both platforms. Web also gained native's duplicate-scope and unknown-exercise merge validation for free.
+- **Verification:** `tests/helpers/storeContract.ts` + `tests/integration/store-contract.test.ts` run 7 identical scenarios on both platforms (seed idempotency, workout round-trip, draft round-trip, gym-deletion policy incl. active drafts and in-progress records, merge import + scope conflicts). Full suites still pass after the extraction (167 integration / 526 unit). One web-only test message assertion (`Replacement gym…`) was aligned to the shared policy message.
 - **Done when:**
-  - [ ] Shared domain logic lives in one module.
-  - [ ] The contract suite runs against both stores in integration tests.
-  - [ ] The known gym-deletion divergence is resolved or explicitly documented as intentional.
+  - [x] Shared domain logic lives in one module.
+  - [x] The contract suite runs against both stores in integration tests.
+  - [x] The known gym-deletion divergence is resolved or explicitly documented as intentional.
 
 ### ARCH-05 — Exercise picker and Exercises screen duplicate roughly 200 lines
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `src/components/ExercisePickerModal.tsx:32-240` and `src/screens/ExercisesScreen.tsx:33-248` duplicate filter constants, custom-exercise state, and save/edit handlers. Minor differences are limited to the row press behavior.
 - **Impact:** Validation and alias fixes must be made twice and can drift.
 - **Required change:** Extract `CustomExerciseModal` and shared filter options; keep the picker and screen as thin compositions.
-- **Done when:** Custom-exercise behavior is implemented once and covered by shared tests.
+- **Implementation (2026-10-18):** New `CustomExerciseModal` (`src/components/CustomExerciseModal.tsx`) owns the create/edit form: state seeding, alias-aware prefill, validation, persistence, and error reporting through one code path. New `src/workout/exercise-options.ts` owns the filter lists (`MUSCLE_GROUPS`, `EQUIPMENT_LIST`, custom pill options) and the normalization helpers (`resolveCustomMuscle`, `resolveCustomEquipment`, `customExerciseDefaults`). `ExercisePickerModal` and `ExercisesScreen` now mount the same modal and keep only their post-save behavior (the picker updates its selection or returns the created exercise; the screen reloads the catalog and refreshes the open detail), deleting ~190 duplicated lines.
+- **Verification:** `tests/unit/custom-exercise.test.ts` covers resolver mapping, prefill defaults, and the create/edit/empty-name save flows through the shared modal (5 tests). Full suites: 170 integration / 537 unit.
+- **Done when:**
+  - [x] Custom-exercise behavior is implemented once and covered by shared tests.
 
 ### ARCH-06 — No repository/query layer; screens fetch directly
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The audit found roughly 29 direct `getStore()`/database calls in screens and modals, including `AnalyticsScreen.tsx:128,321,370,405,435,453,471,489`, `HistoryScreen.tsx:165`, `ExercisesScreen.tsx:186`, and `WorkoutScreen.tsx:65-85`.
 - **Impact:** Loading, caching, error policy, and invalidation are reimplemented per screen, so cross-screen consistency depends on remembering to refresh.
 - **Required change:** Introduce domain hooks or a repository layer (`useWorkoutHistory`, `useAnalyticsSnapshot`, `useExerciseCatalog`) that own caching, invalidation, and errors. Keep `Store` as the persistence adapter.
-- **Done when:** Screens consume domain hooks rather than the raw store.
+- **Implementation (2026-10-18):** Five domain hooks now own all screen query state: `useWorkoutHistory` (history list, gyms, lazily cached details, eager PR badges plus per-workout PR refresh, and an `updateWorkout` cache upsert), `useAnalyticsSnapshot` (workouts, catalog, gyms, scopes, weekly volume, muscle frequency, suggested progression pick), `useExerciseCatalog` (filtered catalog that preserves array identity when a result set is unchanged), `useRoutines` (routines + week snapshot), and `useGymProfiles` (lazily loaded gym list for scope dialogs). Each hook owns its loading/error policy, request ordering, and reload-on-activation with a revision-gated skip. `HistoryScreen`, `AnalyticsScreen`, `ExercisesScreen`, and `WorkoutScreen` were converted to consume them. Remaining direct `getStore()` calls in `AnalyticsScreen` are imperative command flows (backup export/restore, CSV import planning) that move into command modules with the ARCH-02 decomposition; one-off pre-action reads (fresh gym list before starting a workout, per-exercise scope before opening the scope dialog) also stay imperative.
+- **Verification:** `tests/unit/domain-hooks.test.ts` mounts each hook through a test-renderer harness and asserts load counts, revision-gated activation skips, post-write refreshes, detail caching, filter re-queries, and catalog array-identity preservation (6 tests). Full suites: 170 integration / 532 unit.
+- **Done when:**
+  - [x] Screens consume domain hooks rather than the raw store.
 
 ### ARCH-07 — No store revision or reliable cache invalidation
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `useReloadOnActivate` fires a per-tab emitter at `App.tsx:73-83`. Analytics and History use hand-built JSON signatures (`AnalyticsScreen.tsx:136-143`, `HistoryScreen.tsx:142-156`) that omit exercise names and scope contents.
 - **Impact:** Renaming a custom exercise or changing a scope can leave charts and PR badges stale until another data change or a full reload.
 - **Required change:** Add a monotonic `dataVersion` incremented on successful writes, expose it through the store, and invalidate domain queries against it.
+- **Implementation (2026-10-18):** `Store.getDataRevision()` is now the single invalidation signal. Native keeps `SELECT total_changes()`; the web store's counter moved from tab-local memory onto the persisted writer-lease record in the `metadata` store — bumped by the same single write that renews the lease in every mutating operation — so a read-only tab observes writes made by the lease holder, and lease handovers preserve the count. `HistoryScreen` and `AnalyticsScreen` replaced their hand-built JSON signatures with a revision check performed before any hydration; stores without a counter always reload instead of trusting a partial signature.
+- **Verification:** `store-revision.test.ts` asserts reads keep the revision stable, writes advance it, and a second tab on the same database sees the writer's revision; the store contract suite adds "advances the data revision for scope and catalog writes" on both platforms, covering the two writes named in COR-03.
 - **Done when:** Any write that affects analytics or PRs increments the version and refreshes dependent views.
 
 ### ARCH-08 — Three platform-dispatch mechanisms coexist
@@ -452,6 +475,32 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Required change:** Type SQL row shapes explicitly, replace `catch (err: any)` with `unknown` plus a normalizer, add `noUncheckedIndexedAccess`, and replace cluster non-null assertions with an `invariant`/`requireDefined` helper.
 - **Done when:** The store contract is checked structurally and the dead cast is removed.
 
+### ARCH-12 — HistoryScreen is a 903-line component
+
+- **Severity:** Medium
+- **Status:** `Done`
+- **Evidence:** `src/screens/HistoryScreen.tsx` is 903 lines: the component spans lines 57-601 (five `useState` calls, two effects, seven handlers) and the style sheet spans 603-902. The history card markup, including the expanded set-detail tree and PR badges, is inlined into the `FlatList` `renderItem` at lines 297-538.
+- **Impact:** The last remaining oversized screen after Phase 2 requires touching a single 545-line component for any history change, and the card tree cannot be rendered or tested in isolation.
+- **Required change:** Extract a controller hook for screen state, a `HistoryCard` component for the list row, and the pure helpers (repeat-draft building, date formatting, totals, PR notification payloads). Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Implementation (2026-10-18):** `HistoryScreen.tsx` dropped from 903 to 121 lines and is now composition (`ScreenHeader`, gym filter chips, `FlatList` of `HistoryCard`, action sheet, edit/start modals). New `src/screens/history/` module: `useHistoryController.ts` (248 lines) owns the five state variables, both effects (gym-tracking reset, `workoutUpdate` cache sync), the handlers (expand, delete, perform-again, start-repeat, save-edit, PR-details notify), and the derived data (gym-scoped history, gym map, totals); `HistoryCard.tsx` (275 lines) owns the row including the expanded superset-aware set detail and PR badges; `historyLogic.ts` (102 lines) holds the pure helpers (`formatHistoryDate`, `filterHistoryByGym`, `computeHistoryTotals`, `buildRepeatExercises` with an injected UUID source, `buildPRDetailsNotification`). The style sheet moved to `src/screens/historyStyles.ts` so the screen and the card share it.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 569 unit (10 new focused tests in `tests/unit/history-logic.test.ts` and `tests/unit/history-card.test.ts`) / 173 integration tests green.
+- **Done when:**
+  - [x] The screen is under 600 lines and the extracted modules have focused tests.
+  - [x] No behavior regressions in the history, repeat, and edit integration tests.
+
+### ARCH-13 — WorkoutScreen is a 703-line component
+
+- **Severity:** Medium
+- **Status:** `Done`
+- **Evidence:** `src/screens/WorkoutScreen.tsx` is 703 lines: the component spans lines 40-441 (seven `useState` calls, one effect, seven handlers) and the style sheet spans 443-702. The week summary card (lines 190-238) and each routine card (lines 299-358) are inline JSX.
+- **Impact:** Routine list changes and start-flow changes share one component, and the cards cannot be rendered or tested in isolation.
+- **Required change:** Extract a controller hook for screen state, a `WeekSummaryCard` and a `RoutineCard` component, and the pure helpers (folder collection/filtering, routine summary metrics, week labels). Target under 600 lines for the screen and under 300 lines per presentational child.
+- **Implementation (2026-10-18):** `WorkoutScreen.tsx` dropped from 703 to 170 lines and is now composition (`ScreenHeader`, quick-start card, `SectionHeader`, folder chips, `RoutineCard` list, empty states, action sheet, and the four modals). New `src/screens/workout/` module: `useWorkoutScreenController.ts` (224 lines) owns the seven state variables, the folder auto-reset effect, the start/duplicate/delete/edit handlers, and the derived folder list and filtered routines; `WeekSummaryCard.tsx` (60 lines) renders the week-in-review card; `RoutineCard.tsx` (80 lines) renders one routine row; `workoutScreenLogic.ts` (53 lines) holds the pure helpers (`collectRoutineFolders`, `filterRoutinesByFolder`, `buildRoutineSummary`, `formatTodayLabel`, `formatWeekDuration`). The style sheet moved to `src/screens/workoutStyles.ts` so the screen and both cards share it.
+- **Verification:** `npm run typecheck`, `npm run typecheck:tests`, 578 unit (9 new focused tests in `tests/unit/workout-screen-logic.test.ts` and `tests/unit/workout-screen-components.test.ts`) / 173 integration tests green.
+- **Done when:**
+  - [x] The screen is under 600 lines and the extracted modules have focused tests.
+  - [x] No behavior regressions in the routine, folder, and start integration tests.
+
 ---
 
 ## 7. Correctness and platform-parity findings
@@ -459,30 +508,36 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### COR-01 — Web completed-workout filter is dead
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `webStore.ts:1112` filters with `!(workout as any).inProgress`, but `Workout` has no `inProgress` field (`src/types/index.ts:67-78`) and `normalizeWorkout` does not preserve one. Native filters with SQL `WHERE w.in_progress = 0` at `nativeStore.ts:1119`. Web `getWorkoutDetail` also returns any stored record (`webStore.ts:991-1000`), while native requires completion (`nativeStore.ts:987`).
 - **Impact:** In-progress or otherwise unintended records can appear in web history and PR calculations, and web behavior differs from native.
 - **Required change:** Model completion state explicitly in the stored record and filter it consistently, or remove the dead check and guarantee that only completed workouts enter the store.
+- **Implementation (2026-10-18):** Stored completion is now explicit on both platforms. New `src/database/workoutRecord.ts` owns the rule (`isInProgressRecord`, `asCompletedRecord`): native persists `in_progress = 0`, web stamps `inProgress: false` on `finishWorkout` and snapshot merges (mirroring native's merge insert). Every web read path — `getAllWorkoutsSorted` (history + snapshot), `getWorkoutDetail`, `getPreviousSetsForExercise`, `getCompletedWorkoutsForExercises`, `getExerciseStats`, and history reassignment — filters raw records through `isInProgressRecord` before normalization (the old check ran after `normalizeWorkout`, which could drop the field). `getWorkoutDetail` now returns `null` for in-progress records like native. Legacy records without the marker stay visible (absent = completed).
+- **Verification:** `tests/integration/completion-parity.test.ts` — per-platform tests plus a cross-platform `deepEqual` parity test covering a completed and an injected in-progress record across history, detail, snapshot, PR inputs, previous sets, and stats. Pre-fix run failed on web exactly as expected (in-progress record leaked into history, detail, snapshot, previous sets, stats); post-fix all 3 tests pass. Fixture gained `insertRawWorkoutRecord` to write foreign records on both platforms.
 - **Done when:**
-  - [ ] Both platforms return the same records for the same fixture.
-  - [ ] A parity test covers completed and in-progress records.
+  - [x] Both platforms return the same records for the same fixture.
+  - [x] A parity test covers completed and in-progress records.
 
 ### COR-02 — Gym deletion policy diverges between native and web
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** Native rejects deletion when a draft or in-progress workout references the gym (`nativeStore.ts:258-271`). Web rejects only draft references and silently reassigns workouts (`webStore.ts:554-564`).
 - **Impact:** The same user action succeeds on web and fails on native, with different data consequences.
 - **Required change:** Define one policy in `StoreCore` and apply it on both platforms.
+- **Implementation (2026-10-18):** `planGymDeletion` in `src/database/storeCore.ts` is the single policy: `validateGymDeletion`, rejection while an active draft or an in-progress stored workout references the gym, then a plan for draft/scope rewrites and default inheritance. Native feeds it `getWorkoutDrafts()`/`getExerciseGymScopes()` and an `in_progress = 1` query; web feeds the same readers plus raw records marked `inProgress` (via the COR-01 marker). Web now rejects in-progress references instead of silently reassigning; error messages are identical across platforms.
+- **Verification:** Store contract suite scenarios "rejects gym deletion while an active draft references the gym", "rejects gym deletion while an in-progress workout references the gym", and "deletes a gym and reassigns workouts, scope links, and default status" pass on both stores.
 - **Done when:** A parity test exercises gym deletion with drafts and in-progress workouts on both stores.
 
 ### COR-03 — Refresh signatures omit relevant fields
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The Analytics signature at `AnalyticsScreen.tsx:136-143` includes workout IDs/times/gym/volume/counts, gym fields, scope count, and exercise count, but not exercise names or scope contents. The History signature at `HistoryScreen.tsx:142-156` omits `exerciseGymScopes` even though PR evaluation consumes them at `:169-176`.
 - **Impact:** Renames and scope changes can leave analytics and PR displays stale.
 - **Required change:** Replace hand-built signatures with a store revision counter or hash the full relevant inputs.
+- **Implementation (2026-10-18):** Both screens deleted their partial JSON signatures. `AnalyticsScreen` checks `getDataRevision()` before hydrating the snapshot (removing the old signature fallback), and `HistoryScreen` checks the revision before loading history, gyms, and the PR snapshot. Renaming a custom exercise or changing a scope advances the revision (asserted in the store contract suite), so activating either tab reloads; no partial-signature false negatives remain, and views no longer need a second data change or a full reload to refresh.
+- **Verification:** Store contract scenario "advances the data revision for scope and catalog writes" (both platforms) plus the existing revision contract and screen integration suites.
 - **Done when:** Renaming an exercise and changing a scope both refresh the affected views immediately.
 
 ---
@@ -727,21 +782,25 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 ### Phase 2 — Architecture and startup (target: two to four weeks)
 
-- [ ] `ARCH-01` Decompose `ActiveWorkoutScreen`.
-- [ ] `ARCH-02` Decompose `AnalyticsScreen`.
-- [ ] `ARCH-03` Split `WorkoutProvider` into focused hooks.
-- [ ] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
-- [ ] `ARCH-05` Deduplicate custom-exercise UI.
-- [ ] `ARCH-06` Add repository/domain hooks.
-- [ ] `ARCH-07` Add a store revision counter and invalidation.
-- [ ] `PERF-06` Lazy-load the exercise catalog.
-- [ ] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
-- [ ] `PERF-14` Add IndexedDB indexes and indexed history reads.
-- [ ] `COR-01` Fix the web completion filter.
-- [ ] `COR-02` Unify gym deletion policy.
-- [ ] `COR-03` Replace partial signatures with the revision counter.
+- [x] `ARCH-01` Decompose `ActiveWorkoutScreen`.
+- [x] `ARCH-02` Decompose `AnalyticsScreen`.
+- [x] `ARCH-03` Split `WorkoutProvider` into focused hooks.
+- [x] `ARCH-04` Extract `StoreCore` and add a shared contract suite.
+- [x] `ARCH-05` Deduplicate custom-exercise UI.
+- [x] `ARCH-06` Add repository/domain hooks.
+- [x] `ARCH-07` Add a store revision counter and invalidation.
+- [x] `ARCH-12` Decompose `HistoryScreen`.
+- [x] `ARCH-13` Decompose `WorkoutScreen`.
+- [x] `PERF-06` Lazy-load the exercise catalog.
+- [x] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
+- [x] `PERF-14` Add IndexedDB indexes and indexed history reads.
+- [x] `COR-01` Fix the web completion filter.
+- [x] `COR-02` Unify gym deletion policy.
+- [x] `COR-03` Replace partial signatures with the revision counter.
 
 **Exit criteria:** No screen exceeds roughly 600 lines; shared domain rules live in one module; both stores pass the same contract suite; cold-start catalog work is eliminated once seeded.
+
+**Residual note (2026-10-18):** All Phase 2 findings are `Done`. Two screens exceed the 600-line guideline and carry no original finding: `src/screens/HistoryScreen.tsx` (903 lines) and `src/screens/WorkoutScreen.tsx` (703 lines). Both were scheduled as `ARCH-12` and `ARCH-13` and completed on the same branch (see their findings for implementation and verification notes).
 
 ### Phase 3 — Quality gates and accessibility (target: ongoing, start immediately)
 

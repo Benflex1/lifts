@@ -157,9 +157,9 @@ function mutateWebDatabase(
   }));
 }
 
-function upgradeDatabaseToVersionFour(name: string): Promise<void> {
+function upgradeDatabaseToCurrentVersion(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(name, 4);
+    const request = indexedDB.open(name, 5);
     request.onsuccess = () => {
       request.result.close();
       resolve();
@@ -220,11 +220,15 @@ describe('webStore persistence and lease handling', () => {
     });
 
     const database = await readWebDatabase(dbName);
-    assert.equal(database.version, 4);
+    assert.equal(database.version, 5);
     assert.deepEqual([...database.objectStoreNames].sort(), [
       'exercise_gym_scopes', 'exercises', 'gyms', 'health_sync_records',
       'metadata', 'routines', 'settings', 'workout_drafts', 'workouts',
     ]);
+    assert.ok(
+      database.transaction('workouts', 'readonly').objectStore('workouts').indexNames.contains('startTime'),
+      'upgraded databases index workouts by start time',
+    );
     database.close();
     assert.deepEqual(await readLegacyV3Sentinels(dbName), LEGACY_V3_SENTINELS);
 
@@ -276,7 +280,7 @@ describe('webStore persistence and lease handling', () => {
     const dbName = `test-web-catalog-read-only-${Date.now()}`;
     const legacy = await openLegacyVersionThreeDatabase(dbName);
     legacy.close();
-    await upgradeDatabaseToVersionFour(dbName);
+    await upgradeDatabaseToCurrentVersion(dbName);
 
     let currentTime = 100000;
     const now = () => currentTime;
@@ -338,7 +342,7 @@ describe('webStore persistence and lease handling', () => {
     assert.equal(gym.name, 'Downtown');
     await store.updateGym(gym.id, { name: 'Downtown 2' });
     await store.setDefaultGym(gym.id);
-    await assert.rejects(() => store.deleteGym(gym.id, gym.id), /Replacement gym must be different/);
+    await assert.rejects(() => store.deleteGym(gym.id, gym.id), /replacement gym must be different/i);
     await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'global' });
     assert.equal((await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType, 'global');
     const snapshot = await store.readSnapshot();
@@ -418,6 +422,38 @@ describe('webStore persistence and lease handling', () => {
     }
   });
 
+  it('streams history through the startTime index without materializing the store', async () => {
+    const dbName = `test-web-history-index-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    await store.saveCompletedWorkout({
+      id: 'indexed-history',
+      name: 'Indexed history',
+      gymId: 'gym-default',
+      startTime: '2026-09-10T08:00:00.000Z',
+      durationSeconds: 1,
+      totalVolumeKg: 0,
+      exercises: [],
+    });
+
+    const database = await readWebDatabase(dbName);
+    const workoutStore = database.transaction('workouts', 'readonly').objectStore('workouts');
+    assert.ok(workoutStore.indexNames.contains('startTime'), 'startTime index exists');
+    const prototype = Object.getPrototypeOf(workoutStore);
+    const originalGetAll = prototype.getAll;
+    prototype.getAll = () => {
+      throw new Error('history reads must not call getAll');
+    };
+    try {
+      const history = await store.getWorkoutHistory();
+      assert.deepEqual(history.map((row: { id: string }) => row.id), ['indexed-history']);
+    } finally {
+      prototype.getAll = originalGetAll;
+      database.close();
+      await store.close();
+    }
+  });
+
   it('rejects invalid scope references and all new writes in a read-only tab', async () => {
     const dbName = `test-web-gym-validation-${Date.now()}`;
     const first: any = await createWebStore(dbName, { idbFactory: indexedDB });
@@ -456,7 +492,7 @@ describe('webStore persistence and lease handling', () => {
     const readOnly: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await readOnly.init();
     const raw = await new Promise<any>((resolve, reject) => {
-      const req = (indexedDB as any).open(dbName, 4);
+      const req = (indexedDB as any).open(dbName, 5);
       req.onsuccess = () => { const db = req.result; const tx = db.transaction('workouts', 'readonly'); const get = tx.objectStore('workouts').get('legacy-workout'); get.onsuccess = () => { db.close(); resolve(get.result); }; get.onerror = () => reject(get.error); };
       req.onerror = () => reject(req.error);
     });

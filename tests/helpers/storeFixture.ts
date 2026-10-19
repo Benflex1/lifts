@@ -3,7 +3,18 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { Store } from '../../src/database/contract';
+import { Exercise } from '../../src/types';
 import { SqliteDriver, createNativeStore } from '../../src/database/nativeStore';
+
+export interface RawWorkoutRecordInput {
+  id: string;
+  startTime: string;
+  inProgress: boolean;
+  name?: string;
+  endTime?: string;
+  gymId?: string;
+  exercises?: Array<{ exercise: Exercise; sets: Array<{ weightKg: number; reps: number }> }>;
+}
 
 export class NodeSqliteDriver implements SqliteDriver {
   private db: DatabaseSync;
@@ -68,6 +79,11 @@ export interface StoreFixture {
   driver?: NodeSqliteDriver;
   reopen: () => Promise<Store>;
   dispose: () => Promise<void>;
+  /**
+   * Writes a workout record straight to the underlying storage, bypassing
+   * store policy, so tests can simulate foreign or legacy in-progress records.
+   */
+  insertRawWorkoutRecord: (input: RawWorkoutRecordInput) => Promise<void>;
 }
 
 export async function createStoreFixture(platform: 'native' | 'web'): Promise<StoreFixture> {
@@ -81,6 +97,41 @@ export async function createStoreFixture(platform: 'native' | 'web'): Promise<St
     return {
       store,
       driver,
+      insertRawWorkoutRecord: async (input) => {
+        await driver.runAsync(
+          `INSERT INTO workouts (id, routine_id, name, start_time, end_time, duration_seconds, total_volume_kg, notes, in_progress, gym_id)
+           VALUES (?, NULL, ?, ?, ?, 0, 0, NULL, ?, ?)`,
+          input.id,
+          input.name ?? `Raw ${input.id}`,
+          input.startTime,
+          input.endTime ?? null,
+          input.inProgress ? 1 : 0,
+          input.gymId ?? 'gym-default',
+        );
+        for (const [index, entry] of (input.exercises ?? []).entries()) {
+          const workoutExerciseId = `${input.id}-exercise-${index}`;
+          await driver.runAsync(
+            `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index, notes, rest_timer_seconds, target_reps, superset_id)
+             VALUES (?, ?, ?, ?, NULL, 90, NULL, NULL)`,
+            workoutExerciseId,
+            input.id,
+            entry.exercise.id,
+            index,
+          );
+          for (const [setIndex, set] of entry.sets.entries()) {
+            await driver.runAsync(
+              `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, set_type, weight_kg, reps, rpe, is_completed, completed_at)
+               VALUES (?, ?, ?, 'normal', ?, ?, NULL, 1, ?)`,
+              `${workoutExerciseId}-set-${setIndex}`,
+              workoutExerciseId,
+              setIndex + 1,
+              set.weightKg,
+              set.reps,
+              input.endTime ?? input.startTime,
+            );
+          }
+        }
+      },
       reopen: async () => {
         driver.close();
         driver = new NodeSqliteDriver(tempFile);
@@ -111,6 +162,53 @@ export async function createStoreFixture(platform: 'native' | 'web'): Promise<St
 
     return {
       store,
+      insertRawWorkoutRecord: async (input) => {
+        await new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open(dbName);
+          request.onsuccess = () => {
+            const rawDb = request.result;
+            const tx = rawDb.transaction('workouts', 'readwrite');
+            tx.objectStore('workouts').put({
+              id: input.id,
+              name: input.name ?? `Raw ${input.id}`,
+              gymId: input.gymId ?? 'gym-default',
+              startTime: input.startTime,
+              endTime: input.endTime ?? input.startTime,
+              durationSeconds: 0,
+              totalVolumeKg: 0,
+              exercises: (input.exercises ?? []).map((entry, index) => ({
+                id: `${input.id}-exercise-${index}`,
+                exerciseId: entry.exercise.id,
+                exercise: entry.exercise,
+                sets: entry.sets.map((set, setIndex) => ({
+                  id: `${input.id}-exercise-${index}-set-${setIndex}`,
+                  setNumber: setIndex + 1,
+                  type: 'normal',
+                  weightKg: set.weightKg,
+                  reps: set.reps,
+                  isCompleted: true,
+                  completedAt: input.endTime ?? input.startTime,
+                })),
+                restTimerSeconds: 90,
+              })),
+              ...(input.inProgress ? { inProgress: true } : {}),
+            });
+            tx.oncomplete = () => {
+              rawDb.close();
+              resolve();
+            };
+            tx.onerror = () => {
+              rawDb.close();
+              reject(tx.error);
+            };
+            tx.onabort = () => {
+              rawDb.close();
+              reject(tx.error);
+            };
+          };
+          request.onerror = () => reject(request.error);
+        });
+      },
       reopen: async () => {
         if (store.close) {
           await store.close();

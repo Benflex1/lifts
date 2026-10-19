@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { NodeSqliteDriver } from '../helpers/storeFixture';
 import { createNativeStore } from '../../src/database/nativeStore';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 import { Workout } from '../../src/types';
 
 /** Counts read queries so tests can pin constant-query behavior. */
@@ -22,7 +22,7 @@ class CountingDriver extends NodeSqliteDriver {
 
 function makeWorkout(index: number, exerciseOffset: number): Workout {
   const exercises = [0, 1, 2].map((slot) =>
-    DEFAULT_EXERCISES[(exerciseOffset + slot) % 20]
+    getDefaultExercises()[(exerciseOffset + slot) % 20]
   );
 
   return {
@@ -83,7 +83,7 @@ describe('native query performance guarantees', () => {
       {
         label: 'exercise history join',
         sql: 'EXPLAIN QUERY PLAN SELECT w.id FROM workouts w JOIN workout_exercises we ON we.workout_id = w.id WHERE we.exercise_id = ?',
-        params: [DEFAULT_EXERCISES[0].id],
+        params: [getDefaultExercises()[0].id],
         index: 'idx_workout_exercises_exercise',
       },
       {
@@ -114,7 +114,7 @@ describe('native query performance guarantees', () => {
       await store.saveCompletedWorkout(makeWorkout(i, i));
     }
 
-    const exerciseIds = Array.from({ length: 6 }, (_, index) => DEFAULT_EXERCISES[index].id);
+    const exerciseIds = Array.from({ length: 6 }, (_, index) => getDefaultExercises()[index].id);
 
     // Warm the exercise catalog cache so the test measures only history reads.
     await store.getAllExercises();
