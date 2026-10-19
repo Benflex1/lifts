@@ -44,7 +44,7 @@ jobs:
         run: npx expo prebuild --platform android --clean
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v6
 
       # No LIFTS_UPLOAD_* variables here: preview APKs stay on the debug key and
       # cannot be installed over a published release. See release.yml.
