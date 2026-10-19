@@ -26,7 +26,11 @@ class RecordingDriver extends NodeSqliteDriver {
   }
 }
 
-function makeWorkout(exerciseId: string, exercise: Workout['exercises'][number]['exercise'], gymId: string): Workout {
+function makeWorkout(
+  exerciseId: string,
+  exercise: Workout['exercises'][number]['exercise'],
+  gymId: string,
+): Workout {
   return {
     id: 'detail-w1',
     name: 'Detail Performance Workout',
@@ -42,9 +46,30 @@ function makeWorkout(exerciseId: string, exercise: Workout['exercises'][number][
         exercise,
         restTimerSeconds: 90,
         sets: [
-          { id: 'detail-s1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
-          { id: 'detail-s2', setNumber: 2, type: 'normal', weightKg: 110, reps: 3, isCompleted: true },
-          { id: 'detail-s3', setNumber: 3, type: 'warmup', weightKg: 40, reps: 8, isCompleted: true },
+          {
+            id: 'detail-s1',
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 100,
+            reps: 5,
+            isCompleted: true,
+          },
+          {
+            id: 'detail-s2',
+            setNumber: 2,
+            type: 'normal',
+            weightKg: 110,
+            reps: 3,
+            isCompleted: true,
+          },
+          {
+            id: 'detail-s3',
+            setNumber: 3,
+            type: 'warmup',
+            weightKg: 40,
+            reps: 8,
+            isCompleted: true,
+          },
         ],
       },
     ],
@@ -64,7 +89,7 @@ describe('exercise detail data loading', () => {
     driver.reads.length = 0;
     const data = await loadExerciseDetailData(store, exercise, gym);
 
-    const historyQueries = driver.reads.filter((sql) => sql.includes(HISTORY_SQL));
+    const historyQueries = driver.reads.filter(sql => sql.includes(HISTORY_SQL));
     assert.equal(historyQueries.length, 1, 'the history is read exactly once');
 
     assert.equal(data.historyWorkouts.length, 1);
@@ -95,13 +120,13 @@ describe('exercise detail data loading', () => {
       store.getExerciseStats(exercise.id, gym.id),
       store.getCompletedWorkoutsForExercise(exercise.id),
     ]);
-    const legacyHistoryQueries = driver.reads.filter((sql) => sql.includes(HISTORY_SQL));
+    const legacyHistoryQueries = driver.reads.filter(sql => sql.includes(HISTORY_SQL));
     assert.equal(legacyHistoryQueries.length, 2, 'the old path duplicated the history query');
 
     assert.deepEqual(data.stats, legacyStats);
     assert.deepEqual(
-      data.historyWorkouts.map((w) => w.id),
-      legacyHistory.map((w) => w.id),
+      data.historyWorkouts.map(w => w.id),
+      legacyHistory.map(w => w.id),
     );
 
     // Podium equivalence against the direct aggregation the modal used.
@@ -114,7 +139,12 @@ describe('exercise detail data loading', () => {
     // And stats equivalence against the direct domain aggregation.
     assert.deepEqual(
       data.stats,
-      calculateDualExerciseStats(data.historyWorkouts, exercise.id, gym.id, data.scope || undefined),
+      calculateDualExerciseStats(
+        data.historyWorkouts,
+        exercise.id,
+        gym.id,
+        data.scope || undefined,
+      ),
     );
   });
 });

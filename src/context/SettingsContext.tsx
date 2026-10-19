@@ -6,7 +6,11 @@ import { BODY_WEIGHT_ENABLED_KEY, parseBodyWeightEnabled } from '../workout/body
 import { useDialog } from './DialogContext';
 import { getPlatformHealthProvider, retryPendingHealthSyncs } from '../health';
 import { updateHealthSyncSetting } from '../health/settings';
-import { parseGymTrackingEnabled, parseHealthSyncEnabled, parseRemoteExerciseImagesEnabled } from '../utils/settings';
+import {
+  parseGymTrackingEnabled,
+  parseHealthSyncEnabled,
+  parseRemoteExerciseImagesEnabled,
+} from '../utils/settings';
 import { TrackingType } from '../types';
 import {
   EXERCISE_TRACKING_TYPES_KEY,
@@ -17,7 +21,12 @@ import {
   TrackingTypeOverrides,
 } from '../workout/tracking';
 import { parseProgressiveOverloadEnabled, PROGRESSIVE_OVERLOAD_KEY } from '../workout/overload';
-import { parseRoutinePrograms, ROUTINE_PROGRAMS_KEY, RoutinePrograms, serializeRoutinePrograms } from '../workout/programs';
+import {
+  parseRoutinePrograms,
+  ROUTINE_PROGRAMS_KEY,
+  RoutinePrograms,
+  serializeRoutinePrograms,
+} from '../workout/programs';
 
 export interface SettingsContextType {
   unit: WeightUnit;
@@ -71,7 +80,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Off until the stored preference is read, so a slow or failed read never fetches photos the user turned off.
   const [remoteImagesEnabled, setRemoteImagesEnabledState] = useState(false);
   const [trackingTypesEnabled, setTrackingTypesEnabledState] = useState(false);
-  const [trackingTypeOverrides, setTrackingTypeOverridesState] = useState<TrackingTypeOverrides>({});
+  const [trackingTypeOverrides, setTrackingTypeOverridesState] = useState<TrackingTypeOverrides>(
+    {},
+  );
   const [overloadEnabled, setOverloadEnabledState] = useState(true);
   const [routinePrograms, setRoutineProgramsState] = useState<RoutinePrograms>({});
   const [bodyWeightEnabled, setBodyWeightEnabledState] = useState(false);
@@ -113,7 +124,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setRoutineProgramsState(parseRoutinePrograms(storedPrograms));
         setBodyWeightEnabledState(parseBodyWeightEnabled(storedBodyWeight));
         if (persistedHealthSync) {
-          void retryPendingHealthSyncs().catch((error) => {
+          void retryPendingHealthSyncs().catch(error => {
             console.error('Unable to retry pending health syncs', error);
           });
         }
@@ -125,149 +136,180 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     })();
   }, []);
 
-  const setUnit = useCallback(async (u: WeightUnit) => {
-    const prev = unit;
-    setUnitState(u);
-    try {
-      await setSetting('unit', u);
-    } catch (err: any) {
-      setUnitState(prev);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save weight unit setting.',
-      });
-      throw err;
-    }
-  }, [unit, notify]);
+  const setUnit = useCallback(
+    async (u: WeightUnit) => {
+      const prev = unit;
+      setUnitState(u);
+      try {
+        await setSetting('unit', u);
+      } catch (err: any) {
+        setUnitState(prev);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save weight unit setting.',
+        });
+        throw err;
+      }
+    },
+    [unit, notify],
+  );
 
-  const setGymTrackingEnabled = useCallback(async (enabled: boolean) => {
-    const previous = gymTrackingEnabled;
-    setGymTrackingEnabledState(enabled);
-    try {
-      await setSetting('gym_tracking_enabled', enabled ? 'true' : 'false');
-    } catch (err: any) {
-      setGymTrackingEnabledState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save gym tracking setting.',
-      });
-      throw err;
-    }
-  }, [gymTrackingEnabled, notify]);
+  const setGymTrackingEnabled = useCallback(
+    async (enabled: boolean) => {
+      const previous = gymTrackingEnabled;
+      setGymTrackingEnabledState(enabled);
+      try {
+        await setSetting('gym_tracking_enabled', enabled ? 'true' : 'false');
+      } catch (err: any) {
+        setGymTrackingEnabledState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save gym tracking setting.',
+        });
+        throw err;
+      }
+    },
+    [gymTrackingEnabled, notify],
+  );
 
-  const setRemoteImagesEnabled = useCallback(async (enabled: boolean) => {
-    const previous = remoteImagesEnabled;
-    setRemoteImagesEnabledState(enabled);
-    try {
-      await setSetting('remote_exercise_images', enabled ? 'true' : 'false');
-    } catch (err: any) {
-      setRemoteImagesEnabledState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save exercise photo setting.',
-      });
-      throw err;
-    }
-  }, [remoteImagesEnabled, notify]);
+  const setRemoteImagesEnabled = useCallback(
+    async (enabled: boolean) => {
+      const previous = remoteImagesEnabled;
+      setRemoteImagesEnabledState(enabled);
+      try {
+        await setSetting('remote_exercise_images', enabled ? 'true' : 'false');
+      } catch (err: any) {
+        setRemoteImagesEnabledState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save exercise photo setting.',
+        });
+        throw err;
+      }
+    },
+    [remoteImagesEnabled, notify],
+  );
 
-  const setTrackingTypesEnabled = useCallback(async (enabled: boolean) => {
-    const previous = trackingTypesEnabled;
-    setTrackingTypesEnabledState(enabled);
-    try {
-      await setSetting(TRACKING_TYPES_ENABLED_KEY, enabled ? 'true' : 'false');
-    } catch (err: any) {
-      setTrackingTypesEnabledState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save exercise tracking setting.',
-      });
-      throw err;
-    }
-  }, [trackingTypesEnabled, notify]);
+  const setTrackingTypesEnabled = useCallback(
+    async (enabled: boolean) => {
+      const previous = trackingTypesEnabled;
+      setTrackingTypesEnabledState(enabled);
+      try {
+        await setSetting(TRACKING_TYPES_ENABLED_KEY, enabled ? 'true' : 'false');
+      } catch (err: any) {
+        setTrackingTypesEnabledState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save exercise tracking setting.',
+        });
+        throw err;
+      }
+    },
+    [trackingTypesEnabled, notify],
+  );
 
-  const setOverloadEnabled = useCallback(async (enabled: boolean) => {
-    const previous = overloadEnabled;
-    setOverloadEnabledState(enabled);
-    try {
-      await setSetting(PROGRESSIVE_OVERLOAD_KEY, enabled ? 'true' : 'false');
-    } catch (err: any) {
-      setOverloadEnabledState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save next-target setting.',
-      });
-      throw err;
-    }
-  }, [overloadEnabled, notify]);
+  const setOverloadEnabled = useCallback(
+    async (enabled: boolean) => {
+      const previous = overloadEnabled;
+      setOverloadEnabledState(enabled);
+      try {
+        await setSetting(PROGRESSIVE_OVERLOAD_KEY, enabled ? 'true' : 'false');
+      } catch (err: any) {
+        setOverloadEnabledState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save next-target setting.',
+        });
+        throw err;
+      }
+    },
+    [overloadEnabled, notify],
+  );
 
-  const setBodyWeightEnabled = useCallback(async (enabled: boolean) => {
-    const previous = bodyWeightEnabled;
-    setBodyWeightEnabledState(enabled);
-    try {
-      await setSetting(BODY_WEIGHT_ENABLED_KEY, enabled ? 'true' : 'false');
-    } catch (err: any) {
-      setBodyWeightEnabledState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save body weight setting.',
-      });
-      throw err;
-    }
-  }, [bodyWeightEnabled, notify]);
+  const setBodyWeightEnabled = useCallback(
+    async (enabled: boolean) => {
+      const previous = bodyWeightEnabled;
+      setBodyWeightEnabledState(enabled);
+      try {
+        await setSetting(BODY_WEIGHT_ENABLED_KEY, enabled ? 'true' : 'false');
+      } catch (err: any) {
+        setBodyWeightEnabledState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save body weight setting.',
+        });
+        throw err;
+      }
+    },
+    [bodyWeightEnabled, notify],
+  );
 
-  const updateRoutinePrograms = useCallback(async (change: (programs: RoutinePrograms) => RoutinePrograms) => {
-    const previous = routinePrograms;
-    let stored = previous;
-    try {
-      stored = parseRoutinePrograms(await getSetting(ROUTINE_PROGRAMS_KEY));
-    } catch (_) {}
-    const next = change(stored);
-    setRoutineProgramsState(next);
-    try {
-      await setSetting(ROUTINE_PROGRAMS_KEY, serializeRoutinePrograms(next));
-    } catch (err: any) {
-      setRoutineProgramsState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save the rotation.',
-      });
-      throw err;
-    }
-  }, [routinePrograms, notify]);
+  const updateRoutinePrograms = useCallback(
+    async (change: (programs: RoutinePrograms) => RoutinePrograms) => {
+      const previous = routinePrograms;
+      let stored = previous;
+      try {
+        stored = parseRoutinePrograms(await getSetting(ROUTINE_PROGRAMS_KEY));
+      } catch {
+        // Unreadable or missing stored programs fall back to the in-memory copy.
+      }
+      const next = change(stored);
+      setRoutineProgramsState(next);
+      try {
+        await setSetting(ROUTINE_PROGRAMS_KEY, serializeRoutinePrograms(next));
+      } catch (err: any) {
+        setRoutineProgramsState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save the rotation.',
+        });
+        throw err;
+      }
+    },
+    [routinePrograms, notify],
+  );
 
-  const setExerciseTrackingType = useCallback(async (exerciseId: string, type: TrackingType) => {
-    const previous = trackingTypeOverrides;
-    // Start from what is stored, so choices a backup restore merged in since launch are kept.
-    let stored = previous;
-    try {
-      stored = parseTrackingTypeOverrides(await getSetting(EXERCISE_TRACKING_TYPES_KEY));
-    } catch (_) {}
-    const next = { ...stored, [exerciseId]: type };
-    setTrackingTypeOverridesState(next);
-    try {
-      await setSetting(EXERCISE_TRACKING_TYPES_KEY, serializeTrackingTypeOverrides(next));
-    } catch (err: any) {
-      setTrackingTypeOverridesState(previous);
-      await notify({
-        title: 'Settings Error',
-        message: err?.message || 'Failed to save how this exercise is tracked.',
-      });
-      throw err;
-    }
-  }, [trackingTypeOverrides, notify]);
+  const setExerciseTrackingType = useCallback(
+    async (exerciseId: string, type: TrackingType) => {
+      const previous = trackingTypeOverrides;
+      // Start from what is stored, so choices a backup restore merged in since launch are kept.
+      let stored = previous;
+      try {
+        stored = parseTrackingTypeOverrides(await getSetting(EXERCISE_TRACKING_TYPES_KEY));
+      } catch {
+        // Unreadable or missing overrides fall back to the in-memory copy.
+      }
+      const next = { ...stored, [exerciseId]: type };
+      setTrackingTypeOverridesState(next);
+      try {
+        await setSetting(EXERCISE_TRACKING_TYPES_KEY, serializeTrackingTypeOverrides(next));
+      } catch (err: any) {
+        setTrackingTypeOverridesState(previous);
+        await notify({
+          title: 'Settings Error',
+          message: err?.message || 'Failed to save how this exercise is tracked.',
+        });
+        throw err;
+      }
+    },
+    [trackingTypeOverrides, notify],
+  );
 
-  const setHealthSyncEnabled = useCallback(async (enabled: boolean) => {
-    await updateHealthSyncSetting(enabled, healthSyncEnabled, {
-      loadProvider: getPlatformHealthProvider,
-      persist: (value) => setSetting('health_sync_enabled', value ? 'true' : 'false'),
-      setState: setHealthSyncEnabledState,
-      notify,
-      retryPendingHealthSyncs,
-      logRetryFailure: (error) => {
-        console.error('Unable to retry pending health syncs', error);
-      },
-    });
-  }, [healthSyncEnabled, notify]);
+  const setHealthSyncEnabled = useCallback(
+    async (enabled: boolean) => {
+      await updateHealthSyncSetting(enabled, healthSyncEnabled, {
+        loadProvider: getPlatformHealthProvider,
+        persist: value => setSetting('health_sync_enabled', value ? 'true' : 'false'),
+        setState: setHealthSyncEnabledState,
+        notify,
+        retryPendingHealthSyncs,
+        logRetryFailure: error => {
+          console.error('Unable to retry pending health syncs', error);
+        },
+      });
+    },
+    [healthSyncEnabled, notify],
+  );
 
   return (
     <SettingsContext.Provider

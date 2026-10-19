@@ -1,0 +1,12 @@
+node_modules/
+dist*/
+android/
+ios/
+.expo/
+coverage/
+package-lock.json
+*.md
+.serena/
+.claude/
+# Generated exercise catalog: minified by build tooling and never hand-edited.
+src/database/defaultExercises.json

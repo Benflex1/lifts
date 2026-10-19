@@ -3,7 +3,10 @@
  * Checks comma, semicolon, and tab characters outside of quotes across initial lines.
  */
 export function detectDelimiter(text: string): string {
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0).slice(0, 5);
+  const lines = text
+    .split(/\r?\n/)
+    .filter(l => l.trim().length > 0)
+    .slice(0, 5);
   if (lines.length === 0) return ',';
 
   const candidates = [',', ';', '\t'];
@@ -11,7 +14,7 @@ export function detectDelimiter(text: string): string {
   let maxConsistentCount = 0;
 
   for (const delim of candidates) {
-    let counts: number[] = [];
+    const counts: number[] = [];
     for (const line of lines) {
       let count = 0;
       let inQuotes = false;
@@ -51,7 +54,7 @@ export function tokenizeCsv(text: string, customDelimiter?: string): string[][] 
 
   // Strip UTF-8 BOM if present
   let cleanText = text;
-  if (cleanText.charCodeAt(0) === 0xFEFF) {
+  if (cleanText.charCodeAt(0) === 0xfeff) {
     cleanText = cleanText.slice(1);
   }
 

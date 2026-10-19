@@ -12,8 +12,8 @@
 export function isInProgressRecord(record: unknown): boolean {
   return Boolean(
     record &&
-      typeof record === 'object' &&
-      (record as { inProgress?: unknown }).inProgress === true
+    typeof record === 'object' &&
+    (record as { inProgress?: unknown }).inProgress === true,
   );
 }
 

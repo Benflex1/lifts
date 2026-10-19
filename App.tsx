@@ -1,11 +1,5 @@
 import React, { Suspense, useState, useEffect, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Dumbbell, History, BookOpen, TrendingUp } from 'lucide-react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -177,7 +171,9 @@ function MainAppContent() {
                   <TabActivationContext.Provider value={tabEmitters[tab.key]}>
                     <Suspense fallback={<TabLoadingFallback />}>
                       {tab.key === 'workout' && <WorkoutScreen />}
-                      {tab.key === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
+                      {tab.key === 'history' && (
+                        <HistoryScreen workoutUpdate={historyWorkoutUpdate} />
+                      )}
                       {tab.key === 'exercises' && <ExercisesScreen />}
                       {tab.key === 'analytics' && <AnalyticsScreen />}
                     </Suspense>
@@ -276,8 +272,7 @@ export default function App() {
       const record = JSON.stringify({
         message: error.message,
         scope: context.scope,
-        componentStack:
-          typeof context.componentStack === 'string' ? context.componentStack : null,
+        componentStack: typeof context.componentStack === 'string' ? context.componentStack : null,
         at: new Date().toISOString(),
       });
       if (record === lastRecord) return;

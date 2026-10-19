@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from 'react';
 import { getStore, initDatabase } from '../database/db';
 import { reportError } from '../utils/errorReporting';
 
@@ -65,15 +72,15 @@ export function StorageProvider({ children }: { children: ReactNode }) {
     if (!isReady) return;
     let unsubscribe: (() => void) | undefined;
     getStore()
-      .then((store) => {
+      .then(store => {
         setIsReadOnly(Boolean(store.isReadOnly?.()));
         if (store.onReadOnlyChange) {
-          unsubscribe = store.onReadOnlyChange((ro) => {
+          unsubscribe = store.onReadOnlyChange(ro => {
             setIsReadOnly(ro);
           });
         }
       })
-      .catch((err) => {
+      .catch(err => {
         reportError(err, { scope: 'storage.read-only-subscription' });
       });
 

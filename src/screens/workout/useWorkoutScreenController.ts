@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Copy, Edit2, ListOrdered, Play, SkipForward, Trash2, XCircle } from 'lucide-react-native';
+import {
+  Check,
+  Copy,
+  Edit2,
+  ListOrdered,
+  Play,
+  SkipForward,
+  Trash2,
+  XCircle,
+} from 'lucide-react-native';
 import { Routine } from '../../types';
 import { deleteRoutine, duplicateRoutine, getGyms } from '../../database/db';
 import { useWorkoutActions, useWorkoutGyms } from '../../context/WorkoutContext';
@@ -106,12 +115,10 @@ export function useWorkoutScreenController() {
     if (!pendingStart) return false;
 
     try {
-      const started = await startWorkout(
-        pendingStart.routine,
-        pendingStart.customName,
-        undefined,
-        { gymId, deload: pendingStart.deload },
-      );
+      const started = await startWorkout(pendingStart.routine, pendingStart.customName, undefined, {
+        gymId,
+        deload: pendingStart.deload,
+      });
       if (started) setPendingStart(null);
       return started;
     } catch (e) {
@@ -152,16 +159,16 @@ export function useWorkoutScreenController() {
   };
 
   const saveProgram = async (program: RoutineProgram) => {
-    await updateRoutinePrograms((programs) => ({ ...programs, [program.folderName]: program }));
+    await updateRoutinePrograms(programs => ({ ...programs, [program.folderName]: program }));
   };
 
   const stopProgram = async (folderName: string) => {
-    await updateRoutinePrograms((programs) => removeProgramFolder(programs, folderName));
+    await updateRoutinePrograms(programs => removeProgramFolder(programs, folderName));
   };
 
   const pointProgramAt = async (state: ProgramState, routineId: string) => {
     try {
-      await updateRoutinePrograms((programs) => {
+      await updateRoutinePrograms(programs => {
         const stored = programs[state.program.folderName];
         return stored
           ? { ...programs, [stored.folderName]: withNextOverride(stored, routineId) }
@@ -205,7 +212,7 @@ export function useWorkoutScreenController() {
   const selectedProgram = selectedFolder !== 'All' ? routinePrograms[selectedFolder] : undefined;
   // A rotation whose folder dropped below two routines has no card, so the row is how to edit or stop it.
   const isDormantRotation = Boolean(
-    selectedProgram && !programStates.some((state) => state.program.folderName === selectedFolder),
+    selectedProgram && !programStates.some(state => state.program.folderName === selectedFolder),
   );
   const canMakeRotation =
     selectedFolder !== 'All' &&
@@ -287,17 +294,14 @@ export function useWorkoutScreenController() {
             {
               key: 'skip',
               label: `Skip to ${
-                menuProgram.rotation[
-                  (menuProgram.nextIndex + 1) % menuProgram.rotation.length
-                ].name
+                menuProgram.rotation[(menuProgram.nextIndex + 1) % menuProgram.rotation.length].name
               }`,
               icon: SkipForward,
               onPress: () =>
                 pointProgramAt(
                   menuProgram,
-                  menuProgram.rotation[
-                    (menuProgram.nextIndex + 1) % menuProgram.rotation.length
-                  ].id,
+                  menuProgram.rotation[(menuProgram.nextIndex + 1) % menuProgram.rotation.length]
+                    .id,
                 ),
             },
             {
@@ -342,29 +346,28 @@ export function useWorkoutScreenController() {
       routines,
       program: editingProgramFolder ? routinePrograms[editingProgramFolder] : undefined,
       onSave: saveProgram,
-      onStop: () =>
-        editingProgramFolder ? stopProgram(editingProgramFolder) : Promise.resolve(),
+      onStop: () => (editingProgramFolder ? stopProgram(editingProgramFolder) : Promise.resolve()),
       onClose: () => setEditingProgramFolder(null),
     },
     editorModal: {
       visible: showEditor,
       routineToEdit,
-      existingFolders: folders.filter((f) => f !== 'All'),
+      existingFolders: folders.filter(f => f !== 'All'),
       onClose: () => setShowEditor(false),
       onSaved: loadRoutines,
     },
     folderModal: {
       visible: showFolderManage,
-      folders: folders.filter((f) => f !== 'All'),
+      folders: folders.filter(f => f !== 'All'),
       onClose: () => setShowFolderManage(false),
       onFoldersChanged: () => {
         setShowFolderManage(false);
         loadRoutines();
       },
       onFolderRenamed: (oldName: string, newName: string) =>
-        updateRoutinePrograms((programs) => renameProgramFolder(programs, oldName, newName)),
+        updateRoutinePrograms(programs => renameProgramFolder(programs, oldName, newName)),
       onFolderDeleted: (name: string) =>
-        updateRoutinePrograms((programs) => removeProgramFolder(programs, name)),
+        updateRoutinePrograms(programs => removeProgramFolder(programs, name)),
     },
     settingsModal: {
       visible: showSettings,

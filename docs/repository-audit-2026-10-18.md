@@ -214,7 +214,7 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Impact:** Each typed character re-aggregates the entire training history and re-renders the records subtree.
 - **Required change:** Debounce the search input (150-250 ms) and compute the aggregate once. Filter the precomputed record list by query instead of re-running aggregation.
 - **Implementation (2026-10-18):** `RecordsView` keeps the input text in local state and commits through a 200 ms `createDebouncer` (`SEARCH_DEBOUNCE_MS`). `AnalyticsScreen.recordsOverview` no longer depends on the query — `buildTrophyRoomSummary` runs only when history, catalog, gyms, scopes, or the gym filter change — and `trophySummary` narrows the precomputed records with the order-preserving `filterTrophyRecords` (`src/workout/trophy-room.ts`). Coverage: `tests/unit/debounce.test.ts`, a filter-equivalence test in `tests/unit/trophy-room.test.ts`, and `tests/unit/records-row-memoization.test.ts`.
-- **Deferred:** A renderer-level spy proving the screen itself never re-runs the aggregate per keystroke requires the RNTL harness tracked under `DX-02` (Phase 3); the dependency list and the equivalence test are the current evidence.
+- **Renderer verification (2026-10-18, DX-02):** `tests/unit/perf-03-records-aggregate.test.ts` mounts `RecordsSection`, spies on `buildTrophyRoomSummary`, commits search text through the 200 ms debounce, and asserts the aggregate stays at one call while rows filter and reach the empty state.
 - **Done when:**
   - [x] Typing only filters an existing record list.
   - [ ] `buildTrophyRoomSummary` is not called per keystroke, verified with a spy or render-count test. — deferred to `DX-02`; verified structurally today (`recordsOverview` deps exclude `trophySearch`).
@@ -291,7 +291,7 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Impact:** Users with many trained exercises mount every record row at once, and the whole subtree re-renders on each search update.
 - **Required change:** Make the records list a `FlatList` with the header content in `ListHeaderComponent`, or memoize the row component and bound the rendered list.
 - **Implementation (2026-10-18):** The records branch is a `FlatList` with the card header and chip rows in `ListHeaderComponent` (only that branch dropped the outer `ScrollView`; the header scrollers keep it), configured with `initialNumToRender={12}`, `maxToRenderPerBatch={12}`, and `windowSize={7}`. `RecordRow` is extracted and memoized so a filtered list only re-renders rows whose own props changed. Coverage: `tests/unit/records-row-memoization.test.ts` — replacing one record re-renders only that row, and filtering the list leaves unchanged middle rows untouched.
-- **Deferred:** The mount-count assertion ("only visible rows are mounted for a 500-record dataset") needs a real renderer; it lands with the RNTL harness tracked under `DX-02` (Phase 3).
+- **Renderer verification (2026-10-18, DX-02):** `tests/unit/perf-09-records-virtualization.test.ts` mounts the list with 500 synthetic records and asserts exactly the 12-row initial window renders; React Native's own list is Flow-typed source that Node cannot load, so the mount count is measured through react-native-web's virtualized list under jsdom, and the native element's window configuration (initialNumToRender 12, maxToRenderPerBatch 12, windowSize 7) is asserted directly on the rendered `FlatList`.
 - **Done when:**
   - [ ] Only visible rows are mounted for a 500-record synthetic dataset. — deferred to `DX-02`; the `FlatList` windowing configuration is in place.
   - [x] Search updates do not re-render unrelated rows.
@@ -547,47 +547,61 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-01 — Core workout controls have incomplete screen-reader coverage
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `ActiveWorkoutScreen.tsx` contains 55 `TouchableOpacity` elements, 22 `accessibilityRole` attributes, and 23 `accessibilityLabel` attributes. Missing coverage includes the collapsed exercise row at `:763-781`, the compact RPE badge at `:1084-1093`, and the inline RPE cell at `:1097-1106`. The set checkbox at `:1111-1126` shows the correct pattern.
 - **Impact:** A screen-reader user cannot reliably identify or operate the primary set controls.
 - **Required change:** Add roles, labels, hints, and state to every interactive control, starting with the logger set/exercise/RPE surfaces.
+- **Implementation (2026-10-18):** The logger interaction tree was migrated to `AppTouchable` and every control now carries a role, a label, and dynamic state or hints: the collapsed/expanded exercise rows (`ActiveExerciseCard`; the collapsed row announces "name, N of M sets completed" with an expand hint), the expanded menu and collapse buttons, set badges, compact and inline RPE cells, and move/delete controls (`ActiveSetRow`), the add-exercise button (`ExerciseStream`), all `ExerciseOptionsMenu` rows (including the conditional superset label and disabled state on move up/down), the `WorkoutOptionsMenu` rows (conditional RPE-column label, documented scrim as `accessible={false}`), the `SetOptionsModal` close/done/type/drop/RPE chips (with selected state), plate and delete shortcuts, and the logger-reachable modals: `WarmupModal` (bar chips, presets, custom steps, ramp rows and steppers, replace toggle, apply button with disabled state), `WorkoutDurationModal`, `PlateCalculatorModal`, `ExercisePickerModal`, `DraftRecoveryModal`, and `DraftResumeBanner`. A scoped `no-restricted-imports` rule now rejects raw `TouchableOpacity`/`TouchableHighlight`/`Pressable` imports in these files, so new controls must use the primitive. `WorkoutHeader` and `ActiveWorkoutScreen` controls were already labelled and only needed the primitive migration. Verification: the brace-aware scan used to size the work reports 124 unlabelled touchables app-wide before and 0 in the logger surfaces after; both typechecks, ESLint, Prettier, and the 584-test suite pass. Remaining unlabelled controls outside the logger and rest scope are tracked as `A11Y-06`.
 - **Done when:** Every touchable in the logger has a meaningful label and role, verified by a checklist and automated where possible.
 
 ### A11Y-02 — Rest controls, mini bar, and read-only banner are unlabeled
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `RestTimerOverlay.tsx:59-83` has three touchables with no role or label. `ActiveWorkoutMiniBar.tsx:31-35` has one large unlabeled touchable. `ReadOnlyBanner.tsx:35-46` has an unlabeled "Take Over" action.
 - **Impact:** Rest-timer adjustment, resuming a minimized workout, and recovering from read-only mode are difficult or impossible without sight.
 - **Required change:** Add labels/roles to these controls and make the countdown a polite live region.
+- **Implementation (2026-10-18):** `RestTimerOverlay`'s controls now read "Decrease rest timer by 30 seconds", "Increase rest timer by 30 seconds", and "Skip rest". `ActiveWorkoutMiniBar` announces "Resume workout <name>" with a return hint, and `ReadOnlyBanner`'s action is "Take over editing session" with busy/disabled state. `RestTimeWheelModal` labels its close button, presets, every minute/second wheel row (with selected state), the apply-to-all checkbox, and the confirm button ("Disable rest timer" or "Confirm rest timer"). All four files use the `AppTouchable` primitive and are covered by the scoped `no-restricted-imports` list. The countdown's polite live region is implemented with the dynamic-semantics work in `A11Y-03`. Verification: the audit scan reports 0 unlabelled touchables in these files; both typechecks, ESLint, Prettier, and the 584-test suite pass.
 - **Done when:** All three surfaces are operable with a screen reader.
 
 ### A11Y-03 — No live regions or value semantics for dynamic UI
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** There are zero `accessibilityLiveRegion` and zero `accessibilityValue` occurrences in `src/`. The rest timer, workout clock, PR toast, and 30 text inputs expose no dynamic semantics.
 - **Impact:** Countdowns and record celebrations are silent, and inputs do not announce their current values.
 - **Required change:** Add live regions to timers and toasts, and add label/value semantics to weight, reps, RPE, and notes inputs.
+- **Implementation (2026-10-18):** The rest countdown is a polite live region with `accessibilityRole="timer"` and a value ("Rest time remaining"): the PR toast is an assertive live region (role `alert` with the full announcement) and now uses `AppTouchable`. The header duration metric became a self-contained clock component so its `accessibilityValue` follows the ticking time without re-rendering the header; it is deliberately not a live region because a once-per-second announcement stream is hostile, and the value stays queryable on demand. `WeightInput`, `RepsInput`, and `ExerciseNoteInput` accept an `accessibilityLabel` and expose `accessibilityValue` from their current display text; `ActiveSetRow` passes per-set labels ("Weight for set 3", "Reps for set 3") and `ActiveExerciseCard` labels the note field per exercise. RPE is chip-based and was covered by `A11Y-01`. Tests: `tests/unit/accessibility-semantics.test.ts` asserts the live regions, roles, and values.
 - **Done when:** Dynamic updates are announced without requiring focus changes.
 
 ### A11Y-04 — Modal semantics and focus handling are inconsistent
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** Only 4 occurrences of `accessibilityViewIsModal` exist across the app despite many custom modals.
 - **Impact:** Screen-reader users can escape into background content while a modal is open.
 - **Required change:** Standardize modal containers on `accessibilityViewIsModal`, initial focus, and focus return.
+- **Implementation (2026-10-18):** Every custom modal container (26 files, 31 containers including the nested rep-target dropdown in `RoutineEditorModal`) now sets `accessibilityViewIsModal`, so screen readers cannot leave the modal. `src/hooks/useModalAccessibility.ts` standardizes initial focus: the content container takes iOS accessibility focus when the modal opens, and UIKit returns focus to the presenting element on close; Android's native modal window owns focus trapping and restoration, and the hook is a documented no-op there (and for hidden modals). The hook is wired into all 25 modal components through the container ref. Tests: `tests/unit/modal-accessibility.test.ts` covers the focus move, the hidden-modal no-op, and the non-iOS no-op; a repository scan confirms every `<Modal` element is accompanied by `accessibilityViewIsModal`.
 - **Done when:** Every modal traps focus and restores it on close.
 
 ### A11Y-05 — No enforced accessibility primitive or lint rule
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** Accessibility attributes are applied ad hoc. There is no required-label wrapper component and no `jsx-a11y`-style rule in CI.
 - **Impact:** New UI will keep reproducing the same gaps.
 - **Required change:** Add an `AppTouchable`/`IconButton` primitive that requires an accessibility label, and enforce it through review and lint where possible.
+- **Implementation (2026-10-18):** `src/components/ui.tsx` exports `AppTouchable`, whose props require `accessibilityLabel` and default `accessibilityRole` to `button` (`IconButton` already required a label); dismiss scrims opt out with `accessible={false}` instead of a meaningless label. `tests/unit/app-touchable.test.ts` covers label and role forwarding, press handling, the scrim opt-out, and the type-level requirement (a `@ts-expect-error` proves an omitted label does not compile). Scoped `no-restricted-imports` rules reject raw `TouchableOpacity`/`Pressable`/`TouchableHighlight` imports in the logger and rest surfaces (landed with `A11Y-01`; the rest surfaces follow in `A11Y-02`), so new controls there must use the primitive. `eslint-plugin-react-native-a11y` was evaluated first but supports only ESLint 8 and below, so the type-enforced primitive plus scoped import restrictions carry the enforcement.
 - **Done when:** New interactive components use the primitive by default.
+
+### A11Y-06 — Unlabelled controls remain outside the logger and rest surfaces
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** After the logger (`A11Y-01`) and rest (`A11Y-02`) migrations, a brace-aware scan for `TouchableOpacity` openings without an `accessibilityLabel` still reports 49 controls in shared modals, shared primitives whose accessible name currently comes from child text, and secondary screens: `RoutineEditorModal` (21), `CsvImportModal` (6), `FolderManageModal` (4), `WorkoutEditModal` (4), `CustomExerciseModal` (3), `ExerciseScopeModal` (3), `ui.tsx` (4), and one each in `AnalyticsScreen`, `ExercisesScreen`, `WorkoutScreen`, and `history/HistoryCard`. These are outside the Phase 3 exit criteria (logger and rest controls) and are logged as residual instead of being skipped.
+- **Impact:** Outside the logging flow, screen readers fall back to child text or announce icon-only controls incompletely.
+- **Required change:** Migrate the remaining interactive components to `AppTouchable`, adding labels/roles/state and extending the scoped `no-restricted-imports` list; give the shared primitives (`SegmentedControl`, `Chip`, `ActionSheet`, header actions) explicit labels where child text is not a full description.
+- **Done when:** The scan reports zero unlabelled touchables outside explicit `accessibilityViewIsModal`/`accessible={false}` dismiss scrims.
 
 ---
 
@@ -596,37 +610,41 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-01 — No lint or formatting tooling
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No ESLint, Prettier, Biome, EditorConfig, husky, or lint-staged configuration exists. `package.json` has no `lint` script. Style is enforced only by prose in `CONTRIBUTING.md`.
 - **Impact:** Hook dependency mistakes and inconsistent formatting reach review. Contributors must infer style from surrounding code.
 - **Required change:** Add ESLint with `react-hooks`, `@typescript-eslint`, and an RN-compatible accessibility subset; add Prettier or Biome; add `lint` and `format:check` scripts and a CI job. Add a pre-commit hook only if it does not slow the core loop.
+- **Implementation (2026-10-18):** `eslint.config.mjs` (flat config) applies `@eslint/js`, the type-unaware `typescript-eslint` recommended set, and `react-hooks` with `rules-of-hooks` and `exhaustive-deps` as errors. `@typescript-eslint/no-explicit-any` is a warning pending `ARCH-11`; tests relax only host-stub-specific rules. The first full run surfaced 236 problems: 49 unused imports/variables, 14 hook-dependency gaps, a dead branch in `resolveInitialAccordionState` (`src/workout/gym-session.ts`, removed as unreachable), a missing rethrow cause in `src/utils/backup.ts`, and stale `require` suppressions replaced with reasons. Real hook fixes landed for `ExercisePickerModal` (memoized loader), `ProgressionCurveView` (memoized accessor), and the logger keyboard effect; the remaining deliberate dependency narrowings carry line-scoped suppressions with rationale. Prettier (single quotes, 100 columns, `arrowParens: avoid`, `trailingComma: all`) baselined the repository; the generated `src/database/defaultExercises.json` catalog is ignored. `npm run lint`, `npm run lint:fix`, `npm run format`, and `npm run format:check` exist, and CI runs lint and the format check on every push (branch filter broadened to `**`) and pull request. No pre-commit hook was added: CI enforces the gates without slowing the core loop. `eslint-plugin-react-native-a11y` was evaluated for the accessibility subset but does not support ESLint 9+; the required-label primitive and scoped import restriction in `A11Y-05` cover that gap. Verification: `npm run lint` exits 0 (0 errors, 124 `any` warnings tracked by `ARCH-11`), `npm run format:check` is clean, and both typechecks plus the 578 + 173 test suites pass on the formatted tree.
 - **Done when:** CI fails on lint errors and formatting drift.
 
 ### DX-02 — No component or UI tests
 
 - **Severity:** High
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No React renderer dependency exists. The only component-adjacent tests are hand-rolled React fakes in `tests/unit/exercise-visual.test.ts` and `tests/unit/workout-health-sync.test.ts`. `tests/` references 2 of roughly 45 UI files.
 - **Impact:** Regressions in the primary logging flow, modals, and navigation are caught only by manual testing or the APK launch smoke test.
 - **Required change:** Add React Native Testing Library and cover the critical flows: set logging, rest timer, finish/discard, draft recovery, and exercise search. Add one device-level end-to-end flow.
+- **Implementation (2026-10-18):** `@testing-library/react-native` 14 (loaded through its `pure` entry so jest-only matchers are not required) plus `test-renderer` run under the existing `node --test` runner via `tests/helpers/rntlHarness.ts`: React Native itself is Flow-typed source that Node cannot load, so the harness stubs `react-native` with string host components, mocks lucide/safe-area, and provides a row-rendering FlatList double for flow tests (explicitly not a virtualization double). `tests/unit/critical-flows.test.ts` covers the five critical journeys: set logging (`ActiveSetRow`: checkbox toggle, debounced weight commit asserting nothing fires per keystroke, RPE cell), rest timer (`RestTimerOverlay`: read, +30s/-30s, skip), finish and discard (`WorkoutHeader` finish, `WorkoutOptionsMenu` discard and close), draft recovery (`DraftRecoveryModal` continue/discard), and exercise search (`ExercisePickerModal`: initial load, 120 ms debounce, filtering, and selection closing the picker). The harness also unblocked the deferred renderer verifications: the `PERF-03` aggregate spy and the `PERF-09` 500-record mount count. The device-level end-to-end journey lands in `DX-04` (Maestro).
 - **Done when:** Critical UI paths have automated tests that run in CI.
 
 ### DX-03 — No coverage measurement or threshold
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No `c8`, `nyc`, or experimental coverage flag is configured, and no workflow uploads or checks coverage.
 - **Impact:** Coverage can regress silently, and there is no signal for which new modules need tests.
 - **Required change:** Enable coverage for unit and integration runs, publish a report, and set an initial non-regression threshold.
+- **Implementation (2026-10-18):** `npm run test:coverage` runs the unit and integration suites in one Node test process with `--experimental-test-coverage`, excludes `tests/**` from the report, enforces non-regression thresholds (lines 90, branches 83, functions 89 against the measured 91.08 / 84.03 / 89.97), and writes an lcov report to `coverage/lcov.info`. CI runs this in place of the separate test steps and uploads the lcov file as a `coverage-lcov` artifact, so a coverage drop fails the run with the threshold message (verified locally: raising the line threshold to 99 exits 1). `coverage/` is gitignored and excluded from Prettier and ESLint.
 - **Done when:** CI reports coverage and fails on a configured drop.
 
 ### DX-04 — No end-to-end flow tests
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `scripts/android-smoke-test.sh` installs and launches the APK and fails on a crash, but it does not exercise a flow.
 - **Impact:** Lifecycle bugs that only appear in a real app (backgrounding, permissions, navigation) are not covered.
 - **Required change:** Add Maestro or Detox for a small smoke journey: start workout, log a set, minimize, resume, finish.
+- **Implementation (2026-10-18):** `.maestro/smoke-journey.yml` covers the journey: start the seeded Push Day routine (scroll to it; a single tap with retry disabled; confirm the start modal when shown), complete a set, minimize to the floating bar, resume, finish, and assert the completion summary. Selectors come from the accessibility labels added in `A11Y-01`/`A11Y-02` plus visible text. `.github/workflows/e2e.yml` builds the debug-signed preview APK, installs Maestro, enables KVM, and runs the journey on an Android 14 (API 34) emulator through the existing crash-checking install script; the JUnit report, logcat, and screenshots upload as artifacts. CONTRIBUTING documents the local `maestro test` command and the release checklist treats a green journey as a release gate. Verified green on GitHub Actions run `39159356942` (16m51s), including the completion screenshot. Two flow bugs surfaced and were fixed during verification: Maestro treats patterns as regexes (routine names with parentheses), and its automatic tap retry could press the start modal's confirm button at the same screen position.
 - **Done when:** The journey runs in CI on an emulator.
 
 ### DX-05 — Tests are excluded from typechecking
@@ -642,10 +660,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-06 — No dependency automation or security gate
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No Dependabot, Renovate, CodeQL, or `npm audit` step exists. Local audit: 29 vulnerabilities, including a critical `shell-quote` advisory reached through `react-devtools-core` and several high-severity build-tool transitive issues.
 - **Impact:** Security and compatibility drift accumulate silently. Most findings are build-time, but they still affect contributor and CI environments.
 - **Required change:** Add Dependabot/Renovate with grouped Expo updates, run `npm audit --omit=dev` in CI with an agreed policy, and document triage for accepted advisories.
+- **Implementation (2026-10-18):** `.github/dependabot.yml` adds weekly npm and GitHub Actions updates with grouped Expo, React Native, and dev-tooling PRs; majors of `expo`, `react-native`, `react`, and `react-dom` are left to `npx expo install --fix` during SDK upgrades rather than individual Dependabot bumps. `scripts/audit-policy.mjs` runs `npm audit --omit=dev`, fails on high/critical advisories unless they are explicitly accepted with a reason, and prints the production-tree counts; `npm run audit:policy` runs in CI on every push and pull request. Six build/dev-tooling advisories (including the critical `shell-quote` reached through `react-devtools-core`) are accepted with triage notes in `docs/release-checklist.md` section 2, so dependency updates and any new advisory are visible and actionable.
 - **Done when:** Dependency updates and audit results are visible and actionable on every relevant PR.
 
 ### DX-07 — No Node/toolchain pinning and incorrect prerequisites
@@ -661,19 +680,21 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### DX-08 — Version and documentation drift
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `package.json` says version 1.0.0 while `app.json` says 1.0.5. `docs/audit-remediation-results.md:76` says 147 tests (current baseline is 620+). The release checklist and README disagree on Node requirements.
 - **Impact:** Small inconsistencies erode trust in the documentation and complicate release checks.
 - **Required change:** Make `app.json` the single version source (or synchronize both), refresh the stale test counts, and update prerequisites.
+- **Implementation (2026-10-18):** `package.json` is at 1.0.5, matching `app.json` `expo.version`, and `scripts/check-version-sync.mjs` enforces package/app agreement plus the documented `android.versionCode` base formula (`npm run version:check`, also a CI step). The release checklist's "Cutting a release" steps now include the version check and a documentation-freshness pass over this audit and the test counts. `docs/audit-remediation-results.md` was refreshed from the stale 147-test block to the current 580 unit + 173 integration totals, with the original figure noted. README, CONTRIBUTING, and the release checklist already agreed on Node 22.5+/24 via `DX-07`. Coverage: `tests/unit/version-sync.test.ts` passes on the repository and exits 1 for mismatched fixtures.
 - **Done when:** Version and documentation checks are part of the release checklist.
 
 ### DX-09 — Missing open-source collaboration templates
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** No `SECURITY.md`, issue templates, pull-request template, or `CODEOWNERS`.
 - **Impact:** Security reports and contribution quality depend on ad hoc communication.
 - **Required change:** Add a security policy, issue/PR templates, and a lightweight review checklist that references this audit.
+- **Implementation (2026-10-18):** Added `SECURITY.md` (private GitHub advisory reporting, scope for local storage, the web lease, and the opt-in health export, and a pointer at the accepted build-tooling advisories), issue forms for bugs and feature requests plus `config.yml` that routes security reports to the private flow, a pull-request template whose checklist mirrors the verification suite and asks for the audit finding ID, and `.github/CODEOWNERS` covering the maintainer on release and CI metadata. CONTRIBUTING now links the templates and the security policy.
 - **Done when:** The templates are present and linked from CONTRIBUTING.
 
 ### DX-10 — Web export artifacts break the typecheck
@@ -776,7 +797,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `PERF-12` Reduce the rest-timer tick to one update per second.
 - [x] `PERF-13` Fix confetti and SVG parsing costs.
 
-**Renderer-level verifications deferred to Phase 3:** the `PERF-03` per-keystroke spy and `PERF-09` mount-count assertion need mount/render introspection (React Native Testing Library) and ride on `DX-02`. The comparator, memoization, query-count, revision-contract, and call-count tests listed per finding are in place today.
+**Renderer-level verifications (landed 2026-10-18 with `DX-02`):** the `PERF-03` per-keystroke aggregate spy and the `PERF-09` 500-record mount-count assertion now run in the React Native Testing Library harness; see each finding for the tests. The comparator, memoization, query-count, revision-contract, and call-count tests listed per finding remain in place.
 
 **Exit criteria:** Toggling a set re-renders only the affected rows; typing does not trigger a full workout re-render; returning to Analytics with no changes does not hydrate the full database; a 500-record dataset scrolls without mounting all rows.
 
@@ -804,20 +825,24 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 ### Phase 3 — Quality gates and accessibility (target: ongoing, start immediately)
 
-- [ ] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
-- [ ] `DX-02` Add React Native Testing Library and critical-flow tests.
-- [ ] `DX-03` Add coverage reporting and a threshold.
-- [ ] `DX-04` Add one end-to-end smoke journey.
-- [ ] `DX-06` Add dependency automation and an audit policy.
-- [ ] `DX-08` Fix version and documentation drift.
-- [ ] `DX-09` Add collaboration and security templates.
-- [ ] `A11Y-01` Label the core logger controls.
-- [ ] `A11Y-02` Label rest controls, mini bar, and read-only banner.
-- [ ] `A11Y-03` Add live regions and value semantics.
-- [ ] `A11Y-04` Standardize modal semantics.
-- [ ] `A11Y-05` Add a required-label primitive.
+- [x] `DX-01` Add ESLint, Prettier/Biome, and CI enforcement.
+- [x] `DX-02` Add React Native Testing Library and critical-flow tests.
+- [x] `DX-03` Add coverage reporting and a threshold.
+- [x] `DX-04` Add one end-to-end smoke journey.
+- [x] `DX-06` Add dependency automation and an audit policy.
+- [x] `DX-08` Fix version and documentation drift.
+- [x] `DX-09` Add collaboration and security templates.
+- [x] `A11Y-01` Label the core logger controls.
+- [x] `A11Y-02` Label rest controls, mini bar, and read-only banner.
+- [x] `A11Y-03` Add live regions and value semantics.
+- [x] `A11Y-04` Standardize modal semantics.
+- [x] `A11Y-05` Add a required-label primitive.
 
 **Exit criteria:** CI enforces lint, types, tests, and coverage; the core flows have UI tests; the logger and rest controls are screen-reader operable.
+
+**Verification note (2026-10-18):** All Phase 3 findings are Done. CI enforces lint, format, version sync, the dependency audit policy, the dead-code scan, both typechecks, coverage thresholds (91.39% lines / 83.66% branches / 89.40% functions on the 598 + 173 test suite), and the Maestro emulator journey. The logger and rest surfaces are labelled with automated enforcement, and the deferred `PERF-03`/`PERF-09` renderer checks landed with `DX-02`.
+
+**Base update (2026-10-18):** This branch was moved off `main` and onto `develop` (the 1.1 integration line) so every phase opens as its own PR into `develop`. `develop`'s newer work — tracking types, next targets, rotations, body weight, automatic backups, the native rest cue, the exercise-photo switch, and the gym-restore fix — was carried into this branch and brought up to the Phase 3 standards: raw touchables in the new components are labelled for the `A11Y-06` scan, lint/format/typechecks are clean on the merged tree, develop's tests were adapted to the lazy exercise catalog (`getDefaultExercises`) and to the test typechecker, and `tests/unit/tracking-display.test.ts` covers the tracking display helpers. Re-measured on the merged tree: 695 unit + 189 integration tests, coverage 90.71% lines / 84.20% branches / 89.41% functions.
 
 ### Phase 4 — Product follow-through (target: after Phase 1-2)
 
@@ -831,6 +856,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [ ] `ARCH-09` Decide and document the navigation model.
 - [ ] `ARCH-10` Remove dead code.
 - [ ] `ARCH-11` Tighten storage-boundary types.
+- [ ] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
 
 ---
 

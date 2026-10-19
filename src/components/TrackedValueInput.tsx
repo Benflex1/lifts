@@ -63,7 +63,8 @@ const TrackedValueInput: React.FC<Props> = ({
       return;
     }
     const parsed = parse(cleaned);
-    if (parsed !== undefined && Number.isFinite(parsed) && parsed >= 0) latestCommitRef.current(parsed);
+    if (parsed !== undefined && Number.isFinite(parsed) && parsed >= 0)
+      latestCommitRef.current(parsed);
   };
 
   const handleFocus = (e: any) => {
@@ -110,7 +111,7 @@ const TrackedValueInput: React.FC<Props> = ({
 };
 
 /** Time typed as "45", "1:30" or "1:02:05", stored in seconds. */
-export const DurationInput: React.FC<BaseProps> = (props) => (
+export const DurationInput: React.FC<BaseProps> = props => (
   <TrackedValueInput
     {...props}
     format={formatSetDuration}
@@ -121,14 +122,14 @@ export const DurationInput: React.FC<BaseProps> = (props) => (
 );
 
 /** Distance typed in km or miles (following the weight unit), stored in metres. */
-export const DistanceInput: React.FC<BaseProps> = (props) => {
+export const DistanceInput: React.FC<BaseProps> = props => {
   const { unit } = useSettings();
   const distanceUnit = distanceUnitFor(unit);
   return (
     <TrackedValueInput
       {...props}
-      format={(meters) => metersToDisplay(meters, distanceUnit).toString()}
-      parse={(text) => {
+      format={meters => metersToDisplay(meters, distanceUnit).toString()}
+      parse={text => {
         const parsed = parseFloat(text);
         return Number.isNaN(parsed) ? undefined : displayToMeters(parsed, distanceUnit);
       }}

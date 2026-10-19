@@ -6,7 +6,11 @@ const NOW = 1_700_000_000_000;
 
 describe('shiftRestCountdown', () => {
   it('moves the end and the total together so the progress bar does not jump back', () => {
-    const shifted = shiftRestCountdown({ endsAt: NOW + 60_000, totalSeconds: 60, exerciseName: 'Squat' }, 30, NOW);
+    const shifted = shiftRestCountdown(
+      { endsAt: NOW + 60_000, totalSeconds: 60, exerciseName: 'Squat' },
+      30,
+      NOW,
+    );
     assert.deepEqual(shifted, { endsAt: NOW + 90_000, totalSeconds: 90, exerciseName: 'Squat' });
   });
 

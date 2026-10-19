@@ -24,7 +24,8 @@ export interface ExerciseCatalogQuery {
 }
 
 function sameExerciseList(previous: Exercise[], results: Exercise[]): boolean {
-  return previous.length === results.length &&
+  return (
+    previous.length === results.length &&
     previous.every(
       (ex, idx) =>
         ex === results[idx] ||
@@ -32,7 +33,8 @@ function sameExerciseList(previous: Exercise[], results: Exercise[]): boolean {
           ex.name === results[idx].name &&
           ex.equipment === results[idx].equipment &&
           ex.primaryMuscles.join() === results[idx].primaryMuscles.join()),
-    );
+    )
+  );
 }
 
 export function useExerciseCatalog(filters: ExerciseCatalogFilters): ExerciseCatalogQuery {

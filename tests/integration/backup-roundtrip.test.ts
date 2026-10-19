@@ -14,60 +14,85 @@ class FailingSqliteDriver implements SqliteDriver {
   private calls = 0;
   public armed = false;
 
-  constructor(private readonly inner: NodeSqliteDriver, private readonly failAfter: number) {}
+  constructor(
+    private readonly inner: NodeSqliteDriver,
+    private readonly failAfter: number,
+  ) {}
 
-  execAsync(sql: string): Promise<void> { return this.inner.execAsync(sql); }
-  getFirstAsync<T>(sql: string, ...params: any[]): Promise<T | null> { return this.inner.getFirstAsync<T>(sql, ...params); }
-  getAllAsync<T>(sql: string, ...params: any[]): Promise<T[]> { return this.inner.getAllAsync<T>(sql, ...params); }
-  async runAsync(sql: string, ...params: any[]): Promise<{ changes: number; lastInsertRowId: number }> {
+  execAsync(sql: string): Promise<void> {
+    return this.inner.execAsync(sql);
+  }
+  getFirstAsync<T>(sql: string, ...params: any[]): Promise<T | null> {
+    return this.inner.getFirstAsync<T>(sql, ...params);
+  }
+  getAllAsync<T>(sql: string, ...params: any[]): Promise<T[]> {
+    return this.inner.getAllAsync<T>(sql, ...params);
+  }
+  async runAsync(
+    sql: string,
+    ...params: any[]
+  ): Promise<{ changes: number; lastInsertRowId: number }> {
     const result = await this.inner.runAsync(sql, ...params);
     if (this.armed && ++this.calls === this.failAfter) throw new Error('Injected merge failure');
     return result;
   }
-  withTransactionAsync(task: () => Promise<void>): Promise<void> { return this.inner.withTransactionAsync(task); }
-  close(): void { this.inner.close(); }
+  withTransactionAsync(task: () => Promise<void>): Promise<void> {
+    return this.inner.withTransactionAsync(task);
+  }
+  close(): void {
+    this.inner.close();
+  }
 }
 
-function createFailingIdbFactory(failAfterWrites: number): { factory: IDBFactory; arm: () => void } {
+function createFailingIdbFactory(failAfterWrites: number): {
+  factory: IDBFactory;
+  arm: () => void;
+} {
   let enabled = false;
   let writes = 0;
 
-  const wrapStore = (store: any, transaction: any): any => new Proxy(store, {
-    get(target, property, receiver) {
-      if (['add', 'clear', 'delete', 'put'].includes(String(property))) {
-        return (...args: any[]) => {
-          const result = target[property](...args);
-          if (enabled && ++writes === failAfterWrites) transaction.abort();
-          return result;
-        };
-      }
-      const value = Reflect.get(target, property, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+  const wrapStore = (store: any, transaction: any): any =>
+    new Proxy(store, {
+      get(target, property, receiver) {
+        if (['add', 'clear', 'delete', 'put'].includes(String(property))) {
+          return (...args: any[]) => {
+            const result = target[property](...args);
+            if (enabled && ++writes === failAfterWrites) transaction.abort();
+            return result;
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
 
-  const wrapTransaction = (transaction: any): any => new Proxy(transaction, {
-    get(target, property, receiver) {
-      if (property === 'objectStore') return (name: string) => wrapStore(target.objectStore(name), target);
-      const value = Reflect.get(target, property, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+  const wrapTransaction = (transaction: any): any =>
+    new Proxy(transaction, {
+      get(target, property, receiver) {
+        if (property === 'objectStore')
+          return (name: string) => wrapStore(target.objectStore(name), target);
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
 
-  const wrapDatabase = (database: any): any => new Proxy(database, {
-    get(target, property, receiver) {
-      if (property === 'transaction') return (...args: any[]) => wrapTransaction(target.transaction(...args));
-      const value = Reflect.get(target, property, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+  const wrapDatabase = (database: any): any =>
+    new Proxy(database, {
+      get(target, property, receiver) {
+        if (property === 'transaction')
+          return (...args: any[]) => wrapTransaction(target.transaction(...args));
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
 
   const factory = {
     open(name: string, version?: number): IDBOpenDBRequest {
       const request = indexedDB.open(name, version);
       return new Proxy(request, {
         get(target, property, receiver) {
-          if (property === 'result') return target.result ? wrapDatabase(target.result) : target.result;
+          if (property === 'result')
+            return target.result ? wrapDatabase(target.result) : target.result;
           return Reflect.get(target, property, receiver);
         },
       });
@@ -76,31 +101,53 @@ function createFailingIdbFactory(failAfterWrites: number): { factory: IDBFactory
 
   return {
     factory,
-    arm: () => { writes = 0; enabled = true; },
+    arm: () => {
+      writes = 0;
+      enabled = true;
+    },
   };
 }
 
 function buildFailureSnapshot(before: DataSnapshot): DataSnapshot {
   const gym = {
-    id: 'gym-merge-failure', name: 'Merge Failure Gym', color: '#10B981', isDefault: false,
+    id: 'gym-merge-failure',
+    name: 'Merge Failure Gym',
+    color: '#10B981',
+    isDefault: false,
     createdAt: '2026-09-10T00:00:00.000Z',
   };
   const workout: Workout = {
-    id: 'merge-failure-workout', name: 'Merge Failure Workout', gymId: gym.id,
-    startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [],
+    id: 'merge-failure-workout',
+    name: 'Merge Failure Workout',
+    gymId: gym.id,
+    startTime: '2026-09-10T08:00:00.000Z',
+    durationSeconds: 1,
+    totalVolumeKg: 0,
+    exercises: [],
   };
   return {
     exercises: [],
     routines: [],
     workouts: [workout],
-    drafts: [{ version: 1, workout: { ...workout, id: 'merge-failure-draft' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null }],
+    drafts: [
+      {
+        version: 1,
+        workout: { ...workout, id: 'merge-failure-draft' },
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+      },
+    ],
     settings: { 'merge-failure-setting': 'present' },
     gyms: [...before.gyms, gym],
-    exerciseGymScopes: [...before.exerciseGymScopes, {
-      exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
-      scopeType: 'linked_group',
-      linkedGymIds: ['gym-default', gym.id],
-    }],
+    exerciseGymScopes: [
+      ...before.exerciseGymScopes,
+      {
+        exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+        scopeType: 'linked_group',
+        linkedGymIds: ['gym-default', gym.id],
+      },
+    ],
   };
 }
 
@@ -140,7 +187,7 @@ describe('Backup Roundtrip & Merge Safety', () => {
           supersetId: 'ss-roundtrip-1',
         },
       ],
-      'Focus on mind-muscle connection'
+      'Focus on mind-muscle connection',
     );
 
     // 3. Create completed workout with:
@@ -175,10 +222,42 @@ describe('Backup Roundtrip & Merge Safety', () => {
             primaryMuscles: ['pectorals'],
           },
           sets: [
-            { id: 's1', setNumber: 1, type: 'warmup', weightKg: 20, reps: 15, isCompleted: true, rpe: 5 },
-            { id: 's2', setNumber: 2, type: 'normal', weightKg: 100, reps: 8, isCompleted: true, rpe: 8.5 },
-            { id: 's3', setNumber: 3, type: 'drop', weightKg: 72.5, reps: 10, isCompleted: true, rpe: 9 },
-            { id: 's4', setNumber: 4, type: 'failure', weightKg: 60, reps: 12, isCompleted: true, rpe: 10 },
+            {
+              id: 's1',
+              setNumber: 1,
+              type: 'warmup',
+              weightKg: 20,
+              reps: 15,
+              isCompleted: true,
+              rpe: 5,
+            },
+            {
+              id: 's2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 100,
+              reps: 8,
+              isCompleted: true,
+              rpe: 8.5,
+            },
+            {
+              id: 's3',
+              setNumber: 3,
+              type: 'drop',
+              weightKg: 72.5,
+              reps: 10,
+              isCompleted: true,
+              rpe: 9,
+            },
+            {
+              id: 's4',
+              setNumber: 4,
+              type: 'failure',
+              weightKg: 60,
+              reps: 12,
+              isCompleted: true,
+              rpe: 10,
+            },
           ],
         },
         {
@@ -195,7 +274,14 @@ describe('Backup Roundtrip & Merge Safety', () => {
           },
           sets: [
             { id: 's5', setNumber: 1, type: 'normal', weightKg: 0, reps: 20, isCompleted: true },
-            { id: 's6', setNumber: 2, type: 'normal', weightKg: 12.25, reps: 15, isCompleted: true },
+            {
+              id: 's6',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 12.25,
+              reps: 15,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -223,7 +309,14 @@ describe('Backup Roundtrip & Merge Safety', () => {
             restTimerSeconds: 0,
             supersetId: 'ss-draft-1',
             sets: [
-              { id: 'ds1', setNumber: 1, type: 'normal', weightKg: 100, reps: 2, isCompleted: true },
+              {
+                id: 'ds1',
+                setNumber: 1,
+                type: 'normal',
+                weightKg: 100,
+                reps: 2,
+                isCompleted: true,
+              },
             ],
           },
         ],
@@ -253,7 +346,9 @@ describe('Backup Roundtrip & Merge Safety', () => {
       assert.equal(exportedBackup.version, 3);
       assert.ok(Array.isArray(exportedBackup.gyms));
       assert.ok(Array.isArray(exportedBackup.exerciseGymScopes));
-      const exportedCustom = exportedBackup.exercises.find((exercise: Exercise) => exercise.id === 'custom-pause-squat');
+      const exportedCustom = exportedBackup.exercises.find(
+        (exercise: Exercise) => exercise.id === 'custom-pause-squat',
+      );
       assert.equal(exportedCustom.instructionUrl, 'https://example.com/pause-squat-guide');
       assert.equal(exportedCustom.instructionUrlType, 'website');
 
@@ -282,8 +377,8 @@ describe('Backup Roundtrip & Merge Safety', () => {
       assert.equal(destSnap.routines[0].exercises[0].supersetId, 'ss-roundtrip-1'); // routine supersetId preserved!
 
       // Compare custom exercises
-      const destCustom = destSnap.exercises.filter((e) => e.isCustom);
-      const srcCustom = sourceSnap.exercises.filter((e) => e.isCustom);
+      const destCustom = destSnap.exercises.filter(e => e.isCustom);
+      const srcCustom = sourceSnap.exercises.filter(e => e.isCustom);
       assert.equal(destCustom.length, srcCustom.length);
       assert.equal(destCustom[0].name, 'Pause Squat');
       assert.equal(destCustom[0].instructionUrl, 'https://example.com/pause-squat-guide');
@@ -295,8 +390,8 @@ describe('Backup Roundtrip & Merge Safety', () => {
 
       // Compare multi-gym snapshot data
       assert.deepEqual(
-        destSnap.gyms.filter((gym) => !gym.isDefault),
-        sourceSnap.gyms.filter((gym) => !gym.isDefault),
+        destSnap.gyms.filter(gym => !gym.isDefault),
+        sourceSnap.gyms.filter(gym => !gym.isDefault),
       );
       assert.deepEqual(destSnap.exerciseGymScopes, sourceSnap.exerciseGymScopes);
 
@@ -329,7 +424,9 @@ describe('Backup Roundtrip & Merge Safety', () => {
     await populateSourceStore(fixture.store);
 
     const backup = JSON.parse(await buildBackupJson(fixture.store));
-    const custom = backup.exercises.find((exercise: Exercise) => exercise.id === 'custom-pause-squat');
+    const custom = backup.exercises.find(
+      (exercise: Exercise) => exercise.id === 'custom-pause-squat',
+    );
     custom.instructionUrl = 'https://example.com/another-pause-squat-guide';
 
     await assert.rejects(
@@ -359,17 +456,21 @@ describe('Backup Roundtrip & Merge Safety', () => {
       workouts: [],
       drafts: [],
       settings: {},
-      gyms: [{
-        id: 'gym-default',
-        name: 'Default Gym',
-        color: '#3B82F6',
-        isDefault: true,
-        createdAt: '2026-09-10T00:00:00.000Z',
-      }],
+      gyms: [
+        {
+          id: 'gym-default',
+          name: 'Default Gym',
+          color: '#3B82F6',
+          isDefault: true,
+          createdAt: '2026-09-10T00:00:00.000Z',
+        },
+      ],
       exerciseGymScopes: [],
     };
 
-    const backup = JSON.parse(await buildBackupJson({ readSnapshot: async () => snapshot } as Store));
+    const backup = JSON.parse(
+      await buildBackupJson({ readSnapshot: async () => snapshot } as Store),
+    );
     assert.deepEqual(backup.exercises[0], {
       id: 'custom-generated-metadata',
       name: 'Generated Metadata Exercise',
@@ -386,18 +487,21 @@ describe('Backup Roundtrip & Merge Safety', () => {
       await sourceFixture.store.setSetting('unit', 'lb');
       const exported = JSON.parse(await buildBackupJson(sourceFixture.store));
 
-      await restoreBackup(JSON.stringify({
-        ...exported,
-        settings: {
-          ...exported.settings,
-          automatic_backup_enabled: 'true',
-          automatic_backup_directory_uri: 'content://untrusted/tree',
-          schema_probe: '99',
-          writer_probe: 'lease',
-          migration_probe: 'done',
-          imported_setting: 'kept',
-        },
-      }), emptyDestination.store);
+      await restoreBackup(
+        JSON.stringify({
+          ...exported,
+          settings: {
+            ...exported.settings,
+            automatic_backup_enabled: 'true',
+            automatic_backup_directory_uri: 'content://untrusted/tree',
+            schema_probe: '99',
+            writer_probe: 'lease',
+            migration_probe: 'done',
+            imported_setting: 'kept',
+          },
+        }),
+        emptyDestination.store,
+      );
 
       assert.equal(await emptyDestination.store.getSetting('automatic_backup_enabled'), null);
       assert.equal(await emptyDestination.store.getSetting('automatic_backup_directory_uri'), null);
@@ -425,16 +529,22 @@ describe('Backup Roundtrip & Merge Safety', () => {
         assert.equal(exported.settings.unit, 'lb');
 
         await protectedDestination.store.setSetting('remote_exercise_images', 'true');
-        await restoreBackup(JSON.stringify({
-          ...exported,
-          settings: { ...exported.settings, remote_exercise_images: 'false' },
-        }), protectedDestination.store);
+        await restoreBackup(
+          JSON.stringify({
+            ...exported,
+            settings: { ...exported.settings, remote_exercise_images: 'false' },
+          }),
+          protectedDestination.store,
+        );
         assert.equal(await protectedDestination.store.getSetting('remote_exercise_images'), 'true');
 
-        await restoreBackup(JSON.stringify({
-          ...exported,
-          settings: { ...exported.settings, remote_exercise_images: 'false' },
-        }), emptyDestination.store);
+        await restoreBackup(
+          JSON.stringify({
+            ...exported,
+            settings: { ...exported.settings, remote_exercise_images: 'false' },
+          }),
+          emptyDestination.store,
+        );
         assert.equal(await emptyDestination.store.getSetting('remote_exercise_images'), null);
 
         const emptySnapshot = await emptyDestination.store.readSnapshot();
@@ -465,17 +575,27 @@ describe('Backup Roundtrip & Merge Safety', () => {
         assert.equal(exported.settings.unit, 'lb');
 
         await protectedDestination.store.setSetting('health_sync_enabled', 'true');
-        await restoreBackup(JSON.stringify({
-          ...exported,
-          settings: { ...exported.settings, health_sync_enabled: 'false', imported_setting: 'kept' },
-        }), protectedDestination.store);
+        await restoreBackup(
+          JSON.stringify({
+            ...exported,
+            settings: {
+              ...exported.settings,
+              health_sync_enabled: 'false',
+              imported_setting: 'kept',
+            },
+          }),
+          protectedDestination.store,
+        );
         assert.equal(await protectedDestination.store.getSetting('health_sync_enabled'), 'true');
         assert.equal(await protectedDestination.store.getSetting('imported_setting'), 'kept');
 
-        await restoreBackup(JSON.stringify({
-          ...exported,
-          settings: { ...exported.settings, health_sync_enabled: 'true' },
-        }), emptyDestination.store);
+        await restoreBackup(
+          JSON.stringify({
+            ...exported,
+            settings: { ...exported.settings, health_sync_enabled: 'true' },
+          }),
+          emptyDestination.store,
+        );
         assert.equal(await emptyDestination.store.getSetting('health_sync_enabled'), null);
 
         const emptySnapshot = await emptyDestination.store.readSnapshot();
@@ -568,36 +688,48 @@ describe('Backup Roundtrip & Merge Safety', () => {
 
   for (const destinationPlatform of ['native', 'web'] as const) {
     it(`remaps colliding gym IDs without overwriting ${destinationPlatform} destination records`, async () => {
-    const sourceFixture = await createStoreFixture('native');
-    const destinationFixture = await createStoreFixture(destinationPlatform);
-    await populateSourceStore(sourceFixture.store);
-    const destinationGym = await destinationFixture.store.createGym('Destination Gym', '#F59E0B');
+      const sourceFixture = await createStoreFixture('native');
+      const destinationFixture = await createStoreFixture(destinationPlatform);
+      await populateSourceStore(sourceFixture.store);
+      const destinationGym = await destinationFixture.store.createGym('Destination Gym', '#F59E0B');
 
-    const parsed = JSON.parse(await buildBackupJson(sourceFixture.store));
-    const sourceGym = parsed.gyms.find((gym: any) => gym.name === 'Satellite Gym');
-    sourceGym.id = destinationGym.id;
-    parsed.workouts[0].gymId = destinationGym.id;
-    parsed.drafts[0].workout.gymId = destinationGym.id;
-    parsed.exerciseGymScopes[0].linkedGymIds[1] = destinationGym.id;
+      const parsed = JSON.parse(await buildBackupJson(sourceFixture.store));
+      const sourceGym = parsed.gyms.find((gym: any) => gym.name === 'Satellite Gym');
+      sourceGym.id = destinationGym.id;
+      parsed.workouts[0].gymId = destinationGym.id;
+      parsed.drafts[0].workout.gymId = destinationGym.id;
+      parsed.exerciseGymScopes[0].linkedGymIds[1] = destinationGym.id;
 
-    const { preview, snapshotToMerge } = await computeRestorePlan(parsed, destinationFixture.store);
-    assert.equal(preview.gymsCount, 1);
-    assert.equal(preview.scopeOverridesCount, 1);
-    const importedGym = snapshotToMerge.gyms[0];
-    assert.match(importedGym.id, /^gym-import-restore-/);
-    assert.equal(snapshotToMerge.workouts[0].gymId, importedGym.id);
-    assert.equal(snapshotToMerge.drafts[0].workout.gymId, importedGym.id);
-    assert.deepEqual(snapshotToMerge.exerciseGymScopes[0].linkedGymIds, ['gym-default', importedGym.id]);
+      const { preview, snapshotToMerge } = await computeRestorePlan(
+        parsed,
+        destinationFixture.store,
+      );
+      assert.equal(preview.gymsCount, 1);
+      assert.equal(preview.scopeOverridesCount, 1);
+      const importedGym = snapshotToMerge.gyms[0];
+      assert.match(importedGym.id, /^gym-import-restore-/);
+      assert.equal(snapshotToMerge.workouts[0].gymId, importedGym.id);
+      assert.equal(snapshotToMerge.drafts[0].workout.gymId, importedGym.id);
+      assert.deepEqual(snapshotToMerge.exerciseGymScopes[0].linkedGymIds, [
+        'gym-default',
+        importedGym.id,
+      ]);
 
-    await destinationFixture.store.mergeSnapshot(snapshotToMerge);
-    const destinationSnapshot = await destinationFixture.store.readSnapshot();
-    assert.equal(destinationSnapshot.gyms.find((gym) => gym.id === destinationGym.id)?.name, 'Destination Gym');
-    assert.equal(destinationSnapshot.workouts[0].gymId, importedGym.id);
-    assert.equal(destinationSnapshot.drafts[0].workout.gymId, importedGym.id);
-    assert.deepEqual(destinationSnapshot.exerciseGymScopes[0].linkedGymIds, ['gym-default', importedGym.id]);
+      await destinationFixture.store.mergeSnapshot(snapshotToMerge);
+      const destinationSnapshot = await destinationFixture.store.readSnapshot();
+      assert.equal(
+        destinationSnapshot.gyms.find(gym => gym.id === destinationGym.id)?.name,
+        'Destination Gym',
+      );
+      assert.equal(destinationSnapshot.workouts[0].gymId, importedGym.id);
+      assert.equal(destinationSnapshot.drafts[0].workout.gymId, importedGym.id);
+      assert.deepEqual(destinationSnapshot.exerciseGymScopes[0].linkedGymIds, [
+        'gym-default',
+        importedGym.id,
+      ]);
 
-    await sourceFixture.dispose();
-    await destinationFixture.dispose();
+      await sourceFixture.dispose();
+      await destinationFixture.dispose();
     });
   }
 
@@ -611,7 +743,10 @@ describe('Backup Roundtrip & Merge Safety', () => {
     };
     const before = await fixture.store.readSnapshot();
 
-    await assert.rejects(() => restoreBackup(JSON.stringify(parsed), fixture.store), /Conflicting exercise gym scope/);
+    await assert.rejects(
+      () => restoreBackup(JSON.stringify(parsed), fixture.store),
+      /Conflicting exercise gym scope/,
+    );
     assert.deepEqual(await fixture.store.readSnapshot(), before);
     await fixture.dispose();
   });
@@ -627,7 +762,16 @@ describe('Backup Roundtrip & Merge Safety', () => {
         exerciseId: exercise.id,
         exercise,
         restTimerSeconds: 90,
-        sets: [{ id: duplicateSetId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+        sets: [
+          {
+            id: duplicateSetId,
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 20,
+            reps: 8,
+            isCompleted: true,
+          },
+        ],
       });
       const workout: Workout = {
         id: `duplicate-set-workout-${platform}`,
@@ -644,21 +788,25 @@ describe('Backup Roundtrip & Merge Safety', () => {
           ...workout,
           id: `duplicate-set-draft-${platform}`,
           name: 'Duplicate Set Draft',
-          exercises: [makeExercise('duplicate-draft-exercise-1'), makeExercise('duplicate-draft-exercise-2')],
+          exercises: [
+            makeExercise('duplicate-draft-exercise-1'),
+            makeExercise('duplicate-draft-exercise-2'),
+          ],
         },
         savedAt: '2026-09-10T08:01:00.000Z',
         revision: 1,
         restTimer: null,
       };
-      const merge = (candidate: { workouts: Workout[]; drafts: WorkoutDraft[] }) => fixture.store.mergeSnapshot({
-        exercises: [],
-        routines: [],
-        workouts: candidate.workouts,
-        drafts: candidate.drafts,
-        settings: {},
-        gyms: [],
-        exerciseGymScopes: [],
-      });
+      const merge = (candidate: { workouts: Workout[]; drafts: WorkoutDraft[] }) =>
+        fixture.store.mergeSnapshot({
+          exercises: [],
+          routines: [],
+          workouts: candidate.workouts,
+          drafts: candidate.drafts,
+          settings: {},
+          gyms: [],
+          exerciseGymScopes: [],
+        });
 
       await assert.rejects(() => merge({ workouts: [workout], drafts: [] }), /Duplicate set ID/);
       assert.deepEqual(await fixture.store.readSnapshot(), before);
@@ -679,7 +827,9 @@ describe('Backup Roundtrip & Merge Safety', () => {
         exerciseId: exercise.id,
         exercise,
         restTimerSeconds: 90,
-        sets: [{ id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+        sets: [
+          { id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
+        ],
       });
       const makeWorkout = (id: string, exerciseId: string, setId: string): Workout => ({
         id,
@@ -694,53 +844,111 @@ describe('Backup Roundtrip & Merge Safety', () => {
         id,
         name: id,
         createdAt: '2026-09-10T08:00:00.000Z',
-        exercises: [{
-          id: exerciseInstanceId,
-          exerciseId: exercise.id,
-          exercise,
-          orderIndex: 0,
-          targetSets: 1,
-          targetReps: '8',
-          restTimerSeconds: 90,
-        }],
+        exercises: [
+          {
+            id: exerciseInstanceId,
+            exerciseId: exercise.id,
+            exercise,
+            orderIndex: 0,
+            targetSets: 1,
+            targetReps: '8',
+            restTimerSeconds: 90,
+          },
+        ],
       });
-      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) => fixture.store.mergeSnapshot({
-        exercises: [],
-        routines,
-        workouts,
-        drafts,
-        settings: {},
-        gyms: [],
-        exerciseGymScopes: [],
-      });
+      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) =>
+        fixture.store.mergeSnapshot({
+          exercises: [],
+          routines,
+          workouts,
+          drafts,
+          settings: {},
+          gyms: [],
+          exerciseGymScopes: [],
+        });
 
-      await assert.rejects(() => merge([
-        makeWorkout('duplicate-workout-1', 'duplicate-workout-exercise', 'duplicate-workout-set-1'),
-        makeWorkout('duplicate-workout-2', 'duplicate-workout-exercise', 'duplicate-workout-set-2'),
-      ], []), /Duplicate workout exercise ID/);
+      await assert.rejects(
+        () =>
+          merge(
+            [
+              makeWorkout(
+                'duplicate-workout-1',
+                'duplicate-workout-exercise',
+                'duplicate-workout-set-1',
+              ),
+              makeWorkout(
+                'duplicate-workout-2',
+                'duplicate-workout-exercise',
+                'duplicate-workout-set-2',
+              ),
+            ],
+            [],
+          ),
+        /Duplicate workout exercise ID/,
+      );
       assert.deepEqual(await fixture.store.readSnapshot(), before);
 
-      await assert.rejects(() => merge([
-        makeWorkout('duplicate-set-workout-1', 'duplicate-set-exercise-1', 'duplicate-set-id'),
-        makeWorkout('duplicate-set-workout-2', 'duplicate-set-exercise-2', 'duplicate-set-id'),
-      ], []), /Duplicate set ID/);
+      await assert.rejects(
+        () =>
+          merge(
+            [
+              makeWorkout(
+                'duplicate-set-workout-1',
+                'duplicate-set-exercise-1',
+                'duplicate-set-id',
+              ),
+              makeWorkout(
+                'duplicate-set-workout-2',
+                'duplicate-set-exercise-2',
+                'duplicate-set-id',
+              ),
+            ],
+            [],
+          ),
+        /Duplicate set ID/,
+      );
       assert.deepEqual(await fixture.store.readSnapshot(), before);
 
-      await assert.rejects(() => merge([
-        makeWorkout('duplicate-cross-parent-workout', 'duplicate-cross-parent-exercise', 'duplicate-cross-parent-set'),
-      ], [], [{
-        version: 1,
-        workout: makeWorkout('duplicate-cross-parent-draft', 'duplicate-cross-parent-exercise', 'duplicate-cross-parent-set'),
-        savedAt: '2026-09-10T08:01:00.000Z',
-        revision: 1,
-        restTimer: null,
-      }]), /Duplicate workout exercise ID|Duplicate set ID/);
+      await assert.rejects(
+        () =>
+          merge(
+            [
+              makeWorkout(
+                'duplicate-cross-parent-workout',
+                'duplicate-cross-parent-exercise',
+                'duplicate-cross-parent-set',
+              ),
+            ],
+            [],
+            [
+              {
+                version: 1,
+                workout: makeWorkout(
+                  'duplicate-cross-parent-draft',
+                  'duplicate-cross-parent-exercise',
+                  'duplicate-cross-parent-set',
+                ),
+                savedAt: '2026-09-10T08:01:00.000Z',
+                revision: 1,
+                restTimer: null,
+              },
+            ],
+          ),
+        /Duplicate workout exercise ID|Duplicate set ID/,
+      );
       assert.deepEqual(await fixture.store.readSnapshot(), before);
 
-      await assert.rejects(() => merge([], [
-        makeRoutine('duplicate-routine-1', 'duplicate-routine-exercise'),
-        makeRoutine('duplicate-routine-2', 'duplicate-routine-exercise'),
-      ]), /Duplicate routine exercise ID/);
+      await assert.rejects(
+        () =>
+          merge(
+            [],
+            [
+              makeRoutine('duplicate-routine-1', 'duplicate-routine-exercise'),
+              makeRoutine('duplicate-routine-2', 'duplicate-routine-exercise'),
+            ],
+          ),
+        /Duplicate routine exercise ID/,
+      );
       assert.deepEqual(await fixture.store.readSnapshot(), before);
       await fixture.dispose();
     });
@@ -757,7 +965,9 @@ describe('Backup Roundtrip & Merge Safety', () => {
         exerciseId: exercise.id,
         exercise,
         restTimerSeconds: 90,
-        sets: [{ id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true }],
+        sets: [
+          { id: setId, setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true },
+        ],
       });
       const makeWorkout = (id: string, exerciseId: string, setId: string): Workout => ({
         id,
@@ -772,55 +982,92 @@ describe('Backup Roundtrip & Merge Safety', () => {
         id,
         name: id,
         createdAt: '2026-09-10T08:00:00.000Z',
-        exercises: [{
-          id: exerciseInstanceId,
-          exerciseId: exercise.id,
-          exercise,
-          orderIndex: 0,
-          targetSets: 1,
-          targetReps: '8',
-          restTimerSeconds: 90,
-        }],
+        exercises: [
+          {
+            id: exerciseInstanceId,
+            exerciseId: exercise.id,
+            exercise,
+            orderIndex: 0,
+            targetSets: 1,
+            targetReps: '8',
+            restTimerSeconds: 90,
+          },
+        ],
       });
-      const existingWorkout = makeWorkout('destination-workout', 'destination-workout-exercise', 'destination-workout-set');
+      const existingWorkout = makeWorkout(
+        'destination-workout',
+        'destination-workout-exercise',
+        'destination-workout-set',
+      );
       const existingRoutine = makeRoutine('destination-routine', 'destination-routine-exercise');
       const existingDraft: WorkoutDraft = {
         version: 1,
-        workout: makeWorkout('destination-draft', 'destination-draft-exercise', 'destination-draft-set'),
+        workout: makeWorkout(
+          'destination-draft',
+          'destination-draft-exercise',
+          'destination-draft-set',
+        ),
         savedAt: '2026-09-10T08:01:00.000Z',
         revision: 1,
         restTimer: null,
       };
-      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) => fixture.store.mergeSnapshot({
-        exercises: [],
-        routines,
-        workouts,
-        drafts,
-        settings: {},
-        gyms: [],
-        exerciseGymScopes: [],
-      });
+      const merge = (workouts: Workout[], routines: Routine[], drafts: WorkoutDraft[] = []) =>
+        fixture.store.mergeSnapshot({
+          exercises: [],
+          routines,
+          workouts,
+          drafts,
+          settings: {},
+          gyms: [],
+          exerciseGymScopes: [],
+        });
 
       await merge([existingWorkout], [existingRoutine], [existingDraft]);
       const seeded = await fixture.store.readSnapshot();
 
-      await assert.rejects(() => merge([
-        makeWorkout('new-workout-parent', 'destination-workout-exercise', 'destination-workout-set'),
-      ], []), /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i);
+      await assert.rejects(
+        () =>
+          merge(
+            [
+              makeWorkout(
+                'new-workout-parent',
+                'destination-workout-exercise',
+                'destination-workout-set',
+              ),
+            ],
+            [],
+          ),
+        /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i,
+      );
       assert.deepEqual(await fixture.store.readSnapshot(), seeded);
 
-      await assert.rejects(() => merge([], [
-        makeRoutine('new-routine-parent', 'destination-routine-exercise'),
-      ]), /existing|collision|Duplicate routine exercise ID/i);
+      await assert.rejects(
+        () => merge([], [makeRoutine('new-routine-parent', 'destination-routine-exercise')]),
+        /existing|collision|Duplicate routine exercise ID/i,
+      );
       assert.deepEqual(await fixture.store.readSnapshot(), seeded);
 
-      await assert.rejects(() => merge([], [], [{
-        version: 1,
-        workout: makeWorkout('new-draft-parent', 'destination-draft-exercise', 'destination-draft-set'),
-        savedAt: '2026-09-10T08:02:00.000Z',
-        revision: 1,
-        restTimer: null,
-      }]), /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i);
+      await assert.rejects(
+        () =>
+          merge(
+            [],
+            [],
+            [
+              {
+                version: 1,
+                workout: makeWorkout(
+                  'new-draft-parent',
+                  'destination-draft-exercise',
+                  'destination-draft-set',
+                ),
+                savedAt: '2026-09-10T08:02:00.000Z',
+                revision: 1,
+                restTimer: null,
+              },
+            ],
+          ),
+        /existing|collision|Duplicate workout exercise ID|Duplicate set ID/i,
+      );
       assert.deepEqual(await fixture.store.readSnapshot(), seeded);
       await fixture.dispose();
     });
@@ -837,7 +1084,14 @@ describe('Backup Roundtrip & Merge Safety', () => {
         const fixture = await createStoreFixture(platform);
         const before = await fixture.store.readSnapshot();
         const exercise = before.exercises[0];
-        const set: any = { id: 'merge-set-1', setNumber: 1, type: 'normal', weightKg: 20, reps: 8, isCompleted: true };
+        const set: any = {
+          id: 'merge-set-1',
+          setNumber: 1,
+          type: 'normal',
+          weightKg: 20,
+          reps: 8,
+          isCompleted: true,
+        };
         if (value === undefined) delete set[field];
         else set[field] = value;
         const workout: Workout = {
@@ -847,24 +1101,30 @@ describe('Backup Roundtrip & Merge Safety', () => {
           startTime: '2026-09-10T08:00:00.000Z',
           durationSeconds: 60,
           totalVolumeKg: 160,
-          exercises: [{
-            id: 'merge-exercise-1',
-            exerciseId: exercise.id,
-            exercise,
-            sets: [set],
-            restTimerSeconds: 90,
-          }],
+          exercises: [
+            {
+              id: 'merge-exercise-1',
+              exerciseId: exercise.id,
+              exercise,
+              sets: [set],
+              restTimerSeconds: 90,
+            },
+          ],
         };
 
-        await assert.rejects(() => fixture.store.mergeSnapshot({
-          exercises: [],
-          routines: [],
-          workouts: [workout],
-          drafts: [],
-          settings: {},
-          gyms: [],
-          exerciseGymScopes: [],
-        }), new RegExp(field));
+        await assert.rejects(
+          () =>
+            fixture.store.mergeSnapshot({
+              exercises: [],
+              routines: [],
+              workouts: [workout],
+              drafts: [],
+              settings: {},
+              gyms: [],
+              exerciseGymScopes: [],
+            }),
+          new RegExp(field),
+        );
         assert.deepEqual(await fixture.store.readSnapshot(), before);
         await fixture.dispose();
       });
@@ -876,24 +1136,40 @@ describe('Backup Roundtrip & Merge Safety', () => {
       const fixture = await createStoreFixture(platform);
       const before = await fixture.store.readSnapshot();
       const trimmedGym = {
-        id: `gym-trim-${platform}`, name: '  Trimmed Gym  ', color: '#10B981', isDefault: false,
+        id: `gym-trim-${platform}`,
+        name: '  Trimmed Gym  ',
+        color: '#10B981',
+        isDefault: false,
         createdAt: '2026-09-10T00:00:00.000Z',
       };
       await fixture.store.mergeSnapshot({
         ...before,
         gyms: [...before.gyms, trimmedGym],
       });
-      assert.equal((await fixture.store.getGyms()).find((gym) => gym.id === trimmedGym.id)?.name, 'Trimmed Gym');
+      assert.equal(
+        (await fixture.store.getGyms()).find(gym => gym.id === trimmedGym.id)?.name,
+        'Trimmed Gym',
+      );
 
       const afterTrim = await fixture.store.readSnapshot();
       for (const createdAt of [1234567890, 'not-a-timestamp'] as const) {
-        await assert.rejects(() => fixture.store.mergeSnapshot({
-          ...afterTrim,
-          gyms: [...afterTrim.gyms, {
-            id: `gym-invalid-${String(createdAt)}`, name: 'Invalid Timestamp', color: '#F59E0B', isDefault: false,
-            createdAt,
-          }],
-        } as any), /createdAt timestamp/);
+        await assert.rejects(
+          () =>
+            fixture.store.mergeSnapshot({
+              ...afterTrim,
+              gyms: [
+                ...afterTrim.gyms,
+                {
+                  id: `gym-invalid-${String(createdAt)}`,
+                  name: 'Invalid Timestamp',
+                  color: '#F59E0B',
+                  isDefault: false,
+                  createdAt,
+                },
+              ],
+            } as any),
+          /createdAt timestamp/,
+        );
       }
       assert.deepEqual(await fixture.store.readSnapshot(), afterTrim);
       await fixture.dispose();
@@ -907,7 +1183,10 @@ describe('Backup Roundtrip & Merge Safety', () => {
     const before = await store.readSnapshot();
     driver.armed = true;
 
-    await assert.rejects(() => store.mergeSnapshot(buildFailureSnapshot(before)), /Injected merge failure/);
+    await assert.rejects(
+      () => store.mergeSnapshot(buildFailureSnapshot(before)),
+      /Injected merge failure/,
+    );
     assert.deepEqual(await store.readSnapshot(), before);
     driver.close();
   });
@@ -920,7 +1199,10 @@ describe('Backup Roundtrip & Merge Safety', () => {
     const before = await store.readSnapshot();
     failingIdb.arm();
 
-    await assert.rejects(() => store.mergeSnapshot(buildFailureSnapshot(before)), /AbortError|TransactionInactiveError|merge failure/i);
+    await assert.rejects(
+      () => store.mergeSnapshot(buildFailureSnapshot(before)),
+      /AbortError|TransactionInactiveError|merge failure/i,
+    );
     assert.deepEqual(await store.readSnapshot(), before);
     await store.close();
     await new Promise<void>((resolve, reject) => {
@@ -942,20 +1224,20 @@ describe('restore onto a fresh install', () => {
       const source = await createStoreFixture(fromPlatform);
       const destination = await createStoreFixture(toPlatform);
 
-      const sourceDefault = (await source.store.getGyms()).find((gym) => gym.isDefault)!;
+      const sourceDefault = (await source.store.getGyms()).find(gym => gym.isDefault)!;
       await source.store.updateGym(sourceDefault.id, { name: 'Home Gym', color: '#F59E0B' });
       const push = (await source.store.getRoutineById('routine-push-template'))!;
       await source.store.saveRoutine(
         push.name,
         push.folderName || '',
-        push.exercises.slice(0, 2).map((exercise) => ({
+        push.exercises.slice(0, 2).map(exercise => ({
           exerciseId: exercise.exerciseId,
           targetSets: 5,
           targetReps: '5',
           restTimerSeconds: 120,
         })),
         push.notes,
-        push.id
+        push.id,
       );
 
       const backupJson = await buildBackupJson(source.store);
@@ -974,11 +1256,17 @@ describe('restore onto a fresh install', () => {
 
       const restoredPush = (await destination.store.getRoutineById('routine-push-template'))!;
       assert.equal(restoredPush.exercises.length, 2);
-      assert.deepEqual(restoredPush.exercises.map((exercise) => exercise.targetSets), [5, 5]);
+      assert.deepEqual(
+        restoredPush.exercises.map(exercise => exercise.targetSets),
+        [5, 5],
+      );
       assert.equal((await destination.store.getRoutines()).length, 3);
 
       // A second import of the same file is a no-op.
-      const { preview: again } = await computeRestorePlan(JSON.parse(backupJson), destination.store);
+      const { preview: again } = await computeRestorePlan(
+        JSON.parse(backupJson),
+        destination.store,
+      );
       assert.equal(again.defaultGymUpdated, false);
       assert.equal(again.routinesCount, 0);
       await restoreBackup(backupJson, destination.store);
@@ -991,25 +1279,28 @@ describe('restore onto a fresh install', () => {
   it('still rejects a built-in routine that was edited on both devices', async () => {
     const source = await createStoreFixture('native');
     const destination = await createStoreFixture('native');
-    for (const [store, sets] of [[source.store, 5], [destination.store, 4]] as const) {
+    for (const [store, sets] of [
+      [source.store, 5],
+      [destination.store, 4],
+    ] as const) {
       const push = (await store.getRoutineById('routine-push-template'))!;
       await store.saveRoutine(
         push.name,
         push.folderName || '',
-        push.exercises.map((exercise) => ({
+        push.exercises.map(exercise => ({
           exerciseId: exercise.exerciseId,
           targetSets: sets,
           targetReps: '5',
           restTimerSeconds: 120,
         })),
         push.notes,
-        push.id
+        push.id,
       );
     }
 
     await assert.rejects(
       restoreBackup(await buildBackupJson(source.store), destination.store),
-      /Conflicting routine ID: routine-push-template/
+      /Conflicting routine ID: routine-push-template/,
     );
     const kept = (await destination.store.getRoutineById('routine-push-template'))!;
     assert.equal(kept.exercises[0].targetSets, 4);

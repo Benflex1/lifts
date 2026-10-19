@@ -21,10 +21,7 @@
       "package": "com.benflex1.lifts",
       "versionCode": 1000005,
       "softwareKeyboardLayoutMode": "resize",
-      "permissions": [
-        "android.permission.health.WRITE_EXERCISE",
-        "android.permission.VIBRATE"
-      ],
+      "permissions": ["android.permission.health.WRITE_EXERCISE", "android.permission.VIBRATE"],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.READ_EXTERNAL_STORAGE",

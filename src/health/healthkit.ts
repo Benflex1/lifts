@@ -5,16 +5,16 @@ import {
   isHealthDataAvailableAsync,
   requestAuthorization,
   saveWorkoutSample,
-} from "@kingstinct/react-native-healthkit";
+} from '@kingstinct/react-native-healthkit';
 
-import type { HealthProvider, HealthWorkoutPayload } from "./contract";
-import { toHealthKitWorkoutRequest } from "./healthkit-payload";
+import type { HealthProvider, HealthWorkoutPayload } from './contract';
+import { toHealthKitWorkoutRequest } from './healthkit-payload';
 
-const HEALTHKIT_WORKOUT_TYPE = "HKWorkoutTypeIdentifier" as const;
+const HEALTHKIT_WORKOUT_TYPE = 'HKWorkoutTypeIdentifier' as const;
 
 export function createHealthKitProvider(): HealthProvider {
   return {
-    id: "healthkit",
+    id: 'healthkit',
 
     async isAvailable(): Promise<boolean> {
       try {
@@ -24,18 +24,16 @@ export function createHealthKitProvider(): HealthProvider {
       }
     },
 
-    async requestWriteAuthorization(): Promise<
-      "granted" | "denied" | "unavailable"
-    > {
+    async requestWriteAuthorization(): Promise<'granted' | 'denied' | 'unavailable'> {
       let available: boolean;
       try {
         available = await isHealthDataAvailableAsync();
       } catch {
-        return "unavailable";
+        return 'unavailable';
       }
 
       if (!available) {
-        return "unavailable";
+        return 'unavailable';
       }
 
       try {
@@ -47,10 +45,10 @@ export function createHealthKitProvider(): HealthProvider {
 
         return authorizationStatusFor(HEALTHKIT_WORKOUT_TYPE) ===
           AuthorizationStatus.sharingAuthorized
-          ? "granted"
-          : "denied";
+          ? 'granted'
+          : 'denied';
       } catch {
-        return "denied";
+        return 'denied';
       }
     },
 
@@ -58,7 +56,7 @@ export function createHealthKitProvider(): HealthProvider {
       const request = toHealthKitWorkoutRequest(payload);
 
       if (!(await isHealthDataAvailableAsync())) {
-        throw new Error("HealthKit is unavailable");
+        throw new Error('HealthKit is unavailable');
       }
 
       // The installed HealthKit package represents this Apple type with its

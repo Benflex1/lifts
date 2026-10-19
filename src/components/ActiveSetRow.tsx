@@ -1,10 +1,12 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { AppTouchable } from './ui';
 import { Check } from 'lucide-react-native';
 import { SetType, WorkoutSet, type TrackingType } from '../types';
 import { kgToDisplay, WeightUnit } from '../utils/units';
 import { formatPreviousMetric } from '../workout/gym-display';
 import {
+  DEFAULT_TRACKING_TYPE,
   distanceUnitFor,
   formatSetDuration,
   metersToDisplay,
@@ -78,7 +80,7 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
   exerciseName,
   targetReps,
   unit,
-  trackingType,
+  trackingType = DEFAULT_TRACKING_TYPE,
   showRpeColumn,
   gymTrackingEnabled,
   setPR,
@@ -99,15 +101,18 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
     >
       <View style={[styles.setRow, set.isCompleted && styles.setRowCompleted]}>
         {/* Set Number / Type Toggle Badge */}
-        <TouchableOpacity
+        <AppTouchable
           style={[styles.setBadge, { backgroundColor: badge.bg, borderColor: badge.border }]}
           onPress={() => onOpenSetOptions(exerciseId, exerciseName, set)}
           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Set ${set.setNumber} options`}
+          accessibilityHint="Opens set type, RPE, and rest options"
         >
           <Text style={[styles.setBadgeText, { color: badge.text }]}>
             {badge.label || set.setNumber}
           </Text>
-        </TouchableOpacity>
+        </AppTouchable>
 
         {/* Previous Performance Comparison / PR Medal */}
         <View style={styles.previousCell}>
@@ -122,7 +127,7 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
               />
             </View>
           ) : set.previousWeightKg !== undefined || set.previousReps !== undefined ? (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.previousButton}
               onPress={() => onApplyPrevious(exerciseId, set, targetReps)}
               disabled={set.isCompleted}
@@ -156,12 +161,11 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
                   trackingType,
                 )}
               </Text>
-            </TouchableOpacity>
+            </AppTouchable>
           ) : (
             <Text style={styles.previousPlaceholder}>—</Text>
           )}
         </View>
-
         {/* Weight Input */}
         {usesWeight(trackingType) && (
           <View style={styles.inputWrapWeight}>
@@ -182,6 +186,7 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
               completed={set.isCompleted}
               style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
               onFocus={onInputFocus}
+              accessibilityLabel={`Weight for set ${set.setNumber}`}
             />
           </View>
         )}
@@ -196,15 +201,18 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
               completed={set.isCompleted}
               style={[styles.cellInput, set.isCompleted && styles.inputCompleted]}
               onFocus={onInputFocus}
+              accessibilityLabel={`Reps for set ${set.setNumber}`}
             />
             {/* Compact RPE badge if defined and inline column is hidden */}
             {!showRpeColumn && set.rpe != null && (
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.compactRpeBadge}
                 onPress={() => onOpenSetOptions(exerciseId, exerciseName, set)}
+                accessibilityRole="button"
+                accessibilityLabel={`Set ${set.setNumber} RPE ${set.rpe}, edit options`}
               >
                 <Text style={styles.compactRpeText}>@{set.rpe}</Text>
-              </TouchableOpacity>
+              </AppTouchable>
             )}
           </View>
         )}
@@ -245,17 +253,19 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
 
         {/* Optional Inline RPE Column */}
         {showRpeColumn && (
-          <TouchableOpacity
+          <AppTouchable
             style={styles.rpeColCell}
             onPress={() => onOpenSetOptions(exerciseId, exerciseName, set)}
             hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Set ${set.setNumber} RPE ${set.rpe ?? 'not set'}, edit options`}
           >
             <Text style={styles.rpeColCellText}>{set.rpe != null ? set.rpe.toString() : '–'}</Text>
-          </TouchableOpacity>
+          </AppTouchable>
         )}
 
         {/* Completion Checkbox */}
-        <TouchableOpacity
+        <AppTouchable
           style={[
             styles.checkBtn,
             set.isCompleted ? styles.checkBtnActive : styles.checkBtnInactive,
@@ -272,7 +282,7 @@ export const ActiveSetRow = React.memo(function ActiveSetRow({
             color={set.isCompleted ? colors.black : colors.textFaint}
             strokeWidth={2.8}
           />
-        </TouchableOpacity>
+        </AppTouchable>
       </View>
     </SwipeableSetRow>
   );

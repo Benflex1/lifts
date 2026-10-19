@@ -65,7 +65,7 @@ const WorkoutScreenInner: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Up next in each rotation */}
-        {programs.states.map((state) => (
+        {programs.states.map(state => (
           <ProgramCard
             key={state.program.folderName}
             state={state}
@@ -86,7 +86,9 @@ const WorkoutScreenInner: React.FC = () => {
           accessibilityRole="button"
           accessibilityLabel="Start empty workout"
         >
-          <View style={[styles.quickStartIcon, quickStart.hasPrograms && styles.quickStartIconQuiet]}>
+          <View
+            style={[styles.quickStartIcon, quickStart.hasPrograms && styles.quickStartIconQuiet]}
+          >
             <Play
               size={quickStart.hasPrograms ? 16 : 20}
               color={colors.primary}
@@ -95,7 +97,10 @@ const WorkoutScreenInner: React.FC = () => {
           </View>
           <View style={styles.quickStartInfo}>
             <Text
-              style={[styles.quickStartTitle, quickStart.hasPrograms && styles.quickStartTitleQuiet]}
+              style={[
+                styles.quickStartTitle,
+                quickStart.hasPrograms && styles.quickStartTitleQuiet,
+              ]}
             >
               Start Empty Workout
             </Text>
@@ -208,7 +213,9 @@ const WorkoutScreenInner: React.FC = () => {
               <Plus size={22} color={colors.primary} />
             </View>
             <Text style={styles.emptyTitle}>Create your first routine</Text>
-            <Text style={styles.emptyText}>Save your go-to workouts and start them in one tap.</Text>
+            <Text style={styles.emptyText}>
+              Save your go-to workouts and start them in one tap.
+            </Text>
           </TouchableOpacity>
         ) : routines.filtered.length === 0 ? (
           <View style={styles.emptyFolderBox}>

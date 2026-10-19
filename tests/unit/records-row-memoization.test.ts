@@ -45,18 +45,27 @@ function makeRecord(id: string, name: string): ExerciseRecordSummary {
 async function loadRow() {
   const module = await import('../../src/components/RecordsView');
   const renders: string[] = [];
-  const Counted = React.memo(function CountedRow(props: any) {
-    renders.push(props.record.exerciseId);
-    return React.createElement(module.RecordRow, props);
-  }, (prev: any, next: any) => {
-    // Mirrors React.memo's default shallow comparison over the props RecordRow receives.
-    const keys = ['record', 'unit', 'showDivider', 'isFirst', 'isLast', 'onOpen'] as const;
-    return keys.every((key) => prev[key] === next[key]);
-  });
+  const Counted = React.memo(
+    function CountedRow(props: any) {
+      renders.push(props.record.exerciseId);
+      return React.createElement(module.RecordRow, props);
+    },
+    (prev: any, next: any) => {
+      // Mirrors React.memo's default shallow comparison over the props RecordRow receives.
+      const keys = ['record', 'unit', 'showDivider', 'isFirst', 'isLast', 'onOpen'] as const;
+      return keys.every(key => prev[key] === next[key]);
+    },
+  );
   return { module, Counted, renders };
 }
 
-function RowHarness({ records, Counted }: { records: ExerciseRecordSummary[]; Counted: React.ComponentType<any> }) {
+function RowHarness({
+  records,
+  Counted,
+}: {
+  records: ExerciseRecordSummary[];
+  Counted: React.ComponentType<any>;
+}) {
   return React.createElement(
     React.Fragment,
     null,

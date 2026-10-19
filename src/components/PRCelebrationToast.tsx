@@ -1,12 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { AppTouchable } from './ui';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -76,6 +70,8 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
+    // Animation handles are refs; restarting the toast only on a new event is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event]);
 
   const handleDismiss = () => {
@@ -97,7 +93,16 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
 
   if (!event) return null;
 
-  const { achievement, exerciseName, weightKg, reps, durationSeconds, distanceM, trackingType, secondaryCount = 0 } = event;
+  const {
+    achievement,
+    exerciseName,
+    weightKg,
+    reps,
+    durationSeconds,
+    distanceM,
+    trackingType,
+    secondaryCount = 0,
+  } = event;
   const accent = PR_RANK_COLORS[achievement.rank];
   const rankTitle =
     achievement.rank === 1
@@ -109,7 +114,9 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
         : 'Your 3rd best';
   const setText = trackingType
     ? formatTrackedSet({ weightKg, reps, durationSeconds, distanceM }, trackingType, unit)
-    : weightKg > 0 ? `${formatWeight(weightKg, unit)} × ${reps}` : `${reps} reps`;
+    : weightKg > 0
+      ? `${formatWeight(weightKg, unit)} × ${reps}`
+      : `${reps} reps`;
   const desc = formatPRDescription(achievement, unit);
 
   return (
@@ -123,12 +130,13 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
         },
       ]}
     >
-      <TouchableOpacity
+      <AppTouchable
         style={[styles.card, { borderColor: accent + '55' }]}
         activeOpacity={0.9}
         onPress={handleDismiss}
         accessibilityRole="alert"
         accessibilityLabel={`${rankTitle}: ${exerciseName}, ${setText}. ${desc}`}
+        accessibilityLiveRegion="assertive"
       >
         <PRMark rank={achievement.rank} size={40} />
 
@@ -145,7 +153,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
           </Text>
         </View>
 
-        <TouchableOpacity
+        <AppTouchable
           style={styles.closeBtn}
           onPress={handleDismiss}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -153,8 +161,8 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
           accessibilityLabel="Dismiss PR notification"
         >
           <X size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </AppTouchable>
+      </AppTouchable>
     </Animated.View>
   );
 };

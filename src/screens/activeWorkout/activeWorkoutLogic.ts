@@ -87,7 +87,7 @@ export function resolveDisplayedActiveGym(
   gyms: Gym[],
   workoutGymId: string | undefined,
 ): Gym | null {
-  return activeGym || gyms.find((gym) => gym.id === workoutGymId) || null;
+  return activeGym || gyms.find(gym => gym.id === workoutGymId) || null;
 }
 
 /** Nearest preceding set that is a weighted working set (skips warmups and unweighted sets). */
@@ -98,7 +98,7 @@ export function findPreviousWorkingSet(
   return sets
     .slice(0, setIndex)
     .reverse()
-    .find((s) => s.type !== 'warmup' && s.weightKg > 0);
+    .find(s => s.type !== 'warmup' && s.weightKg > 0);
 }
 
 /** The 20/25/30 % drop-set weight suggestions derived from a working set. */

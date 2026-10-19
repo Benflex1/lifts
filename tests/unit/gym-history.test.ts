@@ -7,10 +7,18 @@ import {
 } from '../../src/workout/gym-history';
 
 const machine: Exercise = {
-  id: 'lat-machine', name: 'Lat Machine', category: 'strength', equipment: 'machine', primaryMuscles: ['lats'],
+  id: 'lat-machine',
+  name: 'Lat Machine',
+  category: 'strength',
+  equipment: 'machine',
+  primaryMuscles: ['lats'],
 };
 const barbell: Exercise = {
-  id: 'barbell-row', name: 'Barbell Row', category: 'strength', equipment: 'barbell', primaryMuscles: ['back'],
+  id: 'barbell-row',
+  name: 'Barbell Row',
+  category: 'strength',
+  equipment: 'barbell',
+  primaryMuscles: ['back'],
 };
 const occurrence = (
   workoutId: string,
@@ -18,7 +26,7 @@ const occurrence = (
   gymId: string,
   gymName: string,
   weightKg: number,
-  reps: number
+  reps: number,
 ): CompletedExerciseOccurrence => ({
   workoutId,
   startTime,
@@ -70,7 +78,7 @@ describe('gym-aware previous-set resolution', () => {
     const [suggestion] = resolvePreviousSetsForExercise(
       machine,
       [emptyNewest, history[1]],
-      'gym-c'
+      'gym-c',
     );
 
     assert.equal(suggestion.weightKg, 45);

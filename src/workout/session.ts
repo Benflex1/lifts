@@ -47,7 +47,6 @@ export function createSessionController(
 
   const listeners = new Set<(s: SessionState) => void>();
   let saveTimer: any = null;
-  let isDirty = false;
   let firstDirtyTime: number | null = null;
   let inFlightWrite: Promise<void> | null = null;
 
@@ -67,7 +66,6 @@ export function createSessionController(
       clearTimeout(saveTimer);
       saveTimer = null;
     }
-    isDirty = false;
     firstDirtyTime = null;
   }
 
@@ -159,7 +157,6 @@ export function createSessionController(
     };
     notify();
 
-    isDirty = true;
     if (firstDirtyTime === null) {
       firstDirtyTime = currentNow;
     }

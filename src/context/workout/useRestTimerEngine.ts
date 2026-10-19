@@ -7,11 +7,7 @@ import { getSetting, setSetting } from '../../database/db';
 import { computeRemaining, nextRemainingTickDelay } from '../../utils/timer';
 import { getExactAlarmStatus, openExactAlarmSettings } from '../../utils/exactAlarms';
 import { reportError } from '../../utils/errorReporting';
-import {
-  RestCountdown,
-  restAlarmForAppState,
-  shiftRestCountdown,
-} from '../../utils/restTimer';
+import { RestCountdown, restAlarmForAppState, shiftRestCountdown } from '../../utils/restTimer';
 import {
   initRestNotifications,
   scheduleRestNotification,
@@ -91,7 +87,7 @@ export function useRestTimerEngine(
   useEffect(() => {
     const handler = (state: AppStateStatus) => {
       if (state === 'background' && controllerRef.current && sessionPhase === 'active') {
-        controllerRef.current.flush().catch((error) => {
+        controllerRef.current.flush().catch(error => {
           reportError(error, { scope: 'workout.autosave.background' });
         });
       }
@@ -129,7 +125,7 @@ export function useRestTimerEngine(
       const remaining = computeRemaining(endsAt, now);
       if (remaining <= 0) {
         const expiredRecently = Math.abs(now - endsAt) < 1500;
-        setRestTimer((prev) => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
+        setRestTimer(prev => ({ ...prev, isActive: false, remainingSeconds: 0, endsAt: null }));
         const ctrl = controllerRef.current;
         if (ctrl) {
           const state = ctrl.getState();
@@ -180,7 +176,7 @@ export function useRestTimerEngine(
           lastBuzzedSecondRef.current = null;
         }
 
-        setRestTimer((prev) => {
+        setRestTimer(prev => {
           if (prev.remainingSeconds === remaining) return prev;
           return { ...prev, remainingSeconds: remaining };
         });
@@ -203,7 +199,7 @@ export function useRestTimerEngine(
   useEffect(() => {
     if (!isRestCueNative() || !restTimer.isActive || restTimer.endsAt === null) return;
     void scheduleRestNotification(restTimer.endsAt, restTimer.exerciseName);
-  }, [restTimer.isActive, restTimer.endsAt]);
+  }, [restTimer.isActive, restTimer.endsAt, restTimer.exerciseName]);
 
   // Without exact alarms (denied by default from Android 14) the cue can fire seconds or minutes late,
   // so ask once, on the first rest. Settings keeps a button for later.
@@ -223,7 +219,7 @@ export function useRestTimerEngine(
         cancelLabel: 'Not now',
       });
       if (allow) openExactAlarmSettings();
-    })().catch((error) => {
+    })().catch(error => {
       reportError(error, { scope: 'workout.rest.exact-alarm-prompt' });
     });
   }, [restTimer.isActive, confirm]);

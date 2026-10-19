@@ -57,13 +57,13 @@ export function useWorkoutHistory(): WorkoutHistoryQuery {
   const refreshPRs = async (targetWorkout: Workout): Promise<WorkoutPRSummary | null> => {
     try {
       const distinctExerciseIds = Array.from(
-        new Set(targetWorkout.exercises.map((ex) => ex.exerciseId))
+        new Set(targetWorkout.exercises.map(ex => ex.exerciseId)),
       );
       if (distinctExerciseIds.length === 0) return null;
 
       const [workoutsByEx, scopes] = await Promise.all([
         getCompletedWorkoutsForExercises(distinctExerciseIds),
-        Promise.all(distinctExerciseIds.map((id) => getExerciseGymScope(id))),
+        Promise.all(distinctExerciseIds.map(id => getExerciseGymScope(id))),
       ]);
 
       const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
@@ -76,9 +76,9 @@ export function useWorkoutHistory(): WorkoutHistoryQuery {
         workoutsByEx,
         gymsRef.current,
         gymTrackingEnabled,
-        scopesByEx
+        scopesByEx,
       );
-      setPrs((prev) => ({ ...prev, [targetWorkout.id]: summary }));
+      setPrs(prev => ({ ...prev, [targetWorkout.id]: summary }));
       return summary;
     } catch (e) {
       reportError(e, { scope: 'history.pr-summary' });
@@ -113,19 +113,24 @@ export function useWorkoutHistory(): WorkoutHistoryQuery {
       if (requestId !== requestRef.current) return;
 
       const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
-      (snapshot.exerciseGymScopes || []).forEach((s) => {
+      (snapshot.exerciseGymScopes || []).forEach(s => {
         scopesByEx[s.exerciseId] = s;
       });
 
       // One chronological pass over the whole history (linear), instead of re-scanning the
       // history for every workout.
-      const prMap = evaluateAllWorkoutPRs(snapshot.workouts || [], gymList, gymTrackingEnabled, scopesByEx);
+      const prMap = evaluateAllWorkoutPRs(
+        snapshot.workouts || [],
+        gymList,
+        gymTrackingEnabled,
+        scopesByEx,
+      );
       const detailsMap: Record<string, Workout> = {};
       for (const w of snapshot.workouts || []) {
         detailsMap[w.id] = w;
       }
 
-      setDetails((prev) => ({ ...detailsMap, ...prev }));
+      setDetails(prev => ({ ...detailsMap, ...prev }));
       setPrs(prMap);
     } catch (e) {
       reportError(e, { scope: 'history.load' });
@@ -136,6 +141,8 @@ export function useWorkoutHistory(): WorkoutHistoryQuery {
 
   useEffect(() => {
     void reload();
+    // Mount-only initial load; reload is recreated per render and must not restart the fetch loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useReloadOnActivate(() => void reload({ skipIfUnchanged: true }));

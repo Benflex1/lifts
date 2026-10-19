@@ -55,7 +55,7 @@ export function ProgramEditorModal({
     try {
       await onSave({
         folderName,
-        routineIds: order.map((routine) => routine.id),
+        routineIds: order.map(routine => routine.id),
         // Keep the history of an existing rotation; a new one starts counting now.
         startedAt: program?.startedAt ?? new Date().toISOString(),
         ...(deloadEvery ? { deloadEvery } : {}),
@@ -92,9 +92,16 @@ export function ProgramEditorModal({
             </View>
             <View style={styles.headerText}>
               <Text style={styles.title}>{program ? 'Edit rotation' : 'Make a rotation'}</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>{folderName}</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {folderName}
+              </Text>
             </View>
-            <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <X color={colors.textSecondary} size={22} />
             </TouchableOpacity>
           </View>
@@ -111,9 +118,12 @@ export function ProgramEditorModal({
                   <Text style={styles.indexText}>{index + 1}</Text>
                 </View>
                 <View style={styles.routineInfo}>
-                  <Text style={styles.routineName} numberOfLines={1}>{routine.name}</Text>
+                  <Text style={styles.routineName} numberOfLines={1}>
+                    {routine.name}
+                  </Text>
                   <Text style={styles.routineMeta}>
-                    {routine.exercises.length} {routine.exercises.length === 1 ? 'exercise' : 'exercises'}
+                    {routine.exercises.length}{' '}
+                    {routine.exercises.length === 1 ? 'exercise' : 'exercises'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -137,13 +147,20 @@ export function ProgramEditorModal({
               </View>
             ))}
             {order.length < 2 && (
-              <Text style={styles.warning}>Add at least two routines to this folder to make a rotation.</Text>
+              <Text style={styles.warning}>
+                Add at least two routines to this folder to make a rotation.
+              </Text>
             )}
 
             <Text style={[styles.sectionLabel, styles.sectionGap]}>Deload week</Text>
             <View style={styles.chips}>
-              <Chip label="Off" size="sm" selected={!deloadEvery} onPress={() => setDeloadEvery(undefined)} />
-              {DELOAD_EVERY_OPTIONS.map((every) => (
+              <Chip
+                label="Off"
+                size="sm"
+                selected={!deloadEvery}
+                onPress={() => setDeloadEvery(undefined)}
+              />
+              {DELOAD_EVERY_OPTIONS.map(every => (
                 <Chip
                   key={every}
                   label={`Every ${every}${every === 3 ? 'rd' : 'th'}`}
@@ -170,7 +187,12 @@ export function ProgramEditorModal({
             <Text style={styles.saveText}>{program ? 'Save rotation' : 'Start rotation'}</Text>
           </TouchableOpacity>
           {program && (
-            <TouchableOpacity style={styles.stopBtn} onPress={handleStop} disabled={isSaving} accessibilityRole="button">
+            <TouchableOpacity
+              style={styles.stopBtn}
+              onPress={handleStop}
+              disabled={isSaving}
+              accessibilityRole="button"
+            >
               <Text style={styles.stopText}>Stop rotation</Text>
             </TouchableOpacity>
           )}

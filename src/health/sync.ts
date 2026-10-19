@@ -113,7 +113,7 @@ export async function retryHealthSyncs(
   }
 
   const results: HealthSyncRecord[] = [];
-  for (const record of records.filter((item) => item.provider === provider.id)) {
+  for (const record of records.filter(item => item.provider === provider.id)) {
     let workout: Workout | null;
     try {
       workout = await store.getWorkoutDetail(record.workoutId);

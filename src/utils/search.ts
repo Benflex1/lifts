@@ -47,7 +47,7 @@ const STAPLE_EXERCISES: Record<string, number> = {
   'barbell full squat': 3000,
   'barbell deadlift': 3000,
   'standing military press': 3000,
-  'pullups': 3000,
+  pullups: 3000,
   'wide-grip lat pulldown': 2800,
   'bent over barbell row': 2800,
   'incline dumbbell press': 2800,
@@ -148,24 +148,20 @@ export function smartSearchExercises(
   allExercises: Exercise[],
   query: string = '',
   muscle: string = 'All',
-  equipment: string = 'All'
+  equipment: string = 'All',
 ): Exercise[] {
   let list = allExercises;
 
   // Filter by muscle
   if (muscle && muscle !== 'All') {
     const m = muscle.toLowerCase();
-    list = list.filter(e =>
-      e.primaryMuscles.some(pm => pm.toLowerCase().includes(m))
-    );
+    list = list.filter(e => e.primaryMuscles.some(pm => pm.toLowerCase().includes(m)));
   }
 
   // Filter by equipment
   if (equipment && equipment !== 'All') {
     const eq = equipment.toLowerCase();
-    list = list.filter(e =>
-      (e.equipment || '').toLowerCase().includes(eq)
-    );
+    list = list.filter(e => (e.equipment || '').toLowerCase().includes(eq));
   }
 
   const rawClean = query.trim().toLowerCase();
@@ -201,8 +197,8 @@ export function smartSearchExercises(
     const matchesAll = expandedTokenGroups.every(group =>
       group.tokens.some(
         (t, i) =>
-          index.fullNormalized.includes(t) || index.normNameCompact.includes(group.compact[i])
-      )
+          index.fullNormalized.includes(t) || index.normNameCompact.includes(group.compact[i]),
+      ),
     );
     if (!matchesAll) continue;
 

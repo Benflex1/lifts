@@ -8,14 +8,17 @@ export function resolveRestTimerSeconds(seconds: number | null | undefined): num
 
 export function resolveHistoricalTargetReps(
   exerciseTargetReps: string | undefined,
-  setTargetReps: string | undefined
+  setTargetReps: string | undefined,
 ): string {
   if (exerciseTargetReps?.trim()) return exerciseTargetReps;
   if (setTargetReps?.trim()) return setTargetReps;
   return '10';
 }
 
-export function validateTargetReps(target: string | undefined): { isValid: boolean; error?: string } {
+export function validateTargetReps(target: string | undefined): {
+  isValid: boolean;
+  error?: string;
+} {
   if (!target || typeof target !== 'string' || !target.trim()) {
     return { isValid: false, error: 'Target reps cannot be empty' };
   }
@@ -58,7 +61,7 @@ export function validateTargetReps(target: string | undefined): { isValid: boole
 
   // Comma-separated list: e.g. "12, 10, 8, 6"
   if (/^\d+(\s*,\s*\d+)+$/.test(trimmed)) {
-    const parts = trimmed.split(',').map((p) => parseInt(p.trim(), 10));
+    const parts = trimmed.split(',').map(p => parseInt(p.trim(), 10));
     for (const num of parts) {
       if (num <= 0) {
         return { isValid: false, error: 'All per-set reps must be greater than 0' };
@@ -72,11 +75,16 @@ export function validateTargetReps(target: string | undefined): { isValid: boole
 
   return {
     isValid: false,
-    error: 'Invalid target reps format. Use a number (e.g. 10), range (e.g. 8-12), list (e.g. 12, 10, 8), or AMRAP',
+    error:
+      'Invalid target reps format. Use a number (e.g. 10), range (e.g. 8-12), list (e.g. 12, 10, 8), or AMRAP',
   };
 }
 
-export function initialReps(target: string | undefined, setIndex: number, previousReps?: number): number {
+export function initialReps(
+  target: string | undefined,
+  setIndex: number,
+  previousReps?: number,
+): number {
   if (!target || typeof target !== 'string') {
     return previousReps !== undefined && previousReps > 0 ? previousReps : 10;
   }
@@ -92,8 +100,8 @@ export function initialReps(target: string | undefined, setIndex: number, previo
 
   // Comma-separated list: e.g. "10, 8, 6"
   if (/^\d+(\s*,\s*\d+)+$/.test(trimmed)) {
-    const parts = trimmed.split(',').map((p) => p.trim());
-    const validNumbers = parts.map((p) => parseInt(p, 10)).filter((n) => !isNaN(n) && n > 0);
+    const parts = trimmed.split(',').map(p => p.trim());
+    const validNumbers = parts.map(p => parseInt(p, 10)).filter(n => !isNaN(n) && n > 0);
     if (validNumbers.length > 0) {
       if (setIndex < validNumbers.length) {
         return validNumbers[setIndex];
@@ -159,12 +167,8 @@ export function sanitizeRepsInput(input: string): string {
   return input.replace(/[^0-9]/g, '');
 }
 
-export function moveWorkoutSet(
-  sets: WorkoutSet[],
-  setId: string,
-  direction: -1 | 1
-): WorkoutSet[] {
-  const currentIndex = sets.findIndex((s) => s.id === setId);
+export function moveWorkoutSet(sets: WorkoutSet[], setId: string, direction: -1 | 1): WorkoutSet[] {
+  const currentIndex = sets.findIndex(s => s.id === setId);
   const targetIndex = currentIndex + direction;
   if (currentIndex < 0 || targetIndex < 0 || targetIndex >= sets.length) {
     return sets;

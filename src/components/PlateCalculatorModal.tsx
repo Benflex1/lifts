@@ -1,18 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
+import { Modal, View, Text, TextInput, StyleSheet, ScrollView } from 'react-native';
+import { AppTouchable } from './ui';
 import { X, Check } from 'lucide-react-native';
 import { calculatePlates, KG_PLATES, LB_PLATES } from '../utils/calculator';
 import { useSettings } from '../context/SettingsContext';
 import { kgToDisplay, displayToKg, WeightUnit } from '../utils/units';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -30,7 +24,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
   const { unit } = useSettings();
   const [modalUnit, setModalUnit] = useState<WeightUnit>(unit);
   const [targetWeight, setTargetWeight] = useState(
-    unit === 'lb' ? kgToDisplay(initialWeight, 'lb').toString() : initialWeight.toString()
+    unit === 'lb' ? kgToDisplay(initialWeight, 'lb').toString() : initialWeight.toString(),
   );
   const [barWeight, setBarWeight] = useState(unit === 'lb' ? 45 : 20);
 
@@ -100,16 +94,24 @@ export const PlateCalculatorModal: React.FC<Props> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Plate Calculator</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <AppTouchable
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close plate calculator"
+            >
               <X color={colors.textSecondary} size={24} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -118,7 +120,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
               <View style={styles.inputHeaderRow}>
                 <Text style={styles.label}>Target Weight (Total Barbell Load)</Text>
                 <View style={styles.unitToggleGroup}>
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[styles.unitToggleBtn, modalUnit === 'kg' && styles.unitToggleBtnActive]}
                     onPress={() => handleUnitToggle('kg')}
                     accessibilityRole="button"
@@ -133,8 +135,8 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                     >
                       KG
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </AppTouchable>
+                  <AppTouchable
                     style={[styles.unitToggleBtn, modalUnit === 'lb' && styles.unitToggleBtnActive]}
                     onPress={() => handleUnitToggle('lb')}
                     accessibilityRole="button"
@@ -149,7 +151,7 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                     >
                       LB
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 </View>
               </View>
               <View style={styles.inputRow}>
@@ -171,15 +173,23 @@ export const PlateCalculatorModal: React.FC<Props> = ({
               <Text style={styles.label}>Barbell Weight</Text>
               <View style={styles.pillRow}>
                 {bars.map(w => (
-                  <TouchableOpacity
+                  <AppTouchable
                     key={w}
                     style={[styles.pill, barWeight === w && styles.pillActive]}
                     onPress={() => setBarWeight(w)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${w} ${modalUnit} bar`}
+                    accessibilityState={{ selected: barWeight === w }}
                   >
                     <Text style={[styles.pillText, barWeight === w && styles.pillTextActive]}>
-                      {w} {modalUnit} {modalUnit === 'kg' && w === 20 ? '(Olympic)' : modalUnit === 'lb' && w === 45 ? '(Olympic)' : ''}
+                      {w} {modalUnit}{' '}
+                      {modalUnit === 'kg' && w === 20
+                        ? '(Olympic)'
+                        : modalUnit === 'lb' && w === 45
+                          ? '(Olympic)'
+                          : ''}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 ))}
               </View>
             </View>
@@ -187,7 +197,10 @@ export const PlateCalculatorModal: React.FC<Props> = ({
             {/* Results Display */}
             <View style={styles.resultBox}>
               <Text style={styles.resultSummary}>
-                Weight per side: <Text style={styles.highlightText}>{calc.weightPerSide} {modalUnit}</Text>
+                Weight per side:{' '}
+                <Text style={styles.highlightText}>
+                  {calc.weightPerSide} {modalUnit}
+                </Text>
               </Text>
 
               {calc.plates.length === 0 ? (
@@ -206,7 +219,10 @@ export const PlateCalculatorModal: React.FC<Props> = ({
                         style={[styles.plateChip, { borderColor: getPlateColor(p.weight) }]}
                       >
                         <View
-                          style={[styles.plateColorDot, { backgroundColor: getPlateColor(p.weight) }]}
+                          style={[
+                            styles.plateColorDot,
+                            { backgroundColor: getPlateColor(p.weight) },
+                          ]}
                         />
                         <Text style={styles.plateText}>
                           {p.count} × {p.weight} {modalUnit}
@@ -219,7 +235,8 @@ export const PlateCalculatorModal: React.FC<Props> = ({
 
               {calc.remainder > 0 && (
                 <Text style={styles.remainderText}>
-                  Note: Remainder: {calc.remainder.toFixed(2)} {modalUnit} cannot be loaded with standard plates.
+                  Note: Remainder: {calc.remainder.toFixed(2)} {modalUnit} cannot be loaded with
+                  standard plates.
                 </Text>
               )}
             </View>
@@ -227,16 +244,18 @@ export const PlateCalculatorModal: React.FC<Props> = ({
 
           {/* Action Button */}
           {onApply && (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.applyButton}
               onPress={() => {
                 onApply(displayToKg(numWeight, modalUnit));
                 onClose();
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Apply calculated weight"
             >
               <Check color={colors.black} size={20} />
               <Text style={styles.applyButtonText}>Set as Workout Weight</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           )}
         </View>
       </View>

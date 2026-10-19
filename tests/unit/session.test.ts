@@ -30,7 +30,15 @@ function createMockStore(): Store & {
       exercises: [],
       drafts: Array.from(drafts.values()),
       settings: {},
-      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      gyms: [
+        {
+          id: 'gym-default',
+          name: 'Default Gym',
+          isDefault: true,
+          color: '#3B82F6',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
       exerciseGymScopes: [],
     }),
     saveDraft: async (draft: WorkoutDraft) => {
@@ -73,10 +81,36 @@ function createMockStore(): Store & {
     deleteWorkout: async (id: string) => {
       workouts.delete(id);
     },
-    getGyms: async () => [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
-    getDefaultGym: async () => ({ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }),
-    createGym: async () => ({ id: 'gym-new', name: 'New Gym', isDefault: false, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }),
-    updateGym: async () => ({ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }),
+    getGyms: async () => [
+      {
+        id: 'gym-default',
+        name: 'Default Gym',
+        isDefault: true,
+        color: '#3B82F6',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+    getDefaultGym: async () => ({
+      id: 'gym-default',
+      name: 'Default Gym',
+      isDefault: true,
+      color: '#3B82F6',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }),
+    createGym: async () => ({
+      id: 'gym-new',
+      name: 'New Gym',
+      isDefault: false,
+      color: '#3B82F6',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }),
+    updateGym: async () => ({
+      id: 'gym-default',
+      name: 'Default Gym',
+      isDefault: true,
+      color: '#3B82F6',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }),
     setDefaultGym: async () => {},
     deleteGym: async () => {},
     getExerciseGymScopes: async () => [],
@@ -84,11 +118,17 @@ function createMockStore(): Store & {
     saveExerciseGymScope: async () => {},
     deleteExerciseGymScope: async () => {},
     getPreviousSetsForExercise: async () => [],
-    getExerciseStats: async () => ({ global: { maxWeightKg: 0, maxSetVolumeKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 }, gym: { maxWeightKg: 0, maxSetVolumeKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 } }),
+    getExerciseStats: async () => ({
+      global: { maxWeightKg: 0, maxSetVolumeKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 },
+      gym: { maxWeightKg: 0, maxSetVolumeKg: 0, maxReps: 0, estimated1RM: 0, sessionCount: 0 },
+    }),
     getAllExercises: async () => [],
     searchExercises: async () => [],
     getExerciseById: async () => null,
-    createCustomExercise: async (e: Parameters<Store['createCustomExercise']>[0]) => ({ ...e, id: 'c1' }),
+    createCustomExercise: async (e: Parameters<Store['createCustomExercise']>[0]) => ({
+      ...e,
+      id: 'c1',
+    }),
     getSetting: async () => null,
     setSetting: async () => {},
     renameFolder: async () => {},
@@ -99,7 +139,7 @@ function createMockStore(): Store & {
 
 describe('SessionController Unit Tests', () => {
   it('starts a session and awaits initial durable draft write', async () => {
-    let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+    const currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
     const mockStore = createMockStore();
     const controller = createSessionController(mockStore, () => currentTime);
 
@@ -124,7 +164,7 @@ describe('SessionController Unit Tests', () => {
   });
 
   it('guards against starting when another session is active or starting', async () => {
-    let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+    const currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
     const mockStore = createMockStore();
     const controller = createSessionController(mockStore, () => currentTime);
 
@@ -197,7 +237,7 @@ describe('SessionController Unit Tests', () => {
   });
 
   it('restores active phase and retains state if finish fails', async () => {
-    let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+    const currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
     const mockStore = createMockStore();
     mockStore.failNextFinish = true;
     const controller = createSessionController(mockStore, () => currentTime);
@@ -301,7 +341,6 @@ describe('SessionController Unit Tests', () => {
 
     // Finish 5 minutes later
     const finishTime = now20MinLater + 300_000;
-    const controllerFinish = createSessionController(mockStore, () => finishTime);
     controller.updateClock?.(() => finishTime);
     const finished = await controller.finish();
     assert.equal(finished.durationSeconds, 1500);
@@ -334,11 +373,15 @@ describe('SessionController Unit Tests', () => {
     };
 
     controller.resume(draft);
-    assert.equal(controller.getState().restTimer, null, 'Expired rest timer must be cleared on resume');
+    assert.equal(
+      controller.getState().restTimer,
+      null,
+      'Expired rest timer must be cleared on resume',
+    );
   });
 
   it('discard deletes draft and returns phase to idle', async () => {
-    let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+    const currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
     const mockStore = createMockStore();
     const controller = createSessionController(mockStore, () => currentTime);
 
@@ -361,12 +404,12 @@ describe('SessionController Unit Tests', () => {
   });
 
   it('publishes a fresh immutable state object on every update for React state change detection', async () => {
-    let currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
+    const currentTime = new Date('2026-09-07T10:00:00.000Z').getTime();
     const mockStore = createMockStore();
     const controller = createSessionController(mockStore, () => currentTime);
 
     const receivedStates: any[] = [];
-    controller.subscribe((state) => {
+    controller.subscribe(state => {
       receivedStates.push(state);
     });
 
@@ -433,7 +476,11 @@ describe('SessionController Unit Tests', () => {
     const stateA = receivedStates[receivedStates.length - 2];
     const stateB = receivedStates[receivedStates.length - 1];
 
-    assert.notEqual(stateA, stateB, 'Consecutive state notifications must have distinct object identities');
+    assert.notEqual(
+      stateA,
+      stateB,
+      'Consecutive state notifications must have distinct object identities',
+    );
     assert.equal(stateA.workout.exercises[0].sets[0].reps, 1);
     assert.equal(stateB.workout.exercises[0].sets[0].reps, 12);
     assert.equal(stateB.revision, stateA.revision + 1);

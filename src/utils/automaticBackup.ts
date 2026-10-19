@@ -32,13 +32,16 @@ export async function getAutomaticBackupState(): Promise<AutomaticBackupState> {
   };
 }
 
-export async function chooseAutomaticBackupFolder(initialUri?: string | null): Promise<string | null> {
+export async function chooseAutomaticBackupFolder(
+  initialUri?: string | null,
+): Promise<string | null> {
   if (Platform.OS !== 'android') {
     throw new Error('Automatic folder backups are currently available on Android.');
   }
 
   const fileSystem = await import('expo-file-system/legacy');
-  const result = await fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(initialUri);
+  const result =
+    await fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(initialUri);
   if (!result.granted || !result.directoryUri) return null;
 
   await setSetting(DIRECTORY_KEY, result.directoryUri);
@@ -92,7 +95,7 @@ async function performAutomaticBackup(force: boolean, now: Date): Promise<boolea
     await setSetting(LAST_SUCCESS_KEY, now.toISOString());
 
     const backupUris = (await storage.readDirectoryAsync(state.directoryUri))
-      .map((uri) => ({ uri, timestamp: backupTimestampFromUri(uri) }))
+      .map(uri => ({ uri, timestamp: backupTimestampFromUri(uri) }))
       .filter((item): item is { uri: string; timestamp: string } => item.timestamp !== null)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
@@ -121,6 +124,8 @@ async function performAutomaticBackup(force: boolean, now: Date): Promise<boolea
   }
 }
 
-export function runAutomaticBackup(options: { force?: boolean; now?: Date } = {}): Promise<boolean> {
+export function runAutomaticBackup(
+  options: { force?: boolean; now?: Date } = {},
+): Promise<boolean> {
   return performAutomaticBackup(Boolean(options.force), options.now ?? new Date());
 }

@@ -31,7 +31,9 @@ function toVersionCode(version) {
   }
   const [major, minor, patch] = match.slice(1).map(Number);
   if (major < 1 || major > 2000 || minor > 999 || patch > 999) {
-    throw new Error(`withAndroidRelease: expo.version "${version}" is outside the versionCode range`);
+    throw new Error(
+      `withAndroidRelease: expo.version "${version}" is outside the versionCode range`,
+    );
   }
   return major * 1_000_000 + minor * 1_000 + patch;
 }
@@ -52,35 +54,38 @@ const RELEASE_SIGNING_CONFIG = `        ${MARKER}
 function applyReleaseSigning(gradle) {
   if (gradle.includes(MARKER)) return gradle;
 
-  const signingConfigs = /(\n    signingConfigs \{\n)/;
-  const releaseSigning = /(\n        release \{\n(?:[^\n]*\n)*?\s+)signingConfig signingConfigs\.debug/;
+  const signingConfigs = /(\n {4}signingConfigs \{\n)/;
+  const releaseSigning = /(\n {8}release \{\n(?:[^\n]*\n)*?\s+)signingConfig signingConfigs\.debug/;
   if (!signingConfigs.test(gradle) || !releaseSigning.test(gradle)) {
     throw new Error(
       'withAndroidRelease: app/build.gradle no longer matches the expected Expo template; ' +
-        'update plugins/withAndroidRelease.js before building a release'
+        'update plugins/withAndroidRelease.js before building a release',
     );
   }
 
   return gradle
     .replace(signingConfigs, `$1${RELEASE_SIGNING_CONFIG}`)
-    .replace(releaseSigning, '$1signingConfig signingConfigs.findByName(\'release\') ?: signingConfigs.debug');
+    .replace(
+      releaseSigning,
+      "$1signingConfig signingConfigs.findByName('release') ?: signingConfigs.debug",
+    );
 }
 
 function applyReproducibleDevServerIp(gradle) {
   if (gradle.includes(DEV_SERVER_MARKER)) return gradle;
 
-  const releaseBuildType = /(\n    buildTypes \{\n(?:[^\n]*\n)*?(\s+)release \{\n)/;
+  const releaseBuildType = /(\n {4}buildTypes \{\n(?:[^\n]*\n)*?(\s+)release \{\n)/;
   if (!releaseBuildType.test(gradle)) {
     throw new Error(
       'withAndroidRelease: app/build.gradle no longer matches the expected Expo template; ' +
-        'update plugins/withAndroidRelease.js before building a release'
+        'update plugins/withAndroidRelease.js before building a release',
     );
   }
   return gradle.replace(
     releaseBuildType,
     (match, _block, indent) =>
       `${match}${indent}    ${DEV_SERVER_MARKER}: release APKs must not embed the build host's IP.\n` +
-      `${indent}    resValue "string", "react_native_dev_server_ip", "localhost"\n`
+      `${indent}    resValue "string", "react_native_dev_server_ip", "localhost"\n`,
   );
 }
 
@@ -89,7 +94,7 @@ function resolveVersionCode(version, explicitVersionCode) {
   if (explicitVersionCode != null && explicitVersionCode !== derived) {
     throw new Error(
       `withAndroidRelease: android.versionCode ${explicitVersionCode} does not match ` +
-        `expo.version ${version} (expected ${derived})`
+        `expo.version ${version} (expected ${derived})`,
     );
   }
   return derived;
@@ -113,7 +118,7 @@ function applyAbiBuilds(gradle) {
   if (!androidBlock.test(gradle) || !versionCode.test(gradle)) {
     throw new Error(
       'withAndroidRelease: app/build.gradle no longer matches the expected Expo template; ' +
-        'update plugins/withAndroidRelease.js before building a release'
+        'update plugins/withAndroidRelease.js before building a release',
     );
   }
 
@@ -123,7 +128,7 @@ function applyAbiBuilds(gradle) {
       versionCode,
       (_, _line, indent, code) =>
         `\n${indent}versionCode ${code} * 10 + liftsAbiDigit\n` +
-        `${indent}if (liftsAbi != null) {\n${indent}    ndk { abiFilters liftsAbi }\n${indent}}\n`
+        `${indent}if (liftsAbi != null) {\n${indent}    ndk { abiFilters liftsAbi }\n${indent}}\n`,
     );
 }
 
@@ -141,7 +146,7 @@ function applyUniformNdk(rootGradle) {
   if (!/\napply plugin: "expo-root-project"\n/.test(rootGradle)) {
     throw new Error(
       'withAndroidRelease: android/build.gradle no longer matches the expected Expo template; ' +
-        'update plugins/withAndroidRelease.js before building a release'
+        'update plugins/withAndroidRelease.js before building a release',
     );
   }
   return rootGradle.replace(/\n*$/, '\n') + UNIFORM_NDK;
@@ -151,7 +156,7 @@ function withAndroidRelease(config) {
   config.android = { ...config.android };
   config.android.versionCode = resolveVersionCode(config.version, config.android.versionCode);
 
-  config = withProjectBuildGradle(config, (mod) => {
+  config = withProjectBuildGradle(config, mod => {
     if (mod.modResults.language !== 'groovy') {
       throw new Error('withAndroidRelease: only a Groovy android/build.gradle is supported');
     }
@@ -159,12 +164,12 @@ function withAndroidRelease(config) {
     return mod;
   });
 
-  return withAppBuildGradle(config, (mod) => {
+  return withAppBuildGradle(config, mod => {
     if (mod.modResults.language !== 'groovy') {
       throw new Error('withAndroidRelease: only a Groovy app/build.gradle is supported');
     }
     mod.modResults.contents = applyReproducibleDevServerIp(
-      applyAbiBuilds(applyReleaseSigning(mod.modResults.contents))
+      applyAbiBuilds(applyReleaseSigning(mod.modResults.contents)),
     );
     return mod;
   });

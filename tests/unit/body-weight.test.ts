@@ -23,15 +23,17 @@ describe('body weight log', () => {
   });
 
   it('parses oldest first and drops malformed or implausible entries', () => {
-    const log = parseBodyWeightLog(JSON.stringify([
-      { date: '2026-10-05', weightKg: 81 },
-      { date: '2026-10-01', weightKg: 82 },
-      { date: '2026-10-02', weightKg: 820 },
-      { date: 'yesterday', weightKg: 80 },
-      { date: '2026-10-03', weightKg: '80' },
-      { date: '2026-02-31', weightKg: 80 },
-      null,
-    ]));
+    const log = parseBodyWeightLog(
+      JSON.stringify([
+        { date: '2026-10-05', weightKg: 81 },
+        { date: '2026-10-01', weightKg: 82 },
+        { date: '2026-10-02', weightKg: 820 },
+        { date: 'yesterday', weightKg: 80 },
+        { date: '2026-10-03', weightKg: '80' },
+        { date: '2026-02-31', weightKg: 80 },
+        null,
+      ]),
+    );
     assert.deepEqual(log, [
       { date: '2026-10-01', weightKg: 82 },
       { date: '2026-10-05', weightKg: 81 },
@@ -83,13 +85,15 @@ describe('body weight log', () => {
   });
 
   it('summarizes change over about 30 days and the 7-day average', () => {
-    const log = parseBodyWeightLog(JSON.stringify([
-      { date: '2026-08-20', weightKg: 85 },
-      { date: '2026-09-05', weightKg: 84 },
-      { date: '2026-09-20', weightKg: 83 },
-      { date: '2026-10-04', weightKg: 82.4 },
-      { date: '2026-10-06', weightKg: 82 },
-    ]));
+    const log = parseBodyWeightLog(
+      JSON.stringify([
+        { date: '2026-08-20', weightKg: 85 },
+        { date: '2026-09-05', weightKg: 84 },
+        { date: '2026-09-20', weightKg: 83 },
+        { date: '2026-10-04', weightKg: 82.4 },
+        { date: '2026-10-06', weightKg: 82 },
+      ]),
+    );
     const summary = summarizeBodyWeight(log)!;
     assert.deepEqual(summary.latest, { date: '2026-10-06', weightKg: 82 });
     assert.deepEqual(summary.change, { kg: -2, days: 31 });
@@ -99,21 +103,25 @@ describe('body weight log', () => {
   });
 
   it('measures change from the first weigh-in while the log is young, and none with one entry', () => {
-    const young = parseBodyWeightLog(JSON.stringify([
-      { date: '2026-10-01', weightKg: 80 },
-      { date: '2026-10-06', weightKg: 80.6 },
-    ]));
+    const young = parseBodyWeightLog(
+      JSON.stringify([
+        { date: '2026-10-01', weightKg: 80 },
+        { date: '2026-10-06', weightKg: 80.6 },
+      ]),
+    );
     assert.deepEqual(summarizeBodyWeight(young)!.change, { kg: 0.6, days: 5 });
     assert.equal(summarizeBodyWeight([{ date: '2026-10-06', weightKg: 80 }])!.change, undefined);
     assert.equal(summarizeBodyWeight([]), null);
   });
 
   it('filters chart ranges back from today', () => {
-    const log = parseBodyWeightLog(JSON.stringify([
-      { date: '2025-09-01', weightKg: 90 },
-      { date: '2026-08-01', weightKg: 85 },
-      { date: '2026-10-01', weightKg: 82 },
-    ]));
+    const log = parseBodyWeightLog(
+      JSON.stringify([
+        { date: '2025-09-01', weightKg: 90 },
+        { date: '2026-08-01', weightKg: 85 },
+        { date: '2026-10-01', weightKg: 82 },
+      ]),
+    );
     const now = new Date(2026, 9, 11, 9);
     assert.equal(filterBodyWeightRange(log, '1M', now).length, 1);
     assert.equal(filterBodyWeightRange(log, '3M', now).length, 2);
@@ -130,12 +138,17 @@ describe('body weight log', () => {
   });
 
   it('averages the trend over the 7 days up to each weigh-in', () => {
-    const log = parseBodyWeightLog(JSON.stringify([
-      { date: '2026-10-01', weightKg: 80 },
-      { date: '2026-10-03', weightKg: 82 },
-      { date: '2026-10-07', weightKg: 84 },
-      { date: '2026-10-08', weightKg: 86 },
-    ]));
-    assert.deepEqual(bodyWeightTrend(log).map((entry) => entry.weightKg), [80, 81, 82, 84]);
+    const log = parseBodyWeightLog(
+      JSON.stringify([
+        { date: '2026-10-01', weightKg: 80 },
+        { date: '2026-10-03', weightKg: 82 },
+        { date: '2026-10-07', weightKg: 84 },
+        { date: '2026-10-08', weightKg: 86 },
+      ]),
+    );
+    assert.deepEqual(
+      bodyWeightTrend(log).map(entry => entry.weightKg),
+      [80, 81, 82, 84],
+    );
   });
 });

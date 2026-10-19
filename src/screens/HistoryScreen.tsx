@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, ScrollView } from 'react-native';
 import { History } from 'lucide-react-native';
 import { Workout } from '../types';
 import { WorkoutEditModal } from '../components/WorkoutEditModal';
@@ -68,7 +62,10 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
       ) : (
         <FlatList
           style={styles.scrollArea}
-          contentContainerStyle={[styles.scrollContent, list.history.length === 0 && styles.emptyListContent]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            list.history.length === 0 && styles.emptyListContent,
+          ]}
           keyboardShouldPersistTaps="handled"
           data={list.history}
           keyExtractor={item => item.id}
@@ -92,7 +89,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
               onShowSetPR={list.onShowSetPR}
             />
           )}
-          ListEmptyComponent={(
+          ListEmptyComponent={
             <View style={styles.emptyBox}>
               <View style={styles.emptyIcon}>
                 <History size={26} color={colors.primary} />
@@ -104,7 +101,7 @@ const HistoryScreenInner: React.FC<HistoryScreenProps> = ({ workoutUpdate = null
                 Finished workouts show up here with every set, PR and note.
               </Text>
             </View>
-          )}
+          }
         />
       )}
 

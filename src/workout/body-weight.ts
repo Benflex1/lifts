@@ -17,7 +17,11 @@ export interface BodyWeightEntry {
 
 export type BodyWeightRange = '1M' | '3M' | '1Y' | 'ALL';
 
-const RANGE_DAYS: Record<Exclude<BodyWeightRange, 'ALL'>, number> = { '1M': 30, '3M': 91, '1Y': 365 };
+const RANGE_DAYS: Record<Exclude<BodyWeightRange, 'ALL'>, number> = {
+  '1M': 30,
+  '3M': 91,
+  '1Y': 365,
+};
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -26,7 +30,9 @@ export function parseBodyWeightEnabled(value: string | null): boolean {
 }
 
 export function isValidBodyWeightKg(weightKg: number): boolean {
-  return Number.isFinite(weightKg) && weightKg >= MIN_BODY_WEIGHT_KG && weightKg <= MAX_BODY_WEIGHT_KG;
+  return (
+    Number.isFinite(weightKg) && weightKg >= MIN_BODY_WEIGHT_KG && weightKg <= MAX_BODY_WEIGHT_KG
+  );
 }
 
 /** The local calendar day of a date, so a late-evening weigh-in never lands on tomorrow. */
@@ -38,7 +44,7 @@ export function toDateKey(date: Date): string {
 
 /** Noon on that local day, so day arithmetic never trips over daylight saving changes. */
 export function fromDateKey(key: string): Date {
-  const [year, month, day] = key.split('-').map((part) => parseInt(part, 10));
+  const [year, month, day] = key.split('-').map(part => parseInt(part, 10));
   return new Date(year, month - 1, day, 12);
 }
 
@@ -65,7 +71,8 @@ export function parseBodyWeightLog(value: string | null | undefined): BodyWeight
     if (typeof item !== 'object' || item === null) continue;
     const { date, weightKg } = item as Record<string, unknown>;
     // A real calendar day: 2026-02-31 would roll over to March.
-    if (typeof date !== 'string' || !DATE_KEY.test(date) || toDateKey(fromDateKey(date)) !== date) continue;
+    if (typeof date !== 'string' || !DATE_KEY.test(date) || toDateKey(fromDateKey(date)) !== date)
+      continue;
     if (typeof weightKg !== 'number' || !isValidBodyWeightKg(weightKg)) continue;
     byDate.set(date, { date, weightKg });
   }
@@ -76,12 +83,16 @@ export function serializeBodyWeightLog(entries: BodyWeightEntry[]): string {
   return JSON.stringify(sortByDate(entries).map(({ date, weightKg }) => ({ date, weightKg })));
 }
 
-export function upsertBodyWeight(entries: BodyWeightEntry[], date: string, weightKg: number): BodyWeightEntry[] {
-  return sortByDate([...entries.filter((entry) => entry.date !== date), { date, weightKg }]);
+export function upsertBodyWeight(
+  entries: BodyWeightEntry[],
+  date: string,
+  weightKg: number,
+): BodyWeightEntry[] {
+  return sortByDate([...entries.filter(entry => entry.date !== date), { date, weightKg }]);
 }
 
 export function removeBodyWeight(entries: BodyWeightEntry[], date: string): BodyWeightEntry[] {
-  return entries.filter((entry) => entry.date !== date);
+  return entries.filter(entry => entry.date !== date);
 }
 
 /** Restores add the backup's weigh-ins; on a day both have, this device's wins. */
@@ -93,10 +104,14 @@ export function mergeBodyWeightLogs(existing: string | undefined, incoming: stri
 }
 
 /** Weigh-ins inside a range, counted back from today. */
-export function filterBodyWeightRange(entries: BodyWeightEntry[], range: BodyWeightRange, now: Date = new Date()): BodyWeightEntry[] {
+export function filterBodyWeightRange(
+  entries: BodyWeightEntry[],
+  range: BodyWeightRange,
+  now: Date = new Date(),
+): BodyWeightEntry[] {
   if (range === 'ALL') return entries;
   const today = toDateKey(now);
-  return entries.filter((entry) => {
+  return entries.filter(entry => {
     const age = daysBetween(entry.date, today);
     return age >= 0 && age <= RANGE_DAYS[range];
   });
@@ -122,12 +137,17 @@ export function summarizeBodyWeight(entries: BodyWeightEntry[]): BodyWeightSumma
   }
   base = base ?? entries[0];
   const baseDays = daysBetween(base.date, latest.date);
-  const week = entries.filter((entry) => daysBetween(entry.date, latest.date) <= 6);
-  const weights = entries.map((entry) => entry.weightKg);
+  const week = entries.filter(entry => daysBetween(entry.date, latest.date) <= 6);
+  const weights = entries.map(entry => entry.weightKg);
   return {
     latest,
-    ...(baseDays > 0 ? { change: { kg: Math.round((latest.weightKg - base.weightKg) * 100) / 100, days: baseDays } } : {}),
-    weekAverageKg: Math.round((week.reduce((sum, entry) => sum + entry.weightKg, 0) / week.length) * 100) / 100,
+    ...(baseDays > 0
+      ? {
+          change: { kg: Math.round((latest.weightKg - base.weightKg) * 100) / 100, days: baseDays },
+        }
+      : {}),
+    weekAverageKg:
+      Math.round((week.reduce((sum, entry) => sum + entry.weightKg, 0) / week.length) * 100) / 100,
     lowestKg: Math.min(...weights),
     highestKg: Math.max(...weights),
   };
@@ -137,7 +157,10 @@ export function summarizeBodyWeight(entries: BodyWeightEntry[]): BodyWeightSumma
  * The trend line: each weigh-in averaged with the others from the 7 days up to it, so daily water
  * and food swings don't hide the direction.
  */
-export function bodyWeightTrend(entries: BodyWeightEntry[], windowDays: number = 7): BodyWeightEntry[] {
+export function bodyWeightTrend(
+  entries: BodyWeightEntry[],
+  windowDays: number = 7,
+): BodyWeightEntry[] {
   return entries.map((entry, index) => {
     let sum = 0;
     let count = 0;

@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { AppTouchable } from '../../components/ui';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { Dumbbell, Layers, Plus } from 'lucide-react-native';
 import { ActiveExerciseCard } from '../../components/ActiveExerciseCard';
@@ -83,14 +84,14 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
       scrollEventThrottle={16}
       scrollEnabled={true}
     >
-      {exercises.map((activeEx) => {
+      {exercises.map(activeEx => {
         const ssMeta = supersetMetaMap.get(activeEx.id);
 
         return (
           <React.Fragment key={activeEx.id}>
             {ssMeta?.isFirst && (
               <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
-                <TouchableOpacity
+                <AppTouchable
                   style={[
                     styles.supersetPill,
                     { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
@@ -104,7 +105,7 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
                   <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
                     {ssMeta.label}
                   </Text>
-                </TouchableOpacity>
+                </AppTouchable>
                 <Text style={styles.supersetCountText}>
                   {ssMeta.totalInGroup} Exercises · Alternating Sets
                 </Text>
@@ -158,23 +159,23 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
             <Dumbbell size={26} color={colors.primary} />
           </View>
           <Text style={styles.emptyWorkoutTitle}>Let's get moving</Text>
-          <Text style={styles.emptyWorkoutText}>Add your first exercise to start logging sets.</Text>
+          <Text style={styles.emptyWorkoutText}>
+            Add your first exercise to start logging sets.
+          </Text>
         </View>
       )}
 
       {/* Add Exercise Big Button */}
-      <TouchableOpacity
+      <AppTouchable
         style={[
           styles.addExerciseMainBtn,
           exercises.length === 0 && styles.addExerciseMainBtnSolid,
         ]}
         onPress={onAddExercise}
         accessibilityRole="button"
+        accessibilityLabel="Add exercise"
       >
-        <Plus
-          size={20}
-          color={exercises.length === 0 ? colors.onPrimary : colors.primaryLight}
-        />
+        <Plus size={20} color={exercises.length === 0 ? colors.onPrimary : colors.primaryLight} />
         <Text
           style={[
             styles.addExerciseMainBtnText,
@@ -183,7 +184,7 @@ export const ExerciseStream: React.FC<ExerciseStreamProps> = ({
         >
           Add Exercise
         </Text>
-      </TouchableOpacity>
+      </AppTouchable>
     </ScrollView>
   );
 };

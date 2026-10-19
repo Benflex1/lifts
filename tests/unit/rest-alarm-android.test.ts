@@ -16,7 +16,7 @@ function fakeNative(overrides: Partial<RestAlarmNativeModule> = {}) {
       calls.push('openExactAlarmSettings');
       return true;
     },
-    schedule: async (endsAtMs) => {
+    schedule: async endsAtMs => {
       calls.push('schedule');
       scheduled.push(endsAtMs);
       return true;
@@ -111,14 +111,17 @@ describe('Rest alarm native bridge', () => {
 
   it('takes the same schedule arguments in Kotlin as in the TypeScript interface', () => {
     const kotlin = readFileSync(
-      join(root, 'modules/rest-alarm/android/src/main/java/expo/modules/restalarm/RestAlarmModule.kt'),
-      'utf8'
+      join(
+        root,
+        'modules/rest-alarm/android/src/main/java/expo/modules/restalarm/RestAlarmModule.kt',
+      ),
+      'utf8',
     );
     const types = readFileSync(join(root, 'modules/rest-alarm/RestAlarm.types.ts'), 'utf8');
 
     const kotlinParams = kotlin.match(/AsyncFunction\("schedule"\)\s*\{([^]*?)->/)?.[1] ?? '';
     const tsParams = types.match(/schedule\(([^)]*)\)\s*:\s*Promise/)?.[1] ?? '';
-    const names = (params: string) => [...params.matchAll(/(\w+)\s*:/g)].map((m) => m[1]);
+    const names = (params: string) => [...params.matchAll(/(\w+)\s*:/g)].map(m => m[1]);
 
     assert.ok(names(kotlinParams).length > 0, 'Kotlin schedule parameters not found');
     assert.deepEqual(names(kotlinParams).slice(1), names(tsParams).slice(1));
@@ -148,8 +151,8 @@ describe('Firebase-free Android build', () => {
     files.push(join(root, 'App.tsx'));
 
     const importers = files
-      .filter((file) => /['"]expo-notifications['"]/.test(readFileSync(file, 'utf8')))
-      .map((file) => relative(root, file));
+      .filter(file => /['"]expo-notifications['"]/.test(readFileSync(file, 'utf8')))
+      .map(file => relative(root, file));
     assert.deepEqual(importers, ['src/utils/restNotifications.ios.ts']);
   });
 });

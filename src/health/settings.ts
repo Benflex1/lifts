@@ -66,7 +66,7 @@ export async function updateHealthSyncSetting(
       await dependencies.persist(true);
       if (dependencies.retryPendingHealthSyncs) {
         try {
-          void dependencies.retryPendingHealthSyncs().catch((error) => {
+          void dependencies.retryPendingHealthSyncs().catch(error => {
             if (dependencies.logRetryFailure) {
               dependencies.logRetryFailure(error);
             } else {
@@ -87,12 +87,13 @@ export async function updateHealthSyncSetting(
       await dependencies.notify({
         title: 'Settings Error',
         message: error instanceof Error ? error.message : 'Failed to save health sync setting.',
-        action: authorizationFailed && provider?.openPermissionSettings
-          ? {
-              label: 'Open Settings',
-              onPress: () => provider!.openPermissionSettings!(),
-            }
-          : undefined,
+        action:
+          authorizationFailed && provider?.openPermissionSettings
+            ? {
+                label: 'Open Settings',
+                onPress: () => provider!.openPermissionSettings!(),
+              }
+            : undefined,
       });
       throw error;
     }

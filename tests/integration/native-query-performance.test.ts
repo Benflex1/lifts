@@ -21,9 +21,7 @@ class CountingDriver extends NodeSqliteDriver {
 }
 
 function makeWorkout(index: number, exerciseOffset: number): Workout {
-  const exercises = [0, 1, 2].map((slot) =>
-    getDefaultExercises()[(exerciseOffset + slot) % 20]
-  );
+  const exercises = [0, 1, 2].map(slot => getDefaultExercises()[(exerciseOffset + slot) % 20]);
 
   return {
     id: `perf-${String(index).padStart(3, '0')}`,
@@ -39,7 +37,7 @@ function makeWorkout(index: number, exerciseOffset: number): Workout {
       exercise,
       restTimerSeconds: 90,
       targetReps: '8-12',
-      sets: [0, 1, 2].map((setIndex) => ({
+      sets: [0, 1, 2].map(setIndex => ({
         id: `perf-${index}-ex${exerciseIndex}-s${setIndex}`,
         setNumber: setIndex + 1,
         type: 'normal' as const,
@@ -68,7 +66,7 @@ describe('native query performance guarantees', () => {
     for (const [table, indexName] of expectedIndexes) {
       const indexes = await driver.getAllAsync<{ name: string }>(`PRAGMA index_list(${table})`);
       assert.ok(
-        indexes.some((index) => index.name === indexName),
+        indexes.some(index => index.name === indexName),
         `${table} is missing ${indexName}`,
       );
     }
@@ -97,8 +95,8 @@ describe('native query performance guarantees', () => {
     for (const { label, sql, params, index } of queryPlans) {
       const rows = await driver.getAllAsync<{ detail: string }>(sql, ...params);
       assert.ok(
-        rows.some((row) => row.detail.includes(index)),
-        `${label} should use ${index}, got: ${rows.map((row) => row.detail).join(' | ')}`,
+        rows.some(row => row.detail.includes(index)),
+        `${label} should use ${index}, got: ${rows.map(row => row.detail).join(' | ')}`,
       );
     }
 

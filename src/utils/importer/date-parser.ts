@@ -2,18 +2,30 @@
  * Month names mapping for textual dates (e.g. "15 Jul 2024, 09:30").
  */
 const MONTH_MAP: Record<string, number> = {
-  jan: 0, january: 0,
-  feb: 1, february: 1,
-  mar: 2, march: 2,
-  apr: 3, april: 3,
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
   may: 4,
-  jun: 5, june: 5,
-  jul: 6, july: 6,
-  aug: 7, august: 7,
-  sep: 8, sept: 8, september: 8,
-  oct: 9, october: 9,
-  nov: 10, november: 10,
-  dec: 11, december: 11,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
 };
 
 /**
@@ -40,7 +52,7 @@ export function parseWorkoutDate(dateStr: string): string {
 
   // 2. Textual format with month name: "15 Jul 2024, 09:30" or "Jul 15, 2024, 09:30"
   const textMatch = raw.match(
-    /(?:(\d{1,2})\s+([a-zA-Z]+)|([a-zA-Z]+)\s+(\d{1,2})),?\s+(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?)?/i
+    /(?:(\d{1,2})\s+([a-zA-Z]+)|([a-zA-Z]+)\s+(\d{1,2})),?\s+(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?)?/i,
   );
   if (textMatch) {
     const day = parseInt(textMatch[1] || textMatch[4], 10);
@@ -65,7 +77,7 @@ export function parseWorkoutDate(dateStr: string): string {
 
   // 3. Dot format: "15.03.2024 10:30" or "15.03.2024"
   const dotMatch = raw.match(
-    /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+    /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
   );
   if (dotMatch) {
     const day = parseInt(dotMatch[1], 10);
@@ -82,11 +94,11 @@ export function parseWorkoutDate(dateStr: string): string {
 
   // 4. Slash format: could be DD/MM/YYYY or MM/DD/YYYY
   const slashMatch = raw.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ ,T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
   );
   if (slashMatch) {
-    let partA = parseInt(slashMatch[1], 10);
-    let partB = parseInt(slashMatch[2], 10);
+    const partA = parseInt(slashMatch[1], 10);
+    const partB = parseInt(slashMatch[2], 10);
     const year = parseInt(slashMatch[3], 10);
     const hour = slashMatch[4] ? parseInt(slashMatch[4], 10) : 10;
     const min = slashMatch[5] ? parseInt(slashMatch[5], 10) : 0;
@@ -120,7 +132,7 @@ export function parseWorkoutDate(dateStr: string): string {
  */
 export function parseDurationSeconds(
   str?: string | null,
-  unitHint?: 'seconds' | 'minutes' | 'auto'
+  unitHint?: 'seconds' | 'minutes' | 'auto',
 ): number {
   if (!str || !str.trim()) return 3600; // default 1 hour
   const raw = str.trim();

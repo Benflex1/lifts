@@ -35,27 +35,31 @@ export function useBodyWeightLog(enabled: boolean) {
     void reload();
   }, [reload]);
 
-  const update = useCallback(async (change: (entries: BodyWeightEntry[]) => BodyWeightEntry[]) => {
-    try {
-      const next = change(parseBodyWeightLog(await getSetting(BODY_WEIGHT_LOG_KEY)));
-      await setSetting(BODY_WEIGHT_LOG_KEY, serializeBodyWeightLog(next));
-      version.current += 1;
-      setEntries(next);
-    } catch (err: any) {
-      await notify({
-        title: 'Body Weight',
-        message: err?.message || 'Failed to save your weigh-in.',
-      });
-      throw err;
-    }
-  }, [notify]);
+  const update = useCallback(
+    async (change: (entries: BodyWeightEntry[]) => BodyWeightEntry[]) => {
+      try {
+        const next = change(parseBodyWeightLog(await getSetting(BODY_WEIGHT_LOG_KEY)));
+        await setSetting(BODY_WEIGHT_LOG_KEY, serializeBodyWeightLog(next));
+        version.current += 1;
+        setEntries(next);
+      } catch (err: any) {
+        await notify({
+          title: 'Body Weight',
+          message: err?.message || 'Failed to save your weigh-in.',
+        });
+        throw err;
+      }
+    },
+    [notify],
+  );
 
   const logWeight = useCallback(
-    (date: string, weightKg: number) => update((current) => upsertBodyWeight(current, date, weightKg)),
+    (date: string, weightKg: number) =>
+      update(current => upsertBodyWeight(current, date, weightKg)),
     [update],
   );
   const deleteWeight = useCallback(
-    (date: string) => update((current) => removeBodyWeight(current, date)),
+    (date: string) => update(current => removeBodyWeight(current, date)),
     [update],
   );
 

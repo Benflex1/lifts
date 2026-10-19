@@ -39,15 +39,12 @@ export interface GymSwitchResult {
   cancelled: boolean;
 }
 
-export function resolveStartGymId(
-  defaultGym: Gym,
-  options?: StartWorkoutOptions,
-): string {
+export function resolveStartGymId(defaultGym: Gym, options?: StartWorkoutOptions): string {
   return options?.gymId || defaultGym.id;
 }
 
 export function resolveInitialStartGymId(gyms: readonly Gym[]): string | undefined {
-  return gyms.find((gym) => gym.isDefault)?.id || gyms[0]?.id;
+  return gyms.find(gym => gym.isDefault)?.id || gyms[0]?.id;
 }
 
 export async function loadSuggestionsForWorkout(
@@ -57,7 +54,7 @@ export async function loadSuggestionsForWorkout(
 ): Promise<Record<string, PreviousSetSuggestion[]>> {
   const occurrenceCounts = new Map<string, number>();
   const suggestions = await Promise.all(
-    workout.exercises.map(async (exercise) => {
+    workout.exercises.map(async exercise => {
       const occurrenceIndex = occurrenceCounts.get(exercise.exerciseId) || 0;
       occurrenceCounts.set(exercise.exerciseId, occurrenceIndex + 1);
       return [
@@ -84,8 +81,8 @@ export function captureWorkoutVersion(state: GymSessionControllerState): Workout
     workoutId: state.workout.id,
     revision: state.revision,
     gymId: state.workout.gymId,
-    exerciseIds: state.workout.exercises.map((exercise) => exercise.id),
-    exerciseDefinitionIds: state.workout.exercises.map((exercise) => exercise.exerciseId),
+    exerciseIds: state.workout.exercises.map(exercise => exercise.id),
+    exerciseDefinitionIds: state.workout.exercises.map(exercise => exercise.exerciseId),
   };
 }
 
@@ -94,27 +91,29 @@ export function isCurrentWorkoutVersion(
   expected: WorkoutVersion,
 ): boolean {
   if (state.phase !== 'active' || !state.workout) return false;
-  return state.revision === expected.revision
-    && state.workout.id === expected.workoutId
-    && state.workout.gymId === expected.gymId
-    && state.workout.exercises.length === expected.exerciseIds.length
-    && state.workout.exercises.every((exercise, index) => (
-      exercise.id === expected.exerciseIds[index]
-      && exercise.exerciseId === expected.exerciseDefinitionIds[index]
-    ));
+  return (
+    state.revision === expected.revision &&
+    state.workout.id === expected.workoutId &&
+    state.workout.gymId === expected.gymId &&
+    state.workout.exercises.length === expected.exerciseIds.length &&
+    state.workout.exercises.every(
+      (exercise, index) =>
+        exercise.id === expected.exerciseIds[index] &&
+        exercise.exerciseId === expected.exerciseDefinitionIds[index],
+    )
+  );
 }
 
 export function resolveRepeatSourceGym(
   workout: Pick<Workout, 'gymId'>,
   gyms: Gym[],
 ): Gym | undefined {
-  return gyms.find((gym) => gym.id === workout.gymId);
+  return gyms.find(gym => gym.id === workout.gymId);
 }
 
-export function clearSameGymProvenance<T extends Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>>(
-  set: T,
-  targetGymId: string,
-): T {
+export function clearSameGymProvenance<
+  T extends Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>,
+>(set: T, targetGymId: string): T {
   if (set.previousGymId !== targetGymId) return set;
   return {
     ...set,
@@ -157,7 +156,7 @@ export async function switchWorkoutGym(
   isRequestCurrent: () => boolean = () => true,
 ): Promise<GymSwitchResult> {
   const gyms = await store.getGyms();
-  const gym = gyms.find((candidate) => candidate.id === gymId);
+  const gym = gyms.find(candidate => candidate.id === gymId);
   if (!gym) {
     throw new Error(`Cannot switch workout gym: unknown gym ${gymId}`);
   }
@@ -199,10 +198,9 @@ export function rehydrateUntouchedSuggestions(
 ): Workout {
   return {
     ...workout,
-    exercises: workout.exercises.map((exercise) => {
-      const suggestions = suggestionsByExercise[exercise.id]
-        || suggestionsByExercise[exercise.exerciseId]
-        || [];
+    exercises: workout.exercises.map(exercise => {
+      const suggestions =
+        suggestionsByExercise[exercise.id] || suggestionsByExercise[exercise.exerciseId] || [];
       return {
         ...exercise,
         sets: exercise.sets.map((set, index) => {
@@ -232,13 +230,11 @@ export function resolveInitialAccordionState(
 ): Record<string, boolean> {
   const initial: Record<string, boolean> = {};
   let firstIncompleteFound = false;
-  exercises.forEach((ex, idx) => {
-    const isComplete = ex.sets.length > 0 && ex.sets.every((s) => s.isCompleted);
+  exercises.forEach(ex => {
+    const isComplete = ex.sets.length > 0 && ex.sets.every(s => s.isCompleted);
     if (!firstIncompleteFound && !isComplete) {
       initial[ex.id] = true;
       firstIncompleteFound = true;
-    } else if (!firstIncompleteFound && idx === 0 && !isComplete) {
-      initial[ex.id] = true;
     } else {
       initial[ex.id] = false;
     }
@@ -246,25 +242,29 @@ export function resolveInitialAccordionState(
   return initial;
 }
 
-export function applyPreviousSetStats<T extends {
-  weightKg: number;
-  reps: number;
-  isWeightEdited?: boolean;
-  isCompleted: boolean;
-  previousWeightKg?: number;
-  previousReps?: number;
-  durationSeconds?: number;
-  distanceM?: number;
-  previousDurationSeconds?: number;
-  previousDistanceM?: number;
-}>(set: T, fallbackReps: number = 10): T {
+export function applyPreviousSetStats<
+  T extends {
+    weightKg: number;
+    reps: number;
+    isWeightEdited?: boolean;
+    isCompleted: boolean;
+    previousWeightKg?: number;
+    previousReps?: number;
+    durationSeconds?: number;
+    distanceM?: number;
+    previousDurationSeconds?: number;
+    previousDistanceM?: number;
+  },
+>(set: T, fallbackReps: number = 10): T {
   if (set.isCompleted) return set;
   if (set.previousWeightKg === undefined && set.previousReps === undefined) return set;
   return {
     ...set,
     weightKg: set.previousWeightKg !== undefined ? set.previousWeightKg : set.weightKg,
     reps: set.previousReps !== undefined ? set.previousReps : fallbackReps,
-    ...(set.previousDurationSeconds !== undefined ? { durationSeconds: set.previousDurationSeconds } : {}),
+    ...(set.previousDurationSeconds !== undefined
+      ? { durationSeconds: set.previousDurationSeconds }
+      : {}),
     ...(set.previousDistanceM !== undefined ? { distanceM: set.previousDistanceM } : {}),
     isWeightEdited: true,
   };
@@ -278,30 +278,39 @@ export interface AddedSetGhostStats {
   provenanceSet?: Pick<WorkoutSet, 'previousGymId' | 'previousGymName'>;
 }
 
-export function resolveAddedSetGhostStats(
-  existingSets: WorkoutSet[],
-): AddedSetGhostStats {
+export function resolveAddedSetGhostStats(existingSets: WorkoutSet[]): AddedSetGhostStats {
   // 1. Look for the most recent completed or edited set in reverse
-  const lastCompletedOrEditedSet = [...existingSets].reverse().find(
-    (s) =>
-      s.isCompleted ||
-      s.isWeightEdited ||
-      s.weightKg > 0 ||
-      s.reps > 0 ||
-      (s.durationSeconds ?? 0) > 0 ||
-      (s.distanceM ?? 0) > 0,
-  );
+  const lastCompletedOrEditedSet = [...existingSets]
+    .reverse()
+    .find(
+      s =>
+        s.isCompleted ||
+        s.isWeightEdited ||
+        s.weightKg > 0 ||
+        s.reps > 0 ||
+        (s.durationSeconds ?? 0) > 0 ||
+        (s.distanceM ?? 0) > 0,
+    );
 
   if (lastCompletedOrEditedSet) {
-    const isEdited = lastCompletedOrEditedSet.isWeightEdited ?? (lastCompletedOrEditedSet.weightKg > 0 || lastCompletedOrEditedSet.isCompleted);
-    const ghostWeight = isEdited ? lastCompletedOrEditedSet.weightKg : lastCompletedOrEditedSet.previousWeightKg;
-    const ghostReps = lastCompletedOrEditedSet.reps > 0 ? lastCompletedOrEditedSet.reps : lastCompletedOrEditedSet.previousReps;
-    const ghostDuration = (lastCompletedOrEditedSet.durationSeconds ?? 0) > 0
-      ? lastCompletedOrEditedSet.durationSeconds
-      : lastCompletedOrEditedSet.previousDurationSeconds;
-    const ghostDistance = (lastCompletedOrEditedSet.distanceM ?? 0) > 0
-      ? lastCompletedOrEditedSet.distanceM
-      : lastCompletedOrEditedSet.previousDistanceM;
+    const isEdited =
+      lastCompletedOrEditedSet.isWeightEdited ??
+      (lastCompletedOrEditedSet.weightKg > 0 || lastCompletedOrEditedSet.isCompleted);
+    const ghostWeight = isEdited
+      ? lastCompletedOrEditedSet.weightKg
+      : lastCompletedOrEditedSet.previousWeightKg;
+    const ghostReps =
+      lastCompletedOrEditedSet.reps > 0
+        ? lastCompletedOrEditedSet.reps
+        : lastCompletedOrEditedSet.previousReps;
+    const ghostDuration =
+      (lastCompletedOrEditedSet.durationSeconds ?? 0) > 0
+        ? lastCompletedOrEditedSet.durationSeconds
+        : lastCompletedOrEditedSet.previousDurationSeconds;
+    const ghostDistance =
+      (lastCompletedOrEditedSet.distanceM ?? 0) > 0
+        ? lastCompletedOrEditedSet.distanceM
+        : lastCompletedOrEditedSet.previousDistanceM;
     return {
       previousWeightKg: ghostWeight,
       previousReps: ghostReps,
@@ -312,9 +321,9 @@ export function resolveAddedSetGhostStats(
   }
 
   // 2. Look for the most recent set with ghost suggestions if no set has been done/edited yet
-  const lastGhostSet = [...existingSets].reverse().find(
-    (s) => s.previousWeightKg !== undefined || s.previousReps !== undefined,
-  );
+  const lastGhostSet = [...existingSets]
+    .reverse()
+    .find(s => s.previousWeightKg !== undefined || s.previousReps !== undefined);
 
   if (lastGhostSet) {
     return {
@@ -323,7 +332,9 @@ export function resolveAddedSetGhostStats(
       ...(lastGhostSet.previousDurationSeconds !== undefined
         ? { previousDurationSeconds: lastGhostSet.previousDurationSeconds }
         : {}),
-      ...(lastGhostSet.previousDistanceM !== undefined ? { previousDistanceM: lastGhostSet.previousDistanceM } : {}),
+      ...(lastGhostSet.previousDistanceM !== undefined
+        ? { previousDistanceM: lastGhostSet.previousDistanceM }
+        : {}),
       provenanceSet: lastGhostSet,
     };
   }
@@ -346,34 +357,39 @@ export interface CreateWorkoutSetsOptions {
 }
 
 export function createWorkoutSetsFromSuggestions(options: CreateWorkoutSetsOptions): WorkoutSet[] {
-  const { activeExerciseId, targetSets, targetReps, suggestions, currentGymId, idGenerator } = options;
+  const { activeExerciseId, targetSets, targetReps, suggestions, currentGymId, idGenerator } =
+    options;
   const count = Math.max(targetSets, suggestions.length);
   const sets: WorkoutSet[] = [];
 
   for (let i = 1; i <= count; i++) {
-    const ghost = suggestions[i - 1] ?? (suggestions.length > 0 ? suggestions[suggestions.length - 1] : undefined);
+    const ghost =
+      suggestions[i - 1] ??
+      (suggestions.length > 0 ? suggestions[suggestions.length - 1] : undefined);
     const isSameGym = Boolean(currentGymId && ghost?.sourceGymId === currentGymId);
-    const setId = idGenerator
-      ? idGenerator(i)
-      : `set-${activeExerciseId}-${i}`;
+    const setId = idGenerator ? idGenerator(i) : `set-${activeExerciseId}-${i}`;
 
-    sets.push(withPreviousTracked<WorkoutSet>({
-      id: setId,
-      setNumber: i,
-      type: 'normal',
-      weightKg: 0,
-      reps: 0,
-      targetReps,
-      rpe: undefined,
-      isCompleted: false,
-      isWeightEdited: false,
-      previousWeightKg: ghost ? ghost.weightKg : undefined,
-      previousReps: ghost ? ghost.reps : undefined,
-      previousGymId: isSameGym ? undefined : ghost?.sourceGymId,
-      previousGymName: isSameGym ? undefined : ghost?.sourceGymName,
-    }, ghost));
+    sets.push(
+      withPreviousTracked<WorkoutSet>(
+        {
+          id: setId,
+          setNumber: i,
+          type: 'normal',
+          weightKg: 0,
+          reps: 0,
+          targetReps,
+          rpe: undefined,
+          isCompleted: false,
+          isWeightEdited: false,
+          previousWeightKg: ghost ? ghost.weightKg : undefined,
+          previousReps: ghost ? ghost.reps : undefined,
+          previousGymId: isSameGym ? undefined : ghost?.sourceGymId,
+          previousGymName: isSameGym ? undefined : ghost?.sourceGymName,
+        },
+        ghost,
+      ),
+    );
   }
 
   return sets;
 }
-

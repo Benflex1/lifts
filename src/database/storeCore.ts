@@ -25,9 +25,12 @@ import { asCompletedRecord } from './workoutRecord';
 
 /** Fills in optional exercise arrays that older records may omit. */
 export function normalizeExerciseRecord(exercise: Exercise): Exercise {
-  const secondaryMuscles = Array.isArray(exercise.secondaryMuscles) ? exercise.secondaryMuscles : [];
+  const secondaryMuscles = Array.isArray(exercise.secondaryMuscles)
+    ? exercise.secondaryMuscles
+    : [];
   const instructions = Array.isArray(exercise.instructions) ? exercise.instructions : [];
-  if (secondaryMuscles === exercise.secondaryMuscles && instructions === exercise.instructions) return exercise;
+  if (secondaryMuscles === exercise.secondaryMuscles && instructions === exercise.instructions)
+    return exercise;
   return { ...exercise, secondaryMuscles, instructions };
 }
 
@@ -38,11 +41,13 @@ export function normalizeExerciseRecord(exercise: Exercise): Exercise {
  */
 export function normalizeWorkoutRecord(workout: Workout): Workout {
   if (!Array.isArray(workout.exercises)) return workout;
-  const exercises = workout.exercises.map((activeExercise) => {
+  const exercises = workout.exercises.map(activeExercise => {
     const exercise = normalizeExerciseRecord(activeExercise.exercise);
     return exercise === activeExercise.exercise ? activeExercise : { ...activeExercise, exercise };
   });
-  const exercisesChanged = exercises.some((exercise, index) => exercise !== workout.exercises[index]);
+  const exercisesChanged = exercises.some(
+    (exercise, index) => exercise !== workout.exercises[index],
+  );
   const withGym = workout.gymId ? workout : { ...workout, gymId: DEFAULT_GYM_ID };
   if (!exercisesChanged && withGym === workout) return workout;
   if (!exercisesChanged) return withGym;
@@ -50,9 +55,11 @@ export function normalizeWorkoutRecord(workout: Workout): Workout {
 }
 
 export function normalizeRoutineRecord(routine: Routine): Routine {
-  const exercises = routine.exercises.map((routineExercise) => {
+  const exercises = routine.exercises.map(routineExercise => {
     const exercise = normalizeExerciseRecord(routineExercise.exercise);
-    return exercise === routineExercise.exercise ? routineExercise : { ...routineExercise, exercise };
+    return exercise === routineExercise.exercise
+      ? routineExercise
+      : { ...routineExercise, exercise };
   });
   if (exercises.every((exercise, index) => exercise === routine.exercises[index])) return routine;
   return { ...routine, exercises };
@@ -80,8 +87,12 @@ export function compareBinaryStrings(a: string, b: string): number {
 }
 
 export function scopesAreIdentical(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
-  return a.exerciseId === b.exerciseId && a.scopeType === b.scopeType
-    && JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort());
+  return (
+    a.exerciseId === b.exerciseId &&
+    a.scopeType === b.scopeType &&
+    JSON.stringify([...(a.linkedGymIds || [])].sort()) ===
+      JSON.stringify([...(b.linkedGymIds || [])].sort())
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -92,8 +103,9 @@ export function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
   if (!Array.isArray(snapshot.gyms)) return snapshot;
   return {
     ...snapshot,
-    gyms: snapshot.gyms.map((gym) => {
-      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim()) throw new Error(`Invalid gym ID: ${gym.id}`);
+    gyms: snapshot.gyms.map(gym => {
+      if (typeof gym.id !== 'string' || !gym.id.trim() || gym.id !== gym.id.trim())
+        throw new Error(`Invalid gym ID: ${gym.id}`);
       if (typeof gym.createdAt !== 'string' || !gym.createdAt || isNaN(Date.parse(gym.createdAt))) {
         throw new Error(`Invalid createdAt timestamp in gym: ${gym.id}`);
       }
@@ -107,18 +119,25 @@ export function canonicalizeSnapshotGyms(snapshot: DataSnapshot): DataSnapshot {
 }
 
 /** Rejects ambiguous or conflicting snapshot records before any write. */
-export function validateSnapshotMergeConflicts(snapshot: DataSnapshot, existing: DataSnapshot): void {
+export function validateSnapshotMergeConflicts(
+  snapshot: DataSnapshot,
+  existing: DataSnapshot,
+): void {
   const incomingScopes = snapshot.exerciseGymScopes || [];
   const exerciseIds = new Set([
-    ...existing.exercises.map((exercise) => exercise.id),
-    ...snapshot.exercises.map((exercise) => exercise.id),
+    ...existing.exercises.map(exercise => exercise.id),
+    ...snapshot.exercises.map(exercise => exercise.id),
   ]);
-  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
+  const existingScopes = new Map(
+    existing.exerciseGymScopes.map(scope => [scope.exerciseId, scope]),
+  );
   const seenScopeIds = new Set<string>();
   for (const scope of incomingScopes) {
-    if (seenScopeIds.has(scope.exerciseId)) throw new Error(`Snapshot contains duplicate exercise scope IDs: ${scope.exerciseId}`);
+    if (seenScopeIds.has(scope.exerciseId))
+      throw new Error(`Snapshot contains duplicate exercise scope IDs: ${scope.exerciseId}`);
     seenScopeIds.add(scope.exerciseId);
-    if (!exerciseIds.has(scope.exerciseId)) throw new Error(`unknown exercise: ${scope.exerciseId}`);
+    if (!exerciseIds.has(scope.exerciseId))
+      throw new Error(`unknown exercise: ${scope.exerciseId}`);
     const existingScope = existingScopes.get(scope.exerciseId);
     if (existingScope && !scopesAreIdentical(scope, existingScope)) {
       throw new Error(`Conflicting exercise gym scope: ${scope.exerciseId}`);
@@ -151,33 +170,45 @@ export interface SnapshotMergePlan {
  * record the adapters must persist, in dependency order (gyms, exercises,
  * scopes, routines, workouts, drafts, settings).
  */
-export function planSnapshotMerge(snapshot: DataSnapshot, existing: DataSnapshot): SnapshotMergePlan {
+export function planSnapshotMerge(
+  snapshot: DataSnapshot,
+  existing: DataSnapshot,
+): SnapshotMergePlan {
   validateSnapshotForMerge(snapshot, existing);
   validateSnapshotMergeConflicts(snapshot, existing);
 
-  const destinationGymIds = new Set(existing.gyms.map((gym) => gym.id));
-  const existingDefaultGym = existing.gyms.find((gym) => gym.isDefault);
-  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
+  const destinationGymIds = new Set(existing.gyms.map(gym => gym.id));
+  const existingDefaultGym = existing.gyms.find(gym => gym.isDefault);
+  const existingScopes = new Map(
+    existing.exerciseGymScopes.map(scope => [scope.exerciseId, scope]),
+  );
 
   // A backup may rename/recolour the current default gym; keep its identity and
   // the device's default flag, but adopt the backup's name and colour.
   const gymsToUpdate = existingDefaultGym
     ? (snapshot.gyms || [])
-        .filter((gym) => gym.isDefault && gym.id === existingDefaultGym.id)
-        .map((gym) => ({ ...existingDefaultGym, name: gym.name, color: gym.color }))
+        .filter(gym => gym.isDefault && gym.id === existingDefaultGym.id)
+        .map(gym => ({ ...existingDefaultGym, name: gym.name, color: gym.color }))
     : [];
-  const updatedGymIds = new Set(gymsToUpdate.map((gym) => gym.id));
+  const updatedGymIds = new Set(gymsToUpdate.map(gym => gym.id));
 
   return {
     gymsToUpdate,
     gymsToInsert: (snapshot.gyms || [])
-      .filter((gym) => !destinationGymIds.has(gym.id) && !updatedGymIds.has(gym.id))
-      .map((gym) => ({ ...gym, isDefault: false })),
+      .filter(gym => !destinationGymIds.has(gym.id) && !updatedGymIds.has(gym.id))
+      .map(gym => ({ ...gym, isDefault: false })),
     exercisesToUpsert: snapshot.exercises.map(normalizeExerciseRecord),
-    scopesToInsert: (snapshot.exerciseGymScopes || []).filter((scope) => !existingScopes.has(scope.exerciseId)),
+    scopesToInsert: (snapshot.exerciseGymScopes || []).filter(
+      scope => !existingScopes.has(scope.exerciseId),
+    ),
     routinesToUpsert: snapshot.routines.map(normalizeRoutineRecord),
-    workoutsToUpsert: snapshot.workouts.map((workout) => asCompletedRecord(normalizeWorkoutRecord(workout))),
-    draftsToUpsert: snapshot.drafts.map((draft) => ({ id: draft.workout.id, draft: normalizeDraftRecord(draft) })),
+    workoutsToUpsert: snapshot.workouts.map(workout =>
+      asCompletedRecord(normalizeWorkoutRecord(workout)),
+    ),
+    draftsToUpsert: snapshot.drafts.map(draft => ({
+      id: draft.workout.id,
+      draft: normalizeDraftRecord(draft),
+    })),
     settingsToInsert: Object.entries(snapshot.settings)
       .filter(
         ([key]) =>
@@ -225,23 +256,34 @@ export interface GymDeletionPlan {
  * storage-level rewrite every adapter performs for rows referencing the gym.
  */
 export function planGymDeletion(input: GymDeletionInput): GymDeletionPlan {
-  const { gymId, replacementGymId, gyms, activeWorkoutGymId, drafts, inProgressWorkoutIds, scopes } = input;
+  const {
+    gymId,
+    replacementGymId,
+    gyms,
+    activeWorkoutGymId,
+    drafts,
+    inProgressWorkoutIds,
+    scopes,
+  } = input;
 
   validateGymDeletion(gymId, replacementGymId, gyms, activeWorkoutGymId);
-  if (drafts.some((draft) => isActiveWorkoutForGym(draft.workout, gymId))) {
+  if (drafts.some(draft => isActiveWorkoutForGym(draft.workout, gymId))) {
     throw new Error('cannot delete the gym used by an active workout draft');
   }
   if (inProgressWorkoutIds.length > 0) {
     throw new Error('cannot delete the gym used by an in-progress workout');
   }
 
-  const deleted = gyms.find((gym) => gym.id === gymId)!;
+  const deleted = gyms.find(gym => gym.id === gymId)!;
   return {
     gymId,
     replacementGymId,
     reassignDrafts: drafts
-      .filter((draft) => draft.workout.gymId === gymId)
-      .map((draft) => ({ id: draft.workout.id, draft: { ...draft, workout: { ...draft.workout, gymId: replacementGymId } } })),
+      .filter(draft => draft.workout.gymId === gymId)
+      .map(draft => ({
+        id: draft.workout.id,
+        draft: { ...draft, workout: { ...draft.workout, gymId: replacementGymId } },
+      })),
     scopeWrites: pruneGymFromScopes(scopes, gymId),
     makeDefault: Boolean(deleted.isDefault),
   };
@@ -255,13 +297,19 @@ export function pruneGymFromScopes(
   const writes: Array<{ exerciseId: string; scope: ExerciseGymScope | null }> = [];
   for (const scope of scopes) {
     if (!scope.linkedGymIds?.includes(gymId)) continue;
-    const ids = scope.linkedGymIds.filter((id) => id !== gymId);
+    const ids = scope.linkedGymIds.filter(id => id !== gymId);
     if (ids.length === 0) {
       writes.push({ exerciseId: scope.exerciseId, scope: null });
     } else if (ids.length < 2) {
-      writes.push({ exerciseId: scope.exerciseId, scope: { ...scope, scopeType: 'gym_specific', linkedGymIds: undefined } });
+      writes.push({
+        exerciseId: scope.exerciseId,
+        scope: { ...scope, scopeType: 'gym_specific', linkedGymIds: undefined },
+      });
     } else {
-      writes.push({ exerciseId: scope.exerciseId, scope: { ...scope, scopeType: 'linked_group', linkedGymIds: ids } });
+      writes.push({
+        exerciseId: scope.exerciseId,
+        scope: { ...scope, scopeType: 'linked_group', linkedGymIds: ids },
+      });
     }
   }
   return writes;

@@ -19,24 +19,11 @@ export const MUSCLE_GROUPS = [
   'Calves',
 ];
 
-export const EQUIPMENT_LIST = [
-  'All',
-  'Barbell',
-  'Dumbbell',
-  'Machine',
-  'Cable',
-  'Body Only',
-];
+export const EQUIPMENT_LIST = ['All', 'Barbell', 'Dumbbell', 'Machine', 'Cable', 'Body Only'];
 
 export const CUSTOM_MUSCLE_OPTIONS = MUSCLE_GROUPS.filter(m => m !== 'All');
 
-export const CUSTOM_EQUIPMENT_OPTIONS = [
-  'Barbell',
-  'Dumbbell',
-  'Machine',
-  'Cable',
-  'Bodyweight',
-];
+export const CUSTOM_EQUIPMENT_OPTIONS = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'];
 
 export const MUSCLE_ALIAS_MAP: Record<string, string> = {
   lats: 'Back',
@@ -100,10 +87,15 @@ export function resolveCustomEquipment(raw: string): string {
   return (
     CUSTOM_EQUIPMENT_OPTIONS.find(eq => eq.toLowerCase() === normalized) ||
     EQUIPMENT_ALIAS_MAP[normalized] ||
-    (['kettlebell', 'db'].some(k => normalized.includes(k)) ? 'Dumbbell' :
-      normalized.includes('body') ? 'Bodyweight' :
-      normalized.includes('cable') || normalized.includes('band') ? 'Cable' :
-      normalized.includes('smith') || normalized.includes('machine') ? 'Machine' : 'Barbell')
+    (['kettlebell', 'db'].some(k => normalized.includes(k))
+      ? 'Dumbbell'
+      : normalized.includes('body')
+        ? 'Bodyweight'
+        : normalized.includes('cable') || normalized.includes('band')
+          ? 'Cable'
+          : normalized.includes('smith') || normalized.includes('machine')
+            ? 'Machine'
+            : 'Barbell')
   );
 }
 

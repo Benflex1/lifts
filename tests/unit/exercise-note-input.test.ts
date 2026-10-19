@@ -36,7 +36,7 @@ async function renderNoteInput(props: {
   return { renderer, input, React, Component: ExerciseNoteInput };
 }
 
-test('keystrokes commit only after the debounce fires', async (t) => {
+test('keystrokes commit only after the debounce fires', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,7 +65,7 @@ test('keystrokes commit only after the debounce fires', async (t) => {
   assert.deepEqual(commits, [['ex-1', 'seat pin 4']], 'one commit with the latest text');
 });
 
-test('blur flushes the pending note immediately', async (t) => {
+test('blur flushes the pending note immediately', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -88,7 +88,7 @@ test('blur flushes the pending note immediately', async (t) => {
   assert.deepEqual(commits, [['ex-2', 'tempo 3-1-1']], 'the flushed note is not committed twice');
 });
 
-test('unmount flushes the pending note', async (t) => {
+test('unmount flushes the pending note', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -110,7 +110,7 @@ test('unmount flushes the pending note', async (t) => {
   assert.deepEqual(commits, [['ex-3', 'left knee felt off']], 'unmount never drops text');
 });
 
-test('external note updates are adopted without re-committing', async (t) => {
+test('external note updates are adopted without re-committing', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

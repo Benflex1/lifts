@@ -1,5 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from 'react-native';
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ScrollView,
+} from 'react-native';
 import { ChevronRight, Search, Trophy, X } from 'lucide-react-native';
 import { ExerciseRecordSummary, LiftHighlight, TrophyRoomSummary } from '../workout/trophy-room';
 import { formatWeight, kgToDisplay, WeightUnit } from '../utils/units';
@@ -50,21 +58,29 @@ export function formatRelativeDay(iso: string, now: Date = new Date()): string {
 }
 
 function recordDate(record: ExerciseRecordSummary): string | undefined {
-  const dates = [record.bestWeight?.date, record.best1RM?.date, record.bestVolume?.date, record.bestReps?.date].filter(
-    (d): d is string => Boolean(d),
-  );
+  const dates = [
+    record.bestWeight?.date,
+    record.best1RM?.date,
+    record.bestVolume?.date,
+    record.bestReps?.date,
+  ].filter((d): d is string => Boolean(d));
   return dates.sort().pop();
 }
 
-function headlineFor(record: ExerciseRecordSummary, unit: WeightUnit): { value: string; caption: string } {
+function headlineFor(
+  record: ExerciseRecordSummary,
+  unit: WeightUnit,
+): { value: string; caption: string } {
   if (record.best1RM) return { value: formatWeight(record.best1RM.value, unit), caption: 'e1RM' };
-  if (record.bestWeight) return { value: formatWeight(record.bestWeight.value, unit), caption: 'heaviest' };
+  if (record.bestWeight)
+    return { value: formatWeight(record.bestWeight.value, unit), caption: 'heaviest' };
   if (record.bestReps) return { value: String(record.bestReps.value), caption: 'reps' };
   return { value: '—', caption: '' };
 }
 
 function detailFor(record: ExerciseRecordSummary, unit: WeightUnit): string {
-  if (record.bestWeight) return `Heaviest ${formatWeight(record.bestWeight.value, unit)} × ${record.bestWeight.reps}`;
+  if (record.bestWeight)
+    return `Heaviest ${formatWeight(record.bestWeight.value, unit)} × ${record.bestWeight.reps}`;
   if (record.bestReps) return `Best set ${record.bestReps.value} reps`;
   return 'No completed sets yet';
 }
@@ -117,6 +133,7 @@ export const RecordRow = React.memo(function RecordRow({
       ]}
       onPress={() => onOpen(record)}
       activeOpacity={0.7}
+      testID="record-row"
       accessibilityRole="button"
       accessibilityLabel={`View ${record.exerciseName} record details`}
     >
@@ -152,7 +169,8 @@ export function RecordsView({
   onChangeSearch,
   onOpenRecord,
 }: RecordsViewProps) {
-  const hasRecord = (record: ExerciseRecordSummary) => Boolean(record.bestWeight || record.bestReps);
+  const hasRecord = (record: ExerciseRecordSummary) =>
+    Boolean(record.bestWeight || record.bestReps);
   const overviewRecords = overview?.records.filter(hasRecord) ?? [];
 
   const [searchText, setSearchText] = useState(search);
@@ -164,14 +182,14 @@ export function RecordsView({
   // Keystrokes update the input immediately but only commit after a short
   // pause, so typing filters an existing list instead of recomputing history.
   const debouncer = useMemo(
-    () => createDebouncer<string>(SEARCH_DEBOUNCE_MS, (value) => onChangeSearchRef.current(value)),
+    () => createDebouncer<string>(SEARCH_DEBOUNCE_MS, value => onChangeSearchRef.current(value)),
     [],
   );
   useEffect(() => () => debouncer.cancel(), [debouncer]);
 
   // Keep the input in sync when the committed search changes externally.
   useEffect(() => {
-    setSearchText((prev) => (prev === search ? prev : search));
+    setSearchText(prev => (prev === search ? prev : search));
   }, [search]);
 
   const handleSearchChange = (text: string) => {
@@ -240,7 +258,9 @@ export function RecordsView({
       {/* Recent PRs */}
       <View style={styles.sectionRow}>
         <Text style={styles.sectionTitle}>Recent PRs</Text>
-        {recentCount > 0 && <Text style={styles.sectionMeta}>{recentCount} in the last 30 days</Text>}
+        {recentCount > 0 && (
+          <Text style={styles.sectionMeta}>{recentCount} in the last 30 days</Text>
+        )}
       </View>
       <ScrollView
         horizontal
@@ -325,7 +345,12 @@ export function RecordsView({
         {gymTrackingEnabled && gyms.length > 1 && (
           <>
             <View style={styles.chipDivider} />
-            <Chip size="sm" label="All gyms" selected={selectedGymId === null} onPress={() => onSelectGym(null)} />
+            <Chip
+              size="sm"
+              label="All gyms"
+              selected={selectedGymId === null}
+              onPress={() => onSelectGym(null)}
+            />
             {gyms.map(gym => (
               <Chip
                 key={gym.id}
@@ -338,14 +363,13 @@ export function RecordsView({
           </>
         )}
       </ScrollView>
-
     </View>
   );
 
   return (
     <FlatList
       data={records}
-      keyExtractor={(item) => item.exerciseId}
+      keyExtractor={item => item.exerciseId}
       renderItem={({ item, index }) => (
         <RecordRow
           record={item}

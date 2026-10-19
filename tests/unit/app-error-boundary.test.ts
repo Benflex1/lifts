@@ -22,7 +22,8 @@ mockModule('react-native', {
   Platform: { OS: 'web' },
 });
 
-let boundaryModulePromise: Promise<typeof import('../../src/components/AppErrorBoundary')> | null = null;
+let boundaryModulePromise: Promise<typeof import('../../src/components/AppErrorBoundary')> | null =
+  null;
 function loadBoundaryModule() {
   boundaryModulePromise ??= import('../../src/components/AppErrorBoundary');
   return boundaryModulePromise;
@@ -64,7 +65,7 @@ test('AppErrorBoundary renders a recovery fallback instead of the crashed tree',
   const text = collectText(boundary.render());
 
   assert.ok(text.includes('Something went wrong'));
-  assert.ok(text.some((value) => value.includes('render exploded')));
+  assert.ok(text.some(value => value.includes('render exploded')));
   assert.ok(text.includes('Try Again'));
   assert.ok(text.includes('Reload App'), 'web recovery offers a reload');
 });
@@ -109,9 +110,8 @@ test('AppErrorBoundary renders the fallback when a child throws during render', 
 
 test('AppErrorBoundary records the crash with scope and component stack', async () => {
   const { AppErrorBoundary } = await loadBoundaryModule();
-  const { clearErrorBreadcrumbs, getErrorBreadcrumbs, setErrorSink } = await import(
-    '../../src/utils/errorReporting'
-  );
+  const { clearErrorBreadcrumbs, getErrorBreadcrumbs, setErrorSink } =
+    await import('../../src/utils/errorReporting');
   clearErrorBreadcrumbs();
 
   let reportedScope: string | null = null;

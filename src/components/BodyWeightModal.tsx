@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
 import { Minus, Plus, Trash2, Weight, X } from 'lucide-react-native';
 import {
   BodyWeightEntry,
@@ -36,13 +44,20 @@ function dateKeyDaysAgo(days: number): string {
 }
 
 /** Logs a weigh-in for today or the last two days, and lists recent ones to fix or remove. */
-export function BodyWeightModal({ visible, entries, unit, onSave, onDelete, onClose }: BodyWeightModalProps) {
+export function BodyWeightModal({
+  visible,
+  entries,
+  unit,
+  onSave,
+  onDelete,
+  onClose,
+}: BodyWeightModalProps) {
   const [text, setText] = useState('');
   const [dayOffset, setDayOffset] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
-  const entryFor = (offset: number) => entries.find((entry) => entry.date === dateKeyDaysAgo(offset));
+  const entryFor = (offset: number) => entries.find(entry => entry.date === dateKeyDaysAgo(offset));
 
   useEffect(() => {
     if (!visible) return;
@@ -90,20 +105,30 @@ export function BodyWeightModal({ visible, entries, unit, onSave, onDelete, onCl
               <Weight size={18} color={colors.primaryLight} />
             </View>
             <Text style={styles.title}>Log body weight</Text>
-            <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <X color={colors.textSecondary} size={22} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
             <View style={styles.inputRow}>
-              <TouchableOpacity style={styles.stepBtn} onPress={() => step(-1)} accessibilityRole="button" accessibilityLabel={`0.1 ${unit} less`}>
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => step(-1)}
+                accessibilityRole="button"
+                accessibilityLabel={`0.1 ${unit} less`}
+              >
                 <Minus size={18} color={colors.textSoft} />
               </TouchableOpacity>
               <View style={styles.inputWrap}>
                 <TextInput
                   value={text}
-                  onChangeText={(value) => setText(sanitizeWeightInput(value))}
+                  onChangeText={value => setText(sanitizeWeightInput(value))}
                   keyboardType="decimal-pad"
                   placeholder="0.0"
                   placeholderTextColor={colors.textFaint}
@@ -115,18 +140,24 @@ export function BodyWeightModal({ visible, entries, unit, onSave, onDelete, onCl
                 />
                 <Text style={styles.inputUnit}>{unit}</Text>
               </View>
-              <TouchableOpacity style={styles.stepBtn} onPress={() => step(1)} accessibilityRole="button" accessibilityLabel={`0.1 ${unit} more`}>
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => step(1)}
+                accessibilityRole="button"
+                accessibilityLabel={`0.1 ${unit} more`}
+              >
                 <Plus size={18} color={colors.textSoft} />
               </TouchableOpacity>
             </View>
             {text !== '' && !isValid && (
               <Text style={styles.warning}>
-                Enter a weight between {Math.ceil(kgToDisplay(20, unit))} and {Math.floor(kgToDisplay(400, unit))} {unit}.
+                Enter a weight between {Math.ceil(kgToDisplay(20, unit))} and{' '}
+                {Math.floor(kgToDisplay(400, unit))} {unit}.
               </Text>
             )}
 
             <View style={styles.chips}>
-              {DAY_OPTIONS.map((option) => (
+              {DAY_OPTIONS.map(option => (
                 <Chip
                   key={option.offset}
                   label={option.label}
@@ -138,14 +169,15 @@ export function BodyWeightModal({ visible, entries, unit, onSave, onDelete, onCl
             </View>
             {replacing && (
               <Text style={styles.caption}>
-                Replaces the {kgToDisplay(replacing.weightKg, unit).toFixed(1)} {unit} logged for this day.
+                Replaces the {kgToDisplay(replacing.weightKg, unit).toFixed(1)} {unit} logged for
+                this day.
               </Text>
             )}
 
             {recent.length > 0 && (
               <>
                 <Text style={styles.sectionLabel}>Recent</Text>
-                {recent.map((entry) => (
+                {recent.map(entry => (
                   <View key={entry.date} style={styles.recentRow}>
                     <Text style={styles.recentDate}>{formatWeighInDate(entry.date)}</Text>
                     <Text style={styles.recentValue}>
@@ -245,7 +277,13 @@ const styles = StyleSheet.create({
   },
   inputUnit: { color: colors.textSecondary, fontSize: 16, fontWeight: '700', marginLeft: 4 },
   warning: { color: colors.warning, fontSize: 13, marginTop: 8, textAlign: 'center' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 16 },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginTop: 16,
+  },
   caption: { color: colors.textMuted, fontSize: 12, marginTop: 8, textAlign: 'center' },
   sectionLabel: {
     color: colors.textMuted,

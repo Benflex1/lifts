@@ -95,8 +95,20 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     primaryMuscles: ['lats'],
   };
 
-  const gymA: Gym = { id: 'gym-a', name: 'Gold Gym', isDefault: true, color: '#F59E0B', createdAt: '2026-01-01' };
-  const gymB: Gym = { id: 'gym-b', name: 'FitX', isDefault: false, color: '#3B82F6', createdAt: '2026-01-01' };
+  const gymA: Gym = {
+    id: 'gym-a',
+    name: 'Gold Gym',
+    isDefault: true,
+    color: '#F59E0B',
+    createdAt: '2026-01-01',
+  };
+  const gymB: Gym = {
+    id: 'gym-b',
+    name: 'FitX',
+    isDefault: false,
+    color: '#3B82F6',
+    createdAt: '2026-01-01',
+  };
   const allGyms = [gymA, gymB];
 
   it('evaluates global barbell exercise with Gold, Silver, and Bronze PRs across workouts', () => {
@@ -115,9 +127,23 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: barbellBench,
           restTimerSeconds: 90,
           sets: [
-            { id: 'w1-s1', setNumber: 1, type: 'warmup', weightKg: 60, reps: 10, isCompleted: true },
+            {
+              id: 'w1-s1',
+              setNumber: 1,
+              type: 'warmup',
+              weightKg: 60,
+              reps: 10,
+              isCompleted: true,
+            },
             { id: 'w1-s2', setNumber: 2, type: 'normal', weightKg: 90, reps: 5, isCompleted: true },
-            { id: 'w1-s3', setNumber: 3, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+            {
+              id: 'w1-s3',
+              setNumber: 3,
+              type: 'normal',
+              weightKg: 100,
+              reps: 5,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -156,12 +182,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       ],
     };
 
-    const summary2 = evaluateWorkoutPRs(
-      workout2,
-      { [barbellBench.id]: [workout1] },
-      allGyms,
-      true
-    );
+    const summary2 = evaluateWorkoutPRs(workout2, { [barbellBench.id]: [workout1] }, allGyms, true);
     // 95 kg is 2nd best ever (Silver)
     assert.equal(summary2.setPRs.get('w2-s1')?.primary?.rank, 2);
     assert.equal(summary2.setPRs.get('w2-s1')?.primary?.previousRecord, 90);
@@ -181,8 +202,22 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: barbellBench,
           restTimerSeconds: 90,
           sets: [
-            { id: 'w3-s1', setNumber: 1, type: 'normal', weightKg: 105, reps: 5, isCompleted: true },
-            { id: 'w3-s2', setNumber: 2, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+            {
+              id: 'w3-s1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 105,
+              reps: 5,
+              isCompleted: true,
+            },
+            {
+              id: 'w3-s2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 100,
+              reps: 5,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -192,7 +227,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       workout3,
       { [barbellBench.id]: [workout1, workout2] },
       allGyms,
-      true
+      true,
     );
     assert.equal(summary3.setPRs.get('w3-s1')?.primary?.rank, 1);
     assert.equal(summary3.setPRs.get('w3-s1')?.primary?.previousRecord, 100);
@@ -215,7 +250,14 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: barbellBench,
           restTimerSeconds: 90,
           sets: [
-            { id: 'w4-s1', setNumber: 1, type: 'normal', weightKg: 105, reps: 5, isCompleted: true },
+            {
+              id: 'w4-s1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 105,
+              reps: 5,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -225,7 +267,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       workout4,
       { [barbellBench.id]: [workout1, workout2, workout3] },
       allGyms,
-      true
+      true,
     );
     assert.equal(summary4.setPRs.get('w4-s1'), undefined);
     assert.equal(summary4.goldCount, 0);
@@ -248,7 +290,14 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: legPressMachine,
           restTimerSeconds: 90,
           sets: [
-            { id: 's-ga-1', setNumber: 1, type: 'normal', weightKg: 200, reps: 10, isCompleted: true },
+            {
+              id: 's-ga-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 200,
+              reps: 10,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -273,7 +322,14 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: legPressMachine,
           restTimerSeconds: 90,
           sets: [
-            { id: 's-gb-1', setNumber: 1, type: 'normal', weightKg: 180, reps: 10, isCompleted: true },
+            {
+              id: 's-gb-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 180,
+              reps: 10,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -283,7 +339,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       gymBWorkout,
       { [legPressMachine.id]: [gymAWorkout] },
       allGyms,
-      true // gym tracking enabled
+      true, // gym tracking enabled
     );
 
     const prSet = summaryB.setPRs.get('s-gb-1');
@@ -301,7 +357,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       gymBWorkout,
       { [legPressMachine.id]: [gymAWorkout] },
       allGyms,
-      false // gym tracking disabled
+      false, // gym tracking disabled
     );
     // 180 < 200, so it's 2nd best all-time (Silver) rather than Gold Gym PR
     assert.equal(summaryDisabled.setPRs.get('s-gb-1')?.primary?.rank, 2);
@@ -323,7 +379,14 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: legPressMachine,
           restTimerSeconds: 90,
           sets: [
-            { id: 's-gb-heavy', setNumber: 1, type: 'normal', weightKg: 250, reps: 10, isCompleted: true },
+            {
+              id: 's-gb-heavy',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 250,
+              reps: 10,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -333,7 +396,7 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
       gymBHeavyWorkout,
       { [legPressMachine.id]: [gymAWorkout] },
       allGyms,
-      true // gym tracking enabled
+      true, // gym tracking enabled
     );
     const heavyPr = summaryHeavy.setPRs.get('s-gb-heavy')?.primary;
     assert.ok(heavyPr);
@@ -387,9 +450,30 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: pullUps,
           restTimerSeconds: 60,
           sets: [
-            { id: 's-pu-1', setNumber: 1, type: 'normal', weightKg: 0, reps: 12, isCompleted: true },
-            { id: 's-pu-2', setNumber: 2, type: 'normal', weightKg: 0, reps: 15, isCompleted: true },
-            { id: 's-pu-3', setNumber: 3, type: 'normal', weightKg: 0, reps: 10, isCompleted: true },
+            {
+              id: 's-pu-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 0,
+              reps: 12,
+              isCompleted: true,
+            },
+            {
+              id: 's-pu-2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: 0,
+              reps: 15,
+              isCompleted: true,
+            },
+            {
+              id: 's-pu-3',
+              setNumber: 3,
+              type: 'normal',
+              weightKg: 0,
+              reps: 10,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -500,7 +584,14 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: barbellBench,
           restTimerSeconds: 0,
           sets: [
-            { id: 's-95x9', setNumber: 1, type: 'normal', weightKg: 95, reps: 9, isCompleted: true },
+            {
+              id: 's-95x9',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 95,
+              reps: 9,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -520,7 +611,14 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
           exercise: barbellBench,
           restTimerSeconds: 0,
           sets: [
-            { id: 's-95x10', setNumber: 1, type: 'normal', weightKg: 95, reps: 10, isCompleted: true },
+            {
+              id: 's-95x10',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 95,
+              reps: 10,
+              isCompleted: true,
+            },
           ],
         },
       ],
@@ -534,16 +632,15 @@ describe('PR Calculation Engine & Multi-Gym Rules', () => {
     assert.equal(podium.weight[0].date, '2026-08-10T10:00:00.000Z');
 
     // 2. Check workout PR evaluation: performing 95x10 after 95x9 should award Rank 1 Gold PR for weight
-    const summary = evaluateWorkoutPRs(
-      session2,
-      { [barbellBench.id]: [session1] },
-      allGyms,
-      false
-    );
+    const summary = evaluateWorkoutPRs(session2, { [barbellBench.id]: [session1] }, allGyms, false);
     const setPrResult = summary.setPRs.get('s-95x10');
     assert.ok(setPrResult, '95x10 should earn PR result');
-    const weightAch = setPrResult.achievements.find((a) => a.metric === 'weight');
+    const weightAch = setPrResult.achievements.find(a => a.metric === 'weight');
     assert.ok(weightAch, 'Should earn weight PR achievement');
-    assert.equal(weightAch.rank, 1, 'Should earn Rank 1 Gold for weight PR by beating reps at max weight');
+    assert.equal(
+      weightAch.rank,
+      1,
+      'Should earn Rank 1 Gold for weight PR by beating reps at max weight',
+    );
   });
 });

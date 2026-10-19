@@ -73,11 +73,7 @@ export function PersistenceErrorBanner({ workout }: PersistenceErrorBannerProps)
   };
 
   return (
-    <View
-      style={styles.banner}
-      accessibilityRole="alert"
-      accessibilityLiveRegion="assertive"
-    >
+    <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="assertive">
       <View style={styles.messageRow}>
         <AlertTriangle size={18} color={colors.danger} style={styles.icon} />
         <View style={styles.textContainer}>
@@ -93,9 +89,13 @@ export function PersistenceErrorBanner({ workout }: PersistenceErrorBannerProps)
           onPress={handleShare}
           disabled={!workout}
           accessibilityRole="button"
-          accessibilityLabel={Platform.OS === 'web' ? 'Save a copy of the workout' : 'Share a copy of the workout'}
+          accessibilityLabel={
+            Platform.OS === 'web' ? 'Save a copy of the workout' : 'Share a copy of the workout'
+          }
         >
-          <Text style={styles.secondaryButtonText}>{Platform.OS === 'web' ? 'Save copy' : 'Share copy'}</Text>
+          <Text style={styles.secondaryButtonText}>
+            {Platform.OS === 'web' ? 'Save copy' : 'Share copy'}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.retryButton}

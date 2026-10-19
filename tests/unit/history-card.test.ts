@@ -53,11 +53,11 @@ function textOf(node: unknown): string {
 }
 
 function allTexts(renderer: Renderer): string[] {
-  return renderer.root.findAllByType('Text' as any).map((inst) => textOf(inst));
+  return renderer.root.findAllByType('Text' as any).map(inst => textOf(inst));
 }
 
 function pressByLabel(renderer: Renderer, label: string): void {
-  const nodes = renderer.root.findAll((node) => node.props?.accessibilityLabel === label);
+  const nodes = renderer.root.findAll(node => node.props?.accessibilityLabel === label);
   assert.ok(nodes.length > 0, `no pressable with accessibility label "${label}"`);
   act(() => {
     nodes[0].props.onPress();
@@ -174,7 +174,8 @@ function makeProps(events: string[] = [], overrides: Record<string, unknown> = {
     onToggleExpand: (workoutId: string) => events.push(`toggle:${workoutId}`),
     onOpenMenu: (summary: WorkoutHistorySummary) => events.push(`menu:${summary.id}`),
     onEditWorkout: (detail: Workout) => events.push(`edit:${detail.id}`),
-    onShowSetPR: (exerciseName: string, setNumber: number) => events.push(`pr:${exerciseName}:${setNumber}`),
+    onShowSetPR: (exerciseName: string, setNumber: number) =>
+      events.push(`pr:${exerciseName}:${setNumber}`),
     ...overrides,
   };
 }
@@ -237,7 +238,7 @@ test('HistoryCard renders the expanded detail, PR badge, and edit action', async
   assert.ok(texts.includes('Incline Press'));
   assert.ok(texts.includes('SUPERSET A'), 'shows the superset grouping');
   assert.ok(texts.includes('Note: Slow eccentric'));
-  assert.equal(texts.filter((text) => text === '#1').length, 2, 'renders one pill per completed set');
+  assert.equal(texts.filter(text => text === '#1').length, 2, 'renders one pill per completed set');
   assert.ok(texts.includes(`${formatWeight(100, 'kg')} × 5`));
   assert.ok(texts.includes('RPE 8'));
   assert.ok(!texts.includes(`${formatWeight(200, 'kg')} × 1`), 'excludes incomplete sets');
@@ -252,7 +253,7 @@ test('HistoryCard renders the expanded detail, PR badge, and edit action', async
   pressByLabel(renderer, 'Hide details');
   act(() => {
     const edit = renderer.root.findAll(
-      (node) => node.props?.accessibilityRole === 'button' && textOf(node) === 'Edit Workout',
+      node => node.props?.accessibilityRole === 'button' && textOf(node) === 'Edit Workout',
     );
     assert.equal(edit.length, 1);
     edit[0].props.onPress();

@@ -12,7 +12,8 @@ interface DraggableExerciseCardProps {
   onLayout: (itemId: string, layout: ExerciseLayout) => void;
   onDrop: (itemId: string, deltaY: number) => void;
   onDragActiveChange: (active: boolean) => void;
-  children: React.ReactNode | ((props: { panHandlers: any; isDragging: boolean }) => React.ReactNode);
+  children:
+    React.ReactNode | ((props: { panHandlers: any; isDragging: boolean }) => React.ReactNode);
 }
 
 export function DraggableExerciseCard({
@@ -38,6 +39,8 @@ export function DraggableExerciseCard({
     dragY.setValue(0);
     setIsDragging(false);
     draggingRef.current = false;
+    // dragY is a stable Animated.Value held in a ref; the reset runs only when the card identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId, onDrop, onDragActiveChange]);
 
   const endDrag = (deltaY: number, shouldDrop: boolean) => {
@@ -71,6 +74,8 @@ export function DraggableExerciseCard({
     return () => {
       if (timer) clearTimeout(timer);
     };
+    // endDrag is recreated each render; including it would restart the fail-safe timer constantly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDragging]);
 
   const panResponder = useMemo(
@@ -99,16 +104,19 @@ export function DraggableExerciseCard({
         },
         onPanResponderTerminationRequest: () => true,
       }),
-    []
+    // The responder deliberately reads dragY/endDrag through closures; recreating it per render would break the gesture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
-  useEffect(() => () => endDrag(0, false), []);
+  // Unmount-only cleanup: cancel a drag that is in flight when the card disappears.
+  useEffect(() => () => endDrag(0, false), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isFunctionChild = typeof children === 'function';
 
   return (
     <Animated.View
-      onLayout={(event) => {
+      onLayout={event => {
         onLayout(itemId, {
           y: event.nativeEvent.layout.y,
           height: event.nativeEvent.layout.height,
@@ -118,10 +126,7 @@ export function DraggableExerciseCard({
         styles.card,
         isDragging && styles.draggingCard,
         {
-          transform: [
-            { translateY: dragY },
-            { scale: isDragging ? 1.02 : 1 },
-          ],
+          transform: [{ translateY: dragY }, { scale: isDragging ? 1.02 : 1 }],
         },
       ]}
     >

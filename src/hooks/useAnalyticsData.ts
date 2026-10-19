@@ -70,7 +70,9 @@ export function useAnalyticsData(): AnalyticsData {
   } = useAnalyticsSnapshot();
 
   // Progression states
-  const [selectedProgressionExerciseId, setSelectedProgressionExerciseId] = useState<string | null>(null);
+  const [selectedProgressionExerciseId, setSelectedProgressionExerciseId] = useState<string | null>(
+    null,
+  );
   const [progressionTimeframe, setProgressionTimeframe] = useState<TimeframeFilter>('ALL');
   const [progressionMetric, setProgressionMetric] = useState<ProgressionMetric>('e1rm');
   const [progressionGymFilter, setProgressionGymFilter] = useState<string | null>(null);
@@ -87,12 +89,12 @@ export function useAnalyticsData(): AnalyticsData {
     if (!selectedProgressionExerciseId) {
       return allExerciseList[0] || null;
     }
-    return allExerciseList.find((e) => e.id === selectedProgressionExerciseId) || null;
+    return allExerciseList.find(e => e.id === selectedProgressionExerciseId) || null;
   }, [allExerciseList, selectedProgressionExerciseId]);
 
   const progressionSeries = useMemo(() => {
     if (!progressionExercise || allWorkouts.length === 0) return null;
-    const gymNames = new Map(allGyms.map((g) => [g.id, g.name]));
+    const gymNames = new Map(allGyms.map(g => [g.id, g.name]));
     const allowedGymIds = progressionGymFilter ? [progressionGymFilter] : undefined;
     return extractExerciseProgression(allWorkouts, progressionExercise.id, {
       allowedGymIds,

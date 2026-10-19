@@ -1,5 +1,13 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { TrackingType } from '../types';
 import { TRACKING_TYPE_OPTIONS } from '../workout/tracking';
@@ -14,16 +22,30 @@ export interface TrackingTypeModalProps {
 }
 
 /** Picks what an exercise's sets record. Only reachable with tracking types turned on in Settings. */
-export function TrackingTypeModal({ visible, exerciseName, selectedType, onSelect, onClose }: TrackingTypeModalProps) {
+export function TrackingTypeModal({
+  visible,
+  exerciseName,
+  selectedType,
+  onSelect,
+  onClose,
+}: TrackingTypeModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} accessibilityViewIsModal>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      accessibilityViewIsModal
+    >
       <Pressable style={styles.overlay} onPress={onClose}>
         <View style={styles.container} onStartShouldSetResponder={() => true}>
           <View style={styles.header}>
             <View style={styles.headerCopy}>
               <Text style={styles.title}>Track Sets As</Text>
               <Text style={styles.description} numberOfLines={2}>
-                {exerciseName ? `${exerciseName} keeps this choice for future workouts.` : 'This exercise keeps this choice for future workouts.'}
+                {exerciseName
+                  ? `${exerciseName} keeps this choice for future workouts.`
+                  : 'This exercise keeps this choice for future workouts.'}
               </Text>
             </View>
             <TouchableOpacity
@@ -38,7 +60,7 @@ export function TrackingTypeModal({ visible, exerciseName, selectedType, onSelec
           </View>
 
           <ScrollView>
-            {TRACKING_TYPE_OPTIONS.map((option) => {
+            {TRACKING_TYPE_OPTIONS.map(option => {
               const selected = option.type === selectedType;
               return (
                 <TouchableOpacity

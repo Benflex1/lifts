@@ -1,10 +1,7 @@
 export interface ReadNativeFileOptions {
   maxSizeBytes?: number;
   fileSystem?: {
-    readAsStringAsync: (
-      uri: string,
-      options?: { encoding?: any }
-    ) => Promise<string>;
+    readAsStringAsync: (uri: string, options?: { encoding?: any }) => Promise<string>;
     EncodingType?: { UTF8: any };
   };
   fetchFn?: typeof fetch;
@@ -27,7 +24,7 @@ export interface ReadNativeFileOptions {
  */
 export async function readNativeFileAsString(
   uri: string,
-  options: ReadNativeFileOptions = {}
+  options: ReadNativeFileOptions = {},
 ): Promise<string> {
   const {
     maxSizeBytes,
@@ -45,7 +42,9 @@ export async function readNativeFileAsString(
     const content = await fs.readAsStringAsync(uri, { encoding });
     if (typeof content === 'string') {
       if (maxSizeBytes !== undefined && content.length > maxSizeBytes) {
-        throw new Error(`File exceeds the ${Math.round(maxSizeBytes / (1024 * 1024))} MiB size limit`);
+        throw new Error(
+          `File exceeds the ${Math.round(maxSizeBytes / (1024 * 1024))} MiB size limit`,
+        );
       }
       return content;
     }
@@ -81,7 +80,9 @@ export async function readNativeFileAsString(
 
         if (typeof content === 'string') {
           if (maxSizeBytes !== undefined && content.length > maxSizeBytes) {
-            throw new Error(`File exceeds the ${Math.round(maxSizeBytes / (1024 * 1024))} MiB size limit`);
+            throw new Error(
+              `File exceeds the ${Math.round(maxSizeBytes / (1024 * 1024))} MiB size limit`,
+            );
           }
           return content;
         }
@@ -107,7 +108,9 @@ export async function readNativeFileAsString(
         const content = await fileInstance.text();
         if (typeof content === 'string') {
           if (maxSizeBytes !== undefined && content.length > maxSizeBytes) {
-            throw new Error(`File exceeds the ${Math.round(maxSizeBytes / (1024 * 1024))} MiB size limit`);
+            throw new Error(
+              `File exceeds the ${Math.round(maxSizeBytes / (1024 * 1024))} MiB size limit`,
+            );
           }
           return content;
         }
@@ -123,6 +126,6 @@ export async function readNativeFileAsString(
   throw new Error(
     lastError?.message
       ? `Unable to read file: ${lastError.message}`
-      : `Unable to read file at ${uri}`
+      : `Unable to read file at ${uri}`,
   );
 }

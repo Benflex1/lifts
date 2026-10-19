@@ -9,7 +9,7 @@ describe('kgToDisplay', () => {
   });
 
   it('converts kg to lb', () => {
-    assert.equal(kgToDisplay(100, 'lb'), Math.round(100 / KG_PER_LB * 10) / 10);
+    assert.equal(kgToDisplay(100, 'lb'), Math.round((100 / KG_PER_LB) * 10) / 10);
   });
 });
 

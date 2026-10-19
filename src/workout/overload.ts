@@ -40,7 +40,9 @@ export function getOverloadIncrement(equipment: string | undefined, unit: Weight
 }
 
 /** Rep goal from a routine target: a number or range. Lists and AMRAP have no single goal. */
-export function parseRepGoal(target: string | undefined): { min: number; max: number } | null | undefined {
+export function parseRepGoal(
+  target: string | undefined,
+): { min: number; max: number } | null | undefined {
   const trimmed = target?.trim();
   if (!trimmed) return undefined;
   const single = /^(\d+)$/.exec(trimmed);
@@ -100,13 +102,16 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
   if (trackingType !== 'weight_reps' && trackingType !== 'weighted_bodyweight') return null;
 
   const working = input.sets.filter(
-    (set) => isWorkingSetType(set.previousType) && (set.previousWeightKg ?? 0) > 0 && (set.previousReps ?? 0) > 0,
+    set =>
+      isWorkingSetType(set.previousType) &&
+      (set.previousWeightKg ?? 0) > 0 &&
+      (set.previousReps ?? 0) > 0,
   ) as Array<{ previousWeightKg: number; previousReps: number; previousRpe?: number }>;
   if (working.length === 0) return null;
 
-  const topWeightKg = pickWorkingWeight(working.map((set) => set.previousWeightKg));
-  const topSets = working.filter((set) => set.previousWeightKg === topWeightKg);
-  const topReps = topSets.map((set) => set.previousReps);
+  const topWeightKg = pickWorkingWeight(working.map(set => set.previousWeightKg));
+  const topSets = working.filter(set => set.previousWeightKg === topWeightKg);
+  const topReps = topSets.map(set => set.previousReps);
   const lowestReps = Math.min(...topReps);
 
   const parsedGoal = parseRepGoal(input.targetReps);
@@ -130,7 +135,7 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
   const repList = topReps.join(', ');
 
   if (lowestReps >= goal.max) {
-    const hardest = Math.max(...topSets.map((set) => set.previousRpe ?? 0));
+    const hardest = Math.max(...topSets.map(set => set.previousRpe ?? 0));
     if (hardest >= HARD_RPE) {
       return {
         kind: 'repeat',
@@ -141,7 +146,13 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
     }
     return {
       kind: 'add_weight',
-      weightKg: displayToKg(nextLoadableWeight(kgToDisplay(topWeightKg, unit), getOverloadIncrement(input.equipment, unit)), unit),
+      weightKg: displayToKg(
+        nextLoadableWeight(
+          kgToDisplay(topWeightKg, unit),
+          getOverloadIncrement(input.equipment, unit),
+        ),
+        unit,
+      ),
       reps: goal.min,
       reason: `Every set hit ${goal.max} reps at ${atWeight} last time, so add weight.`,
     };
@@ -168,17 +179,23 @@ export function suggestNextTarget(input: OverloadInput): OverloadSuggestion | nu
  * Sets the suggestion fills: working sets still to do. Completed sets, warmups, and rows that were
  * warmups or drop sets last time stay as they are.
  */
-export function isOverloadFillTarget(set: Pick<WorkoutSet, 'isCompleted' | 'type' | 'previousType'>): boolean {
-  return !set.isCompleted
-    && isWorkingSetType(set.type)
-    && (set.previousType === undefined || isWorkingSetType(set.previousType));
+export function isOverloadFillTarget(
+  set: Pick<WorkoutSet, 'isCompleted' | 'type' | 'previousType'>,
+): boolean {
+  return (
+    !set.isCompleted &&
+    isWorkingSetType(set.type) &&
+    (set.previousType === undefined || isWorkingSetType(set.previousType))
+  );
 }
 
 /**
  * Drops last session's set type and RPE from a set whose ghost numbers will not be refreshed,
  * so stale history (another exercise, another gym) never feeds the next target.
  */
-export function withoutPreviousEffort<T extends Pick<WorkoutSet, 'previousType' | 'previousRpe'>>(set: T): T {
+export function withoutPreviousEffort<T extends Pick<WorkoutSet, 'previousType' | 'previousRpe'>>(
+  set: T,
+): T {
   if (set.previousType === undefined && set.previousRpe === undefined) return set;
   const { previousType: _type, previousRpe: _rpe, ...rest } = set;
   return rest as T;

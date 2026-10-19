@@ -36,4 +36,3 @@ describe('restNotifications', () => {
     assert.equal(res, null);
   });
 });
-

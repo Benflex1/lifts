@@ -15,7 +15,7 @@ describe('backup file saving', () => {
   it('builds a predictable date-stamped backup filename', () => {
     assert.equal(
       getBackupFilename(new Date('2026-09-10T12:00:00.000Z')),
-      'lifts-backup-2026-09-10.json'
+      'lifts-backup-2026-09-10.json',
     );
   });
 
@@ -39,7 +39,7 @@ describe('backup file saving', () => {
     const result = await saveBackupToAndroid(
       backupJson,
       'lifts-backup-2026-09-10.json',
-      fileSystem
+      fileSystem,
     );
 
     assert.equal(result, 'cancelled');
@@ -69,7 +69,7 @@ describe('backup file saving', () => {
     const result = await saveBackupToAndroid(
       backupJson,
       'lifts-backup-2026-09-10.json',
-      fileSystem
+      fileSystem,
     );
 
     assert.equal(result, 'saved');
@@ -106,7 +106,7 @@ describe('backup file saving', () => {
       backupJson,
       'lifts-backup-2026-09-10.json',
       fileSystem,
-      sharing
+      sharing,
     );
 
     assert.equal(result, 'saved');
@@ -156,7 +156,7 @@ describe('backup file saving', () => {
       backupJson,
       'lifts-backup-2026-09-10.json',
       fileSystem as any,
-      sharing
+      sharing,
     );
 
     assert.equal(result, 'saved');

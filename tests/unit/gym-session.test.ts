@@ -111,13 +111,16 @@ describe('gym session helpers', () => {
   });
 
   it('preserves source provenance when adding a set from the prior set', () => {
-    assert.deepEqual(copyPreviousSetProvenance({
-      previousGymId: 'gym-old',
-      previousGymName: 'Old Gym',
-    }), {
-      previousGymId: 'gym-old',
-      previousGymName: 'Old Gym',
-    });
+    assert.deepEqual(
+      copyPreviousSetProvenance({
+        previousGymId: 'gym-old',
+        previousGymName: 'Old Gym',
+      }),
+      {
+        previousGymId: 'gym-old',
+        previousGymName: 'Old Gym',
+      },
+    );
   });
 
   it('rehydrates only untouched suggestion metadata without mutating the workout', () => {
@@ -173,10 +176,7 @@ describe('gym session helpers', () => {
   });
 
   it('preselects the saved default gym for a new workout', () => {
-    const gyms = [
-      workoutGym('gym-other'),
-      { ...workoutGym('gym-default'), isDefault: true },
-    ];
+    const gyms = [workoutGym('gym-other'), { ...workoutGym('gym-default'), isDefault: true }];
 
     assert.equal(resolveInitialStartGymId(gyms), 'gym-default');
     assert.equal(resolveInitialStartGymId(gyms.slice(0, 1)), 'gym-other');
@@ -224,7 +224,11 @@ describe('gym session helpers', () => {
   it('routes every repeated exercise occurrence through the selected gym', async () => {
     const calls: Array<[string, number, string | undefined]> = [];
     const store = {
-      getPreviousSetsForExercise: async (exerciseId: string, occurrenceIndex: number, gymId?: string) => {
+      getPreviousSetsForExercise: async (
+        exerciseId: string,
+        occurrenceIndex: number,
+        gymId?: string,
+      ) => {
         calls.push([exerciseId, occurrenceIndex, gymId]);
         return [{ weightKg: occurrenceIndex + 1, reps: 8 }];
       },
@@ -246,7 +250,7 @@ describe('gym session helpers', () => {
 
   it('ignores a switch result when the controller workout changes during lookup', async () => {
     let releaseLookup!: () => void;
-    const lookupFinished = new Promise<void>((resolve) => {
+    const lookupFinished = new Promise<void>(resolve => {
       releaseLookup = resolve;
     });
     const selectedGym = {
@@ -269,10 +273,7 @@ describe('gym session helpers', () => {
       flush: async () => {},
     };
     const store = {
-      getGyms: async () => [
-        { ...workoutGym('gym-default'), isDefault: true },
-        selectedGym,
-      ],
+      getGyms: async () => [{ ...workoutGym('gym-default'), isDefault: true }, selectedGym],
       getPreviousSetsForExercise: async () => {
         lookupStartedResolve();
         await lookupFinished;
@@ -281,7 +282,7 @@ describe('gym session helpers', () => {
     };
 
     let lookupStartedResolve!: () => void;
-    const lookupStarted = new Promise<void>((resolve) => {
+    const lookupStarted = new Promise<void>(resolve => {
       lookupStartedResolve = resolve;
     });
     const pending = switchWorkoutGym(controller, store, 'gym-new');
@@ -366,7 +367,10 @@ describe('gym session helpers', () => {
       },
       flush: async () => {},
     };
-    assert.equal(appendExercisesToCurrentWorkout(staleController, expected, [addedExercise]), false);
+    assert.equal(
+      appendExercisesToCurrentWorkout(staleController, expected, [addedExercise]),
+      false,
+    );
   });
 
   it('cancels an older idle gym switch when requests resolve out of order', async () => {
@@ -374,7 +378,7 @@ describe('gym session helpers', () => {
     const releases: Array<() => void> = [];
     const store = {
       getGyms: () => {
-        const gyms = new Promise<ReturnType<typeof workoutGym>[]>((resolve) => {
+        const gyms = new Promise<ReturnType<typeof workoutGym>[]>(resolve => {
           releases.push(() => resolve([workoutGym('gym-default'), workoutGym('gym-new')]));
         });
         gymLoads.push(gyms);
@@ -391,9 +395,19 @@ describe('gym session helpers', () => {
     };
     let latestRequest = 0;
     const firstRequest = ++latestRequest;
-    const first = switchWorkoutGym(controller, store, 'gym-new', () => firstRequest === latestRequest);
+    const first = switchWorkoutGym(
+      controller,
+      store,
+      'gym-new',
+      () => firstRequest === latestRequest,
+    );
     const secondRequest = ++latestRequest;
-    const second = switchWorkoutGym(controller, store, 'gym-default', () => secondRequest === latestRequest);
+    const second = switchWorkoutGym(
+      controller,
+      store,
+      'gym-default',
+      () => secondRequest === latestRequest,
+    );
 
     assert.equal(gymLoads.length, 2);
     releases[1]();

@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeElapsedSeconds, computeRemaining, nextRemainingTickDelay } from '../../src/utils/timer';
+import {
+  computeElapsedSeconds,
+  computeRemaining,
+  nextRemainingTickDelay,
+} from '../../src/utils/timer';
 
 describe('computeElapsedSeconds', () => {
   it('returns 0 when now equals startTime', () => {

@@ -28,6 +28,7 @@ mockModule('react-native', {
   Dimensions: { get: () => ({ width: 400, height: 800 }) },
 });
 mockModule('lucide-react-native', iconProxy);
+mockModule('../../src/components/ui', { AppTouchable: 'TouchableOpacity' });
 mockModule('../../src/context/WorkoutContext', { useWorkoutClock: () => 90 });
 mockModule('../../src/components/ActiveExerciseCard', { ActiveExerciseCard: 'ActiveExerciseCard' });
 
@@ -54,11 +55,11 @@ function textOf(node: unknown): string {
 }
 
 function allTexts(renderer: Renderer): string[] {
-  return renderer.root.findAllByType('Text' as any).map((inst) => textOf(inst));
+  return renderer.root.findAllByType('Text' as any).map(inst => textOf(inst));
 }
 
 function pressByLabel(renderer: Renderer, label: string): void {
-  const nodes = renderer.root.findAll((node) => node.props?.accessibilityLabel === label);
+  const nodes = renderer.root.findAll(node => node.props?.accessibilityLabel === label);
   assert.ok(nodes.length > 0, `no pressable with accessibility label "${label}"`);
   act(() => {
     nodes[0].props.onPress();
@@ -74,9 +75,7 @@ function pressByText(renderer: Renderer, text: string): void {
 }
 
 function pressableByText(renderer: Renderer, text: string): TestRenderer.ReactTestInstance {
-  const textNode = renderer.root
-    .findAllByType('Text' as any)
-    .find((inst) => textOf(inst) === text);
+  const textNode = renderer.root.findAllByType('Text' as any).find(inst => textOf(inst) === text);
   assert.ok(textNode, `no text "${text}"`);
   let node: TestRenderer.ReactTestInstance | null = textNode;
   while (node && typeof node.props?.onPress !== 'function') {
@@ -169,7 +168,7 @@ test('WorkoutHeader renders live metrics and wires header actions', async () => 
   pressByLabel(renderer, 'Minimize workout');
   pressByLabel(renderer, 'Workout menu');
   pressByLabel(renderer, 'Finish workout');
-  pressByLabel(renderer, 'Adjust workout duration');
+  pressByLabel(renderer, 'Workout duration');
   assert.deepEqual(calls, ['minimize', 'menu', 'finish', 'duration']);
 });
 
@@ -200,7 +199,7 @@ test('WorkoutHeader shows the saving state and hides the gym row when tracking i
   assert.ok(!texts.includes('Downtown Gym'));
 
   const finish = renderer.root.findAll(
-    (node) => node.props?.accessibilityLabel === 'Finish workout',
+    node => node.props?.accessibilityLabel === 'Finish workout',
   )[0];
   assert.equal(finish.props.disabled, true);
 });
@@ -399,13 +398,17 @@ test('SetOptionsModal disables moving the first set and shows the PR banner', as
   const texts = allTexts(renderer);
 
   assert.ok(texts.includes('SILVER RECORD (2ND BEST)'), 'shows the ranked PR banner');
-  assert.ok(texts.some((text) => text.startsWith('• ')), 'lists the achievement description');
+  assert.ok(
+    texts.some(text => text.startsWith('• ')),
+    'lists the achievement description',
+  );
   assert.equal(pressableByText(renderer, 'Move Up ').props.disabled, true);
   assert.equal(pressableByText(renderer, 'Move Down (to #2)').props.disabled, false);
 });
 
 test('ExerciseOptionsMenu reflects superset state and move boundaries', async () => {
-  const { ExerciseOptionsMenu } = await import('../../src/screens/activeWorkout/ExerciseOptionsMenu');
+  const { ExerciseOptionsMenu } =
+    await import('../../src/screens/activeWorkout/ExerciseOptionsMenu');
 
   const events: string[] = [];
   const makeProps = (overrides: Record<string, unknown> = {}) => ({
@@ -430,9 +433,7 @@ test('ExerciseOptionsMenu reflects superset state and move boundaries', async ()
     ...overrides,
   });
 
-  const renderer = render(
-    React.createElement(ExerciseOptionsMenu, makeProps() as any),
-  );
+  const renderer = render(React.createElement(ExerciseOptionsMenu, makeProps() as any));
   let texts = allTexts(renderer);
   assert.ok(texts.includes('Create Superset'));
   assert.ok(!texts.includes('Ungroup Superset'));
@@ -485,9 +486,7 @@ test('WorkoutOptionsMenu toggles the RPE label and gym row, and forwards actions
     ...overrides,
   });
 
-  const renderer = render(
-    React.createElement(WorkoutOptionsMenu, makeProps() as any),
-  );
+  const renderer = render(React.createElement(WorkoutOptionsMenu, makeProps() as any));
   let texts = allTexts(renderer);
   assert.ok(texts.includes('Show RPE Column'));
   assert.ok(texts.includes('Change Gym · Downtown Gym'));
@@ -507,5 +506,5 @@ test('WorkoutOptionsMenu toggles the RPE label and gym row, and forwards actions
   });
   texts = allTexts(renderer);
   assert.ok(texts.includes('Hide RPE Column'));
-  assert.ok(!texts.some((text) => text.startsWith('Change Gym')));
+  assert.ok(!texts.some(text => text.startsWith('Change Gym')));
 });

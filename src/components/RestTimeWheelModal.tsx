@@ -3,15 +3,16 @@ import {
   Modal,
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
+import { AppTouchable } from './ui';
 import { X, Check, Timer } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -159,9 +160,12 @@ export const RestTimeWheelModal: React.FC<Props> = ({
     return `${mm} : ${ss}`;
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
@@ -173,14 +177,22 @@ export const RestTimeWheelModal: React.FC<Props> = ({
                 </Text>
               )}
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <AppTouchable
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close rest timer picker"
+            >
               <X color={colors.textSecondary} size={24} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           {/* Big Digital Display Banner */}
           <View style={styles.displayBanner}>
-            <Timer size={24} color={totalCalculatedSeconds > 0 ? colors.success : colors.textMuted} />
+            <Timer
+              size={24}
+              color={totalCalculatedSeconds > 0 ? colors.success : colors.textMuted}
+            />
             <Text
               style={[
                 styles.digitalTimeText,
@@ -206,15 +218,18 @@ export const RestTimeWheelModal: React.FC<Props> = ({
             {PRESET_TIMERS.map(p => {
               const isActive = totalCalculatedSeconds === p.totalSec;
               return (
-                <TouchableOpacity
+                <AppTouchable
                   key={p.label}
                   style={[styles.presetChip, isActive && styles.presetChipActive]}
                   onPress={() => selectPreset(p.totalSec)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Rest preset ${p.label}`}
+                  accessibilityState={{ selected: isActive }}
                 >
                   <Text style={[styles.presetText, isActive && styles.presetTextActive]}>
                     {p.label}
                   </Text>
-                </TouchableOpacity>
+                </AppTouchable>
               );
             })}
           </ScrollView>
@@ -245,7 +260,7 @@ export const RestTimeWheelModal: React.FC<Props> = ({
                   {MINUTES_LIST.map((m, idx) => {
                     const isFocused = minutes === m;
                     return (
-                      <TouchableOpacity
+                      <AppTouchable
                         key={m}
                         style={styles.wheelItem}
                         onPress={() => {
@@ -253,13 +268,16 @@ export const RestTimeWheelModal: React.FC<Props> = ({
                           minScrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: true });
                           triggerHaptic();
                         }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Set ${m} minutes`}
+                        accessibilityState={{ selected: isFocused }}
                       >
                         <Text
                           style={[styles.wheelItemText, isFocused && styles.wheelItemTextFocused]}
                         >
                           {m} <Text style={styles.wheelItemUnit}>min</Text>
                         </Text>
-                      </TouchableOpacity>
+                      </AppTouchable>
                     );
                   })}
                 </ScrollView>
@@ -284,7 +302,7 @@ export const RestTimeWheelModal: React.FC<Props> = ({
                   {SECONDS_LIST.map((s, idx) => {
                     const isFocused = seconds === s;
                     return (
-                      <TouchableOpacity
+                      <AppTouchable
                         key={s}
                         style={styles.wheelItem}
                         onPress={() => {
@@ -292,13 +310,17 @@ export const RestTimeWheelModal: React.FC<Props> = ({
                           secScrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: true });
                           triggerHaptic();
                         }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Set ${s} seconds`}
+                        accessibilityState={{ selected: isFocused }}
                       >
                         <Text
                           style={[styles.wheelItemText, isFocused && styles.wheelItemTextFocused]}
                         >
-                          {s.toString().padStart(2, '0')} <Text style={styles.wheelItemUnit}>sec</Text>
+                          {s.toString().padStart(2, '0')}{' '}
+                          <Text style={styles.wheelItemUnit}>sec</Text>
                         </Text>
-                      </TouchableOpacity>
+                      </AppTouchable>
                     );
                   })}
                 </ScrollView>
@@ -308,10 +330,13 @@ export const RestTimeWheelModal: React.FC<Props> = ({
 
           {/* Optional: Apply to All Toggle */}
           {showApplyToAll && (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.applyAllRow}
               onPress={() => setApplyToAll(!applyToAll)}
               activeOpacity={0.8}
+              accessibilityRole="checkbox"
+              accessibilityLabel="Apply this rest timer to all exercises in routine"
+              accessibilityState={{ checked: applyToAll }}
             >
               <View style={[styles.checkbox, applyToAll && styles.checkboxActive]}>
                 {applyToAll && <Check size={14} color={colors.black} strokeWidth={3} />}
@@ -319,16 +344,23 @@ export const RestTimeWheelModal: React.FC<Props> = ({
               <Text style={styles.applyAllText}>
                 Apply this rest timer to all exercises in routine
               </Text>
-            </TouchableOpacity>
+            </AppTouchable>
           )}
 
           {/* Save / Apply Button */}
-          <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
+          <AppTouchable
+            style={styles.confirmButton}
+            onPress={handleConfirm}
+            accessibilityRole="button"
+            accessibilityLabel={
+              totalCalculatedSeconds === 0 ? 'Disable rest timer' : 'Confirm rest timer'
+            }
+          >
             <Check size={20} color={colors.black} strokeWidth={2.5} />
             <Text style={styles.confirmButtonText}>
               {totalCalculatedSeconds === 0 ? 'Disable Rest Timer' : 'Set Rest Time'}
             </Text>
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
     </Modal>

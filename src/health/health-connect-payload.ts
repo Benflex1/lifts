@@ -1,7 +1,7 @@
-import type { HealthWorkoutPayload } from "./contract";
+import type { HealthWorkoutPayload } from './contract';
 
 export interface HealthConnectExerciseSession {
-  recordType: "ExerciseSession";
+  recordType: 'ExerciseSession';
   exerciseType: number;
   title: string;
   startTime: string;
@@ -13,7 +13,7 @@ export function toHealthConnectExerciseSession(
   strengthExerciseType: number,
 ): HealthConnectExerciseSession {
   return {
-    recordType: "ExerciseSession",
+    recordType: 'ExerciseSession',
     exerciseType: strengthExerciseType,
     title: payload.title,
     startTime: payload.startTime,

@@ -7,7 +7,14 @@ export interface CompletedExerciseOccurrence {
   gymId: string;
   gymName: string;
   occurrenceIndex: number;
-  sets: Array<{ weightKg: number; reps: number; durationSeconds?: number; distanceM?: number; type?: SetType; rpe?: number }>;
+  sets: Array<{
+    weightKg: number;
+    reps: number;
+    durationSeconds?: number;
+    distanceM?: number;
+    type?: SetType;
+    rpe?: number;
+  }>;
 }
 
 export function resolvePreviousSetsForExercise(
@@ -18,15 +25,18 @@ export function resolvePreviousSetsForExercise(
   excludeWorkoutIds?: ReadonlySet<string>,
 ): PreviousSetSuggestion[] {
   if (excludeWorkoutIds && excludeWorkoutIds.size > 0) {
-    occurrences = occurrences.filter((occurrence) => !excludeWorkoutIds.has(occurrence.workoutId));
+    occurrences = occurrences.filter(occurrence => !excludeWorkoutIds.has(occurrence.workoutId));
   }
   const allowedGymIds = getAllowedGymIds(exercise, scope, currentGymId);
-  const selected = occurrences.find((occurrence) =>
-    occurrence.sets.length > 0 && (allowedGymIds === null || allowedGymIds.has(occurrence.gymId))
+  const selected = occurrences.find(
+    occurrence =>
+      occurrence.sets.length > 0 && (allowedGymIds === null || allowedGymIds.has(occurrence.gymId)),
   );
-  const fallback = selected ?? (allowedGymIds === null
-    ? undefined
-    : occurrences.find((occurrence) => occurrence.sets.length > 0));
+  const fallback =
+    selected ??
+    (allowedGymIds === null
+      ? undefined
+      : occurrences.find(occurrence => occurrence.sets.length > 0));
   if (!fallback || fallback.sets.length === 0) return [];
 
   const isForeignFallback = selected === undefined && allowedGymIds !== null;

@@ -37,12 +37,12 @@ import { validateTargetReps } from '../workout/sets';
 import { SupersetModal } from './SupersetModal';
 import {
   getSupersetMetadata,
-  linkExercisesInGroup,
   unlinkExerciseFromGroup,
   setSupersetGroupInList,
 } from '../workout/supersets';
 import { colors } from '../theme';
 import { ActionSheet, IconButton } from './ui';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -119,7 +119,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
           targetReps: e.targetReps,
           restTimerSeconds: e.restTimerSeconds,
           supersetId: e.supersetId,
-        }))
+        })),
       );
     } else {
       setName('');
@@ -131,13 +131,10 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
   const [supersetModalExerciseId, setSupersetModalExerciseId] = useState<string | null>(null);
 
-  const supersetMetaMap = useMemo(
-    () => getSupersetMetadata(draftExercises),
-    [draftExercises]
-  );
+  const supersetMetaMap = useMemo(() => getSupersetMetadata(draftExercises), [draftExercises]);
 
   const supersetModalExercises = useMemo(() => {
-    return draftExercises.map((e) => ({
+    return draftExercises.map(e => ({
       id: e.id,
       name: e.exercise.name,
       category: e.exercise.category,
@@ -149,20 +146,14 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
   const handleSaveSupersetGroup = (selectedIds: string[]) => {
     const fallbackId = `ss-routine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setDraftExercises((prev) => setSupersetGroupInList(prev, selectedIds, fallbackId));
+    setDraftExercises(prev => setSupersetGroupInList(prev, selectedIds, fallbackId));
   };
 
   const handleUngroupSupersetById = (exerciseId: string) => {
-    const targetIdx = draftExercises.findIndex((e) => e.id === exerciseId);
+    const targetIdx = draftExercises.findIndex(e => e.id === exerciseId);
     if (targetIdx !== -1) {
-      setDraftExercises((prev) => unlinkExerciseFromGroup(prev, targetIdx));
+      setDraftExercises(prev => unlinkExerciseFromGroup(prev, targetIdx));
     }
-  };
-
-  const handleLinkSuperset = (index: number) => {
-    if (index >= draftExercises.length - 1) return;
-    const fallbackId = `ss-routine-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setDraftExercises(prev => linkExercisesInGroup(prev, index, index + 1, fallbackId));
   };
 
   const handleUnlinkSuperset = (index: number) => {
@@ -190,7 +181,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
   const handleExerciseSelected = (exercise: Exercise) => {
     if (replacingIndex !== null) {
       setDraftExercises(prev =>
-        prev.map((item, idx) => (idx === replacingIndex ? { ...item, exercise } : item))
+        prev.map((item, idx) => (idx === replacingIndex ? { ...item, exercise } : item)),
       );
       setReplacingIndex(null);
     } else {
@@ -201,7 +192,9 @@ export const RoutineEditorModal: React.FC<Props> = ({
   const handleAddMultipleExercises = (exercises: Exercise[]) => {
     if (replacingIndex !== null && exercises.length > 0) {
       setDraftExercises(prev =>
-        prev.map((item, idx) => (idx === replacingIndex ? { ...item, exercise: exercises[0] } : item))
+        prev.map((item, idx) =>
+          idx === replacingIndex ? { ...item, exercise: exercises[0] } : item,
+        ),
       );
       setReplacingIndex(null);
     } else {
@@ -239,7 +232,9 @@ export const RoutineEditorModal: React.FC<Props> = ({
       setDraftExercises(prev => prev.map(item => ({ ...item, restTimerSeconds: seconds })));
     } else if (restWheelIndex !== null) {
       setDraftExercises(prev =>
-        prev.map((item, idx) => (idx === restWheelIndex ? { ...item, restTimerSeconds: seconds } : item))
+        prev.map((item, idx) =>
+          idx === restWheelIndex ? { ...item, restTimerSeconds: seconds } : item,
+        ),
       );
     }
   };
@@ -253,7 +248,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
         const remaining = updated.filter(item => item.supersetId === oldId);
         if (remaining.length < 2) {
           return updated.map(item =>
-            item.supersetId === oldId ? { ...item, supersetId: undefined } : item
+            item.supersetId === oldId ? { ...item, supersetId: undefined } : item,
           );
         }
       }
@@ -285,7 +280,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
   const handleSetTargetSets = (index: number, sets: number) => {
     setDraftExercises(prev =>
-      prev.map((item, idx) => (idx === index ? { ...item, targetSets: sets } : item))
+      prev.map((item, idx) => (idx === index ? { ...item, targetSets: sets } : item)),
     );
   };
 
@@ -295,16 +290,15 @@ export const RoutineEditorModal: React.FC<Props> = ({
         if (idx !== index) return item;
         const updated = Math.max(1, Math.min(20, item.targetSets + delta));
         return { ...item, targetSets: updated };
-      })
+      }),
     );
   };
 
   const handleUpdateReps = (index: number, reps: string) => {
     setDraftExercises(prev =>
-      prev.map((item, idx) => (idx === index ? { ...item, targetReps: reps } : item))
+      prev.map((item, idx) => (idx === index ? { ...item, targetReps: reps } : item)),
     );
   };
-
 
   const handleSelectFolder = (f: string) => {
     if (folderName.toLowerCase() === f.toLowerCase()) {
@@ -346,7 +340,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
         supersetId: e.supersetId,
       })),
       notes.trim(),
-      routineToEdit?.id
+      routineToEdit?.id,
     );
 
     onSaved();
@@ -355,19 +349,25 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
   // Combine unique folders
   const allFolderSuggestions = Array.from(
-    new Set([...existingFolders.filter(Boolean), ...PRESET_FOLDERS])
+    new Set([...existingFolders.filter(Boolean), ...PRESET_FOLDERS]),
   );
 
   // Live Summary
   const totalSets = draftExercises.reduce((sum, e) => sum + (e.targetSets || 0), 0);
   const estimatedMins = Math.round(totalSets * 2.2);
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={onClose}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <X size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>
@@ -472,18 +472,34 @@ export const RoutineEditorModal: React.FC<Props> = ({
               {draftExercises.length > 1 && (
                 <View style={styles.viewToggleGroup}>
                   <TouchableOpacity
-                    style={[styles.viewToggleBtn, viewMode === 'detailed' && styles.viewToggleBtnActive]}
+                    style={[
+                      styles.viewToggleBtn,
+                      viewMode === 'detailed' && styles.viewToggleBtnActive,
+                    ]}
                     onPress={() => setViewMode('detailed')}
                   >
-                    <Text style={[styles.viewToggleText, viewMode === 'detailed' && styles.viewToggleTextActive]}>
+                    <Text
+                      style={[
+                        styles.viewToggleText,
+                        viewMode === 'detailed' && styles.viewToggleTextActive,
+                      ]}
+                    >
                       Detailed
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.viewToggleBtn, viewMode === 'compact' && styles.viewToggleBtnActive]}
+                    style={[
+                      styles.viewToggleBtn,
+                      viewMode === 'compact' && styles.viewToggleBtnActive,
+                    ]}
                     onPress={() => setViewMode('compact')}
                   >
-                    <Text style={[styles.viewToggleText, viewMode === 'compact' && styles.viewToggleTextActive]}>
+                    <Text
+                      style={[
+                        styles.viewToggleText,
+                        viewMode === 'compact' && styles.viewToggleTextActive,
+                      ]}
+                    >
                       Compact
                     </Text>
                   </TouchableOpacity>
@@ -562,11 +578,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           <Text style={styles.compactMeta}>
                             {item.targetSets} sets × {item.targetReps} •
                           </Text>
-                          {item.exercise.secondaryMuscles && item.exercise.secondaryMuscles.length > 0 && (
-                            <Text style={styles.compactSecondaryMeta} numberOfLines={1}>
-                              +{item.exercise.secondaryMuscles.length} secondary
-                            </Text>
-                          )}
+                          {item.exercise.secondaryMuscles &&
+                            item.exercise.secondaryMuscles.length > 0 && (
+                              <Text style={styles.compactSecondaryMeta} numberOfLines={1}>
+                                +{item.exercise.secondaryMuscles.length} secondary
+                              </Text>
+                            )}
                           <TouchableOpacity
                             style={styles.compactRestBadge}
                             onPress={() => setRestWheelIndex(idx)}
@@ -610,7 +627,10 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           onPress={() => handleMoveUp(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                         >
-                          <ChevronUp size={16} color={idx === 0 ? colors.control : colors.textSecondary} />
+                          <ChevronUp
+                            size={16}
+                            color={idx === 0 ? colors.control : colors.textSecondary}
+                          />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[
@@ -623,7 +643,11 @@ export const RoutineEditorModal: React.FC<Props> = ({
                         >
                           <ChevronDown
                             size={16}
-                            color={idx === draftExercises.length - 1 ? colors.control : colors.textSecondary}
+                            color={
+                              idx === draftExercises.length - 1
+                                ? colors.control
+                                : colors.textSecondary
+                            }
                           />
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -638,11 +662,15 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
                     {ssMeta && !ssMeta.isLast && (
                       <View style={styles.supersetConnectorWrap}>
-                        <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                        <View
+                          style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]}
+                        />
                         <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
                           NEXT IN {ssMeta.label}
                         </Text>
-                        <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                        <View
+                          style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]}
+                        />
                       </View>
                     )}
                   </React.Fragment>
@@ -743,14 +771,20 @@ export const RoutineEditorModal: React.FC<Props> = ({
                               <Text style={styles.configLabel}>Sets</Text>
                               <View style={styles.cleanStepperContainer}>
                                 <TouchableOpacity
-                                  style={[styles.cleanStepBtn, item.targetSets <= 1 && styles.cleanStepBtnDisabled]}
+                                  style={[
+                                    styles.cleanStepBtn,
+                                    item.targetSets <= 1 && styles.cleanStepBtnDisabled,
+                                  ]}
                                   onPress={() => handleUpdateSets(idx, -1)}
                                   disabled={item.targetSets <= 1}
                                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                                   accessibilityRole="button"
                                   accessibilityLabel="Remove a set"
                                 >
-                                  <Minus size={15} color={item.targetSets > 1 ? colors.text : colors.textFaint} />
+                                  <Minus
+                                    size={15}
+                                    color={item.targetSets > 1 ? colors.text : colors.textFaint}
+                                  />
                                 </TouchableOpacity>
                                 <TextInput
                                   style={styles.cleanStepInput}
@@ -875,11 +909,15 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
                   {ssMeta && !ssMeta.isLast && (
                     <View style={styles.supersetConnectorWrap}>
-                      <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                      <View
+                        style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]}
+                      />
                       <Text style={[styles.supersetConnectorText, { color: ssMeta.color }]}>
                         NEXT IN {ssMeta.label}
                       </Text>
-                      <View style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]} />
+                      <View
+                        style={[styles.supersetConnectorLine, { backgroundColor: ssMeta.color }]}
+                      />
                     </View>
                   )}
                 </React.Fragment>
@@ -893,7 +931,8 @@ export const RoutineEditorModal: React.FC<Props> = ({
               </View>
               <Text style={styles.emptyTitle}>No exercises in routine</Text>
               <Text style={styles.emptySubtitle}>
-                Add barbell, dumbbell, or machine exercises to configure sets, rep targets, and rest timers.
+                Add barbell, dumbbell, or machine exercises to configure sets, rep targets, and rest
+                timers.
               </Text>
               <TouchableOpacity
                 style={styles.emptyAddBtn}
@@ -946,13 +985,37 @@ export const RoutineEditorModal: React.FC<Props> = ({
             menuIndex === null
               ? []
               : [
-                  { key: 'swap', label: 'Swap Exercise', icon: ArrowRightLeft, onPress: () => handleStartReplace(menuIndex) },
-                  { key: 'duplicate', label: 'Duplicate', icon: Copy, onPress: () => handleDuplicateExercise(menuIndex) },
+                  {
+                    key: 'swap',
+                    label: 'Swap Exercise',
+                    icon: ArrowRightLeft,
+                    onPress: () => handleStartReplace(menuIndex),
+                  },
+                  {
+                    key: 'duplicate',
+                    label: 'Duplicate',
+                    icon: Copy,
+                    onPress: () => handleDuplicateExercise(menuIndex),
+                  },
                   ...(menuIndex > 0
-                    ? [{ key: 'up', label: 'Move Up', icon: ChevronUp, onPress: () => handleMoveUp(menuIndex) }]
+                    ? [
+                        {
+                          key: 'up',
+                          label: 'Move Up',
+                          icon: ChevronUp,
+                          onPress: () => handleMoveUp(menuIndex),
+                        },
+                      ]
                     : []),
                   ...(menuIndex < draftExercises.length - 1
-                    ? [{ key: 'down', label: 'Move Down', icon: ChevronDown, onPress: () => handleMoveDown(menuIndex) }]
+                    ? [
+                        {
+                          key: 'down',
+                          label: 'Move Down',
+                          icon: ChevronDown,
+                          onPress: () => handleMoveDown(menuIndex),
+                        },
+                      ]
                     : []),
                   {
                     key: 'remove',
@@ -995,6 +1058,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
               activeOpacity={1}
               style={styles.dropdownModalCard}
               onPress={e => e.stopPropagation?.()}
+              accessibilityViewIsModal
             >
               <View style={styles.dropdownHeader}>
                 <View style={{ flex: 1 }}>
@@ -1022,7 +1086,10 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   return (
                     <TouchableOpacity
                       key={preset.label}
-                      style={[styles.dropdownOptionRow, isSelected && styles.dropdownOptionRowActive]}
+                      style={[
+                        styles.dropdownOptionRow,
+                        isSelected && styles.dropdownOptionRowActive,
+                      ]}
                       onPress={() => {
                         if (repDropdownIndex !== null) {
                           handleUpdateReps(repDropdownIndex, preset.label);
@@ -1032,7 +1099,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       activeOpacity={0.7}
                     >
                       <View style={[styles.dropdownPill, isSelected && styles.dropdownPillActive]}>
-                        <Text style={[styles.dropdownPillText, isSelected && styles.dropdownPillTextActive]}>
+                        <Text
+                          style={[
+                            styles.dropdownPillText,
+                            isSelected && styles.dropdownPillTextActive,
+                          ]}
+                        >
                           {preset.label}
                         </Text>
                       </View>
@@ -1051,7 +1123,8 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
               <View style={styles.dropdownFooter}>
                 <Text style={styles.dropdownFooterText}>
-                  Tip: You can also type any custom target (e.g. "12, 10, 8" or "To failure") directly into the exercise card.
+                  Tip: You can also type any custom target (e.g. "12, 10, 8" or "To failure")
+                  directly into the exercise card.
                 </Text>
               </View>
             </TouchableOpacity>

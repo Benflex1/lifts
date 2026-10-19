@@ -1,5 +1,3 @@
-import { Workout } from '../types';
-
 export const EXCESSIVE_DURATION_THRESHOLD_SECONDS = 4 * 3600; // 4 hours (14,400 seconds)
 
 export interface DurationBreakdown {
@@ -9,7 +7,11 @@ export interface DurationBreakdown {
 }
 
 export function isExcessiveDuration(durationSeconds: number): boolean {
-  return typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds >= EXCESSIVE_DURATION_THRESHOLD_SECONDS;
+  return (
+    typeof durationSeconds === 'number' &&
+    Number.isFinite(durationSeconds) &&
+    durationSeconds >= EXCESSIVE_DURATION_THRESHOLD_SECONDS
+  );
 }
 
 export function secondsToHoursMinutes(totalSeconds: number): DurationBreakdown {
@@ -23,7 +25,7 @@ export function secondsToHoursMinutes(totalSeconds: number): DurationBreakdown {
 export function parseDurationInput(
   hours: string | number,
   minutes: string | number,
-  seconds: string | number = 0
+  seconds: string | number = 0,
 ): number {
   const parsePart = (val: string | number): number => {
     if (typeof val === 'number') {
@@ -44,9 +46,9 @@ export function parseDurationInput(
   return Math.max(0, h * 3600 + m * 60 + s);
 }
 
-export function estimateWorkoutDuration(
-  workout: { exercises?: Array<{ sets?: Array<{ isCompleted?: boolean; completedAt?: string }> }> }
-): number {
+export function estimateWorkoutDuration(workout: {
+  exercises?: Array<{ sets?: Array<{ isCompleted?: boolean; completedAt?: string }> }>;
+}): number {
   const exercises = workout?.exercises || [];
   const completedSets: Array<{ completedAt?: string }> = [];
 
@@ -63,8 +65,8 @@ export function estimateWorkoutDuration(
   }
 
   const validTimestamps = completedSets
-    .map((s) => (s.completedAt ? new Date(s.completedAt).getTime() : NaN))
-    .filter((t) => Number.isFinite(t));
+    .map(s => (s.completedAt ? new Date(s.completedAt).getTime() : NaN))
+    .filter(t => Number.isFinite(t));
 
   if (validTimestamps.length >= 2) {
     validTimestamps.sort((a, b) => a - b);

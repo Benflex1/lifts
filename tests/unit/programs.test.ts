@@ -16,7 +16,11 @@ import {
 } from '../../src/workout/programs';
 import { suggestNextTarget } from '../../src/workout/overload';
 
-const routine = (id: string, folderName: string | undefined, createdAt = '2026-09-01T00:00:00.000Z'): Routine => ({
+const routine = (
+  id: string,
+  folderName: string | undefined,
+  createdAt = '2026-09-01T00:00:00.000Z',
+): Routine => ({
   id,
   name: id[0].toUpperCase() + id.slice(1),
   folderName,
@@ -24,7 +28,11 @@ const routine = (id: string, folderName: string | undefined, createdAt = '2026-0
   createdAt,
 });
 
-const done = (id: string, routineId: string | undefined, startTime: string): WorkoutHistorySummary => ({
+const done = (
+  id: string,
+  routineId: string | undefined,
+  startTime: string,
+): WorkoutHistorySummary => ({
   id,
   name: routineId || 'Empty',
   routineId,
@@ -36,7 +44,12 @@ const done = (id: string, routineId: string | undefined, startTime: string): Wor
   exerciseNames: [],
 });
 
-const routines = [routine('push', 'PPL'), routine('pull', 'PPL'), routine('legs', 'PPL'), routine('arms', undefined)];
+const routines = [
+  routine('push', 'PPL'),
+  routine('pull', 'PPL'),
+  routine('legs', 'PPL'),
+  routine('arms', undefined),
+];
 const program: RoutineProgram = {
   folderName: 'PPL',
   routineIds: ['push', 'pull', 'legs'],
@@ -75,7 +88,9 @@ describe('routine rotations', () => {
   });
 
   it('ignores workouts from before the rotation started', () => {
-    const state = resolveProgramState(program, routines, [done('w0', 'push', '2026-09-20T10:00:00.000Z')])!;
+    const state = resolveProgramState(program, routines, [
+      done('w0', 'push', '2026-09-20T10:00:00.000Z'),
+    ])!;
     assert.equal(state.next.id, 'push');
     assert.equal(state.lastWorkout, undefined);
   });
@@ -95,7 +110,9 @@ describe('routine rotations', () => {
   it('marks every Nth cycle as a deload', () => {
     const withDeload = { ...program, deloadEvery: 2 };
     assert.equal(resolveProgramState(withDeload, routines, [])!.isDeload, false);
-    const oneCycle = ['push', 'pull', 'legs'].map((id, i) => done(`w${i}`, id, `2026-10-0${i + 2}T10:00:00.000Z`));
+    const oneCycle = ['push', 'pull', 'legs'].map((id, i) =>
+      done(`w${i}`, id, `2026-10-0${i + 2}T10:00:00.000Z`),
+    );
     const state = resolveProgramState(withDeload, routines, oneCycle)!;
     assert.equal(state.cycle, 2);
     assert.equal(state.isDeload, true);
@@ -109,13 +126,23 @@ describe('routine rotations', () => {
       routine('core', 'PPL', '2026-10-05T00:00:00.000Z'),
       routine('upper', 'PPL', '2026-10-04T00:00:00.000Z'),
     ];
-    assert.deepEqual(resolveRotation(program, current).map((r) => r.id), ['push', 'pull', 'upper', 'core']);
+    assert.deepEqual(
+      resolveRotation(program, current).map(r => r.id),
+      ['push', 'pull', 'upper', 'core'],
+    );
   });
 
   it('has no state with fewer than two routines left', () => {
     assert.equal(resolveProgramState(program, [routine('push', 'PPL')], []), null);
-    const states = resolveProgramStates({ PPL: program, Solo: { ...program, folderName: 'Solo' } }, routines, []);
-    assert.deepEqual(states.map((state) => state.program.folderName), ['PPL']);
+    const states = resolveProgramStates(
+      { PPL: program, Solo: { ...program, folderName: 'Solo' } },
+      routines,
+      [],
+    );
+    assert.deepEqual(
+      states.map(state => state.program.folderName),
+      ['PPL'],
+    );
   });
 
   it('finds the program a routine belongs to', () => {
@@ -127,17 +154,29 @@ describe('routine rotations', () => {
 
 describe('stored programs', () => {
   it('round-trips and drops malformed entries', () => {
-    const stored = serializeRoutinePrograms({ PPL: { ...program, deloadEvery: 4, nextOverride: { routineId: 'legs', setAt: '2026-10-03T08:00:00.000Z' } } });
+    const stored = serializeRoutinePrograms({
+      PPL: {
+        ...program,
+        deloadEvery: 4,
+        nextOverride: { routineId: 'legs', setAt: '2026-10-03T08:00:00.000Z' },
+      },
+    });
     assert.deepEqual(parseRoutinePrograms(stored).PPL.deloadEvery, 4);
     assert.deepEqual(parseRoutinePrograms(stored).PPL.nextOverride?.routineId, 'legs');
     assert.deepEqual(parseRoutinePrograms(null), {});
     assert.deepEqual(parseRoutinePrograms('not json'), {});
     assert.deepEqual(parseRoutinePrograms('[]'), {});
-    const mixed = parseRoutinePrograms(JSON.stringify({
-      Good: { routineIds: ['a', 'a', 7, 'b'], startedAt: '2026-10-01T00:00:00.000Z', deloadEvery: 1 },
-      NoDate: { routineIds: ['a'], startedAt: 'soon' },
-      NoIds: { startedAt: '2026-10-01T00:00:00.000Z' },
-    }));
+    const mixed = parseRoutinePrograms(
+      JSON.stringify({
+        Good: {
+          routineIds: ['a', 'a', 7, 'b'],
+          startedAt: '2026-10-01T00:00:00.000Z',
+          deloadEvery: 1,
+        },
+        NoDate: { routineIds: ['a'], startedAt: 'soon' },
+        NoIds: { startedAt: '2026-10-01T00:00:00.000Z' },
+      }),
+    );
     assert.deepEqual(Object.keys(mixed), ['Good']);
     assert.deepEqual(mixed.Good.routineIds, ['a', 'b']);
     assert.equal(mixed.Good.deloadEvery, undefined);
@@ -148,7 +187,11 @@ describe('stored programs', () => {
     const renamed = renameProgramFolder({ PPL: program }, 'PPL', 'Push Pull Legs');
     assert.deepEqual(Object.keys(renamed), ['Push Pull Legs']);
     assert.equal(renamed['Push Pull Legs'].folderName, 'Push Pull Legs');
-    const merged = renameProgramFolder({ PPL: program, Other: { ...program, folderName: 'Other' } }, 'PPL', 'Other');
+    const merged = renameProgramFolder(
+      { PPL: program, Other: { ...program, folderName: 'Other' } },
+      'PPL',
+      'Other',
+    );
     assert.deepEqual(Object.keys(merged), ['Other']);
     assert.deepEqual(removeProgramFolder({ PPL: program }, 'PPL'), {});
     assert.deepEqual(Object.keys(removeProgramFolder({ PPL: program }, 'Nope')), ['PPL']);
@@ -165,7 +208,11 @@ describe('stored programs', () => {
 });
 
 describe('deload targets', () => {
-  const ghost = (weightKg: number, reps: number) => ({ previousType: 'normal' as const, previousWeightKg: weightKg, previousReps: reps });
+  const ghost = (weightKg: number, reps: number) => ({
+    previousType: 'normal' as const,
+    previousWeightKg: weightKg,
+    previousReps: reps,
+  });
 
   it('drops to about 90% on a loadable step and keeps the bottom of the range', () => {
     const suggestion = suggestNextTarget({
@@ -196,8 +243,25 @@ describe('deload targets', () => {
   });
 
   it('gives no deload target when the weight is too light to step down', () => {
-    assert.equal(suggestNextTarget({ sets: [ghost(2, 12)], trackingType: 'weight_reps', equipment: 'dumbbell', unit: 'kg', deload: true }), null);
-    assert.equal(suggestNextTarget({ sets: [ghost(1.81, 12)], trackingType: 'weight_reps', unit: 'lb', deload: true }), null);
+    assert.equal(
+      suggestNextTarget({
+        sets: [ghost(2, 12)],
+        trackingType: 'weight_reps',
+        equipment: 'dumbbell',
+        unit: 'kg',
+        deload: true,
+      }),
+      null,
+    );
+    assert.equal(
+      suggestNextTarget({
+        sets: [ghost(1.81, 12)],
+        trackingType: 'weight_reps',
+        unit: 'lb',
+        deload: true,
+      }),
+      null,
+    );
   });
 });
 
@@ -219,7 +283,10 @@ describe('cycle progress', () => {
 describe('review follow-ups', () => {
   it('ends a pick when the workout finishes after it, even if its start was moved earlier', () => {
     const picked = withNextOverride(program, 'legs', new Date('2026-10-03T18:05:00.000Z'));
-    const legs = { ...done('w1', 'legs', '2026-10-03T17:45:00.000Z'), endTime: '2026-10-03T19:00:00.000Z' };
+    const legs = {
+      ...done('w1', 'legs', '2026-10-03T17:45:00.000Z'),
+      endTime: '2026-10-03T19:00:00.000Z',
+    };
     const state = resolveProgramState(picked, routines, [legs])!;
     assert.equal(state.isOverridden, false);
     assert.equal(state.next.id, 'push');
@@ -234,7 +301,10 @@ describe('review follow-ups', () => {
     assert.equal(state.next.id, 'push');
     assert.equal(state.cycle, 2);
     assert.equal(state.doneInCycle, 0);
-    const afterPush = resolveProgramState(program, routines, [...history, done('w3', 'push', '2026-10-04T10:00:00.000Z')])!;
+    const afterPush = resolveProgramState(program, routines, [
+      ...history,
+      done('w3', 'push', '2026-10-04T10:00:00.000Z'),
+    ])!;
     assert.equal(afterPush.cycle, 2);
     assert.deepEqual(afterPush.doneThisCycleIds, ['push']);
   });
@@ -242,7 +312,11 @@ describe('review follow-ups', () => {
   it('does not move past cycles or deloads when a routine is added to the folder', () => {
     const withDeload = { ...program, deloadEvery: 4 };
     const history = Array.from({ length: 9 }, (_, i) =>
-      done(`w${i}`, ['push', 'pull', 'legs'][i % 3], `2026-10-${String(i + 2).padStart(2, '0')}T10:00:00.000Z`),
+      done(
+        `w${i}`,
+        ['push', 'pull', 'legs'][i % 3],
+        `2026-10-${String(i + 2).padStart(2, '0')}T10:00:00.000Z`,
+      ),
     );
     assert.equal(resolveProgramState(withDeload, routines, history)!.cycle, 4);
     assert.equal(resolveProgramState(withDeload, routines, history)!.isDeload, true);
@@ -253,27 +327,57 @@ describe('review follow-ups', () => {
   });
 
   it('tracks deload workouts and merges lists and rotations on restore', async () => {
-    const { addDeloadWorkoutId, parseDeloadWorkoutIds, mergeDeloadWorkoutIds, mergeRoutinePrograms } = await import('../../src/workout/programs');
+    const {
+      addDeloadWorkoutId,
+      parseDeloadWorkoutIds,
+      mergeDeloadWorkoutIds,
+      mergeRoutinePrograms,
+    } = await import('../../src/workout/programs');
     const once = addDeloadWorkoutId(null, 'w1');
     assert.deepEqual(parseDeloadWorkoutIds(addDeloadWorkoutId(once, 'w1')), ['w1']);
     assert.deepEqual(parseDeloadWorkoutIds('garbage'), []);
-    assert.deepEqual(parseDeloadWorkoutIds(mergeDeloadWorkoutIds(once, '["w0","w1"]')).sort(), ['w0', 'w1']);
+    assert.deepEqual(parseDeloadWorkoutIds(mergeDeloadWorkoutIds(once, '["w0","w1"]')).sort(), [
+      'w0',
+      'w1',
+    ]);
     const local = serializeRoutinePrograms({ PPL: { ...program, deloadEvery: 4 } });
-    const incoming = serializeRoutinePrograms({ PPL: program, Upper: { ...program, folderName: 'Upper' } });
+    const incoming = serializeRoutinePrograms({
+      PPL: program,
+      Upper: { ...program, folderName: 'Upper' },
+    });
     const merged = parseRoutinePrograms(mergeRoutinePrograms(local, incoming));
     assert.deepEqual(Object.keys(merged).sort(), ['PPL', 'Upper']);
     assert.equal(merged.PPL.deloadEvery, 4, "this device's rotation wins");
-    assert.equal(parseRoutinePrograms(mergeRoutinePrograms('{}', incoming)).Upper.folderName, 'Upper');
+    assert.equal(
+      parseRoutinePrograms(mergeRoutinePrograms('{}', incoming)).Upper.folderName,
+      'Upper',
+    );
   });
 
   it('leaves deload sessions out of last time', async () => {
     const { resolvePreviousSetsForExercise } = await import('../../src/workout/gym-history');
-    const bench = { id: 'bench', name: 'Bench', category: 'strength', equipment: 'barbell', primaryMuscles: ['chest'] };
+    const bench = {
+      id: 'bench',
+      name: 'Bench',
+      category: 'strength',
+      equipment: 'barbell',
+      primaryMuscles: ['chest'],
+    };
     const occurrence = (workoutId: string, weightKg: number) => ({
-      workoutId, startTime: '2026-10-01T10:00:00.000Z', gymId: 'gym-default', gymName: 'Default Gym', occurrenceIndex: 0,
+      workoutId,
+      startTime: '2026-10-01T10:00:00.000Z',
+      gymId: 'gym-default',
+      gymName: 'Default Gym',
+      occurrenceIndex: 0,
       sets: [{ weightKg, reps: 8, type: 'normal' as const }],
     });
-    const [last] = resolvePreviousSetsForExercise(bench, [occurrence('deload', 90), occurrence('normal', 100)], 'gym-default', undefined, new Set(['deload']));
+    const [last] = resolvePreviousSetsForExercise(
+      bench,
+      [occurrence('deload', 90), occurrence('normal', 100)],
+      'gym-default',
+      undefined,
+      new Set(['deload']),
+    );
     assert.equal(last.weightKg, 100);
   });
 

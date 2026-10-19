@@ -44,20 +44,42 @@ Thank you for contributing to Lifts! Lifts is a free, local-first, open-source g
 Every change must pass our verification suite before submitting a pull request:
 
 ```bash
-# 1. Type check
-npx tsc --noEmit
+# 1. Lint (errors block CI; warnings are tracked in the audit backlog)
+npm run lint
 
-# 2. Type check the test suite
+# 2. Formatting check
+npm run format:check
+
+# 3. Type check
+npm run typecheck
+
+# 4. Type check the test suite
 npm run typecheck:tests
 
-# 3. Fast unit tests
+# 5. Fast unit tests
 npm test
 
-# 4. Cross-platform integration tests (Native SQLite + Web IndexedDB)
+# 6. Cross-platform integration tests (Native SQLite + Web IndexedDB)
 npm run test:integration
 
-# 5. Web production export smoke test
+# 7. Web production export smoke test
 npx expo export --platform web --output-dir dist-audit-web
+```
+
+Run `npm run format` before committing to apply the shared Prettier configuration.
+
+### Coverage scope
+
+The coverage thresholds measure modules executed by the Node tests, not all application source. This phase uses 90% lines, 83% branches, and 88% functions: the controller regression now includes a previously uninstrumented module in the denominator. The final phase restores the 89% function threshold alongside its additional coverage and platform-dispatch cleanup. Unimported screens and the app shell are absent from the denominator. LCOV is generated locally and uploaded as a CI artifact; it is not tracked in Git. Use component and emulator tests to verify wiring.
+
+### End-to-end smoke journey
+
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). The journey runs for relevant pull requests into `main`/`develop` and pushes to `main` or `develop`. Branch protection must require `emulator-journey` for it to block merging.
+
+With a device or emulator connected and the app installed, run it locally:
+
+```bash
+maestro test .maestro/smoke-journey.yml
 ```
 
 ---
@@ -100,6 +122,7 @@ When contributing code, adhere strictly to these core principles:
    ```bash
    git commit -m "feat: descriptive message in lowercase without emojis"
    ```
-3. Run the full verification suite (`npx tsc --noEmit && npm run typecheck:tests && npm test && npm run test:integration`).
+3. Run the full verification suite (`npm run lint && npm run format:check && npm run typecheck && npm run typecheck:tests && npm test && npm run test:integration`).
 4. Push your branch to GitHub and open a Pull Request against `main`.
 5. Clearly describe the motivation, test evidence, and verified platforms in your PR description.
+6. Use the repository templates for issues and pull requests (the PR checklist mirrors the verification suite). Report vulnerabilities privately through `SECURITY.md`, never in a public issue.

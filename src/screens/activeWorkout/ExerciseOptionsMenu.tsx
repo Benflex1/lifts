@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Text, View } from 'react-native';
+import { AppTouchable } from '../../components/ui';
 import {
   ArrowDown,
   ArrowUp,
@@ -19,6 +20,7 @@ import { ActiveExercise } from '../../types';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 import { isMoveDownDisabled, isMoveUpDisabled } from './activeWorkoutLogic';
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 export interface ExerciseOptionsMenuProps {
   exercise: ActiveExercise | null;
@@ -72,6 +74,9 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
   const moveUpDisabled = isMoveUpDisabled(exerciseIndex);
   const moveDownDisabled = isMoveDownDisabled(exerciseIndex, exerciseCount);
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(exercise !== null);
   return (
     <Modal
       visible={exercise !== null}
@@ -79,51 +84,69 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
+      <AppTouchable
         style={styles.modalBackdrop}
         activeOpacity={1}
         onPress={onClose}
+        accessible={false}
       >
-        <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
+        <View
+          ref={modalA11yRef}
+          accessibilityViewIsModal
+          style={[styles.sheetContainer, { paddingBottom: Math.max(20, bottomInset + 12) }]}
+        >
           <View style={styles.modalHeader}>
             <Text style={styles.modalHeaderTitle} numberOfLines={1}>
               {exercise?.exercise?.name}
             </Text>
-            <TouchableOpacity
+            <AppTouchable
               onPress={onClose}
               style={styles.modalCloseBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close exercise options"
             >
               <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.menuItem}
             onPress={onViewDetails}
+            accessibilityRole="button"
+            accessibilityLabel="View exercise details"
           >
             <Info size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>View Exercise Details</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={[styles.menuItem, moveUpDisabled && styles.menuItemDisabled]}
             disabled={moveUpDisabled}
             onPress={onMoveUp}
+            accessibilityRole="button"
+            accessibilityLabel="Move exercise up"
+            accessibilityState={{ disabled: moveUpDisabled }}
           >
             <ArrowUp size={18} color={moveUpDisabled ? colors.textFaint : colors.textSecondary} />
             <Text style={styles.menuItemText}>Move Up</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={[styles.menuItem, moveDownDisabled && styles.menuItemDisabled]}
             disabled={moveDownDisabled}
             onPress={onMoveDown}
+            accessibilityRole="button"
+            accessibilityLabel="Move exercise down"
+            accessibilityState={{ disabled: moveDownDisabled }}
           >
-            <ArrowDown size={18} color={moveDownDisabled ? colors.textFaint : colors.textSecondary} />
+            <ArrowDown
+              size={18}
+              color={moveDownDisabled ? colors.textFaint : colors.textSecondary}
+            />
             <Text style={styles.menuItemText}>Move Down</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.menuItem}
             onPress={onReorderAll}
             accessibilityRole="button"
@@ -131,26 +154,30 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
           >
             <ArrowUpDown size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Reorder All Exercises</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.menuItem}
             onPress={onSwap}
+            accessibilityRole="button"
+            accessibilityLabel="Swap exercise"
           >
             <Repeat size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Swap Exercise</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.menuItem}
             onPress={onSetRestTimer}
+            accessibilityRole="button"
+            accessibilityLabel="Set rest timer"
           >
             <Timer size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Set Rest Timer</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
           {trackingTypesEnabled && (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.menuItem}
               onPress={onChangeTrackingType}
               accessibilityRole="button"
@@ -160,74 +187,88 @@ export const ExerciseOptionsMenu: React.FC<ExerciseOptionsMenuProps> = ({
               <Text style={styles.menuItemText} numberOfLines={1}>
                 Track As: {trackingTypeLabel}
               </Text>
-            </TouchableOpacity>
+            </AppTouchable>
           )}
 
           {hasLoad && (
             <>
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.menuItem}
                 onPress={onOpenPlateCalculator}
+                accessibilityRole="button"
+                accessibilityLabel="Open plate calculator"
               >
                 <Calculator size={18} color={colors.textSecondary} />
                 <Text style={styles.menuItemText}>Plate Calculator</Text>
-              </TouchableOpacity>
+              </AppTouchable>
 
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.menuItem}
                 onPress={onQuickWarmup}
+                accessibilityRole="button"
+                accessibilityLabel="Add warm-up set"
               >
                 <Flame size={18} color="#F97316" />
                 <Text style={styles.menuItemText}>Add Warm-up Set</Text>
-              </TouchableOpacity>
+              </AppTouchable>
 
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.menuItem}
                 onPress={onWarmupCalculator}
+                accessibilityRole="button"
+                accessibilityLabel="Open warm-up calculator"
               >
                 <Calculator size={18} color="#F97316" />
                 <Text style={styles.menuItemText}>Warm-up Calculator...</Text>
-              </TouchableOpacity>
+              </AppTouchable>
             </>
           )}
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.menuItem}
             onPress={onEditSuperset}
+            accessibilityRole="button"
+            accessibilityLabel={exercise?.supersetId ? 'Edit superset' : 'Create superset'}
           >
             <Layers size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>
               {exercise?.supersetId ? 'Edit Superset' : 'Create Superset'}
             </Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
           {exercise?.supersetId && (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.menuItem}
               onPress={onUngroupSuperset}
+              accessibilityRole="button"
+              accessibilityLabel="Ungroup superset"
             >
               <Layers size={18} color={colors.danger} />
               <Text style={[styles.menuItemText, { color: colors.danger }]}>Ungroup Superset</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           )}
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.menuItem}
             onPress={onEditNote}
+            accessibilityRole="button"
+            accessibilityLabel="Add or edit exercise note"
           >
             <FileText size={18} color={colors.textSecondary} />
             <Text style={styles.menuItemText}>Add / Edit Note</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={[styles.menuItem, styles.menuItemDestructive]}
             onPress={onRemoveExercise}
+            accessibilityRole="button"
+            accessibilityLabel="Remove exercise"
           >
             <Trash2 size={18} color={colors.danger} />
             <Text style={styles.menuItemTextDestructive}>Remove Exercise</Text>
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
-      </TouchableOpacity>
+      </AppTouchable>
     </Modal>
   );
 };

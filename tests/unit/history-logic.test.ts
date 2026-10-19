@@ -81,10 +81,7 @@ function makeWorkoutDetail(): Workout {
       makeActiveExercise('ae2', 'ex2', {
         targetReps: undefined,
         restTimerSeconds: undefined,
-        sets: [
-          makeSet('s3', 1, { targetReps: '5' }),
-          makeSet('s4', 2, { targetReps: undefined }),
-        ],
+        sets: [makeSet('s3', 1, { targetReps: '5' }), makeSet('s4', 2, { targetReps: undefined })],
       }),
     ],
   };
@@ -111,9 +108,18 @@ test('formatHistoryDate renders short weekday labels and never throws', () => {
 test('filterHistoryByGym narrows to the selected gym or passes everything through', () => {
   const history = [makeSummary('w1', 'g1'), makeSummary('w2', 'g2'), makeSummary('w3', 'g1')];
 
-  assert.deepEqual(filterHistoryByGym(history, null).map(w => w.id), ['w1', 'w2', 'w3']);
-  assert.deepEqual(filterHistoryByGym(history, 'g1').map(w => w.id), ['w1', 'w3']);
-  assert.deepEqual(filterHistoryByGym(history, 'missing').map(w => w.id), []);
+  assert.deepEqual(
+    filterHistoryByGym(history, null).map(w => w.id),
+    ['w1', 'w2', 'w3'],
+  );
+  assert.deepEqual(
+    filterHistoryByGym(history, 'g1').map(w => w.id),
+    ['w1', 'w3'],
+  );
+  assert.deepEqual(
+    filterHistoryByGym(history, 'missing').map(w => w.id),
+    [],
+  );
 });
 
 test('computeHistoryTotals counts workouts and sums volume', () => {
@@ -184,7 +190,12 @@ test('buildPRDetailsNotification maps ranks to titles and formats the body', () 
   assert.ok(notification.message.startsWith('Bench Press (Set #3)\n\n• '));
 
   assert.equal(
-    buildPRDetailsNotification('Bench Press', 1, { ...setPR, primary: { ...achievement, rank: 1 } }, 'kg').title,
+    buildPRDetailsNotification(
+      'Bench Press',
+      1,
+      { ...setPR, primary: { ...achievement, rank: 1 } },
+      'kg',
+    ).title,
     'Personal Record',
   );
   assert.equal(
@@ -197,7 +208,12 @@ test('buildPRDetailsNotification maps ranks to titles and formats the body', () 
     'Tied Personal Record',
   );
   assert.equal(
-    buildPRDetailsNotification('Bench Press', 1, { ...setPR, primary: { ...achievement, rank: 3 } }, 'kg').title,
+    buildPRDetailsNotification(
+      'Bench Press',
+      1,
+      { ...setPR, primary: { ...achievement, rank: 3 } },
+      'kg',
+    ).title,
     'Bronze Record',
   );
 });

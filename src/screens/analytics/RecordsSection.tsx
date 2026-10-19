@@ -33,10 +33,17 @@ export function RecordsSection({ analytics }: { analytics: AnalyticsData }) {
   // strip, and the derived filtered summary below.
   const recordsOverview = useMemo(() => {
     if (allWorkouts.length === 0) return null;
-    return buildTrophyRoomSummary(allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, {
-      selectedGymId: trophyGymId,
-      includeMedalCounts: false,
-    });
+    return buildTrophyRoomSummary(
+      allWorkouts,
+      allExerciseList,
+      allGyms,
+      gymTrackingEnabled,
+      exerciseScopes,
+      {
+        selectedGymId: trophyGymId,
+        includeMedalCounts: false,
+      },
+    );
   }, [allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, trophyGymId]);
 
   const trophySummary = useMemo(() => {
@@ -54,7 +61,7 @@ export function RecordsSection({ analytics }: { analytics: AnalyticsData }) {
 
   const handleOpenRecordDetail = useCallback(
     (record: ExerciseRecordSummary) => {
-      const ex = allExerciseList.find((e) => e.id === record.exerciseId);
+      const ex = allExerciseList.find(e => e.id === record.exerciseId);
       if (!ex) return;
       setDetailExercise(ex);
     },
@@ -63,26 +70,26 @@ export function RecordsSection({ analytics }: { analytics: AnalyticsData }) {
 
   return (
     <>
-        <RecordsView
-          overview={recordsOverview}
-          filtered={trophySummary}
-          unit={unit}
-          gyms={allGyms}
-          gymTrackingEnabled={gymTrackingEnabled}
-          selectedGymId={trophyGymId}
-          onSelectGym={setTrophyGymId}
-          category={trophyCategory}
-          onSelectCategory={setTrophyCategory}
-          search={trophySearch}
-          onChangeSearch={setTrophySearch}
-          onOpenRecord={handleOpenRecordDetail}
-        />
+      <RecordsView
+        overview={recordsOverview}
+        filtered={trophySummary}
+        unit={unit}
+        gyms={allGyms}
+        gymTrackingEnabled={gymTrackingEnabled}
+        selectedGymId={trophyGymId}
+        onSelectGym={setTrophyGymId}
+        category={trophyCategory}
+        onSelectCategory={setTrophyCategory}
+        search={trophySearch}
+        onChangeSearch={setTrophySearch}
+        onOpenRecord={handleOpenRecordDetail}
+      />
 
       <ExerciseDetailModal
         visible={detailExercise !== null}
         exercise={detailExercise}
         onClose={() => setDetailExercise(null)}
-        currentGym={trophyGymId ? allGyms.find((g) => g.id === trophyGymId) : null}
+        currentGym={trophyGymId ? allGyms.find(g => g.id === trophyGymId) : null}
         onHistoryTransferred={() => void loadAnalytics()}
       />
     </>

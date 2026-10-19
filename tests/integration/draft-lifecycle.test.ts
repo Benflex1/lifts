@@ -240,9 +240,17 @@ describe('Draft Lifecycle Integration', () => {
       const reopened = await fixture.reopen();
       const detail = await reopened.getWorkoutDetail(workout.id);
       assert.ok(detail);
-      assert.equal(detail?.exercises.length, 2, 'Both occurrences of same exercise must be preserved');
+      assert.equal(
+        detail?.exercises.length,
+        2,
+        'Both occurrences of same exercise must be preserved',
+      );
       assert.equal(detail?.exercises[0].targetReps, '6-8');
-      assert.equal(detail?.exercises[0].sets[0].weightKg, 0, '0 kg must be preserved as 0, not null/empty/default');
+      assert.equal(
+        detail?.exercises[0].sets[0].weightKg,
+        0,
+        '0 kg must be preserved as 0, not null/empty/default',
+      );
       assert.equal(detail?.exercises[1].targetReps, 'AMRAP');
       assert.equal(detail?.exercises[1].sets[0].weightKg, 80);
 
@@ -276,7 +284,14 @@ describe('Draft Lifecycle Integration', () => {
                   exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
                   orderIndex: 0,
                   sets: [
-                    { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 10, isCompleted: true },
+                    {
+                      id: 's1',
+                      setNumber: 1,
+                      type: 'normal',
+                      weightKg: 100,
+                      reps: 10,
+                      isCompleted: true,
+                    },
                   ],
                 },
               ],
@@ -284,7 +299,15 @@ describe('Draft Lifecycle Integration', () => {
           },
         ],
         settings: {},
-        gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+        gyms: [
+          {
+            id: 'gym-default',
+            name: 'Default Gym',
+            isDefault: true,
+            color: '#3B82F6',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
         exerciseGymScopes: [],
       });
 

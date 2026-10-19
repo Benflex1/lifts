@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  AccessibilityRole,
   Easing,
   Modal,
   View,
   Text,
   TouchableOpacity,
+  TouchableOpacityProps,
   StyleSheet,
   StyleProp,
   Platform,
@@ -15,12 +17,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Trophy } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { colors, radii, spacing, type, HEADER_TOP_FALLBACK } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 /**
  * Shared building blocks for the Lifts UI. Screens compose these instead of
  * restyling headers, chips and menus individually, which keeps spacing and
  * hierarchy consistent across the app.
  */
+
+// ---------------------------------------------------------------------------
+// AppTouchable
+// ---------------------------------------------------------------------------
+
+export type AppTouchableProps = Omit<
+  TouchableOpacityProps,
+  'accessibilityLabel' | 'accessibilityRole'
+> & { accessibilityRole?: AccessibilityRole } & (
+    | { accessibilityLabel: string }
+    | {
+        /** Dismiss scrims are intentionally invisible to screen readers. */
+        accessible: false;
+        accessibilityLabel?: string;
+      }
+  );
+
+/**
+ * The required-label primitive (A11Y-05). Interactive components compose this
+ * instead of raw TouchableOpacity, so a missing label is a type error, and the
+ * labelled surfaces restrict raw touchables in ESLint.
+ */
+export function AppTouchable({ accessibilityRole = 'button', ...rest }: AppTouchableProps) {
+  return <TouchableOpacity accessibilityRole={accessibilityRole} {...rest} />;
+}
 
 // ---------------------------------------------------------------------------
 // Screen header
@@ -153,7 +181,10 @@ export function SegmentedControl<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected }}
           >
-            <Text style={[styles.segmentText, selected && styles.segmentTextActive]} numberOfLines={1}>
+            <Text
+              style={[styles.segmentText, selected && styles.segmentTextActive]}
+              numberOfLines={1}
+            >
               {option.label}
             </Text>
           </TouchableOpacity>
@@ -176,7 +207,14 @@ interface ChipProps {
   accessibilityLabel?: string;
 }
 
-export function Chip({ label, selected, onPress, leading, size = 'md', accessibilityLabel }: ChipProps) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  leading,
+  size = 'md',
+  accessibilityLabel,
+}: ChipProps) {
   return (
     <TouchableOpacity
       style={[
@@ -302,6 +340,9 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
 
   const sheetTranslate = progress.interpolate({ inputRange: [0, 1], outputRange: [360, 0] });
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal
       visible={visible}
@@ -310,8 +351,10 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
       onRequestClose={onClose}
       onDismiss={runPendingAction}
     >
-      <View style={styles.sheetRoot}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.sheetRoot}>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}
+        >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}

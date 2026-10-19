@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { Store } from '../../src/database/contract';
-import type {
-  HealthProvider,
-  HealthProviderId,
-  HealthSyncRecord,
-} from '../../src/health/contract';
+import type { HealthProvider, HealthProviderId, HealthSyncRecord } from '../../src/health/contract';
 import { syncWorkoutWithProvider, retryHealthSyncs } from '../../src/health/sync';
 import {
   enqueueCompletedWorkoutSync,
@@ -32,14 +28,14 @@ const workout = (overrides: Partial<Workout> = {}): Workout => ({
 function createFakeStore(workouts: Workout[] = []) {
   const records = new Map<string, HealthSyncRecord>();
   const writes: HealthSyncRecord[] = [];
-  const details = new Map(workouts.map((item) => [item.id, item]));
+  const details = new Map(workouts.map(item => [item.id, item]));
   const key = (workoutId: string, provider: HealthProviderId) => `${workoutId}:${provider}`;
 
   const store = {
     getHealthSyncRecord: async (workoutId: string, provider: HealthProviderId) =>
       records.get(key(workoutId, provider)) ?? null,
     getHealthSyncRecords: async (status?: HealthSyncRecord['status']) =>
-      [...records.values()].filter((record) => !status || record.status === status),
+      [...records.values()].filter(record => !status || record.status === status),
     saveHealthSyncRecord: async (record: HealthSyncRecord) => {
       writes.push({ ...record });
       records.set(key(record.workoutId, record.provider), { ...record });
@@ -60,7 +56,7 @@ function createProvider(
       id,
       isAvailable: async () => true,
       requestWriteAuthorization: async () => 'granted' as const,
-      writeStrengthWorkout: async (payload) => {
+      writeStrengthWorkout: async payload => {
         payloads.push(payload);
         return write(payload);
       },
@@ -145,7 +141,12 @@ test('retries pending and failed records with the same fingerprint', async () =>
   records.set('workout-1:healthkit', { ...initial!, status: 'failed', syncedAt: undefined });
   writes.length = 0;
 
-  const result = await syncWorkoutWithProvider(store, workout(), provider, '2026-09-13T11:00:00.000Z');
+  const result = await syncWorkoutWithProvider(
+    store,
+    workout(),
+    provider,
+    '2026-09-13T11:00:00.000Z',
+  );
 
   assert.equal(payloads.length, 2);
   assert.equal(writes[0].status, 'pending');
@@ -243,7 +244,10 @@ test('continues retrying later rows when an eligible workout cannot be mapped', 
   const results = await retryHealthSyncs(store, provider, '2026-09-13T11:00:00.000Z');
 
   assert.equal(payloads.length, 1);
-  assert.deepEqual(results.map((result) => [result.workoutId, result.status]), [['valid', 'synced']]);
+  assert.deepEqual(
+    results.map(result => [result.workoutId, result.status]),
+    [['valid', 'synced']],
+  );
   assert.equal(records.get('invalid:healthkit')?.status, 'failed');
   assert.equal(records.get('valid:healthkit')?.status, 'synced');
 });
@@ -265,7 +269,7 @@ test('keeps final ledger persistence best-effort after the provider writes', asy
   const { store, writes } = createFakeStore();
   const { provider, payloads } = createProvider();
   let saveCount = 0;
-  store.saveHealthSyncRecord = async (record) => {
+  store.saveHealthSyncRecord = async record => {
     saveCount += 1;
     if (saveCount === 2) throw new Error('final storage unavailable');
     writes.push({ ...record });
@@ -285,7 +289,7 @@ test('serializes concurrent calls for the same workout and provider', async () =
   const { provider, payloads } = createProvider('healthkit', async () => {
     active += 1;
     maxActive = Math.max(maxActive, active);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, 10));
     active -= 1;
   });
 

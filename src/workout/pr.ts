@@ -1,4 +1,4 @@
-import { Exercise, ExerciseGymScope, Gym, Workout, WorkoutSet } from '../types';
+import { ExerciseGymScope, Gym, Workout, WorkoutSet } from '../types';
 import { calculate1RM } from '../utils/calculator';
 import { formatWeight, WeightUnit } from '../utils/units';
 import { ExerciseHistoryEntry, collectExerciseHistory } from './exercise-history';

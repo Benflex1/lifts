@@ -32,6 +32,10 @@ mockModule('react-native', {
   TextInput: 'TextInput',
   TouchableOpacity: 'TouchableOpacity',
   StyleSheet: { create: (styles: unknown) => styles },
+  Platform: {
+    OS: 'web',
+    select: (options: Record<string, unknown>) => options.web ?? options.default,
+  },
 });
 
 const iconProxy = new Proxy({}, { get: (_target, name) => name }) as Record<string, unknown>;
@@ -67,7 +71,7 @@ before(async () => {
 });
 
 async function flush(): Promise<void> {
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
 }
 
 interface ModalResult {
@@ -116,7 +120,11 @@ test('shared filter lists and resolvers keep the screen and picker in sync', () 
 });
 
 test('customExerciseDefaults prefills from an existing exercise', () => {
-  assert.deepEqual(customExerciseDefaults(null), { name: '', muscle: 'Chest', equipment: 'Barbell' });
+  assert.deepEqual(customExerciseDefaults(null), {
+    name: '',
+    muscle: 'Chest',
+    equipment: 'Barbell',
+  });
   assert.deepEqual(
     customExerciseDefaults({
       id: 'e-lat',

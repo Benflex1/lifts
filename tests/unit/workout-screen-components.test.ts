@@ -50,11 +50,11 @@ function textOf(node: unknown): string {
 }
 
 function allTexts(renderer: Renderer): string[] {
-  return renderer.root.findAllByType('Text' as any).map((inst) => textOf(inst));
+  return renderer.root.findAllByType('Text' as any).map(inst => textOf(inst));
 }
 
 function pressByLabel(renderer: Renderer, label: string): void {
-  const nodes = renderer.root.findAll((node) => node.props?.accessibilityLabel === label);
+  const nodes = renderer.root.findAll(node => node.props?.accessibilityLabel === label);
   assert.ok(nodes.length > 0, `no pressable with accessibility label "${label}"`);
   act(() => {
     nodes[0].props.onPress();
@@ -120,9 +120,7 @@ function makeRoutine(id: string, name: string, overrides: Partial<Routine> = {})
 test('WeekSummaryCard renders the streak, day dots, and stats', async () => {
   const { WeekSummaryCard } = await import('../../src/screens/workout/WeekSummaryCard');
 
-  const renderer = render(
-    React.createElement(WeekSummaryCard, { week: makeWeek(), unit: 'kg' }),
-  );
+  const renderer = render(React.createElement(WeekSummaryCard, { week: makeWeek(), unit: 'kg' }));
   const texts = allTexts(renderer);
 
   assert.ok(texts.includes('This week'));
@@ -149,7 +147,7 @@ test('WeekSummaryCard uses singular labels and drops the streak pill for the fir
 
   assert.ok(texts.includes('workout'));
   assert.ok(!texts.includes('workouts'));
-  assert.ok(!texts.some((text) => text.includes('week streak')));
+  assert.ok(!texts.some(text => text.includes('week streak')));
 });
 
 test('RoutineCard renders the summary tags and forwards its actions', async () => {

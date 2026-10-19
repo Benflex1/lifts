@@ -18,14 +18,14 @@ export const TRACKING_TYPE_OPTIONS: { type: TrackingType; label: string; example
   { type: 'distance_duration', label: 'Distance & Time', example: 'Running, rowing, cycling' },
 ];
 
-const TRACKING_TYPE_SET = new Set<TrackingType>(TRACKING_TYPE_OPTIONS.map((option) => option.type));
+const TRACKING_TYPE_SET = new Set<TrackingType>(TRACKING_TYPE_OPTIONS.map(option => option.type));
 
 export function isTrackingType(value: unknown): value is TrackingType {
   return typeof value === 'string' && TRACKING_TYPE_SET.has(value as TrackingType);
 }
 
 export function trackingTypeLabel(type: TrackingType): string {
-  return TRACKING_TYPE_OPTIONS.find((option) => option.type === type)?.label ?? 'Weight & Reps';
+  return TRACKING_TYPE_OPTIONS.find(option => option.type === type)?.label ?? 'Weight & Reps';
 }
 
 export function parseTrackingTypesEnabled(value: string | null): boolean {
@@ -34,7 +34,9 @@ export function parseTrackingTypesEnabled(value: string | null): boolean {
 
 export type TrackingTypeOverrides = Record<string, TrackingType>;
 
-export function parseTrackingTypeOverrides(value: string | null | undefined): TrackingTypeOverrides {
+export function parseTrackingTypeOverrides(
+  value: string | null | undefined,
+): TrackingTypeOverrides {
   if (!value) return {};
   try {
     const parsed = JSON.parse(value);
@@ -66,9 +68,12 @@ export function mergeTrackingTypeOverrides(existing: string | undefined, incomin
 const DURATION_EXERCISE_IDS = new Set(['Plank', 'Side_Bridge']);
 
 /** A sensible starting type for a library or custom exercise, before the user picks one. */
-export function suggestTrackingType(exercise: Pick<Exercise, 'id' | 'category' | 'equipment'>): TrackingType {
+export function suggestTrackingType(
+  exercise: Pick<Exercise, 'id' | 'category' | 'equipment'>,
+): TrackingType {
   if (exercise.category === 'cardio') return 'distance_duration';
-  if (exercise.category === 'stretching' || DURATION_EXERCISE_IDS.has(exercise.id)) return 'duration';
+  if (exercise.category === 'stretching' || DURATION_EXERCISE_IDS.has(exercise.id))
+    return 'duration';
   if (exercise.equipment === 'body only') return 'bodyweight_reps';
   return DEFAULT_TRACKING_TYPE;
 }
@@ -84,12 +89,17 @@ export function resolveTrackingTypeForExercise(
 }
 
 /** The type an exercise in a workout was logged with. */
-export function getTrackingType(exercise: Pick<ActiveExercise, 'trackingType'> | undefined): TrackingType {
+export function getTrackingType(
+  exercise: Pick<ActiveExercise, 'trackingType'> | undefined,
+): TrackingType {
   return exercise?.trackingType ?? DEFAULT_TRACKING_TYPE;
 }
 
 /** Stores only non-default types, so workouts logged with the setting off look exactly like before. */
-export function withTrackingType<T extends { trackingType?: TrackingType }>(item: T, type: TrackingType): T {
+export function withTrackingType<T extends { trackingType?: TrackingType }>(
+  item: T,
+  type: TrackingType,
+): T {
   const { trackingType: _previous, ...rest } = item;
   return (type === DEFAULT_TRACKING_TYPE ? rest : { ...rest, trackingType: type }) as T;
 }
@@ -115,18 +125,26 @@ export function countsLoad(type: TrackingType): boolean {
   return type === 'weight_reps' || type === 'weighted_bodyweight';
 }
 
-export function setVolumeKg(set: Pick<WorkoutSet, 'weightKg' | 'reps'>, type: TrackingType): number {
+export function setVolumeKg(
+  set: Pick<WorkoutSet, 'weightKg' | 'reps'>,
+  type: TrackingType,
+): number {
   return countsLoad(type) ? set.weightKg * set.reps : 0;
 }
 
-export function exerciseVolumeKg(exercise: Pick<ActiveExercise, 'sets' | 'trackingType'>, completedOnly = true): number {
+export function exerciseVolumeKg(
+  exercise: Pick<ActiveExercise, 'sets' | 'trackingType'>,
+  completedOnly = true,
+): number {
   const type = getTrackingType(exercise);
   return exercise.sets
-    .filter((set) => !completedOnly || set.isCompleted)
+    .filter(set => !completedOnly || set.isCompleted)
     .reduce((sum, set) => sum + setVolumeKg(set, type), 0);
 }
 
-export function workoutVolumeKg(exercises: Pick<ActiveExercise, 'sets' | 'trackingType'>[]): number {
+export function workoutVolumeKg(
+  exercises: Pick<ActiveExercise, 'sets' | 'trackingType'>[],
+): number {
   return exercises.reduce((sum, exercise) => sum + exerciseVolumeKg(exercise), 0);
 }
 
@@ -176,10 +194,15 @@ export function validateTrackedSet(set: WorkoutSet, type: TrackingType): string 
 /** Fills empty inputs from last session's numbers when a set is checked off, like weight × reps does. */
 export function fillTrackedSetFromPrevious(set: WorkoutSet, type: TrackingType): WorkoutSet {
   if (type === 'duration' || type === 'distance_duration') {
-    const durationSeconds = isPositiveNumber(set.durationSeconds) ? set.durationSeconds : set.previousDurationSeconds;
-    const distanceM = usesDistance(type) && !isPositiveNumber(set.distanceM) && !isPositiveNumber(set.durationSeconds)
-      ? set.previousDistanceM
-      : set.distanceM;
+    const durationSeconds = isPositiveNumber(set.durationSeconds)
+      ? set.durationSeconds
+      : set.previousDurationSeconds;
+    const distanceM =
+      usesDistance(type) &&
+      !isPositiveNumber(set.distanceM) &&
+      !isPositiveNumber(set.durationSeconds)
+        ? set.previousDistanceM
+        : set.distanceM;
     return {
       ...set,
       ...(durationSeconds !== undefined ? { durationSeconds } : {}),
@@ -207,8 +230,8 @@ export function parseSetDuration(input: string): number | undefined {
   const trimmed = input.trim();
   if (!trimmed) return undefined;
   if (!/^\d+(:\d{1,2}){0,2}$/.test(trimmed)) return undefined;
-  const parts = trimmed.split(':').map((part) => parseInt(part, 10));
-  if (parts.slice(1).some((part) => part >= 60)) return undefined;
+  const parts = trimmed.split(':').map(part => parseInt(part, 10));
+  if (parts.slice(1).some(part => part >= 60)) return undefined;
   return parts.reduce((total, part) => total * 60 + part, 0);
 }
 
@@ -252,19 +275,28 @@ export interface TrackedSetValues {
 }
 
 /** One-line set summary for history, records and the previous column. */
-export function formatTrackedSet(set: TrackedSetValues, type: TrackingType, unit: WeightUnit): string {
+export function formatTrackedSet(
+  set: TrackedSetValues,
+  type: TrackingType,
+  unit: WeightUnit,
+): string {
   switch (type) {
     case 'bodyweight_reps':
       return `${set.reps} reps`;
     case 'weighted_bodyweight':
-      return set.weightKg > 0 ? `+${formatWeight(set.weightKg, unit)} × ${set.reps}` : `${set.reps} reps`;
+      return set.weightKg > 0
+        ? `+${formatWeight(set.weightKg, unit)} × ${set.reps}`
+        : `${set.reps} reps`;
     case 'assisted_bodyweight':
-      return set.weightKg > 0 ? `−${formatWeight(set.weightKg, unit)} × ${set.reps}` : `${set.reps} reps`;
+      return set.weightKg > 0
+        ? `−${formatWeight(set.weightKg, unit)} × ${set.reps}`
+        : `${set.reps} reps`;
     case 'duration':
       return formatSetDuration(set.durationSeconds ?? 0);
     case 'distance_duration': {
       const parts: string[] = [];
-      if (isPositiveNumber(set.distanceM)) parts.push(formatDistance(set.distanceM, distanceUnitFor(unit)));
+      if (isPositiveNumber(set.distanceM))
+        parts.push(formatDistance(set.distanceM, distanceUnitFor(unit)));
       if (isPositiveNumber(set.durationSeconds)) parts.push(formatSetDuration(set.durationSeconds));
       return parts.length > 0 ? parts.join(' · ') : '—';
     }
@@ -276,12 +308,20 @@ export function formatTrackedSet(set: TrackedSetValues, type: TrackingType, unit
 /** Whether a set or previous-session suggestion carries any logged numbers. */
 export function hasTrackedValues(set: TrackedSetValues | undefined): boolean {
   if (!set) return false;
-  return set.weightKg > 0 || set.reps > 0 || isPositiveNumber(set.durationSeconds) || isPositiveNumber(set.distanceM);
+  return (
+    set.weightKg > 0 ||
+    set.reps > 0 ||
+    isPositiveNumber(set.durationSeconds) ||
+    isPositiveNumber(set.distanceM)
+  );
 }
 
 // --- Previous-session suggestions -------------------------------------------------------------
 
-type PreviousTrackedFields = Pick<WorkoutSet, 'previousDurationSeconds' | 'previousDistanceM' | 'previousType' | 'previousRpe'>;
+type PreviousTrackedFields = Pick<
+  WorkoutSet,
+  'previousDurationSeconds' | 'previousDistanceM' | 'previousType' | 'previousRpe'
+>;
 
 /**
  * Replaces a set's previous time, distance, set type and RPE with a suggestion's. Sets logged as
@@ -290,7 +330,8 @@ type PreviousTrackedFields = Pick<WorkoutSet, 'previousDurationSeconds' | 'previ
  */
 export function withPreviousTracked<T extends PreviousTrackedFields>(
   set: T,
-  source: { durationSeconds?: number; distanceM?: number; type?: SetType; rpe?: number } | undefined,
+  source:
+    { durationSeconds?: number; distanceM?: number; type?: SetType; rpe?: number } | undefined,
 ): T {
   const {
     previousDurationSeconds: _duration,
@@ -301,7 +342,9 @@ export function withPreviousTracked<T extends PreviousTrackedFields>(
   } = set;
   return {
     ...rest,
-    ...(source?.durationSeconds !== undefined ? { previousDurationSeconds: source.durationSeconds } : {}),
+    ...(source?.durationSeconds !== undefined
+      ? { previousDurationSeconds: source.durationSeconds }
+      : {}),
     ...(source?.distanceM !== undefined ? { previousDistanceM: source.distanceM } : {}),
     ...(source?.type !== undefined ? { previousType: source.type } : {}),
     ...(source?.rpe !== undefined && source.rpe !== null ? { previousRpe: source.rpe } : {}),
@@ -328,7 +371,14 @@ export function setRecordValues(
   type: TrackingType,
   estimate1RM: (weightKg: number, reps: number) => number,
 ): SetRecordValues {
-  const values: SetRecordValues = { weight: 0, '1rm': 0, volume: 0, reps: 0, duration: 0, distance: 0 };
+  const values: SetRecordValues = {
+    weight: 0,
+    '1rm': 0,
+    volume: 0,
+    reps: 0,
+    duration: 0,
+    distance: 0,
+  };
   switch (type) {
     case 'bodyweight_reps':
       if (set.reps > 0) values.reps = set.reps;
@@ -365,15 +415,15 @@ export function formatBestTrackedSet(
 ): string | null {
   if (countsLoad(type) || sets.length === 0) return null;
   if (type === 'duration') {
-    const best = Math.max(0, ...sets.map((set) => set.durationSeconds ?? 0));
+    const best = Math.max(0, ...sets.map(set => set.durationSeconds ?? 0));
     return best > 0 ? formatSetDuration(best) : null;
   }
   if (type === 'distance_duration') {
-    const bestDistance = Math.max(0, ...sets.map((set) => set.distanceM ?? 0));
+    const bestDistance = Math.max(0, ...sets.map(set => set.distanceM ?? 0));
     if (bestDistance > 0) return formatDistance(bestDistance, distanceUnitFor(unit));
-    const bestDuration = Math.max(0, ...sets.map((set) => set.durationSeconds ?? 0));
+    const bestDuration = Math.max(0, ...sets.map(set => set.durationSeconds ?? 0));
     return bestDuration > 0 ? formatSetDuration(bestDuration) : null;
   }
-  const bestReps = Math.max(0, ...sets.map((set) => set.reps));
+  const bestReps = Math.max(0, ...sets.map(set => set.reps));
   return bestReps > 0 ? `${bestReps} reps` : null;
 }

@@ -1,18 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { X } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { createCustomExercise, updateCustomExercise } from '../database/db';
-import { customExerciseDefaults, CUSTOM_EQUIPMENT_OPTIONS, CUSTOM_MUSCLE_OPTIONS } from '../workout/exercise-options';
+import {
+  customExerciseDefaults,
+  CUSTOM_EQUIPMENT_OPTIONS,
+  CUSTOM_MUSCLE_OPTIONS,
+} from '../workout/exercise-options';
 import { reportError } from '../utils/errorReporting';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export type CustomExerciseSaveMode = 'created' | 'updated';
 
@@ -80,14 +78,12 @@ export const CustomExerciseModal: React.FC<Props> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>
@@ -118,9 +114,7 @@ export const CustomExerciseModal: React.FC<Props> = ({
                 style={[styles.pill, muscle === m && styles.pillActive]}
                 onPress={() => setMuscle(m)}
               >
-                <Text style={[styles.pillText, muscle === m && styles.pillTextActive]}>
-                  {m}
-                </Text>
+                <Text style={[styles.pillText, muscle === m && styles.pillTextActive]}>{m}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -141,10 +135,12 @@ export const CustomExerciseModal: React.FC<Props> = ({
             ))}
           </View>
 
-          <TouchableOpacity testID="custom-exercise-save" style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>
-              {exercise ? 'Save Changes' : 'Save Exercise'}
-            </Text>
+          <TouchableOpacity
+            testID="custom-exercise-save"
+            style={styles.saveButton}
+            onPress={handleSave}
+          >
+            <Text style={styles.saveButtonText}>{exercise ? 'Save Changes' : 'Save Exercise'}</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -2,7 +2,7 @@ import { DualExerciseStats, Exercise, ExerciseGymScope, ExerciseStats, Workout }
 import { calculate1RM } from '../utils/calculator';
 import { ExerciseHistoryEntry, collectExerciseHistory } from './exercise-history';
 import { getAllowedGymIds } from './gym-scope';
-import { countsLoad, getTrackingType } from './tracking';
+import { countsLoad } from './tracking';
 
 function emptyStats(): ExerciseStats {
   return {

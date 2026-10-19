@@ -12,38 +12,40 @@ const workoutFixture = (): Workout => ({
   durationSeconds: 3600,
   totalVolumeKg: 80 * 5 + 50 * 10,
   notes: 'Original notes',
-  exercises: [{
-    id: 'active-exercise-1',
-    exerciseId: 'exercise-1',
-    exercise: {
-      id: 'exercise-1',
-      name: 'Bench Press',
-      category: 'strength',
-      equipment: 'barbell',
-      primaryMuscles: ['chest'],
+  exercises: [
+    {
+      id: 'active-exercise-1',
+      exerciseId: 'exercise-1',
+      exercise: {
+        id: 'exercise-1',
+        name: 'Bench Press',
+        category: 'strength',
+        equipment: 'barbell',
+        primaryMuscles: ['chest'],
+      },
+      restTimerSeconds: 90,
+      sets: [
+        {
+          id: 'set-1',
+          setNumber: 1,
+          type: 'normal',
+          weightKg: 80,
+          reps: 5,
+          rpe: 8,
+          isCompleted: true,
+        },
+        {
+          id: 'set-2',
+          setNumber: 2,
+          type: 'drop',
+          weightKg: 50,
+          reps: 10,
+          rpe: 9,
+          isCompleted: true,
+        },
+      ],
     },
-    restTimerSeconds: 90,
-    sets: [
-      {
-        id: 'set-1',
-        setNumber: 1,
-        type: 'normal',
-        weightKg: 80,
-        reps: 5,
-        rpe: 8,
-        isCompleted: true,
-      },
-      {
-        id: 'set-2',
-        setNumber: 2,
-        type: 'drop',
-        weightKg: 50,
-        reps: 10,
-        rpe: 9,
-        isCompleted: true,
-      },
-    ],
-  }],
+  ],
 });
 
 describe('applyWorkoutEdits', () => {
@@ -76,10 +78,14 @@ describe('applyWorkoutEdits', () => {
   });
 
   it('rejects an empty gym reassignment', () => {
-    assert.throws(() => applyWorkoutEdits(workoutFixture(), {
-      gymId: '  ',
-      sets: [],
-    }), /Gym ID cannot be empty/);
+    assert.throws(
+      () =>
+        applyWorkoutEdits(workoutFixture(), {
+          gymId: '  ',
+          sets: [],
+        }),
+      /Gym ID cannot be empty/,
+    );
   });
 
   it('updates selected sets, keeps IDs and metadata, and recalculates volume', () => {
@@ -88,12 +94,14 @@ describe('applyWorkoutEdits', () => {
     const updated = applyWorkoutEdits(original, {
       name: 'Corrected Workout',
       notes: 'Updated notes',
-      sets: [{
-        exerciseId: 'exercise-1',
-        setId: 'set-1',
-        weightKg: 100,
-        reps: 4,
-      }],
+      sets: [
+        {
+          exerciseId: 'exercise-1',
+          setId: 'set-1',
+          weightKg: 100,
+          reps: 4,
+        },
+      ],
     });
 
     assert.equal(updated.id, original.id);
@@ -111,9 +119,10 @@ describe('applyWorkoutEdits', () => {
 
   it('rejects invalid weights, reps, and unknown set references', () => {
     const workout = workoutFixture();
-    const edit = (weightKg: number, reps: number) => applyWorkoutEdits(workout, {
-      sets: [{ exerciseId: 'exercise-1', setId: 'set-1', weightKg, reps }],
-    });
+    const edit = (weightKg: number, reps: number) =>
+      applyWorkoutEdits(workout, {
+        sets: [{ exerciseId: 'exercise-1', setId: 'set-1', weightKg, reps }],
+      });
 
     assert.throws(() => edit(-1, 5), /Weight cannot be negative/);
     assert.throws(() => edit(Number.NaN, 5), /Weight must be a valid number/);
@@ -121,9 +130,13 @@ describe('applyWorkoutEdits', () => {
     assert.throws(() => edit(80, 0), /Reps must be greater than 0/);
     assert.throws(() => edit(80, -2), /Reps must be greater than 0/);
     assert.throws(() => edit(80, 5.5), /Reps must be a whole number/);
-    assert.throws(() => applyWorkoutEdits(workout, {
-      sets: [{ exerciseId: 'exercise-1', setId: 'missing-set', weightKg: 80, reps: 5 }],
-    }), /Set exercise-1\/missing-set was not found/);
+    assert.throws(
+      () =>
+        applyWorkoutEdits(workout, {
+          sets: [{ exerciseId: 'exercise-1', setId: 'missing-set', weightKg: 80, reps: 5 }],
+        }),
+      /Set exercise-1\/missing-set was not found/,
+    );
   });
 
   it('updates duration, startTime and automatically adjusts endTime', () => {
@@ -158,7 +171,14 @@ describe('applyWorkoutEdits', () => {
           sets: [
             { id: 'sq-1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
             { id: 'sq-2', setNumber: 2, type: 'normal', weightKg: 110, reps: 5, isCompleted: true },
-            { id: 'sq-3', setNumber: 3, type: 'normal', weightKg: 120, reps: 3, isCompleted: false },
+            {
+              id: 'sq-3',
+              setNumber: 3,
+              type: 'normal',
+              weightKg: 120,
+              reps: 3,
+              isCompleted: false,
+            },
           ],
         },
       ],
@@ -172,9 +192,18 @@ describe('applyWorkoutEdits', () => {
 
   it('rejects invalid duration or malformed dates', () => {
     const workout = workoutFixture();
-    assert.throws(() => applyWorkoutEdits(workout, { durationSeconds: -10, sets: [] }), /Duration must be a positive number/);
-    assert.throws(() => applyWorkoutEdits(workout, { startTime: 'invalid-date', sets: [] }), /Start time must be a valid date/);
-    assert.throws(() => applyWorkoutEdits(workout, { endTime: 'invalid-date', sets: [] }), /End time must be a valid date/);
+    assert.throws(
+      () => applyWorkoutEdits(workout, { durationSeconds: -10, sets: [] }),
+      /Duration must be a positive number/,
+    );
+    assert.throws(
+      () => applyWorkoutEdits(workout, { startTime: 'invalid-date', sets: [] }),
+      /Start time must be a valid date/,
+    );
+    assert.throws(
+      () => applyWorkoutEdits(workout, { endTime: 'invalid-date', sets: [] }),
+      /End time must be a valid date/,
+    );
   });
 
   it('sanitizes NaN and invalid numbers on incomplete sets to safe values', () => {
@@ -194,8 +223,22 @@ describe('applyWorkoutEdits', () => {
           restTimerSeconds: 90,
           sets: [
             { id: 'set-1', setNumber: 1, type: 'normal', weightKg: 80, reps: 8, isCompleted: true },
-            { id: 'set-2', setNumber: 2, type: 'normal', weightKg: NaN, reps: NaN, isCompleted: false },
-            { id: 'set-3', setNumber: 3, type: 'normal', weightKg: -5, reps: 3.5, isCompleted: false },
+            {
+              id: 'set-2',
+              setNumber: 2,
+              type: 'normal',
+              weightKg: NaN,
+              reps: NaN,
+              isCompleted: false,
+            },
+            {
+              id: 'set-3',
+              setNumber: 3,
+              type: 'normal',
+              weightKg: -5,
+              reps: 3.5,
+              isCompleted: false,
+            },
           ],
         },
       ],
@@ -231,7 +274,14 @@ describe('applyWorkoutEdits', () => {
           exercise: exDef,
           restTimerSeconds: 90,
           sets: [
-            { id: 'b1-set-1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+            {
+              id: 'b1-set-1',
+              setNumber: 1,
+              type: 'normal',
+              weightKg: 100,
+              reps: 5,
+              isCompleted: true,
+            },
           ],
         },
         {
@@ -240,7 +290,14 @@ describe('applyWorkoutEdits', () => {
           exercise: exDef,
           restTimerSeconds: 120,
           sets: [
-            { id: 'b2-set-1', setNumber: 1, type: 'drop', weightKg: 60, reps: 12, isCompleted: true },
+            {
+              id: 'b2-set-1',
+              setNumber: 1,
+              type: 'drop',
+              weightKg: 60,
+              reps: 12,
+              isCompleted: true,
+            },
           ],
         },
       ],

@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal,
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   FlatList,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { AppTouchable } from './ui';
 import { Search, X, Plus, Check } from 'lucide-react-native';
 import { Exercise } from '../types';
 import { searchExercises } from '../database/db';
@@ -20,6 +20,7 @@ import { ExerciseFilterBar } from './ExerciseFilterBar';
 import { IconButton } from './ui';
 import { EXERCISE_LIST_PERFORMANCE_PROPS, ExerciseListRow } from './ExerciseListRow';
 import { useStableCallback } from '../hooks/useStableCallback';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -57,14 +58,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (visible) {
-      loadExercises();
-      setSelectedExercises(new Map());
-    }
-  }, [visible, debouncedQuery, selectedMuscle, selectedEquipment]);
-
-  const loadExercises = async () => {
+  const loadExercises = useCallback(async () => {
     try {
       const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
       setExercises(results);
@@ -73,7 +67,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
     } finally {
       setInitialLoading(false);
     }
-  };
+  }, [debouncedQuery, selectedMuscle, selectedEquipment]);
+
+  useEffect(() => {
+    if (visible) {
+      loadExercises();
+      setSelectedExercises(new Map());
+    }
+  }, [visible, loadExercises]);
 
   const handleItemPress = (item: Exercise) => {
     if (multiSelect) {
@@ -113,7 +114,9 @@ export const ExercisePickerModal: React.FC<Props> = ({
   const handleCustomSaved = async (saved: Exercise, mode: CustomExerciseSaveMode) => {
     await loadExercises();
     if (mode === 'updated') {
-      setSelectedExercises(prev => (prev.has(saved.id) ? new Map(prev).set(saved.id, saved) : prev));
+      setSelectedExercises(prev =>
+        prev.has(saved.id) ? new Map(prev).set(saved.id, saved) : prev,
+      );
     } else if (multiSelect) {
       setSelectedExercises(prev => new Map(prev).set(saved.id, saved));
     } else {
@@ -122,9 +125,12 @@ export const ExercisePickerModal: React.FC<Props> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
@@ -160,9 +166,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
             clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <AppTouchable
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <X size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           )}
         </View>
 
@@ -184,7 +195,10 @@ export const ExercisePickerModal: React.FC<Props> = ({
           <FlatList
             data={exercises}
             keyExtractor={item => item.id}
-            contentContainerStyle={[styles.listContent, multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 }]}
+            contentContainerStyle={[
+              styles.listContent,
+              multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 },
+            ]}
             keyboardShouldPersistTaps="handled"
             {...EXERCISE_LIST_PERFORMANCE_PROPS}
             extraData={selectedExercises}
@@ -200,16 +214,23 @@ export const ExercisePickerModal: React.FC<Props> = ({
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No exercises found.</Text>
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.createCustomBar}
                   onPress={handleOpenAddCustom}
                   accessibilityRole="button"
+                  accessibilityLabel={
+                    searchQuery.trim()
+                      ? `Create custom exercise ${searchQuery.trim()}`
+                      : 'Create custom exercise'
+                  }
                 >
                   <Plus size={16} color={colors.primaryLight} />
                   <Text style={styles.createCustomText}>
-                    {searchQuery.trim() ? `Create "${searchQuery.trim()}"` : 'Create Custom Exercise'}
+                    {searchQuery.trim()
+                      ? `Create "${searchQuery.trim()}"`
+                      : 'Create Custom Exercise'}
                   </Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             }
           />
@@ -218,7 +239,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
         {/* Floating Batch Add Bar */}
         {multiSelect && selectedExercises.size > 0 && (
           <View style={styles.floatingBarWrap}>
-            <TouchableOpacity
+            <AppTouchable
               style={styles.floatingAddBtn}
               onPress={() => {
                 if (onSelectMultiple) {
@@ -228,12 +249,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
                 }
                 onClose();
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${selectedExercises.size} selected ${selectedExercises.size === 1 ? 'exercise' : 'exercises'}`}
             >
               <Check size={20} color={colors.onPrimary} strokeWidth={2.5} />
               <Text style={styles.floatingAddBtnText}>
                 Add {selectedExercises.size} Exercise{selectedExercises.size > 1 ? 's' : ''}
               </Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
         )}
 

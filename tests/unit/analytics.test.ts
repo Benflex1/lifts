@@ -20,21 +20,23 @@ const makeExercise = (
     secondaryMuscles,
   },
   restTimerSeconds: 0,
-  sets: [{
-    id: `set-${id}`,
-    setNumber: 1,
-    type: 'normal',
-    weightKg: 10,
-    reps: 5,
-    isCompleted: completed,
-  }],
+  sets: [
+    {
+      id: `set-${id}`,
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 10,
+      reps: 5,
+      isCompleted: completed,
+    },
+  ],
 });
 
 const makeWorkout = (
   id: string,
   startTime: string,
   totalVolumeKg: number,
-  exercises: ActiveExercise[]
+  exercises: ActiveExercise[],
 ): Workout => ({
   id,
   name: id,
@@ -65,7 +67,7 @@ describe('analytics aggregators', () => {
         ['2026-08-24', 20],
         ['2026-08-31', 15],
         ['2026-09-07', 15],
-      ]
+      ],
     );
     assert.ok(points.some(point => point.key === '2026-08-17' && point.volumeKg === 0));
   });
@@ -104,10 +106,12 @@ describe('analytics aggregators', () => {
         makeExercise('bench', ['chest'], true, ['shoulders']),
       ]),
     ];
-    const catalog = [{
-      ...staleEmbeddedExercise.exercise,
-      secondaryMuscles: ['triceps'],
-    }];
+    const catalog = [
+      {
+        ...staleEmbeddedExercise.exercise,
+        secondaryMuscles: ['triceps'],
+      },
+    ];
 
     assert.deepEqual(buildMuscleFrequency(workouts, { exerciseCatalog: catalog }), [
       { muscle: 'chest', primaryCount: 2, secondaryCount: 0, count: 2 },

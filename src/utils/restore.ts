@@ -5,8 +5,16 @@ import { Exercise, ExerciseGymScope, Routine, Workout } from '../types';
 import { buildGymRestoreMapping, remapGymReferences } from './gym-restore';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { buildDefaultRoutines } from '../database/seedData';
-import { EXERCISE_TRACKING_TYPES_KEY, getTrackingType, mergeTrackingTypeOverrides } from '../workout/tracking';
-import { mergeDeloadWorkoutIds, mergeRoutinePrograms, ROUTINE_PROGRAMS_KEY } from '../workout/programs';
+import {
+  EXERCISE_TRACKING_TYPES_KEY,
+  getTrackingType,
+  mergeTrackingTypeOverrides,
+} from '../workout/tracking';
+import {
+  mergeDeloadWorkoutIds,
+  mergeRoutinePrograms,
+  ROUTINE_PROGRAMS_KEY,
+} from '../workout/programs';
 import { BODY_WEIGHT_LOG_KEY, mergeBodyWeightLogs } from '../workout/body-weight';
 
 export interface RestorePreview {
@@ -67,7 +75,8 @@ function isIdenticalScope(a: ExerciseGymScope, b: ExerciseGymScope): boolean {
   return (
     a.exerciseId === b.exerciseId &&
     a.scopeType === b.scopeType &&
-    JSON.stringify([...(a.linkedGymIds || [])].sort()) === JSON.stringify([...(b.linkedGymIds || [])].sort())
+    JSON.stringify([...(a.linkedGymIds || [])].sort()) ===
+      JSON.stringify([...(b.linkedGymIds || [])].sort())
   );
 }
 
@@ -143,21 +152,21 @@ function isIdenticalDraft(a: WorkoutDraft, b: WorkoutDraft): boolean {
 // Built-in routines the user never edited on this device are replaced by the
 // backup's version instead of being treated as a conflict.
 function isUntouchedSeedRoutine(routine: Routine): boolean {
-  const seed = buildDefaultRoutines().find((candidate) => candidate.id === routine.id);
+  const seed = buildDefaultRoutines().find(candidate => candidate.id === routine.id);
   return Boolean(seed && isIdenticalRoutine(seed, routine));
 }
 
 export async function computeRestorePlan(
   backup: BackupV3,
-  store: Store
+  store: Store,
 ): Promise<{ snapshotToMerge: DataSnapshot; preview: RestorePreview }> {
   const existing = await store.readSnapshot();
 
   const gymMapping = buildGymRestoreMapping(backup.gyms, existing.gyms);
   const remappedBackup = remapGymReferences(backup, gymMapping.idMap);
   const knownGymIds = new Set([
-    ...existing.gyms.map((gym) => gym.id),
-    ...gymMapping.gymsToInsert.map((gym) => gym.id),
+    ...existing.gyms.map(gym => gym.id),
+    ...gymMapping.gymsToInsert.map(gym => gym.id),
   ]);
   for (const workout of remappedBackup.workouts) {
     if (!knownGymIds.has(workout.gymId)) {
@@ -170,7 +179,9 @@ export async function computeRestorePlan(
     }
   }
 
-  const existingScopes = new Map(existing.exerciseGymScopes.map((scope) => [scope.exerciseId, scope]));
+  const existingScopes = new Map(
+    existing.exerciseGymScopes.map(scope => [scope.exerciseId, scope]),
+  );
   const scopesToInsert: ExerciseGymScope[] = [];
   for (const scope of remappedBackup.exerciseGymScopes) {
     validateExerciseGymScope(scope, knownGymIds);
@@ -184,10 +195,10 @@ export async function computeRestorePlan(
     }
   }
 
-  const existingWorkouts = new Map(existing.workouts.map((w) => [w.id, w]));
-  const existingRoutines = new Map(existing.routines.map((r) => [r.id, r]));
-  const existingExercises = new Map(existing.exercises.map((e) => [e.id, e]));
-  const existingDrafts = new Map(existing.drafts.map((d) => [d.workout.id, d]));
+  const existingWorkouts = new Map(existing.workouts.map(w => [w.id, w]));
+  const existingRoutines = new Map(existing.routines.map(r => [r.id, r]));
+  const existingExercises = new Map(existing.exercises.map(e => [e.id, e]));
+  const existingDrafts = new Map(existing.drafts.map(d => [d.workout.id, d]));
 
   const workoutsToInsert: Workout[] = [];
   let skippedWorkoutsCount = 0;
@@ -198,7 +209,7 @@ export async function computeRestorePlan(
         skippedWorkoutsCount++;
       } else {
         throw new Error(
-          `Conflicting workout ID: ${w.id} ("${w.name}") already exists with different data`
+          `Conflicting workout ID: ${w.id} ("${w.name}") already exists with different data`,
         );
       }
     } else {
@@ -217,7 +228,7 @@ export async function computeRestorePlan(
         routinesToInsert.push(r);
       } else {
         throw new Error(
-          `Conflicting routine ID: ${r.id} ("${r.name}") already exists with different data`
+          `Conflicting routine ID: ${r.id} ("${r.name}") already exists with different data`,
         );
       }
     } else {
@@ -231,7 +242,7 @@ export async function computeRestorePlan(
     if (exE) {
       if (!isIdenticalExercise(ex, exE)) {
         throw new Error(
-          `Conflicting exercise ID: ${ex.id} ("${ex.name}") already exists with different data`
+          `Conflicting exercise ID: ${ex.id} ("${ex.name}") already exists with different data`,
         );
       }
     } else {
@@ -245,7 +256,7 @@ export async function computeRestorePlan(
     if (exD) {
       if (!isIdenticalDraft(d, exD)) {
         throw new Error(
-          `Conflicting draft ID: ${d.workout.id} ("${d.workout.name}") already exists with different data`
+          `Conflicting draft ID: ${d.workout.id} ("${d.workout.name}") already exists with different data`,
         );
       }
     } else {
@@ -263,13 +274,14 @@ export async function computeRestorePlan(
       newSettingsCount++;
     } else if (isMergedOnRestore(k)) {
       // Per-exercise choices, per-folder rotations and per-day weigh-ins merge, with this device's winning.
-      const merged = k === EXERCISE_TRACKING_TYPES_KEY
-        ? mergeTrackingTypeOverrides(existing.settings[k], v)
-        : k === ROUTINE_PROGRAMS_KEY
-          ? mergeRoutinePrograms(existing.settings[k], v)
-          : k === BODY_WEIGHT_LOG_KEY
-            ? mergeBodyWeightLogs(existing.settings[k], v)
-            : mergeDeloadWorkoutIds(existing.settings[k], v);
+      const merged =
+        k === EXERCISE_TRACKING_TYPES_KEY
+          ? mergeTrackingTypeOverrides(existing.settings[k], v)
+          : k === ROUTINE_PROGRAMS_KEY
+            ? mergeRoutinePrograms(existing.settings[k], v)
+            : k === BODY_WEIGHT_LOG_KEY
+              ? mergeBodyWeightLogs(existing.settings[k], v)
+              : mergeDeloadWorkoutIds(existing.settings[k], v);
       if (merged !== existing.settings[k]) {
         settingsToInsert[k] = merged;
         newSettingsCount++;
@@ -295,7 +307,7 @@ export async function computeRestorePlan(
     scopeOverridesCount: scopesToInsert.length,
     workoutsCount: workoutsToInsert.length,
     routinesCount: routinesToInsert.length,
-    customExercisesCount: exercisesToInsert.filter((e) => e.isCustom).length,
+    customExercisesCount: exercisesToInsert.filter(e => e.isCustom).length,
     draftsCount: draftsToInsert.length,
     newSettingsCount,
     skippedWorkoutsCount,

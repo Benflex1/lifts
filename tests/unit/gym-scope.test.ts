@@ -26,8 +26,11 @@ describe('multi-gym scope policy', () => {
 
   it('lets an explicit override replace the equipment default', () => {
     assert.equal(
-      resolveExerciseScope(exercise('machine'), { exerciseId: 'exercise-machine', scopeType: 'global' }),
-      'global'
+      resolveExerciseScope(exercise('machine'), {
+        exerciseId: 'exercise-machine',
+        scopeType: 'global',
+      }),
+      'global',
     );
   });
 
@@ -36,38 +39,66 @@ describe('multi-gym scope policy', () => {
     assert.deepEqual(
       getAllowedGymIds(
         exercise('machine'),
-        { exerciseId: 'exercise-machine', scopeType: 'linked_group', linkedGymIds: ['gym-a', 'gym-b'] },
-        'gym-default'
+        {
+          exerciseId: 'exercise-machine',
+          scopeType: 'linked_group',
+          linkedGymIds: ['gym-a', 'gym-b'],
+        },
+        'gym-default',
       ),
-      new Set(['gym-a', 'gym-b'])
+      new Set(['gym-a', 'gym-b']),
     );
   });
 
   it('rejects linked scopes with missing, duplicate, or fewer-than-two gym IDs', () => {
     const known = new Set(['gym-a', 'gym-b']);
-    assert.throws(() => validateExerciseGymScope(
-      { exerciseId: 'exercise-machine', scopeType: 'linked_group', linkedGymIds: ['gym-a'] },
-      known
-    ), /at least two/);
-    assert.throws(() => validateExerciseGymScope(
-      { exerciseId: 'exercise-machine', scopeType: 'linked_group', linkedGymIds: ['gym-a', 'gym-a'] },
-      known
-    ), /duplicate/);
-    assert.throws(() => validateExerciseGymScope(
-      { exerciseId: 'exercise-machine', scopeType: 'linked_group', linkedGymIds: ['gym-a', 'gym-c'] },
-      known
-    ), /unknown gym/);
+    assert.throws(
+      () =>
+        validateExerciseGymScope(
+          { exerciseId: 'exercise-machine', scopeType: 'linked_group', linkedGymIds: ['gym-a'] },
+          known,
+        ),
+      /at least two/,
+    );
+    assert.throws(
+      () =>
+        validateExerciseGymScope(
+          {
+            exerciseId: 'exercise-machine',
+            scopeType: 'linked_group',
+            linkedGymIds: ['gym-a', 'gym-a'],
+          },
+          known,
+        ),
+      /duplicate/,
+    );
+    assert.throws(
+      () =>
+        validateExerciseGymScope(
+          {
+            exerciseId: 'exercise-machine',
+            scopeType: 'linked_group',
+            linkedGymIds: ['gym-a', 'gym-c'],
+          },
+          known,
+        ),
+      /unknown gym/,
+    );
   });
 
   it('rejects linked IDs on non-linked scopes and empty exercise IDs', () => {
     const known = new Set(['gym-a', 'gym-b']);
-    assert.throws(() => validateExerciseGymScope(
-      { exerciseId: 'exercise-machine', scopeType: 'global', linkedGymIds: ['gym-a', 'gym-b'] },
-      known
-    ), /only valid/);
-    assert.throws(() => validateExerciseGymScope(
-      { exerciseId: '  ', scopeType: 'gym_specific' },
-      known
-    ), /empty/);
+    assert.throws(
+      () =>
+        validateExerciseGymScope(
+          { exerciseId: 'exercise-machine', scopeType: 'global', linkedGymIds: ['gym-a', 'gym-b'] },
+          known,
+        ),
+      /only valid/,
+    );
+    assert.throws(
+      () => validateExerciseGymScope({ exerciseId: '  ', scopeType: 'gym_specific' }, known),
+      /empty/,
+    );
   });
 });

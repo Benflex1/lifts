@@ -11,20 +11,14 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
-import {
-  X,
-  ArrowUp,
-  ArrowDown,
-  Dumbbell,
-  Check,
-  GripVertical,
-} from 'lucide-react-native';
+import { X, ArrowUp, ArrowDown, Dumbbell, Check, GripVertical } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveExercise } from '../types';
 import { ExerciseVisual } from './MemoizedExerciseVisual';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface ExerciseReorderModalProps {
   visible: boolean;
@@ -115,10 +109,10 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
         }).start();
       },
       onPanResponderTerminationRequest: () => true,
-    })
+    }),
   ).current;
 
-  const completedCount = item.sets.filter((s) => s.isCompleted).length;
+  const completedCount = item.sets.filter(s => s.isCompleted).length;
   const totalSets = item.sets.length;
 
   return (
@@ -127,10 +121,7 @@ const ReorderRow: React.FC<ReorderRowProps> = ({
         styles.exerciseRow,
         isDragging && styles.exerciseRowDragging,
         {
-          transform: [
-            { translateY: dragY },
-            { scale: isDragging ? 1.03 : 1 },
-          ],
+          transform: [{ translateY: dragY }, { scale: isDragging ? 1.03 : 1 }],
         },
       ]}
     >
@@ -219,7 +210,7 @@ export const ExerciseReorderModal: React.FC<ExerciseReorderModalProps> = ({
     if (onMoveExerciseToIndex) {
       onMoveExerciseToIndex(activeExerciseId, targetIndex);
     } else {
-      const currentIndex = exercises.findIndex((e) => e.id === activeExerciseId);
+      const currentIndex = exercises.findIndex(e => e.id === activeExerciseId);
       if (currentIndex >= 0 && currentIndex !== targetIndex) {
         const diff = targetIndex - currentIndex;
         handleMove(activeExerciseId, diff > 0 ? 1 : -1);
@@ -227,22 +218,18 @@ export const ExerciseReorderModal: React.FC<ExerciseReorderModalProps> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
+    <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.modalOverlay}>
         <View style={[styles.sheetContainer, { paddingBottom: Math.max(20, insets.bottom + 12) }]}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.title}>Reorder Exercises</Text>
-              <Text style={styles.subtitle}>
-                Tap arrows or drag the handle to change order
-              </Text>
+              <Text style={styles.subtitle}>Tap arrows or drag the handle to change order</Text>
             </View>
             <TouchableOpacity
               onPress={onClose}

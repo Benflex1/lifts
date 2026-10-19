@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Text, View } from 'react-native';
+import { AppTouchable } from '../../components/ui';
 import { ArrowDown, ArrowUp, Calculator, Trash2, Trophy, X } from 'lucide-react-native';
 import { ActiveExercise, SetType, WorkoutSet } from '../../types';
 import { WeightUnit, kgToDisplay } from '../../utils/units';
@@ -8,6 +9,7 @@ import { WorkoutPRSummary, formatPRDescription } from '../../workout/pr';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
 import { computeDropSetSuggestions, findPreviousWorkingSet } from './activeWorkoutLogic';
+import { useModalAccessibility } from '../../hooks/useModalAccessibility';
 
 export interface SetOptionsTarget {
   activeExerciseId: string;
@@ -53,12 +55,15 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
 }) => {
   const setPR = target ? prSummary?.setPRs.get(target.set.id) : undefined;
 
-  const modalExercise = exercises.find((e) => e.id === target?.activeExerciseId);
-  const currentSetIndex = modalExercise?.sets.findIndex((s) => s.id === target?.set.id) ?? -1;
+  const modalExercise = exercises.find(e => e.id === target?.activeExerciseId);
+  const currentSetIndex = modalExercise?.sets.findIndex(s => s.id === target?.set.id) ?? -1;
   const totalSets = modalExercise?.sets.length ?? 0;
   const isFirstSet = currentSetIndex <= 0;
   const isLastSet = currentSetIndex >= totalSets - 1;
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(target !== null);
   return (
     <Modal
       visible={target !== null}
@@ -66,24 +71,22 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalBackdrop}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.modalBackdrop}>
         <View style={[styles.setOptionsSheet, { paddingBottom: Math.max(20, bottomInset + 12) }]}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={styles.modalHeaderTitle}>
-                Set {target?.set.setNumber} Details
-              </Text>
-              <Text style={styles.modalHeaderSubtitle}>
-                {target?.exerciseName}
-              </Text>
+              <Text style={styles.modalHeaderTitle}>Set {target?.set.setNumber} Details</Text>
+              <Text style={styles.modalHeaderSubtitle}>{target?.exerciseName}</Text>
             </View>
-            <TouchableOpacity
+            <AppTouchable
               onPress={onClose}
               style={styles.modalCloseBtn}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close set options"
             >
               <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           {/* PR Achievement Banner */}
@@ -95,8 +98,8 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                   {setPR.primary?.rank === 1
                     ? 'PERSONAL RECORD (1ST BEST)'
                     : setPR.primary?.rank === 2
-                    ? 'SILVER RECORD (2ND BEST)'
-                    : 'BRONZE RECORD (3RD BEST)'}
+                      ? 'SILVER RECORD (2ND BEST)'
+                      : 'BRONZE RECORD (3RD BEST)'}
                 </Text>
               </View>
               {setPR.achievements.map((ach, idx) => (
@@ -111,20 +114,21 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
           <View style={styles.optionsSection}>
             <Text style={styles.sectionLabel}>SET TYPE</Text>
             <View style={styles.typeChipsRow}>
-              {SET_TYPE_CHIPS.map((t) => {
+              {SET_TYPE_CHIPS.map(t => {
                 const isSelected = target?.set.type === t.type;
                 return (
-                  <TouchableOpacity
+                  <AppTouchable
                     key={t.type}
                     style={[styles.typeChip, isSelected && styles.typeChipActive]}
                     onPress={() => onSelectType(t.type)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set type ${t.label}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
-                    <Text
-                      style={[styles.typeChipText, isSelected && styles.typeChipTextActive]}
-                    >
+                    <Text style={[styles.typeChipText, isSelected && styles.typeChipTextActive]}>
                       {t.label}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 );
               })}
             </View>
@@ -132,10 +136,11 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
             {/* Quick Drop Set Load Reduction Helper */}
             {(() => {
               if (!target || target.set.type !== 'drop') return null;
-              const dropExercise = exercises.find((e) => e.id === target.activeExerciseId);
-              const setIdx = dropExercise?.sets.findIndex((s) => s.id === target.set.id) ?? -1;
+              const dropExercise = exercises.find(e => e.id === target.activeExerciseId);
+              const setIdx = dropExercise?.sets.findIndex(s => s.id === target.set.id) ?? -1;
               const prevWorkingSet = findPreviousWorkingSet(dropExercise?.sets ?? [], setIdx);
-              if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0) return null;
+              if (!prevWorkingSet || !prevWorkingSet.weightKg || prevWorkingSet.weightKg <= 0)
+                return null;
 
               const prevDisplay = kgToDisplay(prevWorkingSet.weightKg, unit);
               const dropReductions = computeDropSetSuggestions(prevWorkingSet, unit);
@@ -147,21 +152,29 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                     Based on Set #{prevWorkingSet.setNumber} ({prevDisplay} {unit}):
                   </Text>
                   <View style={styles.dropChipsRow}>
-                    {dropReductions.map((r) => {
+                    {dropReductions.map(r => {
                       const isCurrent = Math.abs(target.set.weightKg - r.kg) < 0.05;
                       return (
-                        <TouchableOpacity
+                        <AppTouchable
                           key={r.pct}
                           style={[styles.dropChip, isCurrent && styles.dropChipActive]}
                           onPress={() => onSetDropWeight(r.kg)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Drop weight minus ${r.pct} percent`}
+                          accessibilityState={{ selected: isCurrent }}
                         >
                           <Text style={[styles.dropChipPct, isCurrent && styles.dropChipPctActive]}>
                             -{r.pct}%
                           </Text>
-                          <Text style={[styles.dropChipWeight, isCurrent && styles.dropChipWeightActive]}>
+                          <Text
+                            style={[
+                              styles.dropChipWeight,
+                              isCurrent && styles.dropChipWeightActive,
+                            ]}
+                          >
                             {kgToDisplay(r.kg, unit)} {unit}
                           </Text>
-                        </TouchableOpacity>
+                        </AppTouchable>
                       );
                     })}
                   </View>
@@ -178,21 +191,21 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
             </View>
 
             <View style={styles.rpeChipsGrid}>
-              {RPE_CHIPS.map((val) => {
-                const isSelected =
-                  val === null
-                    ? target?.set.rpe == null
-                    : target?.set.rpe === val;
+              {RPE_CHIPS.map(val => {
+                const isSelected = val === null ? target?.set.rpe == null : target?.set.rpe === val;
                 return (
-                  <TouchableOpacity
+                  <AppTouchable
                     key={val === null ? 'none' : val.toString()}
                     style={[styles.rpeChip, isSelected && styles.rpeChipActive]}
                     onPress={() => onSelectRpe(val)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`RPE ${val === null ? 'none' : val}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <Text style={[styles.rpeChipText, isSelected && styles.rpeChipTextActive]}>
                       {val === null ? 'None' : val.toString()}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 );
               })}
             </View>
@@ -215,7 +228,7 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
               </Text>
             </View>
             <View style={styles.setOptionsActions}>
-              <TouchableOpacity
+              <AppTouchable
                 style={[styles.shortcutBtn, isFirstSet && styles.btnDisabled]}
                 disabled={isFirstSet}
                 onPress={() => {
@@ -227,12 +240,17 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                 accessibilityLabel="Move set up"
               >
                 <ArrowUp size={16} color={isFirstSet ? colors.textFaint : colors.purpleLight} />
-                <Text style={[styles.shortcutBtnText, { color: isFirstSet ? colors.textFaint : colors.purpleLight }]}>
+                <Text
+                  style={[
+                    styles.shortcutBtnText,
+                    { color: isFirstSet ? colors.textFaint : colors.purpleLight },
+                  ]}
+                >
                   Move Up {currentSetIndex > 0 ? `(to #${currentSetIndex})` : ''}
                 </Text>
-              </TouchableOpacity>
+              </AppTouchable>
 
-              <TouchableOpacity
+              <AppTouchable
                 style={[styles.shortcutBtn, isLastSet && styles.btnDisabled]}
                 disabled={isLastSet}
                 onPress={() => {
@@ -244,46 +262,60 @@ export const SetOptionsModal: React.FC<SetOptionsModalProps> = ({
                 accessibilityLabel="Move set down"
               >
                 <ArrowDown size={16} color={isLastSet ? colors.textFaint : colors.purpleLight} />
-                <Text style={[styles.shortcutBtnText, { color: isLastSet ? colors.textFaint : colors.purpleLight }]}>
-                  Move Down {currentSetIndex >= 0 && currentSetIndex < totalSets - 1 ? `(to #${currentSetIndex + 2})` : ''}
+                <Text
+                  style={[
+                    styles.shortcutBtnText,
+                    { color: isLastSet ? colors.textFaint : colors.purpleLight },
+                  ]}
+                >
+                  Move Down{' '}
+                  {currentSetIndex >= 0 && currentSetIndex < totalSets - 1
+                    ? `(to #${currentSetIndex + 2})`
+                    : ''}
                 </Text>
-              </TouchableOpacity>
+              </AppTouchable>
             </View>
           </View>
 
           {/* Quick Action Shortcuts: Tools */}
           <View style={styles.setOptionsActions}>
-            <TouchableOpacity
+            <AppTouchable
               style={styles.shortcutBtn}
               onPress={() => {
                 if (target) {
                   onOpenPlateCalculator();
                 }
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Open plate calculator"
             >
               <Calculator size={16} color={colors.primary} />
               <Text style={styles.shortcutBtnText}>Plate Calculator</Text>
-            </TouchableOpacity>
+            </AppTouchable>
 
-            <TouchableOpacity
+            <AppTouchable
               style={styles.shortcutDeleteBtn}
               onPress={() => {
                 if (target) {
                   onDeleteSet();
                 }
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Delete set"
             >
               <Trash2 size={16} color={colors.danger} />
               <Text style={styles.shortcutDeleteText}>Delete Set</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.doneModalBtn}
             onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Done"
           >
             <Text style={styles.doneModalBtnText}>Done</Text>
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
     </Modal>

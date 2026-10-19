@@ -11,8 +11,9 @@ import {
 import { X, Check, Layers, Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
-import { getSupersetMetadata, SUPERSET_PALETTE } from '../workout/supersets';
+import { getSupersetMetadata } from '../workout/supersets';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface SupersetModalExerciseItem {
   id: string;
@@ -45,8 +46,8 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
 
   // Current exercise being edited
   const currentEx = useMemo(
-    () => exercises.find((e) => e.id === currentExerciseId),
-    [exercises, currentExerciseId]
+    () => exercises.find(e => e.id === currentExerciseId),
+    [exercises, currentExerciseId],
   );
 
   const isInExistingSuperset = Boolean(currentEx?.supersetId);
@@ -65,8 +66,8 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
     if (currentEx?.supersetId) {
       // Pre-select all members of this exercise's superset group
       const existingMembers = exercises
-        .filter((e) => e.supersetId === currentEx.supersetId)
-        .map((e) => e.id);
+        .filter(e => e.supersetId === currentEx.supersetId)
+        .map(e => e.id);
       setSelectedIds(new Set(existingMembers));
     } else {
       // Pre-select the current exercise
@@ -78,7 +79,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
     if (Platform.OS !== 'web') {
       bestEffortHaptic(() => Haptics.selectionAsync());
     }
-    setSelectedIds((prev) => {
+    setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -110,14 +111,12 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
   const canSave = selectedIds.size >= 2;
   const isGiant = selectedIds.size >= 3;
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.card}>
           {/* Header */}
           <View style={styles.header}>
@@ -125,7 +124,9 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
               <View
                 style={[
                   styles.iconWrap,
-                  { backgroundColor: currentGroupMeta ? `${currentGroupMeta.color}22` : '#8B5CF622' },
+                  {
+                    backgroundColor: currentGroupMeta ? `${currentGroupMeta.color}22` : '#8B5CF622',
+                  },
                 ]}
               >
                 <Layers
@@ -139,9 +140,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
                     ? currentGroupMeta?.label || 'Edit Superset'
                     : 'Create Superset'}
                 </Text>
-                <Text style={styles.subtitle}>
-                  Select exercises to perform back-to-back
-                </Text>
+                <Text style={styles.subtitle}>Select exercises to perform back-to-back</Text>
               </View>
             </View>
             <TouchableOpacity
@@ -156,21 +155,20 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
           </View>
 
           {/* Exercise List */}
-          <ScrollView style={styles.exerciseList} contentContainerStyle={styles.exerciseListContent}>
-            {exercises.map((item) => {
+          <ScrollView
+            style={styles.exerciseList}
+            contentContainerStyle={styles.exerciseListContent}
+          >
+            {exercises.map(item => {
               const isSelected = selectedIds.has(item.id);
               const otherMeta = supersetMetaMap.get(item.id);
               const isOtherGroup =
-                otherMeta &&
-                (!currentEx?.supersetId || otherMeta.groupId !== currentEx.supersetId);
+                otherMeta && (!currentEx?.supersetId || otherMeta.groupId !== currentEx.supersetId);
 
               return (
                 <TouchableOpacity
                   key={item.id}
-                  style={[
-                    styles.exerciseRow,
-                    isSelected && styles.exerciseRowSelected,
-                  ]}
+                  style={[styles.exerciseRow, isSelected && styles.exerciseRowSelected]}
                   onPress={() => toggleExercise(item.id)}
                   activeOpacity={0.7}
                   accessibilityRole="checkbox"
@@ -178,12 +176,7 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
                   accessibilityLabel={`${item.name}, ${isSelected ? 'selected' : 'not selected'}`}
                 >
                   {/* Checkbox */}
-                  <View
-                    style={[
-                      styles.checkbox,
-                      isSelected && styles.checkboxSelected,
-                    ]}
-                  >
+                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
                     {isSelected && <Check size={13} color={colors.text} strokeWidth={3} />}
                   </View>
 
@@ -200,7 +193,10 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
                       )}
                       {Boolean(item.targetSets || item.setsCount) && (
                         <Text style={styles.exerciseSetsText}>
-                          · {item.targetSets ? `${item.targetSets} sets planned` : `${item.setsCount} sets`}
+                          ·{' '}
+                          {item.targetSets
+                            ? `${item.targetSets} sets planned`
+                            : `${item.setsCount} sets`}
                         </Text>
                       )}
                     </View>
@@ -225,8 +221,8 @@ export const SupersetModal: React.FC<SupersetModalProps> = ({
               {selectedIds.size === 0
                 ? 'Tap exercises to include them in the superset'
                 : selectedIds.size === 1
-                ? 'Select at least 1 more exercise to form a superset'
-                : `${isGiant ? 'Giant Set' : 'Superset'} with ${selectedIds.size} exercises`}
+                  ? 'Select at least 1 more exercise to form a superset'
+                  : `${isGiant ? 'Giant Set' : 'Superset'} with ${selectedIds.size} exercises`}
             </Text>
           </View>
 

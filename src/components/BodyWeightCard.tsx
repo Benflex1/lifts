@@ -57,14 +57,14 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
 
   const chart = useMemo(() => {
     if (visible.length === 0) return null;
-    const weights = visible.map((entry) => entry.weightKg);
+    const weights = visible.map(entry => entry.weightKg);
     const low = Math.min(...weights);
     const high = Math.max(...weights);
     // The line is the 7-day trend, drawn from the whole log so the range's first days are averaged too.
-    const trendByDate = new Map(bodyWeightTrend(entries).map((entry) => [entry.date, entry]));
-    const trendEntries = visible.map((entry) => trendByDate.get(entry.date) ?? entry);
+    const trendByDate = new Map(bodyWeightTrend(entries).map(entry => [entry.date, entry]));
+    const trendEntries = visible.map(entry => trendByDate.get(entry.date) ?? entry);
     // Scale to the trend as well, since days before the range can pull it outside the weigh-ins.
-    const trendWeights = trendEntries.map((entry) => entry.weightKg);
+    const trendWeights = trendEntries.map(entry => entry.weightKg);
     const scaleLow = Math.min(low, ...trendWeights);
     const scaleHigh = Math.max(high, ...trendWeights);
     // Keep a little air above and below, and never zoom so far in that 0.2 kg looks like a cliff.
@@ -75,15 +75,25 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
     const last = fromDateKey(visible[visible.length - 1].date).getTime();
     const span = Math.max(1, last - first);
     const place = (entry: BodyWeightEntry) => ({
-      x: visible.length === 1 ? width / 2 : ((fromDateKey(entry.date).getTime() - first) / span) * (width - 8) + 4,
-      y: CHART_PAD_Y + (1 - (entry.weightKg - minY) / (maxY - minY)) * (CHART_HEIGHT - CHART_PAD_Y * 2),
+      x:
+        visible.length === 1
+          ? width / 2
+          : ((fromDateKey(entry.date).getTime() - first) / span) * (width - 8) + 4,
+      y:
+        CHART_PAD_Y +
+        (1 - (entry.weightKg - minY) / (maxY - minY)) * (CHART_HEIGHT - CHART_PAD_Y * 2),
     });
     const points = visible.map(place);
     const trend = trendEntries.map(place);
-    const line = trend.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
-    const area = trend.length > 1
-      ? `${line} L${trend[trend.length - 1].x.toFixed(1)},${CHART_HEIGHT} L${trend[0].x.toFixed(1)},${CHART_HEIGHT} Z`
-      : '';
+    const line = trend
+      .map(
+        (point, index) => `${index === 0 ? 'M' : 'L'}${point.x.toFixed(1)},${point.y.toFixed(1)}`,
+      )
+      .join(' ');
+    const area =
+      trend.length > 1
+        ? `${line} L${trend[trend.length - 1].x.toFixed(1)},${CHART_HEIGHT} L${trend[0].x.toFixed(1)},${CHART_HEIGHT} Z`
+        : '';
     return { points, trend, line, area, low, high };
   }, [entries, visible, width]);
 
@@ -93,7 +103,8 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
   };
 
   const change = summary?.change;
-  const TrendIcon = !change || Math.abs(change.kg) < 0.05 ? Minus : change.kg > 0 ? TrendingUp : TrendingDown;
+  const TrendIcon =
+    !change || Math.abs(change.kg) < 0.05 ? Minus : change.kg > 0 ? TrendingUp : TrendingDown;
 
   return (
     <View style={styles.card}>
@@ -117,7 +128,9 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
       {!summary ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No weigh-ins yet</Text>
-          <Text style={styles.emptyText}>Log your weight now and then, and the trend shows up here.</Text>
+          <Text style={styles.emptyText}>
+            Log your weight now and then, and the trend shows up here.
+          </Text>
         </View>
       ) : (
         <>
@@ -128,20 +141,27 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
               <View style={styles.changePill}>
                 <TrendIcon size={12} color={colors.primaryLight} />
                 <Text style={styles.changeText}>
-                  {formatChange(change.kg, unit)} · {change.days} {change.days === 1 ? 'day' : 'days'}
+                  {formatChange(change.kg, unit)} · {change.days}{' '}
+                  {change.days === 1 ? 'day' : 'days'}
                 </Text>
               </View>
             )}
           </View>
           <Text style={styles.meta}>
-            {formatWeighInDate(summary.latest.date)} · 7-day average {formatWeight(summary.weekAverageKg, unit)}
+            {formatWeighInDate(summary.latest.date)} · 7-day average{' '}
+            {formatWeight(summary.weekAverageKg, unit)}
           </Text>
 
           {entries.length < 2 ? (
             <Text style={styles.hint}>Log a few more weigh-ins to see your trend.</Text>
           ) : (
             <>
-              <SegmentedControl options={RANGES} value={range} onChange={setRange} style={styles.ranges} />
+              <SegmentedControl
+                options={RANGES}
+                value={range}
+                onChange={setRange}
+                style={styles.ranges}
+              />
 
               <View style={styles.chart} onLayout={onLayout}>
                 {chart ? (
@@ -153,7 +173,14 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
                           <Stop offset="1" stopColor={colors.primary} stopOpacity={0} />
                         </LinearGradient>
                       </Defs>
-                      <Line x1={0} x2={width} y1={CHART_PAD_Y} y2={CHART_PAD_Y} stroke={colors.border} strokeDasharray="3 5" />
+                      <Line
+                        x1={0}
+                        x2={width}
+                        y1={CHART_PAD_Y}
+                        y2={CHART_PAD_Y}
+                        stroke={colors.border}
+                        strokeDasharray="3 5"
+                      />
                       <Line
                         x1={0}
                         x2={width}
@@ -174,7 +201,14 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
                         />
                       ))}
                       {chart.trend.length > 1 && (
-                        <Path d={chart.line} stroke={colors.primary} strokeWidth={2.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+                        <Path
+                          d={chart.line}
+                          stroke={colors.primary}
+                          strokeWidth={2.5}
+                          fill="none"
+                          strokeLinejoin="round"
+                          strokeLinecap="round"
+                        />
                       )}
                       <Circle
                         cx={chart.trend[chart.trend.length - 1].x}
@@ -192,7 +226,9 @@ export function BodyWeightCard({ entries, unit, onLog }: BodyWeightCardProps) {
                           ? formatWeight(chart.low, unit)
                           : `${formatWeight(chart.low, unit)} – ${formatWeight(chart.high, unit)}`}
                       </Text>
-                      <Text style={styles.axisText}>{shortDate(visible[visible.length - 1].date)}</Text>
+                      <Text style={styles.axisText}>
+                        {shortDate(visible[visible.length - 1].date)}
+                      </Text>
                     </View>
                   </>
                 ) : (

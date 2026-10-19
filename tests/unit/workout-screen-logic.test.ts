@@ -66,14 +66,18 @@ test('filterRoutinesByFolder passes everything through for All and narrows other
     makeRoutine('r4', 'D'),
   ];
 
-  assert.deepEqual(filterRoutinesByFolder(routines, 'All').map(r => r.id), [
-    'r1',
-    'r2',
-    'r3',
-    'r4',
-  ]);
-  assert.deepEqual(filterRoutinesByFolder(routines, 'Push').map(r => r.id), ['r1', 'r3']);
-  assert.deepEqual(filterRoutinesByFolder(routines, 'Legs').map(r => r.id), []);
+  assert.deepEqual(
+    filterRoutinesByFolder(routines, 'All').map(r => r.id),
+    ['r1', 'r2', 'r3', 'r4'],
+  );
+  assert.deepEqual(
+    filterRoutinesByFolder(routines, 'Push').map(r => r.id),
+    ['r1', 'r3'],
+  );
+  assert.deepEqual(
+    filterRoutinesByFolder(routines, 'Legs').map(r => r.id),
+    [],
+  );
 });
 
 test('buildRoutineSummary counts exercises, sets, and supersets', () => {

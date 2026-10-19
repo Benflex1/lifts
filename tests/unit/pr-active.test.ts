@@ -4,7 +4,13 @@ import { buildActiveWorkoutRecordIndex, evaluateActiveWorkoutPRs } from '../../s
 import { Exercise, Gym, Workout } from '../../src/types';
 
 const gyms: Gym[] = [{ id: 'g1', name: 'Home', color: '#000000', isDefault: true } as Gym];
-const bench: Exercise = { id: 'bench', name: 'Bench Press', category: 'strength', equipment: 'barbell', primaryMuscles: ['chest'] };
+const bench: Exercise = {
+  id: 'bench',
+  name: 'Bench Press',
+  category: 'strength',
+  equipment: 'barbell',
+  primaryMuscles: ['chest'],
+};
 
 function workout(id: string, startTime: string, sets: [number, number][]): Workout {
   return {
@@ -14,18 +20,20 @@ function workout(id: string, startTime: string, sets: [number, number][]): Worko
     startTime,
     durationSeconds: 3600,
     totalVolumeKg: 0,
-    exercises: [{
-      id: `${id}-bench`,
-      exerciseId: 'bench',
-      exercise: bench,
-      sets: sets.map(([weightKg, reps], i) => ({
-        id: `${id}-s${i}`,
-        setNumber: i + 1,
-        weightKg,
-        reps,
-        isCompleted: true,
-      })),
-    }],
+    exercises: [
+      {
+        id: `${id}-bench`,
+        exerciseId: 'bench',
+        exercise: bench,
+        sets: sets.map(([weightKg, reps], i) => ({
+          id: `${id}-s${i}`,
+          setNumber: i + 1,
+          weightKg,
+          reps,
+          isCompleted: true,
+        })),
+      },
+    ],
   } as Workout;
 }
 
@@ -62,7 +70,13 @@ describe('Live PR ranking during a workout', () => {
 
   it('still flags a real record and a first-ever performance', () => {
     const history = { bench: [workout('prev', '2026-10-01T10:00:00.000Z', [[65, 11]])] };
-    assert.equal(rank(workout('active', '2026-10-10T10:00:00.000Z', [[65, 12]]), history).goldCount, 1);
-    assert.equal(rank(workout('active', '2026-10-10T10:00:00.000Z', [[65, 9]]), { bench: [] }).goldCount, 1);
+    assert.equal(
+      rank(workout('active', '2026-10-10T10:00:00.000Z', [[65, 12]]), history).goldCount,
+      1,
+    );
+    assert.equal(
+      rank(workout('active', '2026-10-10T10:00:00.000Z', [[65, 9]]), { bench: [] }).goldCount,
+      1,
+    );
   });
 });

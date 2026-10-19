@@ -13,6 +13,7 @@ interface Props {
   completed?: boolean;
   style?: StyleProp<TextStyle>;
   onFocus?: (e: any, inputRef?: React.RefObject<TextInput | null>) => void;
+  accessibilityLabel?: string;
 }
 
 export const WeightInput: React.FC<Props> = ({
@@ -23,6 +24,7 @@ export const WeightInput: React.FC<Props> = ({
   completed,
   style,
   onFocus,
+  accessibilityLabel,
 }) => {
   const { unit } = useSettings();
   const inputRef = useRef<TextInput>(null);
@@ -120,6 +122,8 @@ export const WeightInput: React.FC<Props> = ({
       onChangeText={handleTextChange}
       onBlur={handleBlur}
       onSubmitEditing={handleBlur}
+      accessibilityLabel={`${accessibilityLabel ?? 'Weight'} in ${unit}`}
+      accessibilityValue={{ text: shownText === '' ? 'not set' : shownText }}
     />
   );
 };

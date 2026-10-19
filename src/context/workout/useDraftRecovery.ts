@@ -25,7 +25,6 @@ export interface DraftRecovery {
 
 export function useDraftRecovery({
   controllerRef,
-  gyms,
   selectLoadedGym,
   restTimer,
   accordion,

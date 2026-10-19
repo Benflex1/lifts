@@ -1,12 +1,5 @@
 import React, { useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  PanResponder,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, Animated, PanResponder, Platform } from 'react-native';
 import { Trash2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -109,7 +102,7 @@ export const SwipeableSetRow: React.FC<Props> = ({
           }).start();
         }
       },
-    })
+    }),
   ).current;
 
   // Keep the red layer hidden at rest so it never bleeds through rounded corners

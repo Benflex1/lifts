@@ -8,9 +8,7 @@ export interface RestCountdown {
 }
 
 export type RestAlarmAction =
-  | { kind: 'arm'; endsAt: number; exerciseName?: string }
-  | { kind: 'cancel' }
-  | { kind: 'none' };
+  { kind: 'arm'; endsAt: number; exerciseName?: string } | { kind: 'cancel' } | { kind: 'none' };
 
 /**
  * Moves a running rest by `deltaSeconds`, keeping `totalSeconds` in step so the progress bar
@@ -19,7 +17,7 @@ export type RestAlarmAction =
 export function shiftRestCountdown(
   countdown: RestCountdown,
   deltaSeconds: number,
-  now: number
+  now: number,
 ): RestCountdown | null {
   const endsAt = countdown.endsAt + deltaSeconds * 1000;
   if (computeRemaining(endsAt, now) <= 0) return null;
@@ -34,7 +32,7 @@ export function shiftRestCountdown(
 export function restAlarmForAppState(
   nextState: string,
   countdown: RestCountdown | null,
-  now: number
+  now: number,
 ): RestAlarmAction {
   if (nextState === 'active') return { kind: 'cancel' };
   if (nextState === 'background' && countdown && computeRemaining(countdown.endsAt, now) > 0) {

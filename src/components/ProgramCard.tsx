@@ -24,7 +24,13 @@ export function ProgramCard({ state, onStart, onMenu }: ProgramCardProps) {
   const setCount = next.exercises.reduce((sum, item) => sum + (item.targetSets || 0), 0);
   const accent = isDeload ? colors.warning : colors.primary;
   const shortName = shortRoutineName(next.name);
-  const detail = shortName !== next.name ? next.name.slice(shortName.length).trim().replace(/^\(|\)$/g, '') : '';
+  const detail =
+    shortName !== next.name
+      ? next.name
+          .slice(shortName.length)
+          .trim()
+          .replace(/^\(|\)$/g, '')
+      : '';
 
   return (
     <View style={[styles.card, isDeload && styles.cardDeload]}>
@@ -54,14 +60,24 @@ export function ProgramCard({ state, onStart, onMenu }: ProgramCardProps) {
       </View>
 
       <Text style={styles.upNext}>Up next</Text>
-      <Text style={styles.title} numberOfLines={1}>{shortName}</Text>
-      {detail ? <Text style={styles.detail} numberOfLines={1}>{detail}</Text> : null}
+      <Text style={styles.title} numberOfLines={1}>
+        {shortName}
+      </Text>
+      {detail ? (
+        <Text style={styles.detail} numberOfLines={1}>
+          {detail}
+        </Text>
+      ) : null}
       <Text style={styles.meta}>
         {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} · {setCount} sets
         {isDeload ? ' · lighter targets' : ''}
       </Text>
 
-      <View style={styles.track} accessible accessibilityLabel={`Workout ${nextIndex + 1} of ${rotation.length} in this cycle`}>
+      <View
+        style={styles.track}
+        accessible
+        accessibilityLabel={`Workout ${nextIndex + 1} of ${rotation.length} in this cycle`}
+      >
         {rotation.map((routine, index) => {
           const isDone = state.doneThisCycleIds.includes(routine.id) && index !== nextIndex;
           const isNext = index === nextIndex;
@@ -76,10 +92,7 @@ export function ProgramCard({ state, onStart, onMenu }: ProgramCardProps) {
               />
               <View style={styles.stepLabelRow}>
                 {isDone && <Check size={10} color={colors.textMuted} strokeWidth={3} />}
-                <Text
-                  style={[styles.stepLabel, isNext && styles.stepLabelNext]}
-                  numberOfLines={1}
-                >
+                <Text style={[styles.stepLabel, isNext && styles.stepLabelNext]} numberOfLines={1}>
                   {shortRoutineName(routine.name)}
                 </Text>
               </View>
@@ -101,7 +114,11 @@ export function ProgramCard({ state, onStart, onMenu }: ProgramCardProps) {
         accessibilityRole="button"
         accessibilityLabel={`Start ${next.name}`}
       >
-        <Play size={16} color={isDeload ? colors.black : colors.onPrimary} fill={isDeload ? colors.black : colors.onPrimary} />
+        <Play
+          size={16}
+          color={isDeload ? colors.black : colors.onPrimary}
+          fill={isDeload ? colors.black : colors.onPrimary}
+        />
         <Text style={[styles.startText, isDeload && { color: colors.black }]} numberOfLines={1}>
           Start {shortName}
         </Text>

@@ -14,6 +14,7 @@ interface ExerciseNoteInputProps {
   placeholderTextColor?: string;
   autoFocus?: boolean;
   onFocus?: TextInputProps['onFocus'];
+  accessibilityLabel?: string;
 }
 
 /**
@@ -30,6 +31,7 @@ export const ExerciseNoteInput = React.memo(function ExerciseNoteInput({
   placeholderTextColor,
   autoFocus,
   onFocus,
+  accessibilityLabel,
 }: ExerciseNoteInputProps) {
   const [text, setText] = useState(notes ?? '');
 
@@ -44,7 +46,10 @@ export const ExerciseNoteInput = React.memo(function ExerciseNoteInput({
   }, [exerciseId]);
 
   const debouncer = useMemo(
-    () => createDebouncer<string>(NOTE_COMMIT_DEBOUNCE_MS, (value) => onCommitRef.current(exerciseIdRef.current, value)),
+    () =>
+      createDebouncer<string>(NOTE_COMMIT_DEBOUNCE_MS, value =>
+        onCommitRef.current(exerciseIdRef.current, value),
+      ),
     [],
   );
 
@@ -53,7 +58,7 @@ export const ExerciseNoteInput = React.memo(function ExerciseNoteInput({
 
   // Adopt external updates (e.g. the workout was reloaded from a draft).
   useEffect(() => {
-    setText((prev) => (prev === (notes ?? '') ? prev : notes ?? ''));
+    setText(prev => (prev === (notes ?? '') ? prev : (notes ?? '')));
   }, [notes]);
 
   const handleChangeText = (value: string) => {
@@ -71,6 +76,8 @@ export const ExerciseNoteInput = React.memo(function ExerciseNoteInput({
       onBlur={() => debouncer.flushNow()}
       onFocus={onFocus}
       autoFocus={autoFocus}
+      accessibilityLabel={accessibilityLabel ?? 'Exercise note'}
+      accessibilityValue={{ text: text === '' ? 'empty' : text }}
     />
   );
 });

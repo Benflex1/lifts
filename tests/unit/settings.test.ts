@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { isDeviceLocalSetting, parseGymTrackingEnabled, parseHealthSyncEnabled, parseRemoteExerciseImagesEnabled } from '../../src/utils/settings';
+import {
+  isDeviceLocalSetting,
+  parseGymTrackingEnabled,
+  parseHealthSyncEnabled,
+  parseRemoteExerciseImagesEnabled,
+} from '../../src/utils/settings';
 
 describe('gym tracking setting', () => {
   it('defaults to enabled and only disables for the persisted false value', () => {

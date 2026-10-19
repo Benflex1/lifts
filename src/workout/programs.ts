@@ -46,13 +46,27 @@ export function parseRoutinePrograms(value: string | null): RoutinePrograms {
   for (const [folderName, entry] of Object.entries(raw)) {
     if (!isRecord(entry) || !folderName.trim()) continue;
     if (!Array.isArray(entry.routineIds) || !isTimestamp(entry.startedAt)) continue;
-    const routineIds = entry.routineIds.filter((id): id is string => typeof id === 'string' && id.length > 0);
-    const program: RoutineProgram = { folderName, routineIds: Array.from(new Set(routineIds)), startedAt: entry.startedAt };
-    if (typeof entry.deloadEvery === 'number' && Number.isInteger(entry.deloadEvery) && entry.deloadEvery >= 2) {
+    const routineIds = entry.routineIds.filter(
+      (id): id is string => typeof id === 'string' && id.length > 0,
+    );
+    const program: RoutineProgram = {
+      folderName,
+      routineIds: Array.from(new Set(routineIds)),
+      startedAt: entry.startedAt,
+    };
+    if (
+      typeof entry.deloadEvery === 'number' &&
+      Number.isInteger(entry.deloadEvery) &&
+      entry.deloadEvery >= 2
+    ) {
       program.deloadEvery = entry.deloadEvery;
     }
     const override = entry.nextOverride;
-    if (isRecord(override) && typeof override.routineId === 'string' && isTimestamp(override.setAt)) {
+    if (
+      isRecord(override) &&
+      typeof override.routineId === 'string' &&
+      isTimestamp(override.setAt)
+    ) {
       program.nextOverride = { routineId: override.routineId, setAt: override.setAt };
     }
     programs[folderName] = program;
@@ -66,12 +80,14 @@ export function serializeRoutinePrograms(programs: RoutinePrograms): string {
 
 /** The folder's routines in rotation order: saved order first, then newer routines by creation date. */
 export function resolveRotation(program: RoutineProgram, routines: readonly Routine[]): Routine[] {
-  const inFolder = routines.filter((routine) => routine.folderName === program.folderName);
-  const byId = new Map(inFolder.map((routine) => [routine.id, routine]));
-  const ordered = program.routineIds.map((id) => byId.get(id)).filter((routine): routine is Routine => Boolean(routine));
-  const listed = new Set(ordered.map((routine) => routine.id));
+  const inFolder = routines.filter(routine => routine.folderName === program.folderName);
+  const byId = new Map(inFolder.map(routine => [routine.id, routine]));
+  const ordered = program.routineIds
+    .map(id => byId.get(id))
+    .filter((routine): routine is Routine => Boolean(routine));
+  const listed = new Set(ordered.map(routine => routine.id));
   const added = inFolder
-    .filter((routine) => !listed.has(routine.id))
+    .filter(routine => !listed.has(routine.id))
     // Stable, so routines created together keep the order the folder lists them in.
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return [...ordered, ...added];
@@ -109,8 +125,8 @@ export function resolveProgramState(
 
   const startedAt = Date.parse(program.startedAt);
   const done = history
-    .filter((workout) => workout.routineId !== undefined && indexById.has(workout.routineId))
-    .filter((workout) => Date.parse(workout.startTime) >= startedAt)
+    .filter(workout => workout.routineId !== undefined && indexById.has(workout.routineId))
+    .filter(workout => Date.parse(workout.startTime) >= startedAt)
     .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id));
 
   // Walk the rotation in time order: a new cycle starts each time it comes back around, so skips,
@@ -135,9 +151,12 @@ export function resolveProgramState(
   // A skip or pick holds until a rotation workout finishes after it was made.
   const override = program.nextOverride;
   const overrideIndex = override ? indexById.get(override.routineId) : undefined;
-  const lastFinishedAt = lastWorkout ? Date.parse(lastWorkout.endTime ?? lastWorkout.startTime) : undefined;
-  const isOverridden = overrideIndex !== undefined
-    && (lastFinishedAt === undefined || lastFinishedAt < Date.parse(override!.setAt));
+  const lastFinishedAt = lastWorkout
+    ? Date.parse(lastWorkout.endTime ?? lastWorkout.startTime)
+    : undefined;
+  const isOverridden =
+    overrideIndex !== undefined &&
+    (lastFinishedAt === undefined || lastFinishedAt < Date.parse(override!.setAt));
   if (isOverridden) nextIndex = overrideIndex!;
 
   // The next workout opens a new cycle when it comes back around.
@@ -171,7 +190,7 @@ export function resolveProgramStates(
 ): ProgramState[] {
   return Object.values(programs)
     .sort((a, b) => a.folderName.localeCompare(b.folderName))
-    .map((program) => resolveProgramState(program, routines, history))
+    .map(program => resolveProgramState(program, routines, history))
     .filter((state): state is ProgramState => state !== null);
 }
 
@@ -188,21 +207,25 @@ export function parseDeloadWorkoutIds(value: string | null | undefined): string[
   if (!value) return [];
   try {
     const raw = JSON.parse(value);
-    return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string' && id.length > 0) : [];
+    return Array.isArray(raw)
+      ? raw.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
   } catch {
     return [];
   }
 }
 
 export function addDeloadWorkoutId(value: string | null | undefined, workoutId: string): string {
-  const ids = parseDeloadWorkoutIds(value).filter((id) => id !== workoutId);
+  const ids = parseDeloadWorkoutIds(value).filter(id => id !== workoutId);
   ids.push(workoutId);
   return JSON.stringify(ids.slice(-MAX_DELOAD_WORKOUTS));
 }
 
 /** Restores union the lists; rotations merge per folder with this device's winning. */
 export function mergeDeloadWorkoutIds(existing: string | undefined, incoming: string): string {
-  const ids = Array.from(new Set([...parseDeloadWorkoutIds(incoming), ...parseDeloadWorkoutIds(existing)]));
+  const ids = Array.from(
+    new Set([...parseDeloadWorkoutIds(incoming), ...parseDeloadWorkoutIds(existing)]),
+  );
   return JSON.stringify(ids.slice(-MAX_DELOAD_WORKOUTS));
 }
 
@@ -214,17 +237,28 @@ export function mergeRoutinePrograms(existing: string | undefined, incoming: str
 }
 
 /** Points the rotation at a routine until the next rotation workout finishes. */
-export function withNextOverride(program: RoutineProgram, routineId: string, now: Date = new Date()): RoutineProgram {
+export function withNextOverride(
+  program: RoutineProgram,
+  routineId: string,
+  now: Date = new Date(),
+): RoutineProgram {
   return { ...program, nextOverride: { routineId, setAt: now.toISOString() } };
 }
 
 /** The program a routine belongs to, if any, so starting it from anywhere counts toward the rotation. */
-export function findProgramForRoutine(programs: RoutinePrograms, routine: Routine | undefined): RoutineProgram | undefined {
+export function findProgramForRoutine(
+  programs: RoutinePrograms,
+  routine: Routine | undefined,
+): RoutineProgram | undefined {
   if (!routine?.folderName) return undefined;
   return programs[routine.folderName];
 }
 
-export function renameProgramFolder(programs: RoutinePrograms, oldName: string, newName: string): RoutinePrograms {
+export function renameProgramFolder(
+  programs: RoutinePrograms,
+  oldName: string,
+  newName: string,
+): RoutinePrograms {
   const program = programs[oldName];
   if (!program || oldName === newName) return programs;
   const { [oldName]: _old, ...rest } = programs;
@@ -233,7 +267,10 @@ export function renameProgramFolder(programs: RoutinePrograms, oldName: string, 
   return { ...rest, [newName]: { ...program, folderName: newName } };
 }
 
-export function removeProgramFolder(programs: RoutinePrograms, folderName: string): RoutinePrograms {
+export function removeProgramFolder(
+  programs: RoutinePrograms,
+  folderName: string,
+): RoutinePrograms {
   if (!programs[folderName]) return programs;
   const { [folderName]: _removed, ...rest } = programs;
   return rest;
@@ -242,7 +279,8 @@ export function removeProgramFolder(programs: RoutinePrograms, folderName: strin
 /** Human "today", "yesterday", "3 days ago" for the last workout line. */
 export function formatDaysAgo(iso: string, now: Date = new Date()): string {
   const then = new Date(iso);
-  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const startOfDay = (date: Date) =>
+    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const days = Math.round((startOfDay(now) - startOfDay(then)) / 86_400_000);
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';

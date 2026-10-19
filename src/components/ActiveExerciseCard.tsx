@@ -1,5 +1,6 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { AppTouchable } from './ui';
 import {
   CheckCircle2,
   ChevronDown,
@@ -186,7 +187,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
 
   const cardElement = !isExpanded ? (
     // Collapsed Accordion Row - Lyfta Screenshot 1
-    <TouchableOpacity
+    <AppTouchable
       key={exercise.id}
       style={[
         styles.collapsedCard,
@@ -194,8 +195,11 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
       ]}
       onPress={() => onToggleExpanded(exercise.id)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`${exercise.exercise?.name || 'Exercise'}, ${completedCount} of ${totalCount} sets completed`}
+      accessibilityHint="Expands the set list"
     >
-      <TouchableOpacity
+      <AppTouchable
         style={styles.exerciseAvatar}
         onPress={e => {
           e.stopPropagation();
@@ -214,7 +218,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
         ) : (
           <Dumbbell size={20} color={colors.primary} />
         )}
-      </TouchableOpacity>
+      </AppTouchable>
 
       <View style={styles.collapsedContent}>
         <Text style={styles.collapsedTitle} numberOfLines={1}>
@@ -240,7 +244,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
       </View>
 
       <View style={styles.collapsedActions}>
-        <TouchableOpacity
+        <AppTouchable
           style={styles.iconBtn}
           onPress={e => {
             e.stopPropagation();
@@ -251,10 +255,10 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
           accessibilityRole="button"
         >
           <MoreHorizontal size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
+        </AppTouchable>
         <ChevronDown size={18} color={colors.textMuted} />
       </View>
-    </TouchableOpacity>
+    </AppTouchable>
   ) : (
     // Expanded Full Exercise Card
     <View
@@ -266,7 +270,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
     >
       {/* Exercise Header */}
       <View style={styles.cardHeader}>
-        <TouchableOpacity
+        <AppTouchable
           style={styles.exerciseAvatar}
           onPress={() => onOpenDetail(exercise.exercise || null)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -282,9 +286,9 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
           ) : (
             <Dumbbell size={20} color={colors.primary} />
           )}
-        </TouchableOpacity>
+        </AppTouchable>
 
-        <TouchableOpacity
+        <AppTouchable
           style={styles.exerciseTitleGroup}
           onPress={() => onOpenDetail(exercise.exercise || null)}
           activeOpacity={0.7}
@@ -315,29 +319,33 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
               </View>
             )}
           </View>
-        </TouchableOpacity>
+        </AppTouchable>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity
+          <AppTouchable
             style={styles.iconBtn}
             onPress={() => onOpenMenu(exercise)}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel={`${exercise.exercise?.name || 'Exercise'} options`}
           >
             <MoreHorizontal size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AppTouchable>
+          <AppTouchable
             style={styles.iconBtn}
             onPress={() => onToggleExpanded(exercise.id)}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Collapse ${exercise.exercise?.name || 'exercise'}`}
           >
             <ChevronUp size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
 
       {/* Rest timer + note pills */}
       <View style={styles.exerciseMetaRow}>
-        <TouchableOpacity
+        <AppTouchable
           style={styles.restTimerRow}
           onPress={() => onOpenRestWheel(exercise)}
           accessibilityRole="button"
@@ -347,9 +355,9 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
           <Text style={styles.restTimerRowText}>
             Rest {exercise.restTimerSeconds ? formatDuration(exercise.restTimerSeconds) : 'Off'}
           </Text>
-        </TouchableOpacity>
+        </AppTouchable>
         {overload && (
-          <TouchableOpacity
+          <AppTouchable
             style={[styles.overloadPill, isDeloadTarget && styles.deloadPill]}
             onPress={() => onApplyOverload(exercise, overload)}
             onLongPress={() => onExplainOverload(overloadLabel, overload)}
@@ -365,10 +373,10 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
             <Text style={[styles.overloadPillText, isDeloadTarget && styles.deloadPillText]}>
               {overloadLabel}
             </Text>
-          </TouchableOpacity>
+          </AppTouchable>
         )}
         {!showNoteInput && (
-          <TouchableOpacity
+          <AppTouchable
             style={styles.addNotePrompt}
             onPress={() => onStartEditingNote(exercise.id)}
             accessibilityRole="button"
@@ -376,7 +384,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
           >
             <FileText size={13} color={colors.textSecondary} />
             <Text style={styles.addNotePromptText}>Note</Text>
-          </TouchableOpacity>
+          </AppTouchable>
         )}
       </View>
 
@@ -392,6 +400,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
             placeholderTextColor={colors.textMuted}
             onFocus={onInputFocus}
             autoFocus={isNoteEditing && (!exercise.notes || exercise.notes.length === 0)}
+            accessibilityLabel={`Note for ${exercise.exercise?.name || 'exercise'}`}
           />
         </View>
       )}
@@ -443,7 +452,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
       ))}
 
       {/* Add Set Button */}
-      <TouchableOpacity
+      <AppTouchable
         style={styles.addSetBtnWide}
         onPress={() => onAddSet(exercise.id, 'normal')}
         accessibilityRole="button"
@@ -451,7 +460,7 @@ export const ActiveExerciseCard = React.memo(function ActiveExerciseCard({
       >
         <Plus size={16} color={colors.text} />
         <Text style={styles.addSetBtnWideText}>Add Set</Text>
-      </TouchableOpacity>
+      </AppTouchable>
     </View>
   );
   return cardElement;

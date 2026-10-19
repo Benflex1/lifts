@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { X, Edit2, Trash2, Check } from 'lucide-react-native';
 import { renameFolder, deleteFolder } from '../database/db';
 import { useDialog } from '../context/DialogContext';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -68,9 +62,12 @@ export const FolderManageModal: React.FC<Props> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>Manage Folders</Text>
@@ -110,10 +107,7 @@ export const FolderManageModal: React.FC<Props> = ({
                       >
                         <Edit2 size={16} color={colors.textSecondary} />
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleDelete(f)}
-                        style={styles.iconBtn}
-                      >
+                      <TouchableOpacity onPress={() => handleDelete(f)} style={styles.iconBtn}>
                         <Trash2 size={16} color={colors.danger} />
                       </TouchableOpacity>
                     </View>
@@ -130,14 +124,41 @@ export const FolderManageModal: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', padding: 24 },
-  container: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: colors.border },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  container: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   title: { color: colors.text, fontSize: 18, fontWeight: '700' },
   emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center', paddingVertical: 20 },
-  folderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  folderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
   folderName: { color: colors.text, fontSize: 15, fontWeight: '600', flex: 1 },
   actions: { flexDirection: 'row', gap: 8 },
   iconBtn: { padding: 8, borderRadius: 8, backgroundColor: colors.surfaceAlt },
-  renameInput: { flex: 1, backgroundColor: colors.border, borderRadius: 8, color: colors.text, fontSize: 15, paddingHorizontal: 12, paddingVertical: 8, marginRight: 8 },
+  renameInput: {
+    flex: 1,
+    backgroundColor: colors.border,
+    borderRadius: 8,
+    color: colors.text,
+    fontSize: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+  },
   confirmBtn: { padding: 8, borderRadius: 8, backgroundColor: colors.successSoft },
 });

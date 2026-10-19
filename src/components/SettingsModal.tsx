@@ -17,7 +17,11 @@ import { WeightUnit } from '../utils/units';
 import { GymProfilesModal } from './GymProfilesModal';
 import { useWorkout } from '../context/WorkoutContext';
 import { colors } from '../theme';
-import { ExactAlarmStatus, getExactAlarmStatus, openExactAlarmSettings } from '../utils/exactAlarms';
+import {
+  ExactAlarmStatus,
+  getExactAlarmStatus,
+  openExactAlarmSettings,
+} from '../utils/exactAlarms';
 import {
   AutomaticBackupState,
   chooseAutomaticBackupFolder,
@@ -26,6 +30,7 @@ import {
   setAutomaticBackupEnabled,
 } from '../utils/automaticBackup';
 import { useDialog } from '../context/DialogContext';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -33,6 +38,8 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ visible, onClose }: SettingsModalProps) {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   const {
     unit,
     setUnit,
@@ -75,7 +82,7 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
     if (!visible) return;
     setExactAlarmStatus(getExactAlarmStatus());
     void refreshAutomaticBackupState();
-    const subscription = AppState.addEventListener('change', (state) => {
+    const subscription = AppState.addEventListener('change', state => {
       if (state === 'active') {
         setExactAlarmStatus(getExactAlarmStatus());
         void refreshAutomaticBackupState();
@@ -237,319 +244,326 @@ export function SettingsModal({ visible, onClose }: SettingsModalProps) {
         onRequestClose={handleClose}
         accessibilityViewIsModal={true}
       >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Settings</Text>
-            <TouchableOpacity
-              onPress={handleClose}
-              style={styles.closeButton}
-              accessibilityRole="button"
-              accessibilityLabel="Close settings"
-            >
-              <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.settingsContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.section}>
-            <View style={styles.settingHeaderRow}>
-              <View style={styles.settingTextContainer}>
-                <Text style={styles.sectionTitle}>Gym Tracking</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Keep workout history and machine suggestions separated by gym.
-                </Text>
-              </View>
-              <Switch
-                value={gymTrackingEnabled}
-                onValueChange={handleGymTrackingChange}
-                disabled={isSaving}
-                trackColor={{ false: colors.control, true: colors.primary }}
-                thumbColor={gymTrackingEnabled ? colors.text : colors.textSecondary}
-                accessibilityLabel="Gym Tracking"
-                accessibilityRole="switch"
-                accessibilityState={{ checked: gymTrackingEnabled, disabled: isSaving }}
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.manageButton}
-              onPress={() => setShowGymProfiles(true)}
-              disabled={isSaving}
-              accessibilityRole="button"
-              accessibilityLabel="Manage gyms"
-            >
-              <Text style={styles.manageButtonText}>Manage Gyms</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.settingHeaderRow}>
-              <View style={styles.settingTextContainer}>
-                <Text style={styles.sectionTitle}>Next Targets</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Suggest the next weight and reps for each exercise from your last session. Tap the suggestion in a workout to fill your sets.
-                </Text>
-              </View>
-              <Switch
-                value={overloadEnabled}
-                onValueChange={handleOverloadChange}
-                disabled={isSaving}
-                trackColor={{ false: colors.control, true: colors.primary }}
-                thumbColor={overloadEnabled ? colors.text : colors.textSecondary}
-                accessibilityLabel="Next Targets"
-                accessibilityRole="switch"
-                accessibilityState={{ checked: overloadEnabled, disabled: isSaving }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.settingHeaderRow}>
-              <View style={styles.settingTextContainer}>
-                <Text style={styles.sectionTitle}>Time, Distance & Bodyweight</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Log planks and stretches by time, cardio by distance and time, and bodyweight moves by reps. Change how an exercise is tracked from its menu in a workout.
-                </Text>
-              </View>
-              <Switch
-                value={trackingTypesEnabled}
-                onValueChange={handleTrackingTypesChange}
-                disabled={isSaving}
-                trackColor={{ false: colors.control, true: colors.primary }}
-                thumbColor={trackingTypesEnabled ? colors.text : colors.textSecondary}
-                accessibilityLabel="Time, Distance and Bodyweight tracking"
-                accessibilityRole="switch"
-                accessibilityState={{ checked: trackingTypesEnabled, disabled: isSaving }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.settingHeaderRow}>
-              <View style={styles.settingTextContainer}>
-                <Text style={styles.sectionTitle}>Body Weight</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Log your weight and see the trend on the Progress tab.
-                </Text>
-              </View>
-              <Switch
-                value={bodyWeightEnabled}
-                onValueChange={handleBodyWeightChange}
-                disabled={isSaving}
-                trackColor={{ false: colors.control, true: colors.primary }}
-                thumbColor={bodyWeightEnabled ? colors.text : colors.textSecondary}
-                accessibilityLabel="Body Weight"
-                accessibilityRole="switch"
-                accessibilityState={{ checked: bodyWeightEnabled, disabled: isSaving }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.settingHeaderRow}>
-              <View style={styles.settingTextContainer}>
-                <Text style={styles.sectionTitle}>Exercise Photos</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Load exercise photos from GitHub. Off shows the built-in illustrations and stops those requests.
-                </Text>
-              </View>
-              <Switch
-                value={remoteImagesEnabled}
-                onValueChange={handleRemoteImagesChange}
-                disabled={isSaving}
-                trackColor={{ false: colors.control, true: colors.primary }}
-                thumbColor={remoteImagesEnabled ? colors.text : colors.textSecondary}
-                accessibilityLabel="Exercise Photos"
-                accessibilityRole="switch"
-                accessibilityState={{ checked: remoteImagesEnabled, disabled: isSaving }}
-              />
-            </View>
-          </View>
-
-          {Platform.OS === 'android' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Automatic Backups</Text>
-              <Text style={styles.sectionSubtitle}>
-                Save a full backup after each completed workout and keep the newest 10 copies.
-              </Text>
-              <Text style={styles.backupStatus}>
-                {automaticBackup.directoryUri ? 'Backup folder selected on this device.' : 'Choose a folder for your backups.'}
-              </Text>
+        <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
+          <View style={styles.container}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Settings</Text>
               <TouchableOpacity
-                style={styles.manageButton}
-                onPress={handleChooseBackupFolder}
-                disabled={isBackupBusy}
+                onPress={handleClose}
+                style={styles.closeButton}
                 accessibilityRole="button"
-                accessibilityLabel={automaticBackup.directoryUri ? 'Change automatic backup folder' : 'Choose automatic backup folder'}
+                accessibilityLabel="Close settings"
               >
-                <Text style={styles.manageButtonText}>
-                  {automaticBackup.directoryUri ? 'Change Backup Folder' : 'Choose Backup Folder'}
-                </Text>
+                <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
-              <View style={[styles.settingHeaderRow, styles.backupSwitchRow]}>
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.backupSwitchTitle}>After each workout</Text>
-                </View>
-                <Switch
-                  value={automaticBackup.enabled}
-                  onValueChange={handleAutomaticBackupChange}
-                  disabled={isBackupBusy || !automaticBackup.directoryUri}
-                  trackColor={{ false: colors.control, true: colors.primary }}
-                  thumbColor={automaticBackup.enabled ? colors.text : colors.textSecondary}
-                  accessibilityLabel="Back up automatically after each workout"
-                  accessibilityRole="switch"
-                  accessibilityState={{
-                    checked: automaticBackup.enabled,
-                    disabled: isBackupBusy || !automaticBackup.directoryUri,
-                  }}
-                />
-              </View>
-              <TouchableOpacity
-                style={[styles.manageButton, styles.backupNowButton]}
-                onPress={handleBackupNow}
-                disabled={isBackupBusy || !automaticBackup.directoryUri}
-                accessibilityRole="button"
-                accessibilityLabel="Back up now"
-              >
-                {isBackupBusy ? (
-                  <ActivityIndicator size="small" color={colors.textSoft} />
-                ) : (
-                  <Text style={styles.manageButtonText}>Back Up Now</Text>
-                )}
-              </TouchableOpacity>
-              <Text style={styles.backupStatus}>
-                {automaticBackup.lastSuccessAt
-                  ? `Last backup: ${new Date(automaticBackup.lastSuccessAt).toLocaleString()}`
-                  : 'No backup saved yet.'}
-              </Text>
-              {!!automaticBackup.lastError && (
-                <Text style={styles.backupError}>
-                  Latest attempt failed: {automaticBackup.lastError}
-                </Text>
-              )}
             </View>
-          )}
 
-          {Platform.OS !== 'web' && (
-            <View style={styles.section}>
-              <View style={styles.settingHeaderRow}>
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.sectionTitle}>Sync completed workouts</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Lifts writes workout sessions to Apple Health or Health Connect and does not read health data.
-                  </Text>
+            <ScrollView style={styles.settingsContent} keyboardShouldPersistTaps="handled">
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Gym Tracking</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Keep workout history and machine suggestions separated by gym.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={gymTrackingEnabled}
+                    onValueChange={handleGymTrackingChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={gymTrackingEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Gym Tracking"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: gymTrackingEnabled, disabled: isSaving }}
+                  />
                 </View>
-                <Switch
-                  value={healthSyncEnabled}
-                  onValueChange={handleHealthSyncChange}
+                <TouchableOpacity
+                  style={styles.manageButton}
+                  onPress={() => setShowGymProfiles(true)}
                   disabled={isSaving}
-                  trackColor={{ false: colors.control, true: colors.primary }}
-                  thumbColor={healthSyncEnabled ? colors.text : colors.textSecondary}
-                  accessibilityLabel="Sync completed workouts"
-                  accessibilityRole="switch"
-                  accessibilityState={{ checked: healthSyncEnabled, disabled: isSaving }}
-                />
+                  accessibilityRole="button"
+                  accessibilityLabel="Manage gyms"
+                >
+                  <Text style={styles.manageButtonText}>Manage Gyms</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-          )}
 
-          {exactAlarmStatus === 'denied' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>On-time rest alerts</Text>
-              <Text style={styles.sectionSubtitle}>
-                Android can delay the end-of-rest buzz while your phone is locked. Allow Lifts to set alarms and reminders so it buzzes on time.
-              </Text>
-              <TouchableOpacity
-                style={styles.manageButton}
-                onPress={() => openExactAlarmSettings()}
-                accessibilityRole="button"
-                accessibilityLabel="Allow alarms and reminders"
-              >
-                <Text style={styles.manageButtonText}>Allow Alarms & Reminders</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Unit Setting Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Weight Unit</Text>
-            <Text style={styles.sectionSubtitle}>
-              Select your preferred unit for recording and displaying lifts.
-            </Text>
-
-            <View style={styles.unitOptions}>
-              <TouchableOpacity
-                style={[
-                  styles.unitOption,
-                  unit === 'kg' && styles.unitOptionActive,
-                ]}
-                onPress={() => handleUnitChange('kg')}
-                accessibilityRole="button"
-                accessibilityLabel="Set unit to Kilograms"
-                accessibilityState={{ selected: unit === 'kg' }}
-                disabled={isSaving}
-              >
-                <View style={styles.unitTextContainer}>
-                  <Text
-                    style={[
-                      styles.unitOptionTitle,
-                      unit === 'kg' && styles.unitOptionTitleActive,
-                    ]}
-                  >
-                    Kilograms (kg)
-                  </Text>
-                  <Text style={styles.unitOptionDescription}>Metric system</Text>
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Next Targets</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Suggest the next weight and reps for each exercise from your last session. Tap
+                      the suggestion in a workout to fill your sets.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={overloadEnabled}
+                    onValueChange={handleOverloadChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={overloadEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Next Targets"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: overloadEnabled, disabled: isSaving }}
+                  />
                 </View>
-                {unit === 'kg' && <Check size={20} color={colors.primary} />}
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.unitOption,
-                  unit === 'lb' && styles.unitOptionActive,
-                ]}
-                onPress={() => handleUnitChange('lb')}
-                accessibilityRole="button"
-                accessibilityLabel="Set unit to Pounds"
-                accessibilityState={{ selected: unit === 'lb' }}
-                disabled={isSaving}
-              >
-                <View style={styles.unitTextContainer}>
-                  <Text
-                    style={[
-                      styles.unitOptionTitle,
-                      unit === 'lb' && styles.unitOptionTitleActive,
-                    ]}
-                  >
-                    Pounds (lb)
-                  </Text>
-                  <Text style={styles.unitOptionDescription}>Imperial system</Text>
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Time, Distance & Bodyweight</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Log planks and stretches by time, cardio by distance and time, and bodyweight
+                      moves by reps. Change how an exercise is tracked from its menu in a workout.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={trackingTypesEnabled}
+                    onValueChange={handleTrackingTypesChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={trackingTypesEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Time, Distance and Bodyweight tracking"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: trackingTypesEnabled, disabled: isSaving }}
+                  />
                 </View>
-                {unit === 'lb' && <Check size={20} color={colors.primary} />}
-              </TouchableOpacity>
-            </View>
+              </View>
+
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Body Weight</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Log your weight and see the trend on the Progress tab.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={bodyWeightEnabled}
+                    onValueChange={handleBodyWeightChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={bodyWeightEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Body Weight"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: bodyWeightEnabled, disabled: isSaving }}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.section}>
+                <View style={styles.settingHeaderRow}>
+                  <View style={styles.settingTextContainer}>
+                    <Text style={styles.sectionTitle}>Exercise Photos</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Load exercise photos from GitHub. Off shows the built-in illustrations and
+                      stops those requests.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={remoteImagesEnabled}
+                    onValueChange={handleRemoteImagesChange}
+                    disabled={isSaving}
+                    trackColor={{ false: colors.control, true: colors.primary }}
+                    thumbColor={remoteImagesEnabled ? colors.text : colors.textSecondary}
+                    accessibilityLabel="Exercise Photos"
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: remoteImagesEnabled, disabled: isSaving }}
+                  />
+                </View>
+              </View>
+
+              {Platform.OS === 'android' && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Automatic Backups</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Save a full backup after each completed workout and keep the newest 10 copies.
+                  </Text>
+                  <Text style={styles.backupStatus}>
+                    {automaticBackup.directoryUri
+                      ? 'Backup folder selected on this device.'
+                      : 'Choose a folder for your backups.'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.manageButton}
+                    onPress={handleChooseBackupFolder}
+                    disabled={isBackupBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      automaticBackup.directoryUri
+                        ? 'Change automatic backup folder'
+                        : 'Choose automatic backup folder'
+                    }
+                  >
+                    <Text style={styles.manageButtonText}>
+                      {automaticBackup.directoryUri
+                        ? 'Change Backup Folder'
+                        : 'Choose Backup Folder'}
+                    </Text>
+                  </TouchableOpacity>
+                  <View style={[styles.settingHeaderRow, styles.backupSwitchRow]}>
+                    <View style={styles.settingTextContainer}>
+                      <Text style={styles.backupSwitchTitle}>After each workout</Text>
+                    </View>
+                    <Switch
+                      value={automaticBackup.enabled}
+                      onValueChange={handleAutomaticBackupChange}
+                      disabled={isBackupBusy || !automaticBackup.directoryUri}
+                      trackColor={{ false: colors.control, true: colors.primary }}
+                      thumbColor={automaticBackup.enabled ? colors.text : colors.textSecondary}
+                      accessibilityLabel="Back up automatically after each workout"
+                      accessibilityRole="switch"
+                      accessibilityState={{
+                        checked: automaticBackup.enabled,
+                        disabled: isBackupBusy || !automaticBackup.directoryUri,
+                      }}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.manageButton, styles.backupNowButton]}
+                    onPress={handleBackupNow}
+                    disabled={isBackupBusy || !automaticBackup.directoryUri}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back up now"
+                  >
+                    {isBackupBusy ? (
+                      <ActivityIndicator size="small" color={colors.textSoft} />
+                    ) : (
+                      <Text style={styles.manageButtonText}>Back Up Now</Text>
+                    )}
+                  </TouchableOpacity>
+                  <Text style={styles.backupStatus}>
+                    {automaticBackup.lastSuccessAt
+                      ? `Last backup: ${new Date(automaticBackup.lastSuccessAt).toLocaleString()}`
+                      : 'No backup saved yet.'}
+                  </Text>
+                  {!!automaticBackup.lastError && (
+                    <Text style={styles.backupError}>
+                      Latest attempt failed: {automaticBackup.lastError}
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {Platform.OS !== 'web' && (
+                <View style={styles.section}>
+                  <View style={styles.settingHeaderRow}>
+                    <View style={styles.settingTextContainer}>
+                      <Text style={styles.sectionTitle}>Sync completed workouts</Text>
+                      <Text style={styles.sectionSubtitle}>
+                        Lifts writes workout sessions to Apple Health or Health Connect and does not
+                        read health data.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={healthSyncEnabled}
+                      onValueChange={handleHealthSyncChange}
+                      disabled={isSaving}
+                      trackColor={{ false: colors.control, true: colors.primary }}
+                      thumbColor={healthSyncEnabled ? colors.text : colors.textSecondary}
+                      accessibilityLabel="Sync completed workouts"
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: healthSyncEnabled, disabled: isSaving }}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {exactAlarmStatus === 'denied' && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>On-time rest alerts</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Android can delay the end-of-rest buzz while your phone is locked. Allow Lifts
+                    to set alarms and reminders so it buzzes on time.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.manageButton}
+                    onPress={() => openExactAlarmSettings()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Allow alarms and reminders"
+                  >
+                    <Text style={styles.manageButtonText}>Allow Alarms & Reminders</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Unit Setting Section */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Weight Unit</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Select your preferred unit for recording and displaying lifts.
+                </Text>
+
+                <View style={styles.unitOptions}>
+                  <TouchableOpacity
+                    style={[styles.unitOption, unit === 'kg' && styles.unitOptionActive]}
+                    onPress={() => handleUnitChange('kg')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Set unit to Kilograms"
+                    accessibilityState={{ selected: unit === 'kg' }}
+                    disabled={isSaving}
+                  >
+                    <View style={styles.unitTextContainer}>
+                      <Text
+                        style={[
+                          styles.unitOptionTitle,
+                          unit === 'kg' && styles.unitOptionTitleActive,
+                        ]}
+                      >
+                        Kilograms (kg)
+                      </Text>
+                      <Text style={styles.unitOptionDescription}>Metric system</Text>
+                    </View>
+                    {unit === 'kg' && <Check size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.unitOption, unit === 'lb' && styles.unitOptionActive]}
+                    onPress={() => handleUnitChange('lb')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Set unit to Pounds"
+                    accessibilityState={{ selected: unit === 'lb' }}
+                    disabled={isSaving}
+                  >
+                    <View style={styles.unitTextContainer}>
+                      <Text
+                        style={[
+                          styles.unitOptionTitle,
+                          unit === 'lb' && styles.unitOptionTitleActive,
+                        ]}
+                      >
+                        Pounds (lb)
+                      </Text>
+                      <Text style={styles.unitOptionDescription}>Imperial system</Text>
+                    </View>
+                    {unit === 'lb' && <Check size={20} color={colors.primary} />}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {isSaving && (
+                <View style={styles.savingRow}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.savingText}>Saving...</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Footer button */}
+            <TouchableOpacity
+              style={styles.doneButton}
+              onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </TouchableOpacity>
           </View>
-
-          {isSaving && (
-            <View style={styles.savingRow}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.savingText}>Saving...</Text>
-            </View>
-          )}
-          </ScrollView>
-
-          {/* Footer button */}
-          <TouchableOpacity
-            style={styles.doneButton}
-            onPress={handleClose}
-            accessibilityRole="button"
-            accessibilityLabel="Done"
-          >
-            <Text style={styles.doneButtonText}>Done</Text>
-          </TouchableOpacity>
         </View>
-      </View>
       </Modal>
       <GymProfilesModal
         visible={showGymProfiles}

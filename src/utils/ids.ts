@@ -7,6 +7,7 @@ export function createScopedId(prefix: string): string {
   // Expo's native crypto module is loaded only on runtimes without Web Crypto,
   // keeping this utility usable by the Node-based store tests and web builds.
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- loaded only when Web Crypto is unavailable
     const expoCrypto = require('expo-crypto') as { randomUUID: () => string };
     return `${prefix}-${expoCrypto.randomUUID()}`;
   } catch (_) {

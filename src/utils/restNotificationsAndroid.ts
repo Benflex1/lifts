@@ -4,7 +4,7 @@ export type ExactAlarmStatus = 'granted' | 'denied' | 'unsupported';
 
 export function createAndroidRestNotifications(
   native: RestAlarmNativeModule | null,
-  now: () => number = Date.now
+  now: () => number = Date.now,
 ) {
   // Notification permission is not needed: the rest cue is a vibration, not a notification.
   async function initRestNotifications(): Promise<void> {}
@@ -19,7 +19,10 @@ export function createAndroidRestNotifications(
   }
 
   // Arms the native vibration cue. The exercise name is unused: nothing is shown, only felt.
-  async function scheduleRestNotification(endsAtMs: number, _exerciseName?: string): Promise<string | null> {
+  async function scheduleRestNotification(
+    endsAtMs: number,
+    _exerciseName?: string,
+  ): Promise<string | null> {
     if (!native) return null;
     if (endsAtMs <= now()) return null;
     try {

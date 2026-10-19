@@ -146,14 +146,15 @@ interface Harness<T> {
 }
 
 async function flush(): Promise<void> {
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
 }
 
 async function mountHook<T>(
   useHook: (props: any) => T,
   props: Record<string, unknown> = {},
 ): Promise<Harness<T>> {
-  const { TabActivationContext, createActivationEmitter } = await import('../../src/hooks/useReloadOnActivate');
+  const { TabActivationContext, createActivationEmitter } =
+    await import('../../src/hooks/useReloadOnActivate');
   const emitter = createActivationEmitter();
   const result = { current: undefined as unknown as T };
   const propsRef = { current: props };
@@ -235,12 +236,18 @@ test('useWorkoutHistory caches lazily loaded details and PR summaries', async ()
 test('useExerciseCatalog requeries on filter changes and only refreshes after writes', async () => {
   resetCalls();
   const { useExerciseCatalog } = await import('../../src/hooks/useExerciseCatalog');
-  const harness = await mountHook(useExerciseCatalog, { query: '', muscle: 'All', equipment: 'All' });
+  const harness = await mountHook(useExerciseCatalog, {
+    query: '',
+    muscle: 'All',
+    equipment: 'All',
+  });
 
   assert.equal(state.calls.search, 1);
   assert.deepEqual(state.lastSearch, { query: '', muscle: 'All', equipment: 'All' });
 
-  const firstResults = [{ id: 'e1', name: 'Bench Press', equipment: 'barbell', primaryMuscles: ['chest'] }];
+  const firstResults = [
+    { id: 'e1', name: 'Bench Press', equipment: 'barbell', primaryMuscles: ['chest'] },
+  ];
   state.catalogResults = firstResults;
   await harness.update({ query: 'bench', muscle: 'All', equipment: 'All' });
   assert.equal(state.calls.search, 2);
@@ -254,7 +261,11 @@ test('useExerciseCatalog requeries on filter changes and only refreshes after wr
   state.revision += 1;
   await harness.emit();
   assert.equal(state.calls.search, 3, 'a write refreshes the catalog');
-  assert.equal(harness.result.current.exercises, stableArray, 'identical results keep array identity');
+  assert.equal(
+    harness.result.current.exercises,
+    stableArray,
+    'identical results keep array identity',
+  );
 });
 
 test('useAnalyticsSnapshot hydrates once and refreshes only after writes', async () => {

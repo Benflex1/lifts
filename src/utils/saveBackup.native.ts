@@ -12,11 +12,7 @@ export interface AndroidBackupFileSystem {
       directoryUri?: string;
     }>;
     createFileAsync: (parentUri: string, fileName: string, mimeType: string) => Promise<string>;
-    writeAsStringAsync: (
-      uri: string,
-      contents: string,
-      options?: WritingOptions
-    ) => Promise<void>;
+    writeAsStringAsync: (uri: string, contents: string, options?: WritingOptions) => Promise<void>;
   };
   EncodingType: { UTF8: WritingOptions['encoding'] };
 }
@@ -24,25 +20,18 @@ export interface AndroidBackupFileSystem {
 export interface IosBackupFileSystem {
   cacheDirectory: string | null;
   EncodingType: { UTF8: WritingOptions['encoding'] };
-  writeAsStringAsync: (
-    uri: string,
-    contents: string,
-    options?: WritingOptions
-  ) => Promise<void>;
+  writeAsStringAsync: (uri: string, contents: string, options?: WritingOptions) => Promise<void>;
 }
 
 export interface IosSharing {
   isAvailableAsync: () => Promise<boolean>;
-  shareAsync: (
-    uri: string,
-    options?: { mimeType?: string; dialogTitle?: string }
-  ) => Promise<void>;
+  shareAsync: (uri: string, options?: { mimeType?: string; dialogTitle?: string }) => Promise<void>;
 }
 
 export async function saveBackupToAndroid(
   json: string,
   filename: string,
-  fileSystem: AndroidBackupFileSystem
+  fileSystem: AndroidBackupFileSystem,
 ): Promise<SaveBackupResult> {
   const permission = await fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
   if (!permission.granted || !permission.directoryUri) {
@@ -53,7 +42,7 @@ export async function saveBackupToAndroid(
   const fileUri = await fileSystem.StorageAccessFramework.createFileAsync(
     permission.directoryUri,
     filenameWithoutExtension,
-    'application/json'
+    'application/json',
   );
   await fileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, json, {
     encoding: fileSystem.EncodingType.UTF8,
@@ -65,7 +54,7 @@ export async function saveBackupToIos(
   json: string,
   filename: string,
   fileSystem: IosBackupFileSystem,
-  sharing: IosSharing
+  sharing: IosSharing,
 ): Promise<SaveBackupResult> {
   if (!fileSystem.cacheDirectory) {
     throw new Error('Temporary file storage is unavailable');
@@ -92,18 +81,14 @@ export async function saveBackupAndroidWithFallback(
   json: string,
   filename: string,
   fileSystem: Partial<AndroidBackupFileSystem> & IosBackupFileSystem,
-  sharing: IosSharing
+  sharing: IosSharing,
 ): Promise<SaveBackupResult> {
   try {
     if (
       fileSystem.StorageAccessFramework &&
       typeof fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync === 'function'
     ) {
-      return await saveBackupToAndroid(
-        json,
-        filename,
-        fileSystem as AndroidBackupFileSystem
-      );
+      return await saveBackupToAndroid(json, filename, fileSystem as AndroidBackupFileSystem);
     }
   } catch (safErr) {
     reportError(safErr, { scope: 'backup.save.saf-fallback' });
@@ -113,7 +98,7 @@ export async function saveBackupAndroidWithFallback(
 
 function getPlatformOS(): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- platform probe for diagnostics only
     const rn = require('react-native');
     return rn?.Platform?.OS || 'unknown';
   } catch {

@@ -1,12 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  LayoutChangeEvent,
-  GestureResponderEvent,
-} from 'react-native';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, LayoutChangeEvent, GestureResponderEvent } from 'react-native';
 import Svg, {
   Path,
   Defs,
@@ -57,7 +50,6 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
 
   const points = series.points;
 
-
   const handleLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
     if (w > 0 && Math.abs(w - containerWidth) > 2) {
@@ -65,20 +57,23 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
     }
   };
 
-  const getPointValue = (p: ProgressionDataPoint): number => {
-    switch (metric) {
-      case 'e1rm':
-        return kgToDisplay(p.e1rmKg, unit);
-      case 'max_weight':
-        return kgToDisplay(p.maxWeightKg, unit);
-      case 'volume':
-        return kgToDisplay(p.totalVolumeKg, unit);
-      case 'max_reps':
-        return p.maxReps;
-      default:
-        return kgToDisplay(p.e1rmKg, unit);
-    }
-  };
+  const getPointValue = useCallback(
+    (p: ProgressionDataPoint): number => {
+      switch (metric) {
+        case 'e1rm':
+          return kgToDisplay(p.e1rmKg, unit);
+        case 'max_weight':
+          return kgToDisplay(p.maxWeightKg, unit);
+        case 'volume':
+          return kgToDisplay(p.totalVolumeKg, unit);
+        case 'max_reps':
+          return p.maxReps;
+        default:
+          return kgToDisplay(p.e1rmKg, unit);
+      }
+    },
+    [metric, unit],
+  );
 
   const formatMetricValue = (val: number): string => {
     if (metric === 'max_reps') {
@@ -118,12 +113,10 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
     const valueSpan = Math.max(1, max - min);
 
     const mappedCoords = points.map((p, idx) => {
-      let x = paddingLeft;
-      if (points.length === 1) {
-        x = paddingLeft + chartWidth / 2;
-      } else {
-        x = paddingLeft + (idx / (points.length - 1)) * chartWidth;
-      }
+      const x =
+        points.length === 1
+          ? paddingLeft + chartWidth / 2
+          : paddingLeft + (idx / (points.length - 1)) * chartWidth;
 
       const val = getPointValue(p);
       const normalizedY = (val - min) / valueSpan;
@@ -167,7 +160,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
       linePath: lineD,
       areaPath: areaD,
     };
-  }, [points, metric, unit, containerWidth, height]);
+  }, [points, chartWidth, chartHeight, getPointValue]);
 
   const trajectoryStats = useMemo(() => {
     if (points.length === 0) return null;
@@ -175,8 +168,8 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
     const lastP = points[points.length - 1];
 
     let changePct: number | null = null;
-    let bestFormatted = '';
-    let currentFormatted = '';
+    let bestFormatted: string;
+    let currentFormatted: string;
 
     if (metric === 'e1rm') {
       const best = series.summary.allTimeBest1RM;
@@ -192,10 +185,12 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
       bestFormatted = formatWeight(best, unit);
       currentFormatted = formatWeight(current, unit);
       if (points.length >= 2 && firstP.maxWeightKg > 0) {
-        changePct = Number((((lastP.maxWeightKg - firstP.maxWeightKg) / firstP.maxWeightKg) * 100).toFixed(1));
+        changePct = Number(
+          (((lastP.maxWeightKg - firstP.maxWeightKg) / firstP.maxWeightKg) * 100).toFixed(1),
+        );
       }
     } else if (metric === 'max_reps') {
-      const best = series.summary.allTimeBestReps || Math.max(...points.map((p) => p.maxReps));
+      const best = series.summary.allTimeBestReps || Math.max(...points.map(p => p.maxReps));
       const current = lastP.maxReps;
       bestFormatted = `${best} reps`;
       currentFormatted = `${current} reps`;
@@ -204,12 +199,14 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
       }
     } else {
       // volume
-      const best = Math.max(...points.map((p) => p.totalVolumeKg));
+      const best = Math.max(...points.map(p => p.totalVolumeKg));
       const current = lastP.totalVolumeKg;
       bestFormatted = formatWeight(best, unit);
       currentFormatted = formatWeight(current, unit);
       if (points.length >= 2 && firstP.totalVolumeKg > 0) {
-        changePct = Number((((lastP.totalVolumeKg - firstP.totalVolumeKg) / firstP.totalVolumeKg) * 100).toFixed(1));
+        changePct = Number(
+          (((lastP.totalVolumeKg - firstP.totalVolumeKg) / firstP.totalVolumeKg) * 100).toFixed(1),
+        );
       }
     }
 
@@ -243,9 +240,8 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
     }
   };
 
-  const activeIndex = selectedIndex !== null
-    ? Math.min(selectedIndex, points.length - 1)
-    : points.length - 1;
+  const activeIndex =
+    selectedIndex !== null ? Math.min(selectedIndex, points.length - 1) : points.length - 1;
   const activePoint = points[activeIndex];
   const activeCoord = coords[activeIndex];
 
@@ -281,8 +277,8 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
                 trajectoryStats.changePct > 0
                   ? styles.trajectoryPillPositive
                   : trajectoryStats.changePct < 0
-                  ? styles.trajectoryPillNegative
-                  : styles.trajectoryPillNeutral,
+                    ? styles.trajectoryPillNegative
+                    : styles.trajectoryPillNeutral,
               ]}
             >
               {trajectoryStats.changePct > 0 ? (
@@ -296,11 +292,13 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
                   trajectoryStats.changePct > 0
                     ? { color: colors.success }
                     : trajectoryStats.changePct < 0
-                    ? { color: colors.danger }
-                    : { color: colors.textSecondary },
+                      ? { color: colors.danger }
+                      : { color: colors.textSecondary },
                 ]}
               >
-                {trajectoryStats.changePct > 0 ? `+${trajectoryStats.changePct}%` : `${trajectoryStats.changePct}%`}
+                {trajectoryStats.changePct > 0
+                  ? `+${trajectoryStats.changePct}%`
+                  : `${trajectoryStats.changePct}%`}
               </Text>
             </View>
           )}
@@ -316,7 +314,10 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
           </View>
 
           <View style={styles.summaryMetaPill}>
-            <Text style={styles.summaryMetaValue}>{trajectoryStats.totalSessions} {trajectoryStats.totalSessions === 1 ? 'session' : 'sessions'}</Text>
+            <Text style={styles.summaryMetaValue}>
+              {trajectoryStats.totalSessions}{' '}
+              {trajectoryStats.totalSessions === 1 ? 'session' : 'sessions'}
+            </Text>
           </View>
         </View>
       )}
@@ -333,10 +334,10 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
                   {metric === 'e1rm'
                     ? 'NEW 1RM PR'
                     : metric === 'max_weight'
-                    ? 'NEW WEIGHT PR'
-                    : metric === 'volume'
-                    ? 'NEW VOL PR'
-                    : 'NEW REPS PR'}
+                      ? 'NEW WEIGHT PR'
+                      : metric === 'volume'
+                        ? 'NEW VOL PR'
+                        : 'NEW REPS PR'}
                 </Text>
               </View>
             )}
@@ -350,16 +351,20 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
               {metric === 'e1rm'
                 ? 'Est. 1RM'
                 : metric === 'max_weight'
-                ? 'Top Weight'
-                : metric === 'volume'
-                ? 'Session Volume'
-                : 'Max Reps'}
+                  ? 'Top Weight'
+                  : metric === 'volume'
+                    ? 'Session Volume'
+                    : 'Max Reps'}
             </Text>
           </View>
 
           <View style={styles.calloutFooter}>
             <Text style={styles.calloutTopSet}>
-              Best Set: {activePoint.topSet.weightKg > 0 ? formatWeight(activePoint.topSet.weightKg, unit) : 'BW'} × {activePoint.topSet.reps}
+              Best Set:{' '}
+              {activePoint.topSet.weightKg > 0
+                ? formatWeight(activePoint.topSet.weightKg, unit)
+                : 'BW'}{' '}
+              × {activePoint.topSet.reps}
               {activePoint.topSet.rpe ? ` @${activePoint.topSet.rpe}` : ''}
             </Text>
             {gymTrackingEnabled && activePoint.gymName && (
@@ -413,9 +418,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
           ))}
 
           {/* Area Fill */}
-          {areaPath !== '' && (
-            <Path d={areaPath} fill="url(#curveGradient)" />
-          )}
+          {areaPath !== '' && <Path d={areaPath} fill="url(#curveGradient)" />}
 
           {/* Curve Stroke */}
           {linePath !== '' && (
@@ -450,14 +453,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
             return (
               <G key={c.point.workoutId || idx}>
                 {/* Active halo */}
-                {isSelected && (
-                  <Circle
-                    cx={c.x}
-                    cy={c.y}
-                    r="8"
-                    fill="#38BDF825"
-                  />
-                )}
+                {isSelected && <Circle cx={c.x} cy={c.y} r="8" fill="#38BDF825" />}
 
                 {/* Point dot */}
                 <Circle

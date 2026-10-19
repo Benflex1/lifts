@@ -1,5 +1,6 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { AppTouchable } from '../components/ui';
 import { X } from 'lucide-react-native';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 import { ExercisePickerModal } from '../components/ExercisePickerModal';
@@ -27,8 +28,12 @@ import { styles } from './activeWorkoutStyles';
  * ARCH-01: composition only. Screen state and handlers live in `useActiveWorkoutController`;
  * the header, exercise stream, option menus, and modals are the extracted children.
  */
-export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({ onFinish }) => {
-  const { activeWorkout, header, stream, overlays, modals } = useActiveWorkoutController({ onFinish });
+export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => void }> = ({
+  onFinish,
+}) => {
+  const { activeWorkout, header, stream, overlays, modals } = useActiveWorkoutController({
+    onFinish,
+  });
 
   if (!activeWorkout) {
     return null;
@@ -44,10 +49,7 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
       <ExerciseStream {...stream} />
 
       {/* Floating Rest Timer Overlay */}
-      <RestTimerOverlay
-        nextUpText={overlays.nextUpCue}
-        bottomOffset={overlays.bottomOffset}
-      />
+      <RestTimerOverlay nextUpText={overlays.nextUpCue} bottomOffset={overlays.bottomOffset} />
 
       {/* Non-blocking Floating Superset Cue when timer is not active */}
       {!overlays.isRestTimerActive && overlays.nextUpCue && (
@@ -58,14 +60,14 @@ export const ActiveWorkoutScreen: React.FC<{ onFinish: (workout: Workout) => voi
           <Text style={styles.supersetCueText} numberOfLines={1}>
             {overlays.nextUpCue}
           </Text>
-          <TouchableOpacity
+          <AppTouchable
             onPress={overlays.onDismissNextUpCue}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Dismiss next up cue"
           >
             <X size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       )}
 

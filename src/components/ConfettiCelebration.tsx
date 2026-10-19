@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Dimensions, Animated, Easing, Platform } from 'react-native';
+import { StyleSheet, Dimensions, Animated, Easing, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
 
@@ -107,7 +107,7 @@ export const ConfettiCelebration: React.FC<ConfettiCelebrationProps> = ({
 
   return (
     <Animated.View style={[styles.container, { opacity }]} pointerEvents="none">
-      {particles.map((p) => (
+      {particles.map(p => (
         <Animated.View
           key={p.id}
           style={[

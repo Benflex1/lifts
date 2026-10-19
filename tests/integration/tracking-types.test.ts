@@ -10,13 +10,18 @@ import { parseWorkoutCsv } from '../../src/utils/importer/csv-parser';
 import { EXERCISE_TRACKING_TYPES_KEY } from '../../src/workout/tracking';
 import { Workout } from '../../src/types';
 
-async function exerciseById(store: Awaited<ReturnType<typeof createStoreFixture>>['store'], id: string) {
+async function exerciseById(
+  store: Awaited<ReturnType<typeof createStoreFixture>>['store'],
+  id: string,
+) {
   const exercise = await store.getExerciseById(id);
   assert.ok(exercise, `missing exercise ${id}`);
   return exercise!;
 }
 
-async function trackedWorkout(store: Awaited<ReturnType<typeof createStoreFixture>>['store']): Promise<Workout> {
+async function trackedWorkout(
+  store: Awaited<ReturnType<typeof createStoreFixture>>['store'],
+): Promise<Workout> {
   const plank = await exerciseById(store, 'Plank');
   const run = await exerciseById(store, 'Running_Treadmill');
   const bench = await exerciseById(store, 'Barbell_Bench_Press_-_Medium_Grip');
@@ -30,16 +35,60 @@ async function trackedWorkout(store: Awaited<ReturnType<typeof createStoreFixtur
     totalVolumeKg: 500,
     exercises: [
       {
-        id: 'ae-bench', exerciseId: bench.id, exercise: bench, restTimerSeconds: 90,
-        sets: [{ id: 'set-bench', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true, completedAt: '2026-10-01T10:05:00.000Z' }],
+        id: 'ae-bench',
+        exerciseId: bench.id,
+        exercise: bench,
+        restTimerSeconds: 90,
+        sets: [
+          {
+            id: 'set-bench',
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 100,
+            reps: 5,
+            isCompleted: true,
+            completedAt: '2026-10-01T10:05:00.000Z',
+          },
+        ],
       },
       {
-        id: 'ae-plank', exerciseId: plank.id, exercise: plank, restTimerSeconds: 60, trackingType: 'duration',
-        sets: [{ id: 'set-plank', setNumber: 1, type: 'normal', weightKg: 0, reps: 0, durationSeconds: 75, isCompleted: true, completedAt: '2026-10-01T10:20:00.000Z' }],
+        id: 'ae-plank',
+        exerciseId: plank.id,
+        exercise: plank,
+        restTimerSeconds: 60,
+        trackingType: 'duration',
+        sets: [
+          {
+            id: 'set-plank',
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 0,
+            reps: 0,
+            durationSeconds: 75,
+            isCompleted: true,
+            completedAt: '2026-10-01T10:20:00.000Z',
+          },
+        ],
       },
       {
-        id: 'ae-run', exerciseId: run.id, exercise: run, restTimerSeconds: 0, trackingType: 'distance_duration',
-        sets: [{ id: 'set-run', setNumber: 1, type: 'normal', weightKg: 0, reps: 0, durationSeconds: 1500, distanceM: 5000, isCompleted: true, completedAt: '2026-10-01T10:50:00.000Z' }],
+        id: 'ae-run',
+        exerciseId: run.id,
+        exercise: run,
+        restTimerSeconds: 0,
+        trackingType: 'distance_duration',
+        sets: [
+          {
+            id: 'set-run',
+            setNumber: 1,
+            type: 'normal',
+            weightKg: 0,
+            reps: 0,
+            durationSeconds: 1500,
+            distanceM: 5000,
+            isCompleted: true,
+            completedAt: '2026-10-01T10:50:00.000Z',
+          },
+        ],
       },
     ],
   };
@@ -52,7 +101,7 @@ for (const platform of ['native', 'web'] as const) {
       try {
         await fixture.store.saveCompletedWorkout(await trackedWorkout(fixture.store));
         const detail = await fixture.store.getWorkoutDetail('wo-tracked');
-        const byId = new Map(detail!.exercises.map((exercise) => [exercise.id, exercise]));
+        const byId = new Map(detail!.exercises.map(exercise => [exercise.id, exercise]));
         assert.equal(byId.get('ae-bench')!.trackingType, undefined);
         assert.equal('durationSeconds' in byId.get('ae-bench')!.sets[0], false);
         assert.equal(byId.get('ae-plank')!.trackingType, 'duration');
@@ -60,12 +109,18 @@ for (const platform of ['native', 'web'] as const) {
         assert.equal(byId.get('ae-run')!.trackingType, 'distance_duration');
         assert.equal(byId.get('ae-run')!.sets[0].distanceM, 5000);
 
-        const [previous] = await fixture.store.getPreviousSetsForExercise('Running_Treadmill', 0, 'gym-default');
+        const [previous] = await fixture.store.getPreviousSetsForExercise(
+          'Running_Treadmill',
+          0,
+          'gym-default',
+        );
         assert.equal(previous.durationSeconds, 1500);
         assert.equal(previous.distanceM, 5000);
 
         const history = await fixture.store.getCompletedWorkoutsForExercise('Plank');
-        const plankOccurrence = history[0].exercises.find((exercise) => exercise.exerciseId === 'Plank')!;
+        const plankOccurrence = history[0].exercises.find(
+          exercise => exercise.exerciseId === 'Plank',
+        )!;
         assert.equal(plankOccurrence.trackingType, 'duration');
         assert.equal(plankOccurrence.sets[0].durationSeconds, 75);
       } finally {
@@ -80,20 +135,26 @@ for (const platform of ['native', 'web'] as const) {
         assert.equal(JSON.parse(await buildBackupJson(source.store)).version, 3);
 
         await source.store.saveCompletedWorkout(await trackedWorkout(source.store));
-        await source.store.setSetting(EXERCISE_TRACKING_TYPES_KEY, '{"Pushups":"weighted_bodyweight","Plank":"duration"}');
+        await source.store.setSetting(
+          EXERCISE_TRACKING_TYPES_KEY,
+          '{"Pushups":"weighted_bodyweight","Plank":"duration"}',
+        );
         await target.store.setSetting(EXERCISE_TRACKING_TYPES_KEY, '{"Plank":"bodyweight_reps"}');
         const json = await buildBackupJson(source.store);
         assert.equal(parseBackup(json).version, 4);
 
         await restoreBackup(json, target.store);
         const restored = await target.store.getWorkoutDetail('wo-tracked');
-        const run = restored!.exercises.find((exercise) => exercise.id === 'ae-run')!;
+        const run = restored!.exercises.find(exercise => exercise.id === 'ae-run')!;
         assert.equal(run.trackingType, 'distance_duration');
         assert.equal(run.sets[0].durationSeconds, 1500);
-        assert.deepEqual(JSON.parse((await target.store.getSetting(EXERCISE_TRACKING_TYPES_KEY))!), {
-          Plank: 'bodyweight_reps',
-          Pushups: 'weighted_bodyweight',
-        });
+        assert.deepEqual(
+          JSON.parse((await target.store.getSetting(EXERCISE_TRACKING_TYPES_KEY))!),
+          {
+            Plank: 'bodyweight_reps',
+            Pushups: 'weighted_bodyweight',
+          },
+        );
 
         // Restoring the same backup again finds the tracked workout identical and skips it.
         const { preview } = await computeRestorePlan(parseBackup(json), target.store);
@@ -116,7 +177,9 @@ describe('tracking type storage migration', () => {
     await driver.runAsync(
       `INSERT INTO workouts (id, name, start_time, gym_id, in_progress) VALUES ('w1', 'Old', '2026-01-01T10:00:00.000Z', 'gym-default', 0)`,
     );
-    await driver.runAsync(`INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index) VALUES ('we1', 'w1', 'Bench', 0)`);
+    await driver.runAsync(
+      `INSERT INTO workout_exercises (id, workout_id, exercise_id, order_index) VALUES ('we1', 'w1', 'Bench', 0)`,
+    );
     await driver.runAsync(
       `INSERT INTO exercise_sets (id, workout_exercise_id, set_number, weight_kg, reps, is_completed) VALUES ('s1', 'we1', 1, 80, 8, 1)`,
     );
@@ -138,7 +201,10 @@ describe('tracking type storage migration', () => {
     await applyMigrations(driver, { maxVersion: 8 });
     await assert.rejects(applyMigrations(driver, { failAtVersion: 9 }), /version 9/);
     const columns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercise_sets);');
-    assert.equal(columns.some((column) => column.name === 'duration_seconds'), false);
+    assert.equal(
+      columns.some(column => column.name === 'duration_seconds'),
+      false,
+    );
     driver.close();
   });
 });
@@ -173,9 +239,14 @@ describe('CSV import of time and distance', () => {
 2024-07-01 08:00:00,Cardio,45m,Plank,1,0,kg,0,,,,60,,
 2024-07-01 08:00:00,Cardio,45m,Running (Treadmill),1,0,kg,0,,5,km,1500,,
 2024-07-01 08:00:00,Cardio,45m,Bench Press (Barbell),1,100,kg,5,,,,,,`;
-      const plan = computeCsvImportPlan(csv, await fixture.store.readSnapshot(), { targetGymId: 'gym-default' });
+      const plan = computeCsvImportPlan(csv, await fixture.store.readSnapshot(), {
+        targetGymId: 'gym-default',
+      });
       const [workout] = plan.snapshotToMerge.workouts;
-      assert.deepEqual(workout.exercises.map((exercise) => exercise.trackingType), ['duration', 'distance_duration', undefined]);
+      assert.deepEqual(
+        workout.exercises.map(exercise => exercise.trackingType),
+        ['duration', 'distance_duration', undefined],
+      );
       assert.equal(workout.totalVolumeKg, 500);
     } finally {
       await fixture.dispose();
