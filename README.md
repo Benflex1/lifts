@@ -72,6 +72,7 @@ Lifts employs a dual-engine local storage architecture:
 - **Native (Android & iOS)**: Stored in a durable SQLite database via `expo-sqlite` with write queue serialization and transactional schema migrations (`src/database/nativeStore.ts`).
 - **Web**: Stored in client-side IndexedDB with single-writer lease protection (`src/database/webStore.ts`).
   - *Note on Web Limitations*: Data stored in the browser depends on local browser storage policies. Clearing browsing history, using incognito/private mode, or browser storage eviction can remove local data. For permanent and offline training, use the native Android or iOS builds.
+  - *Installable shell*: production web exports ship a manifest and a versioned service worker, completed by `scripts/postprocess-web-export.mjs`. Keep the first visit online until service-worker installation finishes; the matching shell and exported assets, including unvisited tab bundles, are then available offline. New releases install online and activate after existing app tabs close. Workout data still follows the storage caveat above.
 
 ---
 
@@ -159,6 +160,8 @@ To build a standalone debug APK locally without relying on cloud services:
 - [Product Roadmap](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
 - [Release & Verification Checklist](docs/release-checklist.md) (including signing and publishing)
+- [Navigation Model](docs/navigation.md)
+- [Platform Dispatch](docs/platform-dispatch.md)
 - [Multi-Gym Tracking & Machine Isolation Design Spec](docs/superpowers/specs/2026-09-10-multi-gym-tracking-design.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)

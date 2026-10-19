@@ -1,14 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Switch,
-} from 'react-native';
+import { Modal, View, Text, ScrollView, StyleSheet, ActivityIndicator, Switch } from 'react-native';
+import { AppTouchable } from './ui';
 import {
   X,
   FileSpreadsheet,
@@ -100,7 +92,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                 <FileSpreadsheet size={22} color={colors.primary} />
                 <Text style={styles.headerTitle}>Import Workouts</Text>
               </View>
-              <TouchableOpacity
+              <AppTouchable
                 onPress={onClose}
                 disabled={isImporting}
                 style={styles.closeBtn}
@@ -108,7 +100,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                 accessibilityLabel="Close import modal"
               >
                 <X size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
+              </AppTouchable>
             </View>
 
             <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
@@ -212,12 +204,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                 {/* Filter Tabs */}
                 <View style={styles.filterChipRow}>
                   {unassignedCustomCount > 0 && (
-                    <TouchableOpacity
+                    <AppTouchable
                       style={[
                         styles.filterChip,
                         assignmentFilter === 'needs_review' && styles.filterChipActiveWarning,
                       ]}
                       onPress={() => setAssignmentFilter('needs_review')}
+                      accessibilityRole="button"
+                      accessibilityLabel="Show assignments that need review"
+                      accessibilityState={{ selected: assignmentFilter === 'needs_review' }}
                     >
                       <AlertTriangle
                         size={13}
@@ -233,15 +228,18 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                       >
                         Needs Review ({unassignedCustomCount})
                       </Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   )}
 
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[
                       styles.filterChip,
                       assignmentFilter === 'all' && styles.filterChipActive,
                     ]}
                     onPress={() => setAssignmentFilter('all')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show all assignments"
+                    accessibilityState={{ selected: assignmentFilter === 'all' }}
                   >
                     <Text
                       style={[
@@ -251,14 +249,17 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                     >
                       All ({assignments.length})
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
 
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[
                       styles.filterChip,
                       assignmentFilter === 'matched' && styles.filterChipActive,
                     ]}
                     onPress={() => setAssignmentFilter('matched')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show matched assignments"
+                    accessibilityState={{ selected: assignmentFilter === 'matched' }}
                   >
                     <Text
                       style={[
@@ -268,7 +269,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                     >
                       Matched ({matchedCount})
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 </View>
 
                 {/* Assignment Items List */}
@@ -328,7 +329,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                           <View style={styles.assignmentActionsRow}>
                             {isCustom ? (
                               <>
-                                <TouchableOpacity
+                                <AppTouchable
                                   style={styles.actionBtnPrimary}
                                   onPress={() => setPickerTargetRawName(item.rawName)}
                                   accessibilityRole="button"
@@ -338,7 +339,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                                   <Text style={styles.actionBtnPrimaryText}>
                                     Select Library Exercise
                                   </Text>
-                                </TouchableOpacity>
+                                </AppTouchable>
 
                                 <View style={styles.actionBtnStatic}>
                                   <CheckCircle2 size={13} color={colors.textSecondary} />
@@ -347,7 +348,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                               </>
                             ) : (
                               <>
-                                <TouchableOpacity
+                                <AppTouchable
                                   style={styles.actionBtnSecondary}
                                   onPress={() => setPickerTargetRawName(item.rawName)}
                                   accessibilityRole="button"
@@ -355,10 +356,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                                 >
                                   <Edit3 size={13} color={colors.primaryLight} />
                                   <Text style={styles.actionBtnSecondaryText}>Change Exercise</Text>
-                                </TouchableOpacity>
+                                </AppTouchable>
 
                                 {onSetCustomExercise && (
-                                  <TouchableOpacity
+                                  <AppTouchable
                                     style={styles.actionBtnSubtle}
                                     onPress={() => onSetCustomExercise(item.rawName)}
                                     accessibilityRole="button"
@@ -366,7 +367,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                                   >
                                     <Plus size={13} color={colors.textSecondary} />
                                     <Text style={styles.actionBtnSubtleText}>Make Custom</Text>
-                                  </TouchableOpacity>
+                                  </AppTouchable>
                                 )}
                               </>
                             )}
@@ -392,11 +393,14 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                     {gyms.map(gym => {
                       const isSelected = gym.id === selectedGymId;
                       return (
-                        <TouchableOpacity
+                        <AppTouchable
                           key={gym.id}
                           style={[styles.gymOption, isSelected && styles.gymOptionSelected]}
                           onPress={() => onSelectGymId(gym.id)}
                           disabled={isImporting}
+                          accessibilityRole="radio"
+                          accessibilityLabel={`Import into ${gym.name}`}
+                          accessibilityState={{ selected: isSelected, disabled: isImporting }}
                         >
                           <View
                             style={[
@@ -413,7 +417,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                             {gym.name} {gym.isDefault ? '(Default)' : ''}
                           </Text>
                           {isSelected && <CheckCircle2 size={16} color={colors.primary} />}
-                        </TouchableOpacity>
+                        </AppTouchable>
                       );
                     })}
                   </View>
@@ -472,11 +476,18 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
 
             {/* Footer Action Buttons */}
             <View style={styles.footer}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={isImporting}>
+              <AppTouchable
+                style={styles.cancelBtn}
+                onPress={onClose}
+                disabled={isImporting}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel import"
+                accessibilityState={{ disabled: isImporting }}
+              >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
+              </AppTouchable>
 
-              <TouchableOpacity
+              <AppTouchable
                 style={[
                   styles.confirmBtn,
                   (isImporting || (skipDuplicates && preview.newWorkoutsCount === 0)) &&
@@ -484,6 +495,12 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                 ]}
                 onPress={onConfirmImport}
                 disabled={isImporting || (skipDuplicates && preview.newWorkoutsCount === 0)}
+                accessibilityRole="button"
+                accessibilityLabel="Import workouts"
+                accessibilityState={{
+                  disabled: isImporting || (skipDuplicates && preview.newWorkoutsCount === 0),
+                  busy: isImporting,
+                }}
               >
                 {isImporting ? (
                   <ActivityIndicator size="small" color={colors.text} />
@@ -496,7 +513,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                     <ArrowRight size={18} color={colors.text} />
                   </>
                 )}
-              </TouchableOpacity>
+              </AppTouchable>
             </View>
           </View>
         </View>

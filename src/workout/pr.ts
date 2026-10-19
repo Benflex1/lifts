@@ -83,7 +83,7 @@ export interface WorkoutPRSummary {
  * Structural comparison of two achievements. PR evaluation rebuilds result
  * objects on every pass, so memoized rows compare by value instead of identity.
  */
-export function isSamePRAchievement(a?: PRAchievement | null, b?: PRAchievement | null): boolean {
+function isSamePRAchievement(a?: PRAchievement | null, b?: PRAchievement | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   return (
@@ -168,7 +168,7 @@ export function evaluateRank(
 /**
  * Extracts distinct, descending-sorted values for weight, 1RM, volume, and reps from workouts.
  */
-export function extractLeaderboard(
+function extractLeaderboard(
   workouts: Workout[],
   exerciseId: string,
   gymFilter: Set<string> | null,
@@ -207,7 +207,7 @@ export function extractLeaderboard(
  * Global Rank 1 > Gym Rank 1
  * Weight > 1RM > Volume > Reps
  */
-export function compareAchievements(a: PRAchievement, b: PRAchievement): number {
+function compareAchievements(a: PRAchievement, b: PRAchievement): number {
   if (a.rank !== b.rank) return a.rank - b.rank; // 1 < 2 < 3
   if (a.isTie !== b.isTie) {
     if (!a.isTie && b.isTie) return -1;

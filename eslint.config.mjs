@@ -57,6 +57,16 @@ export default tseslint.config(
       'src/components/ReadOnlyBanner.tsx',
       'src/components/RestTimeWheelModal.tsx',
       'src/components/PRCelebrationToast.tsx',
+      'src/components/CsvImportModal.tsx',
+      'src/components/CustomExerciseModal.tsx',
+      'src/components/ExerciseScopeModal.tsx',
+      'src/components/FolderManageModal.tsx',
+      'src/components/RoutineEditorModal.tsx',
+      'src/components/WorkoutEditModal.tsx',
+      'src/screens/AnalyticsScreen.tsx',
+      'src/screens/ExercisesScreen.tsx',
+      'src/screens/WorkoutScreen.tsx',
+      'src/screens/history/HistoryCard.tsx',
     ],
     rules: {
       'no-restricted-imports': [
@@ -70,6 +80,23 @@ export default tseslint.config(
                 'Use AppTouchable from src/components/ui (it requires an accessibility label).',
             },
           ],
+        },
+      ],
+    },
+  },
+  {
+    // ARCH-08: module selection uses Metro platform extensions. DOM capability
+    // checks belong in *.web.ts modules; export.ts is the documented exception
+    // (browser download path shared by every platform).
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/**/*.web.ts', 'src/utils/export.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'UnaryExpression[operator="typeof"][argument.name="document"]',
+          message:
+            'Use a Metro platform extension (*.web.ts) instead of runtime DOM detection (see docs/platform-dispatch.md).',
         },
       ],
     },
@@ -91,6 +118,13 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    // Service worker for the exported web shell (PROD-06).
+    files: ['public/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.serviceworker },
     },
   },
 );

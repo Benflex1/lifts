@@ -40,6 +40,7 @@ mockModule('react-native', {
 
 const iconProxy = new Proxy({}, { get: (_target, name) => name }) as Record<string, unknown>;
 mockModule('lucide-react-native', iconProxy);
+mockModule('../../src/components/ui', { AppTouchable: 'TouchableOpacity' });
 
 interface CustomExercisePayload {
   name: string;

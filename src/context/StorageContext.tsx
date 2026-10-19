@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { getStore, initDatabase } from '../database/db';
 import { reportError } from '../utils/errorReporting';
+import { errorMessage } from '../utils/invariant';
 
 export interface StorageContextValue {
   isReady: boolean;
@@ -42,9 +43,9 @@ export function StorageProvider({ children }: { children: ReactNode }) {
       const store = await getStore();
       setIsReadOnly(Boolean(store.isReadOnly?.()));
       setIsReady(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       reportError(err, { scope: 'storage.init' });
-      setError(err?.message || 'Storage initialization failed');
+      setError(errorMessage(err) || 'Storage initialization failed');
       setIsReady(false);
     }
   }, []);
@@ -58,7 +59,7 @@ export function StorageProvider({ children }: { children: ReactNode }) {
         return acquired;
       }
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       reportError(err, { scope: 'storage.take-over-lease' });
       return false;
     }

@@ -7,6 +7,7 @@ import { formatTimer } from '../../utils/calculator';
 import { WeightUnit, formatWeight } from '../../utils/units';
 import { colors } from '../../theme';
 import { styles } from '../activeWorkoutStyles';
+import { useI18n } from '../../i18n';
 
 /**
  * Renders the ticking workout duration without re-rendering the whole logger every
@@ -14,6 +15,7 @@ import { styles } from '../activeWorkoutStyles';
  * clock without re-rendering the header.
  */
 const LiveWorkoutClock: React.FC<{ onPress: () => void }> = ({ onPress }) => {
+  const { t } = useI18n();
   const elapsedSeconds = useWorkoutClock();
   const formatted = formatTimer(elapsedSeconds);
 
@@ -22,12 +24,12 @@ const LiveWorkoutClock: React.FC<{ onPress: () => void }> = ({ onPress }) => {
       style={styles.metricColumn}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Workout duration"
-      accessibilityHint="Opens workout duration options"
+      accessibilityLabel={t('logger.workoutDuration')}
+      accessibilityHint={t('logger.durationHint')}
       accessibilityValue={{ text: formatted }}
     >
       <Text style={[styles.metricColValue, { color: colors.primary }]}>{formatted}</Text>
-      <Text style={styles.metricColLabel}>Duration</Text>
+      <Text style={styles.metricColLabel}>{t('logger.duration')}</Text>
     </AppTouchable>
   );
 };
@@ -65,6 +67,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
   onFinish,
   onOpenDuration,
 }) => {
+  const { t } = useI18n();
   return (
     <>
       {/* Top App Bar */}
@@ -73,7 +76,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
           onPress={onMinimize}
           style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Minimize workout"
+          accessibilityLabel={t('logger.minimize')}
           accessibilityRole="button"
         >
           <ChevronDown size={22} color={colors.textSoft} />
@@ -85,7 +88,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
           </Text>
           {isDeload ? (
             <Text style={[styles.topBarSubtitle, styles.topBarDeload]} numberOfLines={1}>
-              Deload week
+              {t('workout.deloadWeek')}
               {showGym && gymName ? ` · ${gymName}` : ''}
             </Text>
           ) : showGym && gymName ? (
@@ -100,7 +103,7 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
             onPress={onOpenMenu}
             style={styles.moreBtn}
             hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-            accessibilityLabel="Workout menu"
+            accessibilityLabel={t('logger.menu')}
             accessibilityRole="button"
           >
             <MoreHorizontal size={20} color={colors.textSoft} />
@@ -111,10 +114,12 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
             style={[styles.finishBtn, isFinishing && styles.btnDisabled]}
             disabled={isFinishing}
             accessibilityRole="button"
-            accessibilityLabel="Finish workout"
+            accessibilityLabel={t('logger.finishA11y')}
             accessibilityState={{ busy: isFinishing, disabled: isFinishing }}
           >
-            <Text style={styles.finishBtnText}>{isFinishing ? 'Saving...' : 'Finish'}</Text>
+            <Text style={styles.finishBtnText}>
+              {isFinishing ? t('logger.saving') : t('logger.finish')}
+            </Text>
           </AppTouchable>
         </View>
       </View>
@@ -124,14 +129,14 @@ export const WorkoutHeader: React.FC<WorkoutHeaderProps> = ({
         <LiveWorkoutClock onPress={onOpenDuration} />
         <View style={styles.metricColumn}>
           <Text style={styles.metricColValue}>{formatWeight(liveVolume, unit)}</Text>
-          <Text style={styles.metricColLabel}>Volume</Text>
+          <Text style={styles.metricColLabel}>{t('logger.volume')}</Text>
         </View>
         <View style={styles.metricColumn}>
           <Text style={styles.metricColValue}>
             {completedSetsCount}
             <Text style={styles.metricColValueMuted}> / {totalSetsCount}</Text>
           </Text>
-          <Text style={styles.metricColLabel}>Sets</Text>
+          <Text style={styles.metricColLabel}>{t('logger.sets')}</Text>
         </View>
       </View>
       <View style={styles.progressTrack}>

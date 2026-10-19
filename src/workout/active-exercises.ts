@@ -46,21 +46,6 @@ export function moveActiveExercise(
   return moveActiveExerciseToIndex(exercises, activeExerciseId, targetIndex);
 }
 
-export function computeExerciseLayouts(
-  exerciseIds: string[],
-  heights: Record<string, number>,
-  spacing = 12,
-): Record<string, ExerciseLayout> {
-  const layouts: Record<string, ExerciseLayout> = {};
-  let currentY = 0;
-  for (const id of exerciseIds) {
-    const h = heights[id] || 80;
-    layouts[id] = { y: currentY, height: h };
-    currentY += h + spacing;
-  }
-  return layouts;
-}
-
 export function getExerciseDropIndex(
   exerciseIds: string[],
   layouts: Record<string, ExerciseLayout>,

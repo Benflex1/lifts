@@ -1,13 +1,5 @@
 import { Workout } from '../types';
 
-export interface SupersetGroupInfo {
-  id: string; // supersetId
-  label: string; // 'SUPERSET A', 'GIANT SET B', etc.
-  type: 'superset' | 'giant_set';
-  color: string;
-  exerciseIds: string[];
-}
-
 export interface ExerciseSupersetMeta {
   groupId: string;
   label: string;

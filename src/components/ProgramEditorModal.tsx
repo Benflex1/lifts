@@ -183,6 +183,7 @@ export function ProgramEditorModal({
             onPress={handleSave}
             disabled={order.length < 2 || isSaving}
             accessibilityRole="button"
+            accessibilityLabel={program ? 'Save rotation' : 'Start rotation'}
           >
             <Text style={styles.saveText}>{program ? 'Save rotation' : 'Start rotation'}</Text>
           </TouchableOpacity>
@@ -192,6 +193,7 @@ export function ProgramEditorModal({
               onPress={handleStop}
               disabled={isSaving}
               accessibilityRole="button"
+              accessibilityLabel="Stop rotation"
             >
               <Text style={styles.stopText}>Stop rotation</Text>
             </TouchableOpacity>

@@ -114,3 +114,9 @@ Ranked by priority. Finishing the F-Droid submission (Phase 4) comes first; the 
 - [ ] **Lock-Screen Rest Timer & Home-Screen Widget**: An ongoing notification or widget showing the rest countdown and the next set. Gives most of a watch companion's value for much less work.
 - [ ] **Translations (i18n)**: Translation infrastructure with English and German first. F-Droid's audience is international, and it gets more expensive to add the more screens there are.
 - [ ] **Light Theme & Accessibility Pass**: Screen-reader labels across all screens and a light or high-contrast theme option.
+
+#### Scoped media and companion milestone (2026-10-18)
+
+- **Media increment 1 (next):** a 2-second looping animation for the 20 highest-traffic exercises, generated from the existing local two-frame SVG poses (no remote assets, no licensing changes), with a reduced-motion opt-out. This is the small increment before any full animation system.
+- **Media increment 2 (later):** complete the animation set, then evaluate video/GIF loops.
+- **Watch companion:** deferred behind the lock-screen rest timer and home-screen widget (Phase 5), which deliver the same wrist-visible value with far less surface area.

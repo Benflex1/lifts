@@ -6,6 +6,7 @@ import { IconButton } from '../../components/ui';
 import { colors } from '../../theme';
 import { styles } from '../workoutStyles';
 import { buildRoutineSummary } from './workoutScreenLogic';
+import { useI18n } from '../../i18n';
 
 export interface RoutineCardProps {
   routine: Routine;
@@ -22,6 +23,7 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
   onOpenMenu,
   onStart,
 }) => {
+  const { t } = useI18n();
   const { hasSupersets, exerciseCount, setCount, preview } = buildRoutineSummary(routine);
 
   return (
@@ -33,7 +35,9 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
           </Text>
           <View style={styles.routineMetaRow}>
             <Text style={styles.routineMeta}>
-              {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} · {setCount} sets
+              {exerciseCount === 1
+                ? t('workout.routineMetaOne', { exercises: exerciseCount, sets: setCount })
+                : t('workout.routineMetaOther', { exercises: exerciseCount, sets: setCount })}
             </Text>
             {routine.folderName && showFolderTag && (
               <View style={styles.metaTag}>
@@ -44,7 +48,9 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
             {hasSupersets && (
               <View style={[styles.metaTag, styles.supersetTag]}>
                 <Layers size={11} color={colors.purpleLight} />
-                <Text style={[styles.metaTagText, { color: colors.purpleLight }]}>Supersets</Text>
+                <Text style={[styles.metaTagText, { color: colors.purpleLight }]}>
+                  {t('workout.supersets')}
+                </Text>
               </View>
             )}
           </View>
@@ -70,10 +76,10 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({
         onPress={() => onStart(routine)}
         activeOpacity={0.8}
         accessibilityRole="button"
-        accessibilityLabel={`Start ${routine.name}`}
+        accessibilityLabel={t('workout.startRoutineOf', { name: routine.name })}
       >
         <Play size={15} color={colors.primaryLight} fill={colors.primaryLight} />
-        <Text style={styles.startRoutineBtnText}>Start Routine</Text>
+        <Text style={styles.startRoutineBtnText}>{t('workout.startRoutine')}</Text>
       </TouchableOpacity>
     </View>
   );

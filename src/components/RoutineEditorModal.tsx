@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TextInput, ScrollView, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { useDialog } from '../context/DialogContext';
 import {
   X,
@@ -364,18 +357,25 @@ export const RoutineEditorModal: React.FC<Props> = ({
       <View ref={modalA11yRef} accessibilityViewIsModal style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
+          <AppTouchable
             onPress={onClose}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close routine editor"
           >
             <X size={24} color={colors.textSecondary} />
-          </TouchableOpacity>
+          </AppTouchable>
           <Text style={styles.headerTitle}>
             {routineToEdit ? 'Edit Routine' : 'Create Routine'}
           </Text>
-          <TouchableOpacity onPress={handleSave} style={styles.saveHeaderBtn}>
+          <AppTouchable
+            onPress={handleSave}
+            style={styles.saveHeaderBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Save routine"
+          >
             <Text style={styles.saveHeaderBtnText}>Save</Text>
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
 
         <ScrollView
@@ -414,10 +414,13 @@ export const RoutineEditorModal: React.FC<Props> = ({
               {allFolderSuggestions.map(f => {
                 const isSelected = folderName.toLowerCase() === f.toLowerCase();
                 return (
-                  <TouchableOpacity
+                  <AppTouchable
                     key={f}
                     style={[styles.folderPresetChip, isSelected && styles.folderPresetChipActive]}
                     onPress={() => handleSelectFolder(f)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Folder ${f}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <Folder
                       size={11}
@@ -429,7 +432,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                     >
                       {f}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 );
               })}
             </ScrollView>
@@ -471,12 +474,15 @@ export const RoutineEditorModal: React.FC<Props> = ({
               <Text style={styles.sectionTitle}>Exercises ({draftExercises.length})</Text>
               {draftExercises.length > 1 && (
                 <View style={styles.viewToggleGroup}>
-                  <TouchableOpacity
+                  <AppTouchable
                     style={[
                       styles.viewToggleBtn,
                       viewMode === 'detailed' && styles.viewToggleBtnActive,
                     ]}
                     onPress={() => setViewMode('detailed')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Detailed view"
+                    accessibilityState={{ selected: viewMode === 'detailed' }}
                   >
                     <Text
                       style={[
@@ -486,13 +492,16 @@ export const RoutineEditorModal: React.FC<Props> = ({
                     >
                       Detailed
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </AppTouchable>
+                  <AppTouchable
                     style={[
                       styles.viewToggleBtn,
                       viewMode === 'compact' && styles.viewToggleBtnActive,
                     ]}
                     onPress={() => setViewMode('compact')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Compact view"
+                    accessibilityState={{ selected: viewMode === 'compact' }}
                   >
                     <Text
                       style={[
@@ -502,20 +511,22 @@ export const RoutineEditorModal: React.FC<Props> = ({
                     >
                       Compact
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 </View>
               )}
             </View>
-            <TouchableOpacity
+            <AppTouchable
               style={styles.addExBtn}
               onPress={() => {
                 setReplacingIndex(null);
                 setShowPicker(true);
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Add exercise"
             >
               <Plus size={16} color={colors.primary} />
               <Text style={styles.addExBtnText}>Add</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           {/* Compact View Mode */}
@@ -527,7 +538,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   <React.Fragment key={item.id}>
                     {ssMeta?.isFirst && (
                       <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
-                        <TouchableOpacity
+                        <AppTouchable
                           style={[
                             styles.supersetPill,
                             { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
@@ -541,7 +552,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
                             {ssMeta.label}
                           </Text>
-                        </TouchableOpacity>
+                        </AppTouchable>
                         <Text style={styles.supersetCountText}>
                           {ssMeta.totalInGroup} Exercises · Alternating Sets
                         </Text>
@@ -557,10 +568,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       <View style={styles.compactOrderBadge}>
                         <Text style={styles.compactOrderText}>#{idx + 1}</Text>
                       </View>
-                      <TouchableOpacity
+                      <AppTouchable
                         style={styles.compactInfo}
                         onPress={() => handleStartReplace(idx)}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Swap ${item.exercise.name}`}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={styles.compactName} numberOfLines={1}>
@@ -584,10 +597,12 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                 +{item.exercise.secondaryMuscles.length} secondary
                               </Text>
                             )}
-                          <TouchableOpacity
+                          <AppTouchable
                             style={styles.compactRestBadge}
                             onPress={() => setRestWheelIndex(idx)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Change rest timer for ${item.exercise.name}`}
                           >
                             <Timer size={11} color={colors.success} />
                             <Text style={styles.compactRestText}>
@@ -595,44 +610,51 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                 ? `${Math.floor(item.restTimerSeconds / 60)}m ${item.restTimerSeconds % 60}s`
                                 : 'Off'}
                             </Text>
-                          </TouchableOpacity>
+                          </AppTouchable>
                         </View>
-                      </TouchableOpacity>
+                      </AppTouchable>
                       <View style={styles.compactActions}>
-                        <TouchableOpacity
+                        <AppTouchable
                           style={styles.compactActionBtn}
                           onPress={() => setSupersetModalExerciseId(item.id)}
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                           accessibilityLabel={ssMeta ? `Edit ${ssMeta.label}` : 'Create superset'}
                         >
                           <Layers size={14} color={ssMeta ? ssMeta.color : colors.purple} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AppTouchable>
+                        <AppTouchable
                           style={styles.compactActionBtn}
                           onPress={() => handleStartReplace(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Swap ${item.exercise.name}`}
                         >
                           <ArrowRightLeft size={14} color={colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AppTouchable>
+                        <AppTouchable
                           style={styles.compactActionBtn}
                           onPress={() => handleDuplicateExercise(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Duplicate ${item.exercise.name}`}
                         >
                           <Copy size={14} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AppTouchable>
+                        <AppTouchable
                           style={[styles.compactActionBtn, idx === 0 && styles.iconActionDisabled]}
                           disabled={idx === 0}
                           onPress={() => handleMoveUp(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move ${item.exercise.name} up`}
+                          accessibilityState={{ disabled: idx === 0 }}
                         >
                           <ChevronUp
                             size={16}
                             color={idx === 0 ? colors.control : colors.textSecondary}
                           />
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AppTouchable>
+                        <AppTouchable
                           style={[
                             styles.compactActionBtn,
                             idx === draftExercises.length - 1 && styles.iconActionDisabled,
@@ -640,6 +662,9 @@ export const RoutineEditorModal: React.FC<Props> = ({
                           disabled={idx === draftExercises.length - 1}
                           onPress={() => handleMoveDown(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move ${item.exercise.name} down`}
+                          accessibilityState={{ disabled: idx === draftExercises.length - 1 }}
                         >
                           <ChevronDown
                             size={16}
@@ -649,14 +674,16 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                 : colors.textSecondary
                             }
                           />
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AppTouchable>
+                        <AppTouchable
                           style={styles.compactDeleteBtn}
                           onPress={() => handleRemoveExercise(idx)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${item.exercise.name}`}
                         >
                           <Trash2 size={14} color={colors.danger} />
-                        </TouchableOpacity>
+                        </AppTouchable>
                       </View>
                     </View>
 
@@ -688,7 +715,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                 <React.Fragment key={item.id}>
                   {ssMeta?.isFirst && (
                     <View style={[styles.supersetGroupHeader, { borderLeftColor: ssMeta.color }]}>
-                      <TouchableOpacity
+                      <AppTouchable
                         style={[
                           styles.supersetPill,
                           { backgroundColor: ssMeta.color + '25', borderColor: ssMeta.color },
@@ -702,7 +729,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                         <Text style={[styles.supersetPillText, { color: ssMeta.color }]}>
                           {ssMeta.label}
                         </Text>
-                      </TouchableOpacity>
+                      </AppTouchable>
                       <Text style={styles.supersetCountText}>
                         {ssMeta.totalInGroup} Exercises · Alternating Sets
                       </Text>
@@ -717,7 +744,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   >
                     {/* Exercise Card Header */}
                     <View style={styles.cardTopRow}>
-                      <TouchableOpacity
+                      <AppTouchable
                         style={styles.cardHeaderInfo}
                         onPress={() => handleStartReplace(idx)}
                         activeOpacity={0.7}
@@ -749,7 +776,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                             </Text>
                           </View>
                         </View>
-                      </TouchableOpacity>
+                      </AppTouchable>
 
                       <IconButton
                         icon={MoreHorizontal}
@@ -770,7 +797,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                             <View style={styles.configCell}>
                               <Text style={styles.configLabel}>Sets</Text>
                               <View style={styles.cleanStepperContainer}>
-                                <TouchableOpacity
+                                <AppTouchable
                                   style={[
                                     styles.cleanStepBtn,
                                     item.targetSets <= 1 && styles.cleanStepBtnDisabled,
@@ -785,7 +812,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                     size={15}
                                     color={item.targetSets > 1 ? colors.text : colors.textFaint}
                                   />
-                                </TouchableOpacity>
+                                </AppTouchable>
                                 <TextInput
                                   style={styles.cleanStepInput}
                                   keyboardType="number-pad"
@@ -802,7 +829,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                   maxLength={2}
                                   accessibilityLabel="Target sets"
                                 />
-                                <TouchableOpacity
+                                <AppTouchable
                                   style={styles.cleanStepBtn}
                                   onPress={() => handleUpdateSets(idx, 1)}
                                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -810,7 +837,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                   accessibilityLabel="Add a set"
                                 >
                                   <Plus size={15} color={colors.text} />
-                                </TouchableOpacity>
+                                </AppTouchable>
                               </View>
                             </View>
 
@@ -833,7 +860,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                   autoCorrect={false}
                                   accessibilityLabel="Target reps"
                                 />
-                                <TouchableOpacity
+                                <AppTouchable
                                   style={styles.presetDropdownBtn}
                                   onPress={() => setRepDropdownIndex(idx)}
                                   activeOpacity={0.7}
@@ -842,7 +869,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                                   accessibilityLabel="Rep presets"
                                 >
                                   <Sparkles size={15} color={colors.primaryLight} />
-                                </TouchableOpacity>
+                                </AppTouchable>
                               </View>
                             </View>
                           </View>
@@ -855,7 +882,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
 
                     {/* Rest timer + superset pills */}
                     <View style={styles.pillRow}>
-                      <TouchableOpacity
+                      <AppTouchable
                         style={styles.restWheelTriggerBtn}
                         onPress={() => setRestWheelIndex(idx)}
                         activeOpacity={0.7}
@@ -868,11 +895,11 @@ export const RoutineEditorModal: React.FC<Props> = ({
                             ? `Rest ${Math.floor(item.restTimerSeconds / 60)}:${String(item.restTimerSeconds % 60).padStart(2, '0')}`
                             : 'Rest off'}
                         </Text>
-                      </TouchableOpacity>
+                      </AppTouchable>
 
                       {ssMeta ? (
                         <>
-                          <TouchableOpacity
+                          <AppTouchable
                             style={[styles.ssActiveBadge, { backgroundColor: ssMeta.color + '1A' }]}
                             onPress={() => setSupersetModalExerciseId(item.id)}
                             activeOpacity={0.8}
@@ -883,26 +910,28 @@ export const RoutineEditorModal: React.FC<Props> = ({
                             <Text style={[styles.ssActiveBadgeText, { color: ssMeta.color }]}>
                               {ssMeta.label}
                             </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
+                          </AppTouchable>
+                          <AppTouchable
                             style={styles.ssUnlinkBtn}
                             onPress={() => handleUnlinkSuperset(idx)}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             accessibilityRole="button"
+                            accessibilityLabel="Ungroup superset"
                           >
                             <Text style={styles.ssUnlinkBtnText}>Ungroup</Text>
-                          </TouchableOpacity>
+                          </AppTouchable>
                         </>
                       ) : (
-                        <TouchableOpacity
+                        <AppTouchable
                           style={styles.ssLinkBtn}
                           onPress={() => setSupersetModalExerciseId(item.id)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           accessibilityRole="button"
+                          accessibilityLabel="Create a superset"
                         >
                           <Layers size={13} color={colors.textSecondary} />
                           <Text style={styles.ssLinkBtnText}>Superset</Text>
-                        </TouchableOpacity>
+                        </AppTouchable>
                       )}
                     </View>
                   </View>
@@ -934,30 +963,34 @@ export const RoutineEditorModal: React.FC<Props> = ({
                 Add barbell, dumbbell, or machine exercises to configure sets, rep targets, and rest
                 timers.
               </Text>
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.emptyAddBtn}
                 onPress={() => {
                   setReplacingIndex(null);
                   setShowPicker(true);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Add your first exercise"
               >
                 <Plus size={18} color={colors.text} />
                 <Text style={styles.emptyAddBtnText}>Add Exercises</Text>
-              </TouchableOpacity>
+              </AppTouchable>
             </View>
           )}
 
           {draftExercises.length > 0 && (
-            <TouchableOpacity
+            <AppTouchable
               style={styles.bottomAddBtn}
               onPress={() => {
                 setReplacingIndex(null);
                 setShowPicker(true);
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Add exercise"
             >
               <Plus size={18} color={colors.primary} />
               <Text style={styles.bottomAddBtnText}>Add Exercises</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           )}
         </ScrollView>
 
@@ -1049,16 +1082,18 @@ export const RoutineEditorModal: React.FC<Props> = ({
           animationType="fade"
           onRequestClose={() => setRepDropdownIndex(null)}
         >
-          <TouchableOpacity
+          <AppTouchable
             style={styles.dropdownModalOverlay}
             activeOpacity={1}
             onPress={() => setRepDropdownIndex(null)}
+            accessible={false}
           >
-            <TouchableOpacity
+            <AppTouchable
               activeOpacity={1}
               style={styles.dropdownModalCard}
               onPress={e => e.stopPropagation?.()}
               accessibilityViewIsModal
+              accessible={false}
             >
               <View style={styles.dropdownHeader}>
                 <View style={{ flex: 1 }}>
@@ -1069,13 +1104,15 @@ export const RoutineEditorModal: React.FC<Props> = ({
                     </Text>
                   )}
                 </View>
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.dropdownCloseBtn}
                   onPress={() => setRepDropdownIndex(null)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close rep target presets"
                 >
                   <X size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
 
               <ScrollView style={styles.dropdownList} bounces={false}>
@@ -1084,7 +1121,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                     repDropdownIndex !== null &&
                     draftExercises[repDropdownIndex]?.targetReps === preset.label;
                   return (
-                    <TouchableOpacity
+                    <AppTouchable
                       key={preset.label}
                       style={[
                         styles.dropdownOptionRow,
@@ -1097,6 +1134,9 @@ export const RoutineEditorModal: React.FC<Props> = ({
                         }
                       }}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Rep target ${preset.label}`}
+                      accessibilityState={{ selected: isSelected }}
                     >
                       <View style={[styles.dropdownPill, isSelected && styles.dropdownPillActive]}>
                         <Text
@@ -1116,7 +1156,7 @@ export const RoutineEditorModal: React.FC<Props> = ({
                       ) : (
                         <View style={{ width: 18 }} />
                       )}
-                    </TouchableOpacity>
+                    </AppTouchable>
                   );
                 })}
               </ScrollView>
@@ -1127,8 +1167,8 @@ export const RoutineEditorModal: React.FC<Props> = ({
                   directly into the exercise card.
                 </Text>
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+            </AppTouchable>
+          </AppTouchable>
         </Modal>
 
         {/* Superset Manager Modal */}

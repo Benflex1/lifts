@@ -13,18 +13,12 @@ import {
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
 import { validateSnapshotStructure } from '../database/snapshot-validation';
+import { errorMessage } from './invariant';
 
 export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 
-export interface BackupV2 {
-  version: 2;
-  exportedAt: string;
-  workouts: Workout[];
-  routines: Routine[];
-  exercises: Exercise[];
-  drafts: import('../database/contract').WorkoutDraft[];
-  settings: Record<string, string>;
-}
+// The Schema v2 backup shape lives in the import path (backup.ts validates v2
+// snapshots); only the current export shape stays declared here.
 
 export interface BackupV3 extends DataSnapshot {
   // Version 4 is version 3 plus time, distance and tracking types. It is written only when a
@@ -209,8 +203,8 @@ export function parseBackup(json: string): BackupV3 {
   let parsed: any;
   try {
     parsed = JSON.parse(json);
-  } catch (e: any) {
-    throw new Error(`Invalid JSON in backup file: ${e.message}`, { cause: e });
+  } catch (e: unknown) {
+    throw new Error(`Invalid JSON in backup file: ${errorMessage(e)}`, { cause: e });
   }
 
   if (!parsed || typeof parsed !== 'object') {

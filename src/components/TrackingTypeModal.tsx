@@ -37,7 +37,7 @@ export function TrackingTypeModal({
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose} accessible={false}>
         <View style={styles.container} onStartShouldSetResponder={() => true}>
           <View style={styles.header}>
             <View style={styles.headerCopy}>

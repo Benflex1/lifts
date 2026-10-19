@@ -6,7 +6,7 @@ describe('readNativeFileAsString', () => {
   it('reads content using FileSystem legacy when available', async () => {
     const mockFs = {
       readAsStringAsync: async (uri: string) => `content-from-fs-${uri}`,
-      EncodingType: { UTF8: 'utf8' },
+      EncodingType: { UTF8: 'utf8' as const },
     };
 
     const content = await readNativeFileAsString('file:///path/to/workout.csv', {
@@ -24,7 +24,7 @@ describe('readNativeFileAsString', () => {
       readAsStringAsync: async () => {
         throw new Error(`Location '${contentUri}' isn't readable.`);
       },
-      EncodingType: { UTF8: 'utf8' },
+      EncodingType: { UTF8: 'utf8' as const },
     };
 
     const mockFetch: typeof fetch = async (input: any) => {
@@ -51,7 +51,7 @@ describe('readNativeFileAsString', () => {
       readAsStringAsync: async () => {
         throw new Error('legacy fs failed');
       },
-      EncodingType: { UTF8: 'utf8' },
+      EncodingType: { UTF8: 'utf8' as const },
     };
 
     const mockFetch: typeof fetch = async () => {
@@ -80,7 +80,7 @@ describe('readNativeFileAsString', () => {
   it('enforces maximum size limit', async () => {
     const mockFs = {
       readAsStringAsync: async () => 'x'.repeat(100),
-      EncodingType: { UTF8: 'utf8' },
+      EncodingType: { UTF8: 'utf8' as const },
     };
 
     await assert.rejects(async () => {
@@ -96,7 +96,7 @@ describe('readNativeFileAsString', () => {
       readAsStringAsync: async () => {
         throw new Error("Location 'test.csv' isn't readable.");
       },
-      EncodingType: { UTF8: 'utf8' },
+      EncodingType: { UTF8: 'utf8' as const },
     };
 
     const mockFetch: typeof fetch = async () => {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { AppTouchable } from '../components/ui';
 import {
   ChevronRight,
   Folder,
@@ -20,6 +21,7 @@ import { ProgramEditorModal } from '../components/ProgramEditorModal';
 import { RoutineCard } from './workout/RoutineCard';
 import { WeekSummaryCard } from './workout/WeekSummaryCard';
 import { useWorkoutScreenController } from './workout/useWorkoutScreenController';
+import { useI18n } from '../i18n';
 import { styles } from './workoutStyles';
 
 /**
@@ -28,6 +30,7 @@ import { styles } from './workoutStyles';
  * extracted presentational components.
  */
 const WorkoutScreenInner: React.FC = () => {
+  const { t } = useI18n();
   const {
     header,
     weekCard,
@@ -48,12 +51,12 @@ const WorkoutScreenInner: React.FC = () => {
     <View style={styles.container}>
       <ScreenHeader
         eyebrow={header.eyebrow}
-        title="Workout"
+        title={t('workout.title')}
         right={
           <IconButton
             icon={Settings2}
             onPress={header.onOpenSettings}
-            accessibilityLabel="Open settings"
+            accessibilityLabel={t('workout.openSettings')}
           />
         }
       />
@@ -79,12 +82,12 @@ const WorkoutScreenInner: React.FC = () => {
 
         {/* Quick Start */}
         {/* With a rotation up next, the empty workout steps back so one start button leads. */}
-        <TouchableOpacity
+        <AppTouchable
           style={[styles.quickStartCard, quickStart.hasPrograms && styles.quickStartQuiet]}
           onPress={quickStart.onStartEmpty}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Start empty workout"
+          accessibilityLabel={t('workout.startEmptyA11y')}
         >
           <View
             style={[styles.quickStartIcon, quickStart.hasPrograms && styles.quickStartIconQuiet]}
@@ -102,7 +105,7 @@ const WorkoutScreenInner: React.FC = () => {
                 quickStart.hasPrograms && styles.quickStartTitleQuiet,
               ]}
             >
-              Start Empty Workout
+              {t('workout.quickStartTitle')}
             </Text>
             <Text
               style={[
@@ -110,20 +113,20 @@ const WorkoutScreenInner: React.FC = () => {
                 quickStart.hasPrograms && styles.quickStartSubtitleQuiet,
               ]}
             >
-              Log exercises as you go
+              {t('workout.quickStartSubtitle')}
             </Text>
           </View>
           <ChevronRight
             size={20}
             color={quickStart.hasPrograms ? colors.textMuted : colors.onPrimary}
           />
-        </TouchableOpacity>
+        </AppTouchable>
 
         {/* Routines */}
         <SectionHeader
-          title="Routines"
+          title={t('workout.routines')}
           meta={routines.count > 0 ? String(routines.count) : undefined}
-          actionLabel="+ New"
+          actionLabel={t('workout.newRoutine')}
           onAction={routines.onCreate}
           style={styles.sectionHeader}
         />
@@ -158,7 +161,7 @@ const WorkoutScreenInner: React.FC = () => {
               size={36}
               iconSize={17}
               onPress={routines.onOpenFolderManager}
-              accessibilityLabel="Manage folders"
+              accessibilityLabel={t('workout.manageFolders')}
             />
           </View>
         )}
@@ -174,15 +177,15 @@ const WorkoutScreenInner: React.FC = () => {
         ))}
 
         {routines.canMakeRotation && (
-          <TouchableOpacity
+          <AppTouchable
             style={styles.makeRotation}
             onPress={routines.onOpenProgramEditor}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={
               routines.isDormantRotation
-                ? `Edit ${routines.selectedFolder} rotation`
-                : `Make ${routines.selectedFolder} a rotation`
+                ? t('workout.editRotationA11y', { folder: routines.selectedFolder })
+                : t('workout.makeRotationA11y', { folder: routines.selectedFolder })
             }
           >
             <View style={styles.makeRotationIcon}>
@@ -190,36 +193,37 @@ const WorkoutScreenInner: React.FC = () => {
             </View>
             <View style={styles.makeRotationText}>
               <Text style={styles.makeRotationTitle}>
-                {routines.isDormantRotation ? 'Rotation paused' : 'Make this folder a rotation'}
+                {routines.isDormantRotation
+                  ? t('workout.rotationPausedTitle')
+                  : t('workout.makeRotationTitle')}
               </Text>
               <Text style={styles.makeRotationSubtitle}>
                 {routines.isDormantRotation
-                  ? 'Add a routine to resume it, or stop it'
-                  : 'Always know which workout is next'}
+                  ? t('workout.rotationPausedSubtitle')
+                  : t('workout.makeRotationSubtitle')}
               </Text>
             </View>
             <ChevronRight size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          </AppTouchable>
         )}
 
         {routines.count === 0 ? (
-          <TouchableOpacity
+          <AppTouchable
             style={styles.emptyRoutinesBox}
             onPress={routines.onCreate}
             activeOpacity={0.8}
             accessibilityRole="button"
+            accessibilityLabel={t('workout.emptyTitle')}
           >
             <View style={styles.emptyIcon}>
               <Plus size={22} color={colors.primary} />
             </View>
-            <Text style={styles.emptyTitle}>Create your first routine</Text>
-            <Text style={styles.emptyText}>
-              Save your go-to workouts and start them in one tap.
-            </Text>
-          </TouchableOpacity>
+            <Text style={styles.emptyTitle}>{t('workout.emptyTitle')}</Text>
+            <Text style={styles.emptyText}>{t('workout.emptySubtitle')}</Text>
+          </AppTouchable>
         ) : routines.filtered.length === 0 ? (
           <View style={styles.emptyFolderBox}>
-            <Text style={styles.emptyText}>No routines in this folder.</Text>
+            <Text style={styles.emptyText}>{t('workout.emptyText')}</Text>
           </View>
         ) : null}
       </ScrollView>

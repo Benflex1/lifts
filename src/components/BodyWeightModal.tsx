@@ -218,6 +218,7 @@ export function BodyWeightModal({
             onPress={handleSave}
             disabled={!isValid || isSaving}
             accessibilityRole="button"
+            accessibilityLabel="Save weigh-in"
           >
             <Text style={styles.saveText}>Save</Text>
           </TouchableOpacity>

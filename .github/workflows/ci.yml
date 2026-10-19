@@ -35,6 +35,9 @@ jobs:
       - name: Dependency audit policy
         run: npm run audit:policy
 
+      - name: Dead code scan
+        run: npm run check:dead-code
+
       - name: TypeScript typecheck
         run: npm run typecheck
 
@@ -53,5 +56,7 @@ jobs:
       - name: Android prebuild (applies config plugins)
         run: npx expo prebuild --platform android --clean --no-install
 
-      - name: Web bundle export
-        run: npx expo export --platform web --output-dir dist-ci-web
+      - name: Web bundle export (with PWA shell)
+        run: |
+          npx expo export --platform web --output-dir dist-ci-web
+          node scripts/postprocess-web-export.mjs dist-ci-web

@@ -7,6 +7,7 @@ import { CsvImportPreview, computeCsvImportPlan, pickCsvFile } from '../utils/im
 import { detectEquipmentHint, inferPrimaryMuscle } from '../utils/importer/exercise-mapper';
 import { createScopedId } from '../utils/ids';
 import { WeightUnit } from '../utils/units';
+import { errorMessage } from '../utils/invariant';
 
 /**
  * ARCH-02 domain hook: owns the whole CSV import flow — picking a file, previewing the merge
@@ -108,10 +109,10 @@ export function useCsvImportFlow({
       });
 
       setPreview(plan);
-    } catch (err: any) {
+    } catch (err: unknown) {
       await notify({
         title: 'Import Failed',
-        message: err?.message || 'Failed to read or parse the selected CSV file.',
+        message: errorMessage(err) || 'Failed to read or parse the selected CSV file.',
       });
     }
   };
@@ -183,10 +184,10 @@ export function useCsvImportFlow({
         title: 'Import Complete',
         message: `Successfully imported ${importedCount} workouts and ${preview.totalSets} sets from ${preview.formatLabel}.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       await notify({
         title: 'Import Failed',
-        message: err?.message || 'Failed to import workouts. No changes were made.',
+        message: errorMessage(err) || 'Failed to import workouts. No changes were made.',
       });
     } finally {
       setIsImporting(false);

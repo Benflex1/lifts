@@ -45,15 +45,78 @@ import {
   planSnapshotMerge,
 } from './storeCore';
 
+export type SqliteBindValue = string | number | null;
+
 export interface SqliteDriver {
   execAsync(sql: string): Promise<void>;
-  runAsync(sql: string, ...params: any[]): Promise<{ changes: number; lastInsertRowId: number }>;
-  getFirstAsync<T>(sql: string, ...params: any[]): Promise<T | null>;
-  getAllAsync<T>(sql: string, ...params: any[]): Promise<T[]>;
+  runAsync(
+    sql: string,
+    ...params: SqliteBindValue[]
+  ): Promise<{ changes: number; lastInsertRowId: number }>;
+  getFirstAsync<T>(sql: string, ...params: SqliteBindValue[]): Promise<T | null>;
+  getAllAsync<T>(sql: string, ...params: SqliteBindValue[]): Promise<T[]>;
   withTransactionAsync(task: () => Promise<void>): Promise<void>;
 }
 
-function mapExerciseRow(r: any): Exercise {
+interface ExerciseRow {
+  id: string;
+  name: string;
+  category: string;
+  equipment: string;
+  primary_muscles: string | null;
+  secondary_muscles: string | null;
+  instructions: string | null;
+  instruction_url?: string | null;
+  instruction_url_type?: string | null;
+  is_custom: number;
+}
+
+interface JoinedExerciseRow {
+  exercise_id: string;
+  ex_name: string;
+  ex_category: string;
+  ex_equipment: string;
+  [column: string]: unknown;
+}
+
+interface SetRow {
+  id: string;
+  set_number: number;
+  set_type: string;
+  weight_kg: number;
+  reps: number;
+  rpe: number | null;
+  is_completed: number;
+  completed_at: string | null;
+  duration_seconds?: number | null;
+  distance_m?: number | null;
+}
+
+interface GymRow {
+  id: string;
+  name: string;
+  is_default: number;
+  color: string;
+  created_at: string;
+}
+
+interface ScopeRow {
+  exercise_id: string;
+  scope_type: string;
+  linked_gym_ids: string | null;
+}
+
+interface HealthSyncRow {
+  workout_id: string;
+  provider: string;
+  payload_fingerprint: string;
+  status: string;
+  attempted_at: string;
+  synced_at: string | null;
+  last_error: string | null;
+}
+
+function mapExerciseRow(r: ExerciseRow): Exercise {
   return normalizeExerciseRecord({
     id: r.id,
     name: r.name,
@@ -67,13 +130,15 @@ function mapExerciseRow(r: any): Exercise {
       : { instructionUrl: r.instruction_url }),
     ...(r.instruction_url_type === null || r.instruction_url_type === undefined
       ? {}
-      : { instructionUrlType: r.instruction_url_type }),
+      : {
+          instructionUrlType: r.instruction_url_type as NonNullable<Exercise['instructionUrlType']>,
+        }),
     isCustom: Boolean(r.is_custom),
   });
 }
 
 function mapJoinedExerciseRow(
-  r: any,
+  r: JoinedExerciseRow,
   aliases: {
     primary: string;
     secondary: string;
@@ -88,33 +153,35 @@ function mapJoinedExerciseRow(
     name: r.ex_name,
     category: r.ex_category,
     equipment: r.ex_equipment,
-    primaryMuscles: JSON.parse(r[aliases.primary] || '[]'),
-    secondaryMuscles: JSON.parse(r[aliases.secondary] || '[]'),
-    instructions: JSON.parse(r[aliases.instructions] || '[]'),
+    primaryMuscles: JSON.parse((r[aliases.primary] as string) || '[]'),
+    secondaryMuscles: JSON.parse((r[aliases.secondary] as string) || '[]'),
+    instructions: JSON.parse((r[aliases.instructions] as string) || '[]'),
     ...(r[aliases.url] === null || r[aliases.url] === undefined
       ? {}
-      : { instructionUrl: r[aliases.url] }),
+      : { instructionUrl: r[aliases.url] as string }),
     ...(r[aliases.urlType] === null || r[aliases.urlType] === undefined
       ? {}
-      : { instructionUrlType: r[aliases.urlType] }),
+      : {
+          instructionUrlType: r[aliases.urlType] as NonNullable<Exercise['instructionUrlType']>,
+        }),
     isCustom: Boolean(r[aliases.custom]),
   });
 }
 
-function mapSetRow(s: any): WorkoutSet {
+function mapSetRow(s: SetRow): WorkoutSet {
   return {
     id: s.id,
     setNumber: s.set_number,
-    type: s.set_type as any,
+    type: s.set_type as WorkoutSet['type'],
     weightKg: s.weight_kg,
     reps: s.reps,
     ...(s.duration_seconds === null || s.duration_seconds === undefined
       ? {}
       : { durationSeconds: s.duration_seconds }),
     ...(s.distance_m === null || s.distance_m === undefined ? {} : { distanceM: s.distance_m }),
-    rpe: s.rpe,
+    rpe: s.rpe as number | undefined,
     isCompleted: Boolean(s.is_completed),
-    completedAt: s.completed_at,
+    completedAt: s.completed_at ?? undefined,
   };
 }
 
@@ -122,7 +189,7 @@ function trackingTypeFromRow(value: unknown): { trackingType?: TrackingType } {
   return isTrackingType(value) && value !== DEFAULT_TRACKING_TYPE ? { trackingType: value } : {};
 }
 
-function mapGymRow(r: any): Gym {
+function mapGymRow(r: GymRow): Gym {
   return {
     id: r.id,
     name: r.name,
@@ -132,21 +199,21 @@ function mapGymRow(r: any): Gym {
   };
 }
 
-function mapScopeRow(r: any): ExerciseGymScope {
+function mapScopeRow(r: ScopeRow): ExerciseGymScope {
   const linkedGymIds = r.linked_gym_ids ? JSON.parse(r.linked_gym_ids) : undefined;
   return {
     exerciseId: r.exercise_id,
-    scopeType: r.scope_type,
+    scopeType: r.scope_type as ExerciseGymScope['scopeType'],
     ...(linkedGymIds ? { linkedGymIds } : {}),
   };
 }
 
-function mapHealthSyncRow(r: any): HealthSyncRecord {
+function mapHealthSyncRow(r: HealthSyncRow): HealthSyncRecord {
   return {
     workoutId: r.workout_id,
-    provider: r.provider,
+    provider: r.provider as HealthProviderId,
     payloadFingerprint: r.payload_fingerprint,
-    status: r.status,
+    status: r.status as HealthSyncStatus,
     attemptedAt: r.attempted_at,
     ...(r.synced_at === null || r.synced_at === undefined ? {} : { syncedAt: r.synced_at }),
     ...(r.last_error === null || r.last_error === undefined ? {} : { lastError: r.last_error }),
@@ -1221,7 +1288,9 @@ export function createNativeStore(driver: SqliteDriver): Store {
         gymName: workout.gymName,
         occurrenceIndex: requested?.sets.length
           ? occurrenceIndex
-          : Math.max(0, workout.occurrences.indexOf(selected!)),
+          : selected
+            ? Math.max(0, workout.occurrences.indexOf(selected))
+            : 0,
         sets: selected?.sets || [],
       };
     });

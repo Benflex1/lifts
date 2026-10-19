@@ -1,11 +1,19 @@
+import type { EncodingType } from 'expo-file-system/legacy';
+import { errorMessage, toError } from './invariant';
+
+type FileConstructor = new (uri: string) => { text: () => Promise<string> };
+
 export interface ReadNativeFileOptions {
   maxSizeBytes?: number;
   fileSystem?: {
-    readAsStringAsync: (uri: string, options?: { encoding?: any }) => Promise<string>;
-    EncodingType?: { UTF8: any };
+    readAsStringAsync: (
+      uri: string,
+      options?: { encoding?: EncodingType | 'utf8' | 'base64' },
+    ) => Promise<string>;
+    EncodingType?: { UTF8: EncodingType | 'utf8' | 'base64' };
   };
   fetchFn?: typeof fetch;
-  fileConstructor?: new (uri: string) => { text: () => Promise<string> };
+  fileConstructor?: FileConstructor;
 }
 
 /**
@@ -48,24 +56,28 @@ export async function readNativeFileAsString(
       }
       return content;
     }
-  } catch (err: any) {
-    if (err?.message?.includes('size limit')) {
+  } catch (err: unknown) {
+    if (errorMessage(err).includes('size limit')) {
       throw err;
     }
-    lastError = err;
+    lastError = toError(err);
   }
 
   // Strategy 2: React Native fetch(uri) -> ContentResolver stream
   if (fetchFn) {
     try {
       const response = await fetchFn(uri);
-      if (response.ok || (response as any).status === 0) {
+      const legacyResponse = response as unknown as {
+        status?: number;
+        blob?: () => Promise<{ text?: () => Promise<string> }>;
+      };
+      if (response.ok || legacyResponse.status === 0) {
         let content: string | null = null;
 
         if (typeof response.text === 'function') {
           content = await response.text();
-        } else if (typeof (response as any).blob === 'function') {
-          const blob = await (response as any).blob();
+        } else if (typeof legacyResponse.blob === 'function') {
+          const blob = await legacyResponse.blob();
           if (typeof blob.text === 'function') {
             content = await blob.text();
           } else if (typeof FileReader !== 'undefined') {
@@ -73,7 +85,7 @@ export async function readNativeFileAsString(
               const reader = new FileReader();
               reader.onload = () => resolve(reader.result as string);
               reader.onerror = () => reject(reader.error || new Error('Failed to read blob'));
-              reader.readAsText(blob);
+              reader.readAsText(blob as unknown as Blob);
             });
           }
         }
@@ -87,11 +99,11 @@ export async function readNativeFileAsString(
           return content;
         }
       }
-    } catch (err: any) {
-      if (err?.message?.includes('size limit')) {
+    } catch (err: unknown) {
+      if (errorMessage(err).includes('size limit')) {
         throw err;
       }
-      lastError = err;
+      lastError = toError(err);
     }
   }
 
@@ -100,7 +112,7 @@ export async function readNativeFileAsString(
     let TargetFile = fileConstructor;
     if (!TargetFile) {
       const modernFs = await import('expo-file-system');
-      TargetFile = modernFs.File as any;
+      TargetFile = modernFs.File as unknown as FileConstructor;
     }
     if (TargetFile) {
       const fileInstance = new TargetFile(uri);
@@ -116,11 +128,11 @@ export async function readNativeFileAsString(
         }
       }
     }
-  } catch (err: any) {
-    if (err?.message?.includes('size limit')) {
+  } catch (err: unknown) {
+    if (errorMessage(err).includes('size limit')) {
       throw err;
     }
-    lastError = err;
+    lastError = toError(err);
   }
 
   throw new Error(

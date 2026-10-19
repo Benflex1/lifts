@@ -13,6 +13,7 @@ import { usePersistenceError, useWorkoutActions } from '../context/WorkoutContex
 import { useDialog } from '../context/DialogContext';
 import { Workout } from '../types';
 import { colors } from '../theme';
+import { errorMessage } from '../utils/invariant';
 import { saveBackupJson } from '../utils/saveBackup';
 
 interface PersistenceErrorBannerProps {
@@ -38,11 +39,11 @@ export function PersistenceErrorBanner({ workout }: PersistenceErrorBannerProps)
     setRetrying(true);
     try {
       await retryPersistence();
-    } catch (error: any) {
+    } catch (error: unknown) {
       await notify({
         title: 'Still not saving',
         message:
-          error?.message ||
+          errorMessage(error) ||
           'The workout could not be saved. Try again, or share a copy before closing the app.',
       });
     } finally {
@@ -64,10 +65,10 @@ export function PersistenceErrorBanner({ workout }: PersistenceErrorBannerProps)
         title: `${workout.name} (unsaved workout)`,
         message: JSON.stringify(workout, null, 2),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       await notify({
         title: 'Could not share',
-        message: error?.message || 'Sharing is not available on this device.',
+        message: errorMessage(error) || 'Sharing is not available on this device.',
       });
     }
   };

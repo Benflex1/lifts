@@ -15,7 +15,7 @@ function emptyStats(): ExerciseStats {
 }
 
 /** Reduces one already-collected history pass into stat maxima. */
-export function summarizeStatsForEntries(
+function summarizeStatsForEntries(
   entries: ExerciseHistoryEntry[],
   gymFilter: Set<string> | null,
 ): ExerciseStats {

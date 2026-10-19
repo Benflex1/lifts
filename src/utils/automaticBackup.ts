@@ -9,6 +9,19 @@ const LAST_SUCCESS_KEY = 'automatic_backup_last_success_at';
 const LAST_ERROR_KEY = 'automatic_backup_last_error';
 const RETAINED_BACKUPS = 10;
 
+type FileSystemModule = typeof import('expo-file-system/legacy');
+
+export interface AutomaticBackupDependencies {
+  /** Injected in tests; production loads expo-file-system lazily. */
+  fileSystem?: FileSystemModule;
+}
+
+async function loadFileSystem(
+  dependencies: AutomaticBackupDependencies,
+): Promise<FileSystemModule> {
+  return dependencies.fileSystem ?? (await import('expo-file-system/legacy'));
+}
+
 export interface AutomaticBackupState {
   directoryUri: string | null;
   enabled: boolean;
@@ -34,12 +47,13 @@ export async function getAutomaticBackupState(): Promise<AutomaticBackupState> {
 
 export async function chooseAutomaticBackupFolder(
   initialUri?: string | null,
+  dependencies: AutomaticBackupDependencies = {},
 ): Promise<string | null> {
   if (Platform.OS !== 'android') {
     throw new Error('Automatic folder backups are currently available on Android.');
   }
 
-  const fileSystem = await import('expo-file-system/legacy');
+  const fileSystem = await loadFileSystem(dependencies);
   const result =
     await fileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(initialUri);
   if (!result.granted || !result.directoryUri) return null;
@@ -65,7 +79,11 @@ function errorMessage(error: unknown): string {
   return message.slice(0, 500);
 }
 
-async function performAutomaticBackup(force: boolean, now: Date): Promise<boolean> {
+async function performAutomaticBackup(
+  force: boolean,
+  now: Date,
+  dependencies: AutomaticBackupDependencies,
+): Promise<boolean> {
   if (Platform.OS !== 'android') return false;
 
   const state = await getAutomaticBackupState();
@@ -74,7 +92,7 @@ async function performAutomaticBackup(force: boolean, now: Date): Promise<boolea
   let createdFileUri: string | null = null;
   let fileWritten = false;
   try {
-    const fileSystem = await import('expo-file-system/legacy');
+    const fileSystem = await loadFileSystem(dependencies);
     const storage = fileSystem.StorageAccessFramework;
     const timestamp = getTimestamp(now);
     const fileUri = await storage.createFileAsync(
@@ -108,7 +126,7 @@ async function performAutomaticBackup(force: boolean, now: Date): Promise<boolea
   } catch (error) {
     if (createdFileUri && !fileWritten) {
       try {
-        const fileSystem = await import('expo-file-system/legacy');
+        const fileSystem = await loadFileSystem(dependencies);
         await fileSystem.StorageAccessFramework.deleteAsync(createdFileUri);
       } catch (cleanupError) {
         console.warn('Unable to remove incomplete automatic backup', cleanupError);
@@ -125,7 +143,9 @@ async function performAutomaticBackup(force: boolean, now: Date): Promise<boolea
 }
 
 export function runAutomaticBackup(
-  options: { force?: boolean; now?: Date } = {},
+  options: { force?: boolean; now?: Date } & AutomaticBackupDependencies = {},
 ): Promise<boolean> {
-  return performAutomaticBackup(Boolean(options.force), options.now ?? new Date());
+  return performAutomaticBackup(Boolean(options.force), options.now ?? new Date(), {
+    fileSystem: options.fileSystem,
+  });
 }

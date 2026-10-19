@@ -1,3 +1,7 @@
+// Native (Android/iOS) entry point; Metro resolves health/index.web.ts on web.
+// Node tests load this file directly, so the provider and store imports below
+// stay lazy (a load, not a platform selection). See docs/platform-dispatch.md.
+
 import type { Store } from '../database/contract';
 import type { Workout } from '../types';
 import type { HealthProvider } from './contract';
@@ -5,21 +9,11 @@ import type { HealthSyncRecord } from './contract';
 import { syncWorkoutWithProvider, retryHealthSyncs } from './sync';
 
 export async function getPlatformHealthProvider(): Promise<HealthProvider | null> {
-  if (typeof document !== 'undefined') {
-    const { getPlatformHealthProvider: getWebProvider } = await import('./provider.web');
-    return getWebProvider();
-  }
-
   const { getPlatformHealthProvider: getNativeProvider } = await import('./provider.native');
   return getNativeProvider();
 }
 
 async function getHealthStore(): Promise<Store> {
-  if (typeof document !== 'undefined') {
-    const { getStore } = await import('../database/db.web');
-    return getStore();
-  }
-
   const { getStore } = await import('../database/db.native');
   return getStore();
 }

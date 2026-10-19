@@ -313,8 +313,8 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 - **Evidence:** `App.tsx:15-19` statically imports all screens. `App.tsx:48-54` mounts a tab on first visit, and `App.tsx:127-138` keeps visited tabs mounted under `display: none`.
 - **Impact:** Analytics and its chart stack are in the initial bundle. Hidden tabs retain state and subscriptions, and memory grows with each visited tab.
 - **Required change:** Use `React.lazy` plus `Suspense` for Analytics and History, and consider unmounting or freezing heavy tabs after a timeout. Keep the fast first-switch behavior where it matters.
-- **Implementation (2026-10-18):** `App.tsx` now loads `HistoryScreen` and `AnalyticsScreen` through `React.lazy` with a shared `Suspense` fallback, and warms both modules 1.5 s after startup so the first visit does not wait on the network while the initial bundle still excludes them. Because `ExerciseDetailModal` (reachable from eager screens) also renders the progression chart, `ProgressionCurveView` is `React.lazy`-loaded inside the detail modal as well. Hidden-tab retention moved to `src/hooks/useTabRetention.ts`: `workout` and `exercises` stay mounted for instant switching, while `history` and `analytics` are unmounted once they have been hidden for five minutes (30 s sweep, clock runs while the workout logger covers the tabs); revisiting a released tab mounts it fresh.
-- **Verification:** `npx expo export --platform web` main JS 3,914,358 B → 3,736,947 B (−177,411 B); new async chunks `AnalyticsScreen-*.js` (129,981 B), `HistoryScreen-*.js` (35,098 B), `__common-*.js` (10,951 B). Analytics-only markers (`No progression data yet`, `RecordsView`, `Trophy room`, `Import workout data`) are absent from the initial bundle and present in the chunks. `tests/unit/tab-retention.test.ts` covers mount-on-visit, release at the retention boundary, cancel-on-return, non-evictable tabs, and eviction while the logger is open. Full suites: 173 integration / 543 unit.
+- **Implementation (2026-10-18):** `App.tsx` now loads `HistoryScreen` and `AnalyticsScreen` through `React.lazy` with a shared `Suspense` fallback, and warms both modules 1.5 s after startup so the first visit does not wait on the network while the initial bundle still excludes them. Because `ExerciseDetailModal` (reachable from eager screens) also renders the progression chart, `ProgressionCurveView` is `React.lazy`-loaded inside the detail modal as well. Tabs mount on first visit and remain mounted for the app session. The review on 2026-10-19 removed timed eviction: no measured memory benefit justified discarding UI state and introducing logger-return lifecycle bugs. Lazy module loading remains in place.
+- **Verification:** `npx expo export --platform web` main JS 3,914,358 B → 3,736,947 B (−177,411 B); new async chunks `AnalyticsScreen-*.js` (129,981 B), `HistoryScreen-*.js` (35,098 B), `__common-*.js` (10,951 B). Analytics-only markers (`No progression data yet`, `RecordsView`, `Trophy room`, `Import workout data`) are absent from the initial bundle and present in the chunks. `tests/unit/tab-retention.test.ts` now covers mount-on-visit, repeated selection, and preservation through a long logger session. Full suites: 173 integration / 543 unit.
 - **Done when:**
   - [x] The initial web bundle excludes the Analytics chart module.
   - [x] Hidden-tab memory does not grow without bound during a long session.
@@ -442,37 +442,41 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### ARCH-08 — Three platform-dispatch mechanisms coexist
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The codebase uses Metro extensions (`db.native.ts`/`db.web.ts`, `saveBackup.*`, `restNotifications.*`), runtime `typeof document` with dynamic imports (`saveBackup.ts:10-15`, `health/index.ts:8-26`), and `Platform.OS` checks (`pickBackup.ts:4-8`, `SettingsContext.tsx:47-48`).
 - **Impact:** The resolution matrix is hard to reason about, and the fallback branches in `restNotifications.ts` are effectively test-only on real devices.
 - **Required change:** Standardize on Metro platform extensions for module selection and reserve `Platform.OS` for genuine in-module behavior differences. Document the matrix and add a test that asserts selection per platform.
+- **Implementation (2026-10-18):** Base dispatch files no longer select variants at runtime. `saveBackup.ts`, `pickBackup.ts`, and `pickCsv.ts` are explicit Node/test re-exports (web variant plus shared helpers), `health/index.ts` keeps only the native path (its web branch was unreachable because `health/index.web.ts` wins resolution), and `restNotifications.ts` is a documented no-op fallback with the Expo Go detection seam (the dead web branches and the test-only iOS fallback are gone; `.android.ts`/`.ios.ts`/`.web.ts` provide the real implementations). `export.ts` documents its DOM check as the one capability-check exception. `docs/platform-dispatch.md` records the rules and the full family matrix, CONTRIBUTING links it, ESLint rejects runtime `typeof document` selection outside `*.web.ts`, and `tests/unit/platform-dispatch.test.ts` asserts entry-point parity across each family plus the absence of runtime platform selection in base files.
 - **Done when:** A single documented mechanism covers module selection.
 
 ### ARCH-09 — Hand-rolled navigation limits deep links and back behavior
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `App.tsx:35-42` defines a static tab array and renders screens via conditionals. No navigation library or linking integration is present. Android back handling exists only inside the active logger.
 - **Impact:** There are no deep links, no browser URL/history state, no back stack, and Android back exits the app from tab screens. Future flows (onboarding, settings, exercise deep links) will need navigation primitives built from scratch.
 - **Required change:** Decide explicitly whether the fixed four-tab model is permanent. If yes, document the constraint and add web history plus shell-level Android back handling. If no, plan an expo-router/React Navigation migration.
+- **Implementation (2026-10-18):** The fixed four-tab model is documented as the decision in `docs/navigation.md` (rationale, behavior matrix, extension path). Web now keeps URL state: tabs map to `#/<tab>`, a valid hash selects the tab on load, tab changes push a history entry, browser back/forward select the tab in the URL, and an empty hash is normalised with `replaceState`. Shell-level Android back returns to Workout from any secondary tab and lets Workout exit; the logger's own handler keeps precedence. The logic lives in `src/navigation/tabRoutes.ts`, `useWebTabHistory.ts`, and `useAndroidBackToWorkout.ts`, with tests in `tests/unit/navigation.test.ts`.
 - **Done when:** The product decision is documented and the chosen behavior is covered by tests.
 
 ### ARCH-10 — Dead code and unnecessarily public exports
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `DraggableExerciseCard.tsx` (176 lines) has no production import. `computeExerciseLayouts` in `active-exercises.ts:47` has no callers. `restoreBackup` and `shapeBackup` are used only by tests. Several helpers are exported but used only inside their own module.
 - **Impact:** Future dead-code scans are noisy, and unused UI code suggests unfinished work.
 - **Required change:** Delete genuinely dead modules or wire them in deliberately. Move test-only helpers to test utilities or mark them as such.
+- **Implementation (2026-10-18):** Removed the unimported `DraggableExerciseCard` (182 lines), the uncalled `computeExerciseLayouts`, and the unreferenced `BackupV2`, `BackupData`, `RawCsvSetRow`, `SupersetGroupInfo`, and `Stat`/`StatProps` declarations (with their unused styles); unexported internal-only helpers (`formatRelativeDay`, `NOTE_COMMIT_DEBOUNCE_MS`, `PRRankLevel`, `PR_RANK_LABELS`, `summarizeStatsForEntries`, `isSamePRAchievement`, `extractLeaderboard`, `compareAchievements`, `MUSCLE_GROUP_MAP`, `matchesCategory`, `MUSCLE_ALIAS_MAP`, `EQUIPMENT_ALIAS_MAP`). `scripts/dead-code-scan.mjs` (`npm run check:dead-code`, wired into CI) walks `src/`, `tests/`, `App.tsx`, and `index.ts` and fails on exports with no reference anywhere while reporting test-only (deliberate seams such as the exported memo comparators and renderer helpers) and internal-only exports as informational categories. `restoreBackup`/`shapeBackup` have production callers after review (restore flow and `DataTransferSection`), so they stay.
 - **Done when:** The dead-code scan is clean and every remaining export has a caller.
 
 ### ARCH-11 — Type-safety gaps at storage boundaries
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** There are 125 `any` occurrences in `src/`, concentrated in `nativeStore.ts` (42), `backup.ts` (17), and `readNativeFile.ts` (9). The native store is cast `as unknown as Store` at `nativeStore.ts:1521-1568`. Web wrappers use non-null assertions at `db.web.ts:149-158`, and `webStore.ts:1112` uses `(workout as any).inProgress` for a field that does not exist. `tsconfig.json` does not enable `noUncheckedIndexedAccess` or `exactOptionalPropertyTypes`.
 - **Impact:** Contract drift can pass typechecking, and the dead `inProgress` filter is a concrete example of a cast hiding a real bug.
 - **Required change:** Type SQL row shapes explicitly, replace `catch (err: any)` with `unknown` plus a normalizer, add `noUncheckedIndexedAccess`, and replace cluster non-null assertions with an `invariant`/`requireDefined` helper.
+- **Implementation (2026-10-18):** Added `src/utils/invariant.ts` (`requireDefined`, `errorMessage`, `toError`, with tests) and converted every `catch (…: any)` in `src/` (12 files, 17 sites) to `catch (…: unknown)` plus the normalizer. Typed the SQLite boundary with explicit `ExerciseRow`, `JoinedExerciseRow`, `SetRow`, `GymRow`, `ScopeRow`, and `HealthSyncRow` shapes, typed `SqliteDriver` bind parameters, and mapped enums at the edge (`SetType`, scope type, health provider/status) instead of `any`. `webStore` lost its `any` state handles, obtains the IndexedDB factory through `requireDefined`, and the store's non-null assertions (database handle, upgrade transaction, gym lookup, occurrence indexes) now use `requireDefined` or explicit undefined handling; `readNativeFile` uses typed legacy FS/fetch shims. The dead `(workout as any).inProgress` cast was already removed with `COR-01`. `no-explicit-any` warnings dropped from 124 to 91; after the `develop` base integration they re-measured at 88 (the remainder are `nativeStore` query generics, the legacy v2 backup normalizer, and scattered UI callbacks). `noUncheckedIndexedAccess` was measured at 261 errors (chart and parser modules dominate) and logged as `ARCH-14` rather than forced through in this pass.
 - **Done when:** The store contract is checked structurally and the dead cast is removed.
 
 ### ARCH-12 — HistoryScreen is a 903-line component
@@ -597,10 +601,11 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### A11Y-06 — Unlabelled controls remain outside the logger and rest surfaces
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** After the logger (`A11Y-01`) and rest (`A11Y-02`) migrations, a brace-aware scan for `TouchableOpacity` openings without an `accessibilityLabel` still reports 49 controls in shared modals, shared primitives whose accessible name currently comes from child text, and secondary screens: `RoutineEditorModal` (21), `CsvImportModal` (6), `FolderManageModal` (4), `WorkoutEditModal` (4), `CustomExerciseModal` (3), `ExerciseScopeModal` (3), `ui.tsx` (4), and one each in `AnalyticsScreen`, `ExercisesScreen`, `WorkoutScreen`, and `history/HistoryCard`. These are outside the Phase 3 exit criteria (logger and rest controls) and are logged as residual instead of being skipped.
 - **Impact:** Outside the logging flow, screen readers fall back to child text or announce icon-only controls incompletely.
 - **Required change:** Migrate the remaining interactive components to `AppTouchable`, adding labels/roles/state and extending the scoped `no-restricted-imports` list; give the shared primitives (`SegmentedControl`, `Chip`, `ActionSheet`, header actions) explicit labels where child text is not a full description.
+- **Implementation (2026-10-18):** All 49 controls were labelled and migrated to `AppTouchable` across `RoutineEditorModal` (21), `CsvImportModal` (6), `FolderManageModal` (4), `WorkoutEditModal` (4), `CustomExerciseModal` (3), `ExerciseScopeModal` (3), the shared `ui.tsx` primitives (`SegmentedControl` segments, the `SectionHeader` action, the `ActionSheet` cancel button, and the menu scrim now `accessible={false}`), and one control each in `AnalyticsScreen`, `ExercisesScreen`, `WorkoutScreen`, and `history/HistoryCard`; the two `Pressable` dismiss scrims in `GymPickerModal`/`WorkoutStartModal` opt out with `accessible={false}`. The scoped `no-restricted-imports` list now covers every migrated file. `tests/unit/accessibility-touchable-scan.test.ts` walks `src/` with a brace- and quote-aware scan and fails on any raw `TouchableOpacity`/`TouchableHighlight`/`Pressable` without a label and role (scrims and the `AppTouchable` primitive's prop spread excepted), so the standard stays enforced in CI.
 - **Done when:** The scan reports zero unlabelled touchables outside explicit `accessibilityViewIsModal`/`accessible={false}` dismiss scrims.
 
 ---
@@ -714,56 +719,80 @@ Lifts is a React Native / Expo SDK 57 workout tracker with approximately 39,800 
 ### PROD-01 — App Store and F-Droid submissions are pending
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Blocked (external accounts)`
 - **Evidence:** ROADMAP Phase 4 marks F-Droid and App Store publishing as incomplete. The F-Droid recipe and release pipeline exist, but submission to fdroiddata and iOS device acceptance remain.
 - **Impact:** Distribution is limited to GitHub APK releases, and iOS users cannot install through the App Store.
 - **Required change:** Complete the release checklist, submit to fdroiddata, and finish the iOS custom-build acceptance path.
+- **Implementation (2026-10-18):** Code-side readiness is complete and documented: the signed release pipeline, the CI-validated F-Droid recipe, and the release checklist are in place. The remaining steps are account- and hardware-gated and cannot be executed from this repository. F-Droid: fork fdroiddata and open the inclusion merge request per `docs/release-checklist.md` section 8 (requires a GitLab account). iOS: App Store Connect setup plus the REL-34 HealthKit device acceptance run (requires an Apple Developer account and a physical device). The Phase 4 checklist item stays open until one public store per platform is live.
 - **Done when:** The app is installable from at least one public store per platform.
 
 ### PROD-02 — Automatic backups and remote exercise photos are not merged
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `feat/android-automatic-backups` and `feat/remote-exercise-images-setting` contain commits not on `main`. `origin/feat/time-distance-charts` also exists.
 - **Impact:** Users still depend on manual exports for disaster recovery, and completed work sits idle on branches.
 - **Required change:** Review, test, and merge or explicitly defer each branch. Keep branch lifetimes short.
+- **Implementation (2026-10-18):** Branch triage. **Integrated:** automatic Android backups (`a3188f2`) plus its follow-up fixes (`27ef55b` restore only the settings that are exported, `0d1fcf1` canonical backup file names when pruning), adapted to the current architecture (the backup trigger runs after the controller finishes in `useWorkoutMutations`, the Data Transfer copy lives in `DataTransferSection`, and SettingsModal keeps the A11Y-04 focus hook) and covered by new tests (`tests/unit/automatic-backup.test.ts`, `tests/unit/automatic-backup-names.test.ts`, and an integration round-trip asserting export exclusion). **Base change:** the phase stack now sits on `develop`, which already carries automatic backups (#24), the remote exercise-photo switch (#31), the native rest cue (#33), the gym-restore fix (#34), tracking types (#37), next targets (#39), rotations (#40), and the body weight log (#41). The phases merge that lineage and adapt it to the new standards; the automatic-backup work on this branch is the same feature with the test seam and tests described above. **Superseded:** `feature/parity-pass` (its user-facing work — JSON backup export, repeat workout, draft persistence, dead-code/type cleanup — is already on main through later work); recommend closing it. The feature branches listed here (`feat/android-automatic-backups`, `feat/remote-exercise-images-setting`, `fix/rest-timer-background-alarm`, `feature/parity-pass`) can be deleted once the phase PRs merge into `develop`.
 - **Done when:** Each branch is merged or closed with a documented decision.
 
 ### PROD-03 — Rich exercise media and watch companion remain unfinished
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** ROADMAP Phase 4 lists rich media and Wear OS/Apple Watch as incomplete.
 - **Impact:** These are differentiators against paid competitors but not blockers for the core tracker.
 - **Required change:** Keep them behind the reliability and performance work; scope a small media increment before a full animation system.
+- **Implementation (2026-10-18):** Scoped and tracked in `ROADMAP.md` as a two-increment milestone: increment 1 animates the 20 highest-traffic exercises from the existing local SVG pose pairs (no remote assets, reduced-motion opt-out), and increment 2 completes the set and then evaluates video/GIF loops. The watch companion stays deferred behind the lock-screen rest timer and home-screen widget, which deliver the wrist-visible value first. Implementation waits for the remaining reliability and performance items, per the finding.
 - **Done when:** A scoped milestone is agreed and tracked.
 
 ### PROD-04 — No localization or i18n infrastructure
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** The app is English-only; no i18n library, message catalog, or locale-aware formatting layer exists.
 - **Impact:** International adoption is limited, and retrofitting strings after more UI work is more expensive.
 - **Required change:** Introduce a minimal message catalog and locale-aware number/date formatting before expanding the string surface.
+- **Implementation (2026-10-18):** Added `src/i18n/` with a typed catalog (`en` is the key source and `de` must implement every key at compile time), a `translate` helper with `{placeholder}` interpolation and English fallback, and `I18nProvider`/`useI18n` (switching locales re-renders consumers; isolated component renders fall back to English for tests). The navigation shell, Workout screen, routine cards, workout header, workout options menu, and rest overlay now read all visible copy and accessibility labels from the catalog, with German as the proof locale. Remaining screens are tracked in `PROD-07` so the migration continues screen by screen. Tests: `tests/unit/i18n.test.ts` (interpolation, fallbacks, provider switching, and a real surface rendered in German).
 - **Done when:** User-facing strings are centralized and a second locale can be added without touching screen logic.
 
 ### PROD-05 — No deep links or web URL state
 
 - **Severity:** Medium
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `App.tsx` has no linking integration, and no code writes browser history. External links are limited to exercise references in `src/utils/exercise-links.ts`.
 - **Impact:** Web refresh always returns to the Workout tab, and exercises/workouts cannot be linked to or bookmarked.
 - **Required change:** Decide whether deep links are in scope. If yes, add route state and browser history; if no, document the limitation.
+- **Implementation (2026-10-18):** Deep links are in scope for tab state only. The active tab is mirrored to the URL hash and browser history on web (see `ARCH-09`), so refresh, bookmarks, and back/forward work for all four tabs; exercise- and workout-level deep links remain out of scope and are documented in `docs/navigation.md`.
 - **Done when:** The chosen behavior is implemented or explicitly documented.
 
 ### PROD-06 — Web installability and offline shell are not configured
 
 - **Severity:** Low
-- **Status:** `Open`
+- **Status:** `Done`
 - **Evidence:** `app.json` has no web manifest configuration, and the current export contains no manifest or service worker.
 - **Impact:** The data layer is local-first, but the web shell is not installable and may not reload offline.
 - **Required change:** Add a web manifest and service worker strategy if web is a supported target, or state the limitation in the README.
+- **Implementation (2026-10-18):** Added an installable shell for the web export: `public/manifest.webmanifest` (standalone display, theme colours, the 1024px app icon) and `public/sw.js` (runtime caching: network-first navigations with a cached `index.html` fallback, cache-first hashed `/_expo/static/` assets, same-origin GET only, versioned caches). Expo copies `public/` into every export; `scripts/postprocess-web-export.mjs` verifies the shell assets and idempotently injects the manifest link, theme colour, and service-worker registration into `index.html` (CI and the CONTRIBUTING verification flow run it). The README web section documents the installable shell and offline-reload behavior alongside the existing storage caveat. Tests: `tests/unit/web-export-postprocess.test.ts` (injection, idempotency, missing assets) plus a local export that produced `manifest.webmanifest`, `sw.js`, `icon-1024.png`, and the injected `index.html`.
 - **Done when:** The web behavior matches the documented promise.
+
+### ARCH-14 — `noUncheckedIndexedAccess` adoption
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `tsconfig.json` does not enable `noUncheckedIndexedAccess`. Enabling it reports 261 errors across `src/`, concentrated in `ProgressionCurveView` (39), `utils/restore.ts` (34), `workout/pr.ts` (28), `workout/analytics.ts` (28), the CSV importer parsers (50 across four files), and supersets/warmup helpers.
+- **Impact:** Indexed reads (`array[i]`, `record[key]`) are typed as always present, so guards are only written where the author remembers; parser and chart code is the most exposed.
+- **Required change:** Enable the flag (optionally together with `exactOptionalPropertyTypes`), fix the reported reads with local guards or `requireDefined`, and keep the flag on in CI.
+- **Done when:** `tsc --noEmit` is clean with `noUncheckedIndexedAccess` enabled and the tsconfig flag is committed.
+
+### PROD-07 — Localize the remaining screens
+
+- **Severity:** Low
+- **Status:** `Open`
+- **Evidence:** `PROD-04` introduced the catalog and provider and converted the navigation shell, Workout screen, routine cards, workout header, workout options menu, and rest overlay. The logger's set/exercise surfaces, history, analytics, exercises, settings, dialogs, and import/export flows still contain hardcoded English strings — including the surfaces added by the `develop` 1.1 work (rotation cards and the program editor, the tracking-type picker, the body-weight card and modal, the next-target pill, and the new settings sections).
+- **Impact:** A second locale is selectable in principle but those screens would render mixed languages.
+- **Required change:** Move the remaining user-facing strings and accessibility labels into the catalog, screen by screen, and add tests for the highest-traffic ones.
+- **Done when:** No user-facing string literals remain in screen or component code (catalog and formatting exceptions only).
 
 ---
 
@@ -813,7 +842,7 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 - [x] `ARCH-12` Decompose `HistoryScreen`.
 - [x] `ARCH-13` Decompose `WorkoutScreen`.
 - [x] `PERF-06` Lazy-load the exercise catalog.
-- [x] `PERF-11` Lazy-import heavy screens and bound hidden-tab retention.
+- [x] `PERF-11` Lazy-import heavy screens and preserve visited-tab state.
 - [x] `PERF-14` Add IndexedDB indexes and indexed history reads.
 - [x] `COR-01` Fix the web completion filter.
 - [x] `COR-02` Unify gym deletion policy.
@@ -842,21 +871,25 @@ The plan is ordered by user-data risk, then core interaction performance, then s
 
 **Verification note (2026-10-18):** All Phase 3 findings are Done. CI enforces lint, format, version sync, the dependency audit policy, the dead-code scan, both typechecks, coverage thresholds (91.39% lines / 83.66% branches / 89.40% functions on the 598 + 173 test suite), and the Maestro emulator journey. The logger and rest surfaces are labelled with automated enforcement, and the deferred `PERF-03`/`PERF-09` renderer checks landed with `DX-02`.
 
-**Base update (2026-10-18):** This branch was moved off `main` and onto `develop` (the 1.1 integration line) so every phase opens as its own PR into `develop`. `develop`'s newer work — tracking types, next targets, rotations, body weight, automatic backups, the native rest cue, the exercise-photo switch, and the gym-restore fix — was carried into this branch and brought up to the Phase 3 standards: raw touchables in the new components are labelled for the `A11Y-06` scan, lint/format/typechecks are clean on the merged tree, develop's tests were adapted to the lazy exercise catalog (`getDefaultExercises`) and to the test typechecker, and `tests/unit/tracking-display.test.ts` covers the tracking display helpers. Re-measured on the merged tree: 695 unit + 189 integration tests, coverage 90.71% lines / 84.20% branches / 89.41% functions.
+**Base update (2026-10-18):** The remediation stack was moved off `main` and onto `develop` (the 1.1 integration line) so each phase opens as its own PR into `develop`. `develop`'s newer work — tracking types, next targets, rotations, body weight, automatic backups, the native rest cue, the exercise-photo switch, the gym-restore fix, and their settings/stores/screens — was carried into the phases and brought up to the Phase 3 standards: raw touchables in the new components (`BodyWeightModal`, `ProgramEditorModal`, `TrackingTypeModal`) are labelled for the `A11Y-06` scan, lint/format/typechecks are clean on the merged tree, develop's tests were adapted to the lazy exercise catalog (`getDefaultExercises`) and to the test typechecker, and new `tests/unit/tracking-display.test.ts` cases cover the tracking display helpers. Re-measured on the merged tree: 695 unit + 189 integration tests, coverage 90.71% lines / 84.20% branches / 89.41% functions.
 
 ### Phase 4 — Product follow-through (target: after Phase 1-2)
 
-- [ ] `PROD-01` Complete F-Droid and iOS publishing.
-- [ ] `PROD-02` Merge or close automatic backups, remote photos, and time/distance charts.
-- [ ] `PROD-03` Scope the next media/watch milestone.
-- [ ] `PROD-04` Add i18n scaffolding.
-- [ ] `PROD-05` Decide and document deep-link scope.
-- [ ] `PROD-06` Add the web manifest/service worker or document the limitation.
-- [ ] `ARCH-08` Standardize platform dispatch.
-- [ ] `ARCH-09` Decide and document the navigation model.
-- [ ] `ARCH-10` Remove dead code.
-- [ ] `ARCH-11` Tighten storage-boundary types.
-- [ ] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
+- [ ] `PROD-01` Complete F-Droid and iOS publishing (blocked on external accounts; see the finding).
+- [x] `PROD-02` Merge or close automatic backups, remote photos, and time/distance charts.
+- [x] `PROD-03` Scope the next media/watch milestone.
+- [x] `PROD-04` Add i18n scaffolding.
+- [x] `PROD-05` Decide and document deep-link scope.
+- [x] `PROD-06` Add the web manifest/service worker or document the limitation.
+- [x] `ARCH-08` Standardize platform dispatch.
+- [x] `ARCH-09` Decide and document the navigation model.
+- [x] `ARCH-10` Remove dead code.
+- [x] `ARCH-11` Tighten storage-boundary types.
+- [x] `A11Y-06` Label the remaining shared surfaces (see the residual inventory).
+- [ ] `PROD-07` Localize the remaining screens (deferred residual from PROD-04).
+- [ ] `ARCH-14` Enable `noUncheckedIndexedAccess` (deferred residual: 261 reported reads).
+
+**Verification note (2026-10-18):** All Phase 4 findings are addressed except the logged residuals and the externally blocked publishing item. Lint, Prettier, version sync, the dependency audit policy, the dead-code scan, both typechecks, and the coverage run are green (91.35% lines / 84.57% branches / 90.43% functions on 729 unit + 189 integration tests); the web export ships the manifest, service worker, and injected shell; the automatic-backup integration and the Maestro emulator journey land on this branch. The branch base is `develop`; the phases merge it in order and the merged tree was brought to the Phase 3 standards (labelled touchables in the new components, lint/format clean, develop tests adapted to the lazy catalog and the test typechecker, tracking-display tests added). Residuals: `PROD-07` (remaining screens' localisation), `ARCH-14` (`noUncheckedIndexedAccess`, 261 indexed reads), and `PROD-01` (store publishing, blocked on external accounts).
 
 ---
 

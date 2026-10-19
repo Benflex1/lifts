@@ -38,14 +38,18 @@ import {
   createActivationEmitter,
 } from './src/hooks/useReloadOnActivate';
 import { useTabRetention } from './src/hooks/useTabRetention';
+import type { TabKey } from './src/navigation/tabRoutes';
+import { useWebTabHistory } from './src/navigation/useWebTabHistory';
+import { useAndroidBackToWorkout } from './src/navigation/useAndroidBackToWorkout';
+import { I18nProvider, useI18n, type MessageKey } from './src/i18n';
 
-type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
+type Tab = TabKey;
 
-const TABS: { key: Tab; label: string; icon: typeof Dumbbell }[] = [
-  { key: 'workout', label: 'Workout', icon: Dumbbell },
-  { key: 'history', label: 'History', icon: History },
-  { key: 'exercises', label: 'Exercises', icon: BookOpen },
-  { key: 'analytics', label: 'Progress', icon: TrendingUp },
+const TABS: { key: Tab; labelKey: MessageKey; icon: typeof Dumbbell }[] = [
+  { key: 'workout', labelKey: 'nav.workout', icon: Dumbbell },
+  { key: 'history', labelKey: 'nav.history', icon: History },
+  { key: 'exercises', labelKey: 'nav.exercises', icon: BookOpen },
+  { key: 'analytics', labelKey: 'nav.progress', icon: TrendingUp },
 ];
 
 /** Delay before the code-split tabs are warmed in the background, keeping the first switch fast. */
@@ -63,11 +67,12 @@ function TabLoadingFallback() {
 function MainAppContent() {
   const { isWorkingOut, isMinimized, gyms, activeWorkout } = useWorkout();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
   const showLogger = isWorkingOut && !isMinimized;
   const visibleTab: Tab | null = showLogger ? null : currentTab;
 
-  // Mount on first visit and preserve UI state across tabs and the logger.
+  // Mount on first visit, then preserve filters and scroll state across tabs and the logger.
   const { mountedTabs, mountTab } = useTabRetention<Tab>({
     initialTab: 'workout',
   });
@@ -76,6 +81,10 @@ function MainAppContent() {
     setCurrentTab(tab);
     mountTab(tab);
   };
+
+  // ARCH-09/PROD-05: web URL history and shell-level Android back navigation.
+  useWebTabHistory({ tab: currentTab, onSelectTab: selectTab });
+  useAndroidBackToWorkout(currentTab, selectTab);
 
   // Warm the lazy screens shortly after startup so their first visit does not wait on the
   // network, without putting them back into the initial bundle.
@@ -165,7 +174,7 @@ function MainAppContent() {
             mountedTabs.has(tab.key) ? (
               <View key={tab.key} style={[styles.tabPane, currentTab !== tab.key && styles.hidden]}>
                 <AppErrorBoundary
-                  label={tab.label}
+                  label={t(tab.labelKey)}
                   resetKey={currentTab === tab.key ? `${tab.key}:visible` : `${tab.key}:hidden`}
                 >
                   <TabActivationContext.Provider value={tabEmitters[tab.key]}>
@@ -202,7 +211,7 @@ function MainAppContent() {
                 onPress={() => selectTab(tab.key)}
                 activeOpacity={0.7}
                 accessibilityRole="tab"
-                accessibilityLabel={tab.label}
+                accessibilityLabel={t(tab.labelKey)}
                 accessibilityState={{ selected: active }}
               >
                 <Icon
@@ -210,7 +219,9 @@ function MainAppContent() {
                   color={active ? colors.primary : colors.textMuted}
                   strokeWidth={active ? 2.4 : 1.9}
                 />
-                <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
+                <Text style={[styles.navLabel, active && styles.navLabelActive]}>
+                  {t(tab.labelKey)}
+                </Text>
                 <View style={[styles.navDot, active && styles.navDotActive]} />
               </TouchableOpacity>
             );
@@ -287,11 +298,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppErrorBoundary label="App">
-        <StorageProvider>
-          <DialogProvider>
-            <AppRoot />
-          </DialogProvider>
-        </StorageProvider>
+        <I18nProvider>
+          <StorageProvider>
+            <DialogProvider>
+              <AppRoot />
+            </DialogProvider>
+          </StorageProvider>
+        </I18nProvider>
       </AppErrorBoundary>
     </SafeAreaProvider>
   );

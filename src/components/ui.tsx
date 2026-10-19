@@ -179,6 +179,7 @@ export function SegmentedControl<T extends string>({
             onPress={() => onChange(option.key)}
             activeOpacity={0.8}
             accessibilityRole="tab"
+            accessibilityLabel={option.label}
             accessibilityState={{ selected }}
           >
             <Text
@@ -267,6 +268,7 @@ export function SectionHeader({ title, meta, actionLabel, onAction, style }: Sec
           onPress={onAction}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
+          accessibilityLabel={actionLabel}
         >
           <Text style={styles.sectionAction}>{actionLabel}</Text>
         </TouchableOpacity>
@@ -359,7 +361,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={onClose}
-            accessibilityLabel="Close menu"
+            accessible={false}
           />
         </Animated.View>
         <Animated.View
@@ -417,6 +419,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
             onPress={onClose}
             activeOpacity={0.7}
             accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
             <Text style={styles.sheetCancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -430,7 +433,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
 // PR mark
 // ---------------------------------------------------------------------------
 
-export type PRRankLevel = 1 | 2 | 3;
+type PRRankLevel = 1 | 2 | 3;
 
 /** Accent per record rank: gold for a new best, quieter metals for 2nd and 3rd best. */
 export const PR_RANK_COLORS: Record<PRRankLevel, string> = {
@@ -439,7 +442,7 @@ export const PR_RANK_COLORS: Record<PRRankLevel, string> = {
   3: '#D4925B',
 };
 
-export const PR_RANK_LABELS: Record<PRRankLevel, string> = {
+const PR_RANK_LABELS: Record<PRRankLevel, string> = {
   1: 'PR',
   2: '2nd best',
   3: '3rd best',
@@ -466,29 +469,6 @@ export function PRMark({ rank, size = 28 }: PRMarkProps) {
       }}
     >
       <Trophy size={Math.round(size * 0.52)} color={color} strokeWidth={2.2} />
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Stat tile
-// ---------------------------------------------------------------------------
-
-interface StatProps {
-  label: string;
-  value: string;
-  accent?: string;
-}
-
-export function Stat({ label, value, accent }: StatProps) {
-  return (
-    <View style={styles.stat}>
-      <Text style={[styles.statValue, accent ? { color: accent } : null]} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={styles.statLabel} numberOfLines={1}>
-        {label}
-      </Text>
     </View>
   );
 }
@@ -698,19 +678,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.textSecondary,
-  },
-  stat: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'],
-  },
-  statLabel: {
-    ...type.caption,
-    marginTop: 2,
   },
 });

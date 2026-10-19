@@ -35,6 +35,7 @@ import {
   getCompletedSetIds,
   resolveDisplayedActiveGym,
 } from './activeWorkoutLogic';
+import { errorMessage } from '../../utils/invariant';
 
 /**
  * ARCH-01: all state, derived data, effects, and handlers for the active-workout logger. The
@@ -474,10 +475,10 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
           message: 'Could not save the workout session. Your session remains open.',
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       await notify({
         title: 'Save Error',
-        message: e?.message || 'An unexpected error occurred while saving.',
+        message: errorMessage(e) || 'An unexpected error occurred while saving.',
       });
     } finally {
       setIsFinishing(false);
@@ -502,10 +503,10 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
   const handleGymSelect = async (gymId: string) => {
     try {
       await setActiveGym(gymId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       await notify({
         title: 'Gym Error',
-        message: error?.message || 'Failed to switch gym.',
+        message: errorMessage(error) || 'Failed to switch gym.',
       });
       throw error;
     }

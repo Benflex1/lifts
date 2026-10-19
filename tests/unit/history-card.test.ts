@@ -28,7 +28,10 @@ mockModule('react-native', {
 });
 mockModule('lucide-react-native', iconProxy);
 mockModule('../../src/components/PRBadge', { PRBadge: 'PRBadge' });
-mockModule('../../src/components/ui', { IconButton: 'IconButton' });
+mockModule('../../src/components/ui', {
+  IconButton: 'IconButton',
+  AppTouchable: 'TouchableOpacity',
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

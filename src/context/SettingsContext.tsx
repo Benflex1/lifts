@@ -11,6 +11,7 @@ import {
   parseHealthSyncEnabled,
   parseRemoteExerciseImagesEnabled,
 } from '../utils/settings';
+import { errorMessage } from '../utils/invariant';
 import { TrackingType } from '../types';
 import {
   EXERCISE_TRACKING_TYPES_KEY,
@@ -142,11 +143,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setUnitState(u);
       try {
         await setSetting('unit', u);
-      } catch (err: any) {
+      } catch (err: unknown) {
         setUnitState(prev);
         await notify({
           title: 'Settings Error',
-          message: err?.message || 'Failed to save weight unit setting.',
+          message: errorMessage(err) || 'Failed to save weight unit setting.',
         });
         throw err;
       }
@@ -160,11 +161,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setGymTrackingEnabledState(enabled);
       try {
         await setSetting('gym_tracking_enabled', enabled ? 'true' : 'false');
-      } catch (err: any) {
+      } catch (err: unknown) {
         setGymTrackingEnabledState(previous);
         await notify({
           title: 'Settings Error',
-          message: err?.message || 'Failed to save gym tracking setting.',
+          message: errorMessage(err) || 'Failed to save gym tracking setting.',
         });
         throw err;
       }

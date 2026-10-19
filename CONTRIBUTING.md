@@ -62,19 +62,20 @@ npm test
 # 6. Cross-platform integration tests (Native SQLite + Web IndexedDB)
 npm run test:integration
 
-# 7. Web production export smoke test
+# 7. Web production export smoke test (with the manifest and service worker)
 npx expo export --platform web --output-dir dist-audit-web
+node scripts/postprocess-web-export.mjs dist-audit-web
 ```
 
 Run `npm run format` before committing to apply the shared Prettier configuration.
 
 ### Coverage scope
 
-The coverage thresholds measure modules executed by the Node tests, not all application source. This phase uses 90% lines, 83% branches, and 88% functions: the controller regression now includes a previously uninstrumented module in the denominator. The final phase restores the 89% function threshold alongside its additional coverage and platform-dispatch cleanup. Unimported screens and the app shell are absent from the denominator. LCOV is generated locally and uploaded as a CI artifact; it is not tracked in Git. Use component and emulator tests to verify wiring.
+`npm run test:coverage` enforces thresholds over modules executed by the Node test suite. It does not measure all application source files: an unimported screen or app shell is absent from the denominator. The generated LCOV report is ignored by Git and uploaded as a CI artifact. Use component regressions and the emulator journey to verify wiring; these percentages do not establish complete UI, accessibility, or device-performance coverage.
 
 ### End-to-end smoke journey
 
-The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). The journey runs for relevant pull requests into `main`/`develop` and pushes to `main` or `develop`. Branch protection must require `emulator-journey` for it to block merging.
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). It runs for relevant pull requests into `main` or `develop`, and relevant pushes to those branches. Branch protection must require `emulator-journey` to make it a merge gate.
 
 With a device or emulator connected and the app installed, run it locally:
 
@@ -109,6 +110,10 @@ When contributing code, adhere strictly to these core principles:
 5. **Cross-Platform Accessibility**:
    - Ensure all touch targets are at least 44x44 pt.
    - Provide appropriate `accessibilityRole` and `accessibilityLabel` attributes on all touchable elements.
+
+6. **Platform Dispatch**:
+   - Select platform-specific modules with Metro file extensions (`*.native.ts`, `*.android.ts`, `*.ios.ts`, `*.web.ts`); base `.ts` files are Node/test fallbacks only.
+   - Reserve `Platform.OS` for in-module behavior differences. See [docs/platform-dispatch.md](docs/platform-dispatch.md).
 
 ---
 

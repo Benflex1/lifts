@@ -6,6 +6,7 @@ import { exportBackup } from '../utils/export';
 import { pickBackupJson } from '../utils/pickBackup';
 import { computeRestorePlan } from '../utils/restore';
 import { saveBackupToFiles } from '../utils/saveBackup';
+import { errorMessage } from '../utils/invariant';
 
 /**
  * ARCH-02 domain hook: the Tools tab's backup transfer commands — save to files, share to
@@ -30,11 +31,11 @@ export function useBackupTransfer({
     try {
       await exportBackup();
       await notify({ title: 'Export Complete', message: 'Your workout data has been exported.' });
-    } catch (e: any) {
+    } catch (e: unknown) {
       await notify({
         title: 'Export Error',
-        message: e?.message
-          ? `Failed to export data: ${e.message}`
+        message: errorMessage(e)
+          ? `Failed to export data: ${errorMessage(e)}`
           : 'Failed to export data. Please try again.',
       });
     }
@@ -48,11 +49,11 @@ export function useBackupTransfer({
         title: 'Backup Saved',
         message: 'Your workout data was saved to the selected file location.',
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       await notify({
         title: 'Save Error',
-        message: e?.message
-          ? `Failed to save data: ${e.message}`
+        message: errorMessage(e)
+          ? `Failed to save data: ${errorMessage(e)}`
           : 'Failed to save data. Please try again.',
       });
     }
@@ -103,10 +104,10 @@ export function useBackupTransfer({
         title: 'Restore Complete',
         message: 'Your backup data has been successfully merged.',
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       await notify({
         title: 'Restore Failed',
-        message: err?.message || 'An error occurred during restore. No data was changed.',
+        message: errorMessage(err) || 'An error occurred during restore. No data was changed.',
       });
     }
   };

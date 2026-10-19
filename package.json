@@ -64,8 +64,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "version:check": "node scripts/check-version-sync.mjs",
-    "test:coverage": "node -e \"require('node:fs').mkdirSync('coverage',{recursive:true})\" && node --experimental-test-module-mocks --import tsx --experimental-test-coverage --test-coverage-exclude=\"tests/**\" --test-coverage-lines=90 --test-coverage-branches=83 --test-coverage-functions=88 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test tests/unit/*.test.ts tests/integration/*.test.ts",
-    "audit:policy": "node scripts/audit-policy.mjs"
+    "test:coverage": "node -e \"require('node:fs').mkdirSync('coverage',{recursive:true})\" && node --experimental-test-module-mocks --import tsx --experimental-test-coverage --test-coverage-exclude=\"tests/**\" --test-coverage-lines=90 --test-coverage-branches=83 --test-coverage-functions=89 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "audit:policy": "node scripts/audit-policy.mjs",
+    "check:dead-code": "node scripts/dead-code-scan.mjs"
   },
   "private": true,
   "engines": {

@@ -25,7 +25,7 @@ export const CUSTOM_MUSCLE_OPTIONS = MUSCLE_GROUPS.filter(m => m !== 'All');
 
 export const CUSTOM_EQUIPMENT_OPTIONS = ['Barbell', 'Dumbbell', 'Machine', 'Cable', 'Bodyweight'];
 
-export const MUSCLE_ALIAS_MAP: Record<string, string> = {
+const MUSCLE_ALIAS_MAP: Record<string, string> = {
   lats: 'Back',
   lat: 'Back',
   traps: 'Back',
@@ -54,7 +54,7 @@ export const MUSCLE_ALIAS_MAP: Record<string, string> = {
   triceps: 'Triceps',
 };
 
-export const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
+const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
   barbell: 'Barbell',
   bb: 'Barbell',
   dumbbell: 'Dumbbell',

@@ -1,6 +1,7 @@
 import { Store, WorkoutDraft } from '../database/contract';
 import { Workout } from '../types';
 import { reportError } from '../utils/errorReporting';
+import { toError } from '../utils/invariant';
 import { workoutVolumeKg } from './tracking';
 
 export type SessionPhase = 'idle' | 'starting' | 'active' | 'finishing' | 'discarding';
@@ -119,12 +120,12 @@ export function createSessionController(
         revision: 1,
       };
       notify();
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         phase: 'idle',
         workout: null,
         restTimer: null,
-        persistenceError: err,
+        persistenceError: toError(err),
         revision: 0,
       };
       notify();
@@ -225,10 +226,10 @@ export function createSessionController(
         };
         notify();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         ...state,
-        persistenceError: err,
+        persistenceError: toError(err),
       };
       notify();
       throw err;
@@ -315,11 +316,11 @@ export function createSessionController(
       };
       notify();
       return completedWorkout;
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         ...state,
         phase: 'active',
-        persistenceError: err,
+        persistenceError: toError(err),
       };
       notify();
       throw err;
@@ -351,11 +352,11 @@ export function createSessionController(
         revision: 0,
       };
       notify();
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         ...state,
         phase: 'active',
-        persistenceError: err,
+        persistenceError: toError(err),
       };
       notify();
       throw err;
