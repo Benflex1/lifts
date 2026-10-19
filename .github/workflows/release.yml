@@ -196,7 +196,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download x86_64 F-Droid build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: unsigned-x86_64
           path: smoke-apk
@@ -235,7 +235,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download build outputs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: build
 
