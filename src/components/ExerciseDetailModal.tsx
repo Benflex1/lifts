@@ -13,15 +13,12 @@ import { Exercise, DualExerciseStats, Gym, ExerciseGymScope, Workout } from '../
 import { useSettings } from '../context/SettingsContext';
 import { formatWeight } from '../utils/units';
 import {
-  getExerciseStats,
-  getExerciseGymScope,
-  getGyms,
-  getDefaultGym,
-  getCompletedWorkoutsForExercise,
+  getStore,
   reassignExerciseHistory,
 } from '../database/db';
 import { getAllowedGymIds, resolveExerciseScope } from '../workout/gym-scope';
-import { ExercisePodium, extractExercisePodium } from '../workout/pr';
+import { loadExerciseDetailData } from '../workout/exercise-detail';
+import { ExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from './ExercisePodiumView';
 import { ProgressionCurveView } from './ProgressionCurveView';
 import { extractExerciseProgression, ProgressionMetric, TimeframeFilter } from '../workout/analytics';
@@ -144,31 +141,18 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
     async function loadData() {
       try {
-        let activeGym = initialGym;
-        const [allGyms, defaultGym] = await Promise.all([getGyms(), getDefaultGym()]);
-        if (!activeGym) {
-          activeGym = allGyms.find((g) => g.id === defaultGym.id) || allGyms[0] || defaultGym;
-        }
-        if (requestId !== requestCounterRef.current) return;
-        setResolvedGym(activeGym);
-        setAvailableGyms(allGyms);
-
-        const [stats, scope, historyWorkouts] = await Promise.all([
-          getExerciseStats(exercise!.id, activeGym.id),
-          getExerciseGymScope(exercise!.id),
-          getCompletedWorkoutsForExercise(exercise!.id),
-        ]);
+        const store = await getStore();
+        const data = await loadExerciseDetailData(store, exercise!, initialGym);
 
         if (requestId !== requestCounterRef.current) return;
-        const allowedGymIds = getAllowedGymIds(exercise!, scope || undefined, activeGym.id);
-        const podium = extractExercisePodium(historyWorkouts, exercise!.id, allGyms, allowedGymIds);
-
-        setExerciseStats(stats);
-        setExerciseScope(scope);
-        setExercisePodium(podium);
-        setAllHistoryWorkouts(historyWorkouts);
-        setRecentWorkouts(historyWorkouts.slice(0, 5));
-        setGymNamesMap(new Map(allGyms.map((g) => [g.id, g.name])));
+        setResolvedGym(data.resolvedGym);
+        setAvailableGyms(data.gyms);
+        setExerciseStats(data.stats);
+        setExerciseScope(data.scope);
+        setExercisePodium(data.podium);
+        setAllHistoryWorkouts(data.historyWorkouts);
+        setRecentWorkouts(data.historyWorkouts.slice(0, 5));
+        setGymNamesMap(data.gymNamesMap);
       } catch (err) {
         if (requestId !== requestCounterRef.current) return;
         console.warn('Error loading exercise details modal data:', err);

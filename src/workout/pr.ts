@@ -1,6 +1,7 @@
 import { Exercise, ExerciseGymScope, Gym, Workout, WorkoutSet } from '../types';
 import { calculate1RM } from '../utils/calculator';
 import { formatWeight, WeightUnit } from '../utils/units';
+import { ExerciseHistoryEntry, collectExerciseHistory } from './exercise-history';
 import { getAllowedGymIds, resolveExerciseScope } from './gym-scope';
 import {
   distanceUnitFor,
@@ -79,11 +80,38 @@ export interface WorkoutPRSummary {
 }
 
 /**
+ * Structural comparison of two achievements. PR evaluation rebuilds result
+ * objects on every pass, so memoized rows compare by value instead of identity.
+ */
+export function isSamePRAchievement(a?: PRAchievement | null, b?: PRAchievement | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.rank === b.rank &&
+    a.metric === b.metric &&
+    a.scope === b.scope &&
+    a.value === b.value &&
+    a.previousRecord === b.previousRecord &&
+    a.isTie === b.isTie &&
+    a.gymId === b.gymId &&
+    a.gymName === b.gymName
+  );
+}
+
+/** Structural comparison of two set PR results, for memoization guards. */
+export function isSameSetPRResult(a?: SetPRResult, b?: SetPRResult): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.achievements.length !== b.achievements.length) return false;
+  return isSamePRAchievement(a.primary, b.primary);
+}
+
+/**
  * Inserts a value into a descending-sorted distinct array.
  */
 export function insertSortedDistinct(arr: number[], val: number): void {
   if (val <= 0 || arr.includes(val)) return;
-  const idx = arr.findIndex((x) => x < val);
+  const idx = arr.findIndex(x => x < val);
   if (idx === -1) {
     arr.push(val);
   } else {
@@ -97,7 +125,7 @@ export function insertSortedDistinct(arr: number[], val: number): void {
  */
 export function evaluateRank(
   value: number,
-  priorRecords?: readonly number[]
+  priorRecords?: readonly number[],
 ): { rank: PRRank; previousRecord?: number; isTie?: boolean } | null {
   if (value <= 0) return null;
   const records = priorRecords ?? [];
@@ -144,9 +172,11 @@ export function extractLeaderboard(
   workouts: Workout[],
   exerciseId: string,
   gymFilter: Set<string> | null,
-  beforeStartTime?: string
+  beforeStartTime?: string,
 ): ExerciseLeaderboard {
-  const values = Object.fromEntries(PR_METRICS.map((metric) => [metric, new Set<number>()])) as Record<PRMetric, Set<number>>;
+  const values = Object.fromEntries(
+    PR_METRICS.map(metric => [metric, new Set<number>()]),
+  ) as Record<PRMetric, Set<number>>;
 
   for (const w of workouts) {
     if (beforeStartTime && w.startTime >= beforeStartTime) continue;
@@ -209,15 +239,29 @@ export function compareAchievements(a: PRAchievement, b: PRAchievement): number 
  */
 export interface PriorRecordSource {
   /** Distinct values per metric, descending, from sets strictly before `beforeStartTime`. */
-  leaderboard(exerciseId: string, gymFilter: Set<string> | null, beforeStartTime: string): ExerciseLeaderboard;
+  leaderboard(
+    exerciseId: string,
+    gymFilter: Set<string> | null,
+    beforeStartTime: string,
+  ): ExerciseLeaderboard;
   /** Most reps ever done at exactly `weightKg` strictly before `beforeStartTime`. */
-  maxRepsAtWeight(exerciseId: string, gymFilter: Set<string> | null, beforeStartTime: string, weightKg: number): number;
+  maxRepsAtWeight(
+    exerciseId: string,
+    gymFilter: Set<string> | null,
+    beforeStartTime: string,
+    weightKg: number,
+  ): number;
 }
 
 function sourceFromWorkouts(priorWorkoutsByExercise: Record<string, Workout[]>): PriorRecordSource {
   return {
     leaderboard: (exerciseId, gymFilter, beforeStartTime) =>
-      extractLeaderboard(priorWorkoutsByExercise[exerciseId] || [], exerciseId, gymFilter, beforeStartTime),
+      extractLeaderboard(
+        priorWorkoutsByExercise[exerciseId] || [],
+        exerciseId,
+        gymFilter,
+        beforeStartTime,
+      ),
     maxRepsAtWeight: (exerciseId, gymFilter, beforeStartTime, weightKg) => {
       let maxReps = 0;
       for (const pw of priorWorkoutsByExercise[exerciseId] || []) {
@@ -244,7 +288,7 @@ export function evaluateWorkoutPRs(
   priorWorkoutsByExercise: Record<string, Workout[]>,
   gyms: Gym[],
   gymTrackingEnabled: boolean,
-  scopesByExercise?: Record<string, ExerciseGymScope | undefined>
+  scopesByExercise?: Record<string, ExerciseGymScope | undefined>,
 ): WorkoutPRSummary {
   return evaluateWorkoutPRsWithSource(
     workout,
@@ -261,9 +305,9 @@ export function evaluateWorkoutPRsWithSource(
   source: PriorRecordSource,
   gyms: Gym[],
   gymTrackingEnabled: boolean,
-  scopesByExercise?: Record<string, ExerciseGymScope | undefined>
+  scopesByExercise?: Record<string, ExerciseGymScope | undefined>,
 ): WorkoutPRSummary {
-  const gymMap = new Map(gyms.map((g) => [g.id, g.name]));
+  const gymMap = new Map(gyms.map(g => [g.id, g.name]));
   const currentGymName = gymMap.get(workout.gymId);
 
   const setPRs = new Map<string, SetPRResult>();
@@ -288,8 +332,10 @@ export function evaluateWorkoutPRsWithSource(
     const gymFilter = isGymSpecific ? allowedGymIds : null;
     const targetLeaderboard = source.leaderboard(exerciseId, gymFilter, workout.startTime);
     const trackingType = getTrackingType(activeEx);
-    const completedSets = activeEx.sets.filter((s) => s.isCompleted && s.type !== 'warmup');
-    const completedValues = new Map(completedSets.map((set) => [set.id, recordValues(set, trackingType)]));
+    const completedSets = activeEx.sets.filter(s => s.isCompleted && s.type !== 'warmup');
+    const completedValues = new Map(
+      completedSets.map(set => [set.id, recordValues(set, trackingType)]),
+    );
     const metrics = PR_METRICS;
 
     // Map each set ID to its earned achievements in this session
@@ -316,8 +362,18 @@ export function evaluateWorkoutPRsWithSource(
         let rankResult = evaluateRank(bestVal, targetLeaderboard[metric]);
 
         // When weight matches the top historical record, check if reps beat prior reps at this weight
-        if (!rankResult && metric === 'weight' && targetLeaderboard.weight.length > 0 && bestVal === targetLeaderboard.weight[0]) {
-          const maxPriorRepsAtWeight = source.maxRepsAtWeight(exerciseId, gymFilter, workout.startTime, bestVal);
+        if (
+          !rankResult &&
+          metric === 'weight' &&
+          targetLeaderboard.weight.length > 0 &&
+          bestVal === targetLeaderboard.weight[0]
+        ) {
+          const maxPriorRepsAtWeight = source.maxRepsAtWeight(
+            exerciseId,
+            gymFilter,
+            workout.startTime,
+            bestVal,
+          );
           if (bestSet.reps > maxPriorRepsAtWeight) {
             rankResult = { rank: 1, previousRecord: bestVal, isTie: false };
           }
@@ -385,7 +441,6 @@ export function evaluateWorkoutPRsWithSource(
   };
 }
 
-
 // ---------------------------------------------------------------------------
 // Whole-history evaluation
 // ---------------------------------------------------------------------------
@@ -439,7 +494,12 @@ export class PRHistoryIndex implements PriorRecordSource {
     return merged;
   }
 
-  maxRepsAtWeight(exerciseId: string, gymFilter: Set<string> | null, _before: string, weightKg: number): number {
+  maxRepsAtWeight(
+    exerciseId: string,
+    gymFilter: Set<string> | null,
+    _before: string,
+    weightKg: number,
+  ): number {
     let maxReps = 0;
     for (const [gymId, board] of this.boards.get(exerciseId) ?? []) {
       if (gymFilter !== null && !gymFilter.has(gymId)) continue;
@@ -471,7 +531,7 @@ export class PRHistoryIndex implements PriorRecordSource {
  */
 export function buildActiveWorkoutRecordIndex(
   historyByExercise: Record<string, Workout[]>,
-  activeWorkoutId: string | undefined
+  activeWorkoutId: string | undefined,
 ): PRHistoryIndex {
   const index = new PRHistoryIndex();
   const loadedExerciseIds = new Set(Object.keys(historyByExercise));
@@ -496,9 +556,12 @@ export function evaluateActiveWorkoutPRs(
   index: PriorRecordSource,
   gyms: Gym[],
   gymTrackingEnabled: boolean,
-  scopesByExercise?: Record<string, ExerciseGymScope | undefined>
+  scopesByExercise?: Record<string, ExerciseGymScope | undefined>,
 ): WorkoutPRSummary {
-  const loaded = { ...workout, exercises: workout.exercises.filter((ex) => ex.exerciseId in historyByExercise) };
+  const loaded = {
+    ...workout,
+    exercises: workout.exercises.filter(ex => ex.exerciseId in historyByExercise),
+  };
   return evaluateWorkoutPRsWithSource(loaded, index, gyms, gymTrackingEnabled, scopesByExercise);
 }
 
@@ -511,10 +574,10 @@ export function evaluateAllWorkoutPRs(
   workouts: Workout[],
   gyms: Gym[],
   gymTrackingEnabled: boolean,
-  scopesByExercise?: Record<string, ExerciseGymScope | undefined>
+  scopesByExercise?: Record<string, ExerciseGymScope | undefined>,
 ): Record<string, WorkoutPRSummary> {
   const ordered = workouts
-    .filter((w) => typeof w.startTime === 'string' && w.startTime.length > 0)
+    .filter(w => typeof w.startTime === 'string' && w.startTime.length > 0)
     .sort((a, b) => (a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0));
   const index = new PRHistoryIndex();
   const results: Record<string, WorkoutPRSummary> = {};
@@ -525,7 +588,13 @@ export function evaluateAllWorkoutPRs(
     let j = i;
     while (j < ordered.length && ordered[j].startTime === ordered[i].startTime) j++;
     for (let k = i; k < j; k++) {
-      results[ordered[k].id] = evaluateWorkoutPRsWithSource(ordered[k], index, gyms, gymTrackingEnabled, scopesByExercise);
+      results[ordered[k].id] = evaluateWorkoutPRsWithSource(
+        ordered[k],
+        index,
+        gyms,
+        gymTrackingEnabled,
+        scopesByExercise,
+      );
     }
     for (let k = i; k < j; k++) index.add(ordered[k]);
     i = j;
@@ -537,7 +606,8 @@ export function evaluateAllWorkoutPRs(
     for (const ex of w.exercises || []) (byExercise[ex.exerciseId] ||= []).push(w);
   }
   for (const w of workouts) {
-    if (!results[w.id]) results[w.id] = evaluateWorkoutPRs(w, byExercise, gyms, gymTrackingEnabled, scopesByExercise);
+    if (!results[w.id])
+      results[w.id] = evaluateWorkoutPRs(w, byExercise, gyms, gymTrackingEnabled, scopesByExercise);
   }
   return results;
 }
@@ -547,7 +617,14 @@ export function evaluateAllWorkoutPRs(
  * itself is rendered visually by the <Medal /> component next to this text.
  */
 export function formatPRBadgeLabel(achievement: PRAchievement, showGymName = false): string {
-  const rankLabel = achievement.rank === 1 ? (achievement.isTie ? 'Tied PR' : 'PR') : achievement.rank === 2 ? '2nd' : '3rd';
+  const rankLabel =
+    achievement.rank === 1
+      ? achievement.isTie
+        ? 'Tied PR'
+        : 'PR'
+      : achievement.rank === 2
+        ? '2nd'
+        : '3rd';
 
   if (achievement.scope === 'gym') {
     if (showGymName && achievement.gymName) {
@@ -593,7 +670,11 @@ export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit
   let prevStr = '';
   if (achievement.previousRecord !== undefined && achievement.previousRecord > 0) {
     const action = achievement.isTie ? 'ties' : 'beats';
-    if (achievement.metric === 'weight' || achievement.metric === '1rm' || achievement.metric === 'volume') {
+    if (
+      achievement.metric === 'weight' ||
+      achievement.metric === '1rm' ||
+      achievement.metric === 'volume'
+    ) {
       prevStr = ` (${action} ${formatWeight(achievement.previousRecord, unit)})`;
     } else if (achievement.metric === 'reps') {
       prevStr = ` (${action} ${achievement.previousRecord} reps)`;
@@ -633,9 +714,22 @@ export function extractExercisePodium(
   workouts: Workout[],
   exerciseId: string,
   gyms: Gym[],
-  allowedGymIds: Set<string> | null
+  allowedGymIds: Set<string> | null,
 ): ExercisePodium {
-  const gymMap = new Map(gyms.map((g) => [g.id, g.name]));
+  const entries = collectExerciseHistory(workouts, exerciseId);
+  return buildExercisePodium(entries, gyms, allowedGymIds);
+}
+
+/**
+ * Builds the podium from an already-collected history pass, so callers that
+ * also compute statistics do not walk the workout history twice.
+ */
+export function buildExercisePodium(
+  entries: ExerciseHistoryEntry[],
+  gyms: Gym[],
+  allowedGymIds: Set<string> | null,
+): ExercisePodium {
+  const gymMap = new Map(gyms.map(g => [g.id, g.name]));
 
   interface CandidateSet {
     weightKg: number;
@@ -653,30 +747,26 @@ export function extractExercisePodium(
 
   const candidates: CandidateSet[] = [];
 
-  for (const w of workouts) {
-    if (allowedGymIds !== null && !allowedGymIds.has(w.gymId)) continue;
-    const currentGymName = gymMap.get(w.gymId);
+  for (const entry of entries) {
+    if (allowedGymIds !== null && !allowedGymIds.has(entry.gymId)) continue;
+    const currentGymName = gymMap.get(entry.gymId);
 
-    for (const ex of w.exercises) {
-      if (ex.exerciseId !== exerciseId) continue;
-      const trackingType = getTrackingType(ex);
-      for (const s of ex.sets) {
-        if (!s.isCompleted || s.type === 'warmup') continue;
+    for (const set of entry.sets) {
+      if (set.isWarmup) continue;
 
-        candidates.push({
-          weightKg: s.weightKg,
-          reps: s.reps,
-          ...(s.durationSeconds !== undefined ? { durationSeconds: s.durationSeconds } : {}),
-          ...(s.distanceM !== undefined ? { distanceM: s.distanceM } : {}),
-          ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
-          date: w.startTime,
-          gymId: w.gymId,
-          gymName: currentGymName,
-          workoutId: w.id,
-          workoutName: w.name,
-          values: recordValues(s, trackingType),
-        });
-      }
+      candidates.push({
+        weightKg: set.weightKg,
+        reps: set.reps,
+        ...(set.durationSeconds !== undefined ? { durationSeconds: set.durationSeconds } : {}),
+        ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+        ...(set.explicitTrackingType ? { trackingType: set.explicitTrackingType } : {}),
+        date: entry.startedAt,
+        gymId: entry.gymId,
+        gymName: currentGymName,
+        workoutId: entry.workoutId,
+        workoutName: entry.workoutName,
+        values: set.values,
+      });
     }
   }
 
@@ -688,7 +778,7 @@ export function extractExercisePodium(
 
   const buildPodiumForMetric = (
     metric: PRMetric,
-    getValue: (c: CandidateSet) => number
+    getValue: (c: CandidateSet) => number,
   ): PodiumEntry[] => {
     const valueMap = new Map<number, CandidateSet>();
     for (const c of candidates) {
@@ -769,7 +859,6 @@ export function extractExercisePodium(
   };
 
   return Object.fromEntries(
-    PR_METRICS.map((metric) => [metric, buildPodiumForMetric(metric, (c) => c.values[metric])])
+    PR_METRICS.map(metric => [metric, buildPodiumForMetric(metric, c => c.values[metric])]),
   ) as ExercisePodium;
 }
-

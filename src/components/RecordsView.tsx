@@ -1,15 +1,17 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView } from 'react-native';
 import { ChevronRight, Search, Trophy, X } from 'lucide-react-native';
 import { ExerciseRecordSummary, LiftHighlight, TrophyRoomSummary } from '../workout/trophy-room';
 import { formatWeight, kgToDisplay, WeightUnit } from '../utils/units';
 import { Gym } from '../types';
 import { colors, radii } from '../theme';
 import { Chip, PRMark } from './ui';
+import { createDebouncer } from '../utils/debounce';
 
 const CATEGORIES = ['all', 'chest', 'back', 'legs', 'shoulders', 'arms', 'core'] as const;
 const RECENT_LIMIT = 8;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SEARCH_DEBOUNCE_MS = 200;
 
 interface RecordsViewProps {
   /** Records for the current gym, before category and search filters. */
@@ -81,6 +83,61 @@ function BigLift({ label, lift, unit }: { label: string; lift?: LiftHighlight; u
   );
 }
 
+interface RecordRowProps {
+  record: ExerciseRecordSummary;
+  unit: WeightUnit;
+  showDivider: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onOpen: (record: ExerciseRecordSummary) => void;
+}
+
+/**
+ * Memoized so a search or filter change only re-renders rows whose own props
+ * changed (boundary rows), instead of the whole records list.
+ */
+export const RecordRow = React.memo(function RecordRow({
+  record,
+  unit,
+  showDivider,
+  isFirst,
+  isLast,
+  onOpen,
+}: RecordRowProps) {
+  const headline = headlineFor(record, unit);
+  const date = recordDate(record);
+  return (
+    <TouchableOpacity
+      style={[
+        styles.listRow,
+        styles.listRowCard,
+        showDivider && styles.listRowDivider,
+        isFirst && styles.listRowFirst,
+        isLast && styles.listRowLast,
+      ]}
+      onPress={() => onOpen(record)}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`View ${record.exerciseName} record details`}
+    >
+      <View style={styles.listRowText}>
+        <Text style={styles.listName} numberOfLines={1}>
+          {record.exerciseName}
+        </Text>
+        <Text style={styles.listDetail} numberOfLines={1}>
+          {detailFor(record, unit)}
+          {date ? ` · ${formatRelativeDay(date)}` : ''}
+        </Text>
+      </View>
+      <View style={styles.listValueWrap}>
+        <Text style={styles.listValue}>{headline.value}</Text>
+        <Text style={styles.listCaption}>{headline.caption}</Text>
+      </View>
+      <ChevronRight size={16} color={colors.textFaint} />
+    </TouchableOpacity>
+  );
+});
+
 export function RecordsView({
   overview,
   filtered,
@@ -97,6 +154,36 @@ export function RecordsView({
 }: RecordsViewProps) {
   const hasRecord = (record: ExerciseRecordSummary) => Boolean(record.bestWeight || record.bestReps);
   const overviewRecords = overview?.records.filter(hasRecord) ?? [];
+
+  const [searchText, setSearchText] = useState(search);
+  const onChangeSearchRef = useRef(onChangeSearch);
+  useEffect(() => {
+    onChangeSearchRef.current = onChangeSearch;
+  }, [onChangeSearch]);
+
+  // Keystrokes update the input immediately but only commit after a short
+  // pause, so typing filters an existing list instead of recomputing history.
+  const debouncer = useMemo(
+    () => createDebouncer<string>(SEARCH_DEBOUNCE_MS, (value) => onChangeSearchRef.current(value)),
+    [],
+  );
+  useEffect(() => () => debouncer.cancel(), [debouncer]);
+
+  // Keep the input in sync when the committed search changes externally.
+  useEffect(() => {
+    setSearchText((prev) => (prev === search ? prev : search));
+  }, [search]);
+
+  const handleSearchChange = (text: string) => {
+    setSearchText(text);
+    debouncer.schedule(text);
+  };
+
+  const handleClearSearch = () => {
+    debouncer.cancel();
+    setSearchText('');
+    onChangeSearchRef.current('');
+  };
 
   if (!overview || overviewRecords.length === 0) {
     return (
@@ -123,7 +210,7 @@ export function RecordsView({
   const recentCount = recent.filter(item => item.date >= thirtyDaysAgo).length;
   const records = (filtered?.records ?? []).filter(hasRecord);
 
-  return (
+  const listHeader = (
     <View>
       {hasBigThree && (
         <View style={styles.heroCard}>
@@ -202,14 +289,14 @@ export function RecordsView({
           style={styles.searchInput}
           placeholder="Search records"
           placeholderTextColor={colors.textMuted}
-          value={search}
-          onChangeText={onChangeSearch}
+          value={searchText}
+          onChangeText={handleSearchChange}
           autoCapitalize="none"
           autoCorrect={false}
         />
-        {search.length > 0 && (
+        {searchText.length > 0 && (
           <TouchableOpacity
-            onPress={() => onChangeSearch('')}
+            onPress={handleClearSearch}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Clear search"
@@ -252,44 +339,35 @@ export function RecordsView({
         )}
       </ScrollView>
 
-      {records.length > 0 ? (
-        <View style={styles.listCard}>
-          {records.map((record, idx) => {
-            const headline = headlineFor(record, unit);
-            const date = recordDate(record);
-            return (
-              <TouchableOpacity
-                key={record.exerciseId}
-                style={[styles.listRow, idx > 0 && styles.listRowDivider]}
-                onPress={() => onOpenRecord(record)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${record.exerciseName} record details`}
-              >
-                <View style={styles.listRowText}>
-                  <Text style={styles.listName} numberOfLines={1}>
-                    {record.exerciseName}
-                  </Text>
-                  <Text style={styles.listDetail} numberOfLines={1}>
-                    {detailFor(record, unit)}
-                    {date ? ` · ${formatRelativeDay(date)}` : ''}
-                  </Text>
-                </View>
-                <View style={styles.listValueWrap}>
-                  <Text style={styles.listValue}>{headline.value}</Text>
-                  <Text style={styles.listCaption}>{headline.caption}</Text>
-                </View>
-                <ChevronRight size={16} color={colors.textFaint} />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      ) : (
+    </View>
+  );
+
+  return (
+    <FlatList
+      data={records}
+      keyExtractor={(item) => item.exerciseId}
+      renderItem={({ item, index }) => (
+        <RecordRow
+          record={item}
+          unit={unit}
+          showDivider={index > 0}
+          isFirst={index === 0}
+          isLast={index === records.length - 1}
+          onOpen={onOpenRecord}
+        />
+      )}
+      ListHeaderComponent={listHeader}
+      ListEmptyComponent={
         <View style={styles.noMatch}>
           <Text style={styles.emptyText}>No records match these filters.</Text>
         </View>
-      )}
-    </View>
+      }
+      contentContainerStyle={styles.listContent}
+      keyboardShouldPersistTaps="handled"
+      initialNumToRender={12}
+      maxToRenderPerBatch={12}
+      windowSize={7}
+    />
   );
 }
 
@@ -476,12 +554,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderStrong,
     marginHorizontal: 2,
   },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 120,
+  },
   listCard: {
     backgroundColor: colors.surface,
     borderRadius: radii.xl,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
+  },
+  listRowCard: {
+    backgroundColor: colors.surface,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  listRowFirst: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+  },
+  listRowLast: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomLeftRadius: radii.xl,
+    borderBottomRightRadius: radii.xl,
   },
   listRow: {
     flexDirection: 'row',

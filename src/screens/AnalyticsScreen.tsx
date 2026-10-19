@@ -60,7 +60,7 @@ import { pickCsvFile, computeCsvImportPlan, CsvImportPreview } from '../utils/im
 import { detectEquipmentHint, inferPrimaryMuscle } from '../utils/importer/exercise-mapper';
 import { createScopedId } from '../utils/ids';
 import { CsvImportModal } from '../components/CsvImportModal';
-import { buildTrophyRoomSummary, ExerciseRecordSummary, TrophyRoomSummary } from '../workout/trophy-room';
+import { buildTrophyRoomSummary, filterTrophyRecords, ExerciseRecordSummary, TrophyRoomSummary } from '../workout/trophy-room';
 import { ExercisePodium, extractExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from '../components/ExercisePodiumView';
 import { getAllowedGymIds } from '../workout/gym-scope';
@@ -128,24 +128,41 @@ const AnalyticsScreenInner: React.FC = () => {
   const [allGyms, setAllGyms] = useState<Gym[]>([]);
 
   const analyticsSignatureRef = React.useRef<string | null>(null);
+  const analyticsRevisionRef = React.useRef<number | null>(null);
 
   const loadAnalytics = React.useCallback(async ({ skipIfUnchanged = false }: { skipIfUnchanged?: boolean } = {}) => {
     try {
       const store = await getStore();
+
+      // Cheap revision check first: with no writes since the last load there is
+      // nothing to recompute, so return before hydrating the snapshot.
+      const revision = (await store.getDataRevision?.()) ?? null;
+      if (skipIfUnchanged && revision !== null && revision === analyticsRevisionRef.current) {
+        return;
+      }
+
       const snapshot = await store.readSnapshot();
 
       const workouts: Workout[] = snapshot.workouts || [];
       const gymsList: Gym[] = snapshot.gyms || [];
-      const allExercisesList = await getAllExercises();
+      // The snapshot already carries the exercise catalog; no second full read.
+      const allExercisesList = snapshot.exercises;
 
-      // Rebuilding every chart is costly; a background refresh skips it when the inputs are unchanged.
-      const signature = JSON.stringify([
-        workouts.map(w => [w.id, w.startTime, w.endTime, w.gymId, w.totalVolumeKg, w.exercises?.length, w.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0)]),
-        gymsList.map(g => [g.id, g.name, g.color]),
-        (snapshot.exerciseGymScopes || []).length,
-        allExercisesList.length,
-      ]);
-      if (skipIfUnchanged && signature === analyticsSignatureRef.current) return;
+      // Fallback for stores without a revision counter: rebuild the signature
+      // after hydrating (the old behaviour).
+      const signature =
+        revision === null
+          ? JSON.stringify([
+              workouts.map(w => [w.id, w.startTime, w.endTime, w.gymId, w.totalVolumeKg, w.exercises?.length, w.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0)]),
+              gymsList.map(g => [g.id, g.name, g.color]),
+              (snapshot.exerciseGymScopes || []).length,
+              allExercisesList.length,
+            ])
+          : null;
+      if (skipIfUnchanged && signature !== null && signature === analyticsSignatureRef.current) {
+        return;
+      }
+      analyticsRevisionRef.current = revision;
       analyticsSignatureRef.current = signature;
 
       setAllWorkouts(workouts);
@@ -234,33 +251,8 @@ const AnalyticsScreenInner: React.FC = () => {
     return buildConsistencySummary(allWorkouts, new Date(), 12);
   }, [allWorkouts]);
 
-  const trophySummary = useMemo(() => {
-    if (allWorkouts.length === 0) return null;
-    return buildTrophyRoomSummary(
-      allWorkouts,
-      allExerciseList,
-      allGyms,
-      gymTrackingEnabled,
-      exerciseScopes,
-      {
-        selectedGymId: trophyGymId,
-        categoryFilter: trophyCategory,
-        searchQuery: trophySearch,
-        includeMedalCounts: false,
-      }
-    );
-  }, [
-    allWorkouts,
-    allExerciseList,
-    allGyms,
-    gymTrackingEnabled,
-    exerciseScopes,
-    trophyGymId,
-    trophyCategory,
-    trophySearch,
-  ]);
-
-  // Unfiltered by category and search: feeds the Big Three card and the Recent PRs strip.
+  // Unfiltered by category and search: feeds the Big Three card, the Recent PRs
+  // strip, and the derived filtered summary below.
   const recordsOverview = useMemo(() => {
     if (allWorkouts.length === 0) return null;
     return buildTrophyRoomSummary(allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, {
@@ -269,11 +261,27 @@ const AnalyticsScreenInner: React.FC = () => {
     });
   }, [allWorkouts, allExerciseList, allGyms, gymTrackingEnabled, exerciseScopes, trophyGymId]);
 
-  const handleOpenRecordDetail = (record: ExerciseRecordSummary) => {
-    const ex = allExerciseList.find((e) => e.id === record.exerciseId);
-    if (!ex) return;
-    setDetailExercise(ex);
-  };
+  const trophySummary = useMemo(() => {
+    if (!recordsOverview) return null;
+    // Category and search only filter the precomputed list, so typing never
+    // re-walks the workout history.
+    return {
+      ...recordsOverview,
+      records: filterTrophyRecords(recordsOverview.records, {
+        categoryFilter: trophyCategory,
+        searchQuery: trophySearch,
+      }),
+    };
+  }, [recordsOverview, trophyCategory, trophySearch]);
+
+  const handleOpenRecordDetail = React.useCallback(
+    (record: ExerciseRecordSummary) => {
+      const ex = allExerciseList.find((e) => e.id === record.exerciseId);
+      if (!ex) return;
+      setDetailExercise(ex);
+    },
+    [allExerciseList],
+  );
 
   const numWeight = displayToKg(parseFloat(weight) || 0, unit);
   const numReps = parseInt(reps, 10) || 1;
@@ -535,26 +543,20 @@ const AnalyticsScreenInner: React.FC = () => {
       </ScreenHeader>
 
       {activeSection === 'records' ? (
-        <ScrollView
-          style={styles.scrollArea}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <RecordsView
-            overview={recordsOverview}
-            filtered={trophySummary}
-            unit={unit}
-            gyms={allGyms}
-            gymTrackingEnabled={gymTrackingEnabled}
-            selectedGymId={trophyGymId}
-            onSelectGym={setTrophyGymId}
-            category={trophyCategory}
-            onSelectCategory={setTrophyCategory}
-            search={trophySearch}
-            onChangeSearch={setTrophySearch}
-            onOpenRecord={handleOpenRecordDetail}
-          />
-        </ScrollView>
+        <RecordsView
+          overview={recordsOverview}
+          filtered={trophySummary}
+          unit={unit}
+          gyms={allGyms}
+          gymTrackingEnabled={gymTrackingEnabled}
+          selectedGymId={trophyGymId}
+          onSelectGym={setTrophyGymId}
+          category={trophyCategory}
+          onSelectCategory={setTrophyCategory}
+          search={trophySearch}
+          onChangeSearch={setTrophySearch}
+          onOpenRecord={handleOpenRecordDetail}
+        />
       ) : activeSection === 'overview' ? (
         <ScrollView
           style={styles.scrollArea}

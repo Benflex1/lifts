@@ -1399,6 +1399,17 @@ export function createNativeStore(driver: SqliteDriver): Store {
     });
   }
 
+  /**
+   * Cheap monotonic counter of rows changed on this connection. Analytics uses
+   * it to skip a full snapshot hydration when nothing has been written.
+   */
+  async function getDataRevision(): Promise<number> {
+    const row = await driver.getFirstAsync<{ total_changes: number }>(
+      'SELECT total_changes() AS total_changes'
+    );
+    return row?.total_changes ?? 0;
+  }
+
   async function readSnapshot(): Promise<DataSnapshot> {
     // Same order as getWorkoutHistory (newest first), loaded in bulk.
     const workoutRows = await driver.getAllAsync<any>(
@@ -1597,6 +1608,7 @@ export function createNativeStore(driver: SqliteDriver): Store {
   return {
     init,
     isReadOnly: () => false,
+    getDataRevision,
     tryAcquireLease: async () => true,
     readSnapshot,
     saveDraft,
