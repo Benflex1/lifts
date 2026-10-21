@@ -32,6 +32,8 @@ export interface PRAchievement {
   scope: PRScope;
   value: number;
   previousRecord?: number;
+  /** Most reps previously done at this exact weight, when reps at that weight made the record. */
+  previousRepsAtWeight?: number;
   isTie?: boolean;
   gymId?: string;
   gymName?: string;
@@ -92,6 +94,7 @@ function isSamePRAchievement(a?: PRAchievement | null, b?: PRAchievement | null)
     a.scope === b.scope &&
     a.value === b.value &&
     a.previousRecord === b.previousRecord &&
+    a.previousRepsAtWeight === b.previousRepsAtWeight &&
     a.isTie === b.isTie &&
     a.gymId === b.gymId &&
     a.gymName === b.gymName
@@ -359,7 +362,9 @@ export function evaluateWorkoutPRsWithSource(
       }
 
       if (bestVal > 0 && bestSet) {
-        let rankResult = evaluateRank(bestVal, targetLeaderboard[metric]);
+        let rankResult:
+          | (NonNullable<ReturnType<typeof evaluateRank>> & { previousRepsAtWeight?: number })
+          | null = evaluateRank(bestVal, targetLeaderboard[metric]);
 
         // When weight matches the top historical record, check if reps beat prior reps at this weight
         if (
@@ -375,7 +380,12 @@ export function evaluateWorkoutPRsWithSource(
             bestVal,
           );
           if (bestSet.reps > maxPriorRepsAtWeight) {
-            rankResult = { rank: 1, previousRecord: bestVal, isTie: false };
+            rankResult = {
+              rank: 1,
+              previousRecord: bestVal,
+              isTie: false,
+              previousRepsAtWeight: maxPriorRepsAtWeight,
+            };
           }
         }
 
@@ -386,6 +396,9 @@ export function evaluateWorkoutPRsWithSource(
             scope: isGymSpecific ? 'gym' : 'global',
             value: bestVal,
             previousRecord: rankResult.previousRecord,
+            ...(rankResult.previousRepsAtWeight !== undefined
+              ? { previousRepsAtWeight: rankResult.previousRepsAtWeight }
+              : {}),
             isTie: rankResult.isTie,
             gymId: isGymSpecific ? workout.gymId : undefined,
             gymName: isGymSpecific ? currentGymName : undefined,
@@ -683,6 +696,14 @@ export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit
     } else if (achievement.metric === 'distance') {
       prevStr = ` (${action} ${formatDistance(achievement.previousRecord, distanceUnitFor(unit))})`;
     }
+  }
+
+  if (achievement.previousRepsAtWeight !== undefined) {
+    const repsBeaten = achievement.previousRepsAtWeight;
+    return `Most reps at ${formatWeight(achievement.value, unit)}${scopeStr} (beats ${repsBeaten} ${repsBeaten === 1 ? 'rep' : 'reps'})`;
+  }
+  if (achievement.rank === 1 && achievement.previousRecord === undefined) {
+    prevStr = ' (first time logged)';
   }
 
   return `${headline}${scopeStr}${prevStr}`;

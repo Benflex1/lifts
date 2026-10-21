@@ -1,8 +1,7 @@
-import { ActiveExercise, Gym, Workout, WorkoutSet } from '../../types';
+import { ActiveExercise, Gym, WorkoutSet } from '../../types';
 import { WeightUnit, displayToKg, kgToDisplay } from '../../utils/units';
 import { getDefaultIncrement, roundToIncrement } from '../../workout/warmup';
 import { getTrackingType, setVolumeKg } from '../../workout/tracking';
-import { PRHistoryIndex } from '../../workout/pr';
 
 /**
  * ARCH-01: pure helpers backing the active-workout screen. Kept free of React so the derived
@@ -45,40 +44,6 @@ export function getCompletedSetIds(exercises: ActiveExercise[]): Set<string> {
     }
   }
   return completedIds;
-}
-
-/**
- * Every prior workout exactly once, across the per-exercise history caches, excluding the
- * active workout itself (anything starting at or after its start time).
- */
-export function collectPriorWorkouts(
-  exerciseWorkouts: Record<string, Workout[]>,
-  activeStartTime: string | undefined,
-): Workout[] {
-  const seen = new Set<string>();
-  const result: Workout[] = [];
-  for (const list of Object.values(exerciseWorkouts)) {
-    for (const workout of list) {
-      if (seen.has(workout.id)) continue;
-      if (activeStartTime && workout.startTime >= activeStartTime) continue;
-      seen.add(workout.id);
-      result.push(workout);
-    }
-  }
-  return result;
-}
-
-/** Prior records indexed once per loaded history. */
-export function buildPriorRecordIndex(
-  exerciseWorkouts: Record<string, Workout[]>,
-  activeStartTime: string | undefined,
-): PRHistoryIndex {
-  const index = new PRHistoryIndex();
-  const loadedExerciseIds = new Set(Object.keys(exerciseWorkouts));
-  for (const workout of collectPriorWorkouts(exerciseWorkouts, activeStartTime)) {
-    index.add(workout, loadedExerciseIds);
-  }
-  return index;
 }
 
 /** The active gym when selected, else the workout's gym from the loaded list. */
