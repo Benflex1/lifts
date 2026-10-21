@@ -1,29 +1,24 @@
 import type { WorkoutHistorySummary, Routine, Exercise } from '../types';
 import { buildBackupJson as buildV3BackupJson } from './backup';
 
-export interface BackupData {
-  version: number;
-  exportedAt: string;
-  workouts: WorkoutHistorySummary[];
-  routines: Routine[];
-  exercises: Exercise[];
-  settings: Record<string, string>;
-}
-
 export function shapeBackup(
   workouts: WorkoutHistorySummary[],
   routines: Routine[],
   exercises: Exercise[],
-  settings: Record<string, string>
+  settings: Record<string, string>,
 ): string {
-  return JSON.stringify({
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    workouts,
-    routines,
-    exercises,
-    settings,
-  }, null, 2);
+  return JSON.stringify(
+    {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workouts,
+      routines,
+      exercises,
+      settings,
+    },
+    null,
+    2,
+  );
 }
 
 export async function buildBackupJson(): Promise<string> {
@@ -33,6 +28,9 @@ export async function buildBackupJson(): Promise<string> {
 export async function exportBackup(): Promise<void> {
   const json = await buildBackupJson();
 
+  // ARCH-08 exception: this is a capability check (a browser download needs the
+  // DOM), not module selection; web and native builds share this module. See
+  // docs/platform-dispatch.md.
   if (typeof document !== 'undefined') {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

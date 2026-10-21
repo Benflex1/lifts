@@ -1,5 +1,6 @@
-import { Exercise, Workout } from '../types';
+import { Exercise, TrackingType, Workout } from '../types';
 import { calculate1RM } from '../utils/calculator';
+import { countsLoad, getTrackingType, setVolumeKg, usesDistance, usesDuration } from './tracking';
 
 export interface WeeklyVolumePoint {
   key: string;
@@ -32,6 +33,10 @@ function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function isPositive(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 function dateLabel(date: Date): string {
   return date.toLocaleDateString('en-US', {
     month: 'short',
@@ -43,7 +48,7 @@ function dateLabel(date: Date): string {
 export function buildWeeklyVolume(
   workouts: Workout[],
   now: Date = new Date(),
-  weekCount: number = 8
+  weekCount: number = 8,
 ): WeeklyVolumePoint[] {
   const count = Math.max(1, Math.floor(weekCount));
   const currentWeek = startOfWeek(now);
@@ -79,18 +84,15 @@ export function buildMuscleFrequency(
   workouts: Workout[],
   options?: MuscleFrequencyOptions,
 ): MuscleFrequencyPoint[];
-export function buildMuscleFrequency(
-  workouts: Workout[],
-  limit?: number,
-): MuscleFrequencyPoint[];
+export function buildMuscleFrequency(workouts: Workout[], limit?: number): MuscleFrequencyPoint[];
 export function buildMuscleFrequency(
   workouts: Workout[],
   optionsOrLimit: MuscleFrequencyOptions | number = {},
 ): MuscleFrequencyPoint[] {
   const options = typeof optionsOrLimit === 'number' ? {} : optionsOrLimit;
-  const limit = typeof optionsOrLimit === 'number' ? optionsOrLimit : options.limit ?? 8;
+  const limit = typeof optionsOrLimit === 'number' ? optionsOrLimit : (options.limit ?? 8);
   const catalogById = new Map(
-    (options.exerciseCatalog || []).map((exercise) => [exercise.id, exercise]),
+    (options.exerciseCatalog || []).map(exercise => [exercise.id, exercise]),
   );
   const counts = new Map<string, { primaryCount: number; secondaryCount: number }>();
 
@@ -132,7 +134,15 @@ export function buildMuscleFrequency(
     .slice(0, Math.max(0, Math.floor(limit)));
 }
 
-export type ProgressionMetric = 'e1rm' | 'max_weight' | 'volume' | 'max_reps';
+export type ProgressionMetric =
+  | 'e1rm'
+  | 'max_weight'
+  | 'volume'
+  | 'max_reps'
+  | 'max_duration'
+  | 'total_duration'
+  | 'max_distance'
+  | 'best_pace';
 export type TimeframeFilter = '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
 export interface ProgressionDataPoint {
@@ -147,22 +157,37 @@ export interface ProgressionDataPoint {
   maxWeightKg: number;
   totalVolumeKg: number;
   maxReps: number;
+  /** Longest single set, for time and distance exercises. */
+  maxDurationSeconds: number;
+  totalDurationSeconds: number;
+  /** Longest single set's distance. */
+  maxDistanceM: number;
+  /** Fastest pace of any set with both distance and time, in seconds per km. 0 when none. */
+  bestPaceSecondsPerKm: number;
   isPr: boolean;
   prMetrics?: {
     e1rm?: boolean;
     maxWeight?: boolean;
     volume?: boolean;
     maxReps?: boolean;
+    maxDuration?: boolean;
+    totalDuration?: boolean;
+    maxDistance?: boolean;
+    bestPace?: boolean;
   };
   topSet: {
     weightKg: number;
     reps: number;
     rpe?: number;
+    durationSeconds?: number;
+    distanceM?: number;
   };
 }
 
 export interface ExerciseProgressionSeries {
   exerciseId: string;
+  /** How the exercise was logged most recently, which decides the metrics worth charting. */
+  trackingType: TrackingType;
   points: ProgressionDataPoint[];
   summary: {
     allTimeBest1RM: number;
@@ -212,12 +237,15 @@ export function extractExerciseProgression(
   const cutoffMs = getTimeframeCutoff(timeframe, now);
 
   const rawPoints: ProgressionDataPoint[] = [];
+  let trackingType: TrackingType = 'weight_reps';
+  let trackingTypeAt = -Infinity;
 
   for (const workout of workouts) {
     if (allowedGymIds) {
-      const isAllowed = allowedGymIds instanceof Set
-        ? allowedGymIds.has(workout.gymId)
-        : (allowedGymIds.length === 0 || allowedGymIds.includes(workout.gymId));
+      const isAllowed =
+        allowedGymIds instanceof Set
+          ? allowedGymIds.has(workout.gymId)
+          : allowedGymIds.length === 0 || allowedGymIds.includes(workout.gymId);
       if (!isAllowed) {
         continue;
       }
@@ -229,9 +257,19 @@ export function extractExerciseProgression(
       continue;
     }
 
-    const occurrences = (workout.exercises || []).filter((e) => e.exerciseId === exerciseId);
-    const completedSets = occurrences.flatMap((e) => e.sets || []).filter((s) => s.isCompleted);
+    const occurrences = (workout.exercises || []).filter(e => e.exerciseId === exerciseId);
+    const completedSets = occurrences.flatMap(e => e.sets || []).filter(s => s.isCompleted);
     if (completedSets.length === 0) continue;
+    const unloadedSets = new Set(
+      occurrences.filter(e => !countsLoad(getTrackingType(e))).flatMap(e => e.sets || []),
+    );
+    const occurrenceType = getTrackingType(occurrences[occurrences.length - 1]);
+    if (timestamp >= trackingTypeAt) {
+      trackingType = occurrenceType;
+      trackingTypeAt = timestamp;
+    }
+    const tracksTime = occurrences.some(e => usesDuration(getTrackingType(e)));
+    const tracksDistance = occurrences.some(e => usesDistance(getTrackingType(e)));
 
     let maxWeightKg = 0;
     let maxReps = 0;
@@ -239,9 +277,16 @@ export function extractExerciseProgression(
     let best1RM = 0;
     let topSet = completedSets[0];
     let topSetScore = -1;
+    let maxDurationSeconds = 0;
+    let totalDurationSeconds = 0;
+    let maxDistanceM = 0;
+    let bestPaceSecondsPerKm = 0;
+    let trackedTopSet = completedSets[0];
+    let trackedTopScore = -1;
 
     for (const set of completedSets) {
-      const weight = Number.isFinite(set.weightKg) ? Math.max(0, set.weightKg) : 0;
+      const weight =
+        Number.isFinite(set.weightKg) && !unloadedSets.has(set) ? Math.max(0, set.weightKg) : 0;
       const reps = Number.isFinite(set.reps) ? Math.max(0, set.reps) : 0;
       const setVol = weight * reps;
       totalVolumeKg += setVol;
@@ -259,10 +304,29 @@ export function extractExerciseProgression(
         topSetScore = score;
         topSet = set;
       }
+
+      const duration = tracksTime && isPositive(set.durationSeconds) ? set.durationSeconds : 0;
+      const distance = tracksDistance && isPositive(set.distanceM) ? set.distanceM : 0;
+      totalDurationSeconds += duration;
+      if (duration > maxDurationSeconds) maxDurationSeconds = duration;
+      if (distance > maxDistanceM) maxDistanceM = distance;
+      if (distance > 0 && duration > 0) {
+        const pace = duration / (distance / 1000);
+        if (bestPaceSecondsPerKm === 0 || pace < bestPaceSecondsPerKm) bestPaceSecondsPerKm = pace;
+      }
+      // For time and distance, the best set is the longest one: distance first, then time.
+      const trackedScore = distance * 100000 + duration;
+      if (trackedScore > trackedTopScore) {
+        trackedTopScore = trackedScore;
+        trackedTopSet = set;
+      }
     }
+    if (tracksTime || tracksDistance) topSet = trackedTopSet;
 
     const gymName = gymNamesMap
-      ? (gymNamesMap instanceof Map ? gymNamesMap.get(workout.gymId) : (gymNamesMap as Record<string, string>)[workout.gymId])
+      ? gymNamesMap instanceof Map
+        ? gymNamesMap.get(workout.gymId)
+        : (gymNamesMap as Record<string, string>)[workout.gymId]
       : undefined;
 
     rawPoints.push({
@@ -277,11 +341,17 @@ export function extractExerciseProgression(
       maxWeightKg,
       totalVolumeKg,
       maxReps,
+      maxDurationSeconds,
+      totalDurationSeconds,
+      maxDistanceM,
+      bestPaceSecondsPerKm: Math.round(bestPaceSecondsPerKm * 10) / 10,
       isPr: false,
       topSet: {
         weightKg: topSet.weightKg,
         reps: topSet.reps,
         rpe: topSet.rpe,
+        ...(isPositive(topSet.durationSeconds) ? { durationSeconds: topSet.durationSeconds } : {}),
+        ...(isPositive(topSet.distanceM) ? { distanceM: topSet.distanceM } : {}),
       },
     });
   }
@@ -294,6 +364,11 @@ export function extractExerciseProgression(
   let runningBestWeight = 0;
   let runningBestVolume = 0;
   let runningBestReps = 0;
+  let runningBestDuration = 0;
+  let runningBestTotalDuration = 0;
+  let runningBestDistance = 0;
+  // Lower is better for pace, so 0 means no pace yet.
+  let runningBestPace = 0;
 
   for (let i = 0; i < rawPoints.length; i++) {
     const p = rawPoints[i];
@@ -307,6 +382,14 @@ export function extractExerciseProgression(
       maxWeight: isWeightPr,
       volume: isVolPr,
       maxReps: isRepsPr,
+      maxDuration: i > 0 && p.maxDurationSeconds > runningBestDuration && runningBestDuration > 0,
+      totalDuration:
+        i > 0 && p.totalDurationSeconds > runningBestTotalDuration && runningBestTotalDuration > 0,
+      maxDistance: i > 0 && p.maxDistanceM > runningBestDistance && runningBestDistance > 0,
+      bestPace:
+        p.bestPaceSecondsPerKm > 0 &&
+        runningBestPace > 0 &&
+        p.bestPaceSecondsPerKm < runningBestPace,
     };
     p.isPr = is1rmPr || isWeightPr || (runningBestWeight === 0 && isRepsPr);
 
@@ -314,18 +397,29 @@ export function extractExerciseProgression(
     if (p.maxWeightKg > runningBestWeight) runningBestWeight = p.maxWeightKg;
     if (p.totalVolumeKg > runningBestVolume) runningBestVolume = p.totalVolumeKg;
     if (p.maxReps > runningBestReps) runningBestReps = p.maxReps;
+    if (p.maxDurationSeconds > runningBestDuration) runningBestDuration = p.maxDurationSeconds;
+    if (p.totalDurationSeconds > runningBestTotalDuration)
+      runningBestTotalDuration = p.totalDurationSeconds;
+    if (p.maxDistanceM > runningBestDistance) runningBestDistance = p.maxDistanceM;
+    if (
+      p.bestPaceSecondsPerKm > 0 &&
+      (runningBestPace === 0 || p.bestPaceSecondsPerKm < runningBestPace)
+    ) {
+      runningBestPace = p.bestPaceSecondsPerKm;
+    }
   }
 
   // True all-time bests across full history
-  const allTimeBest1RM = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.e1rmKg)) : 0;
-  const allTimeBestWeight = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxWeightKg)) : 0;
-  const allTimeBestReps = rawPoints.length > 0 ? Math.max(...rawPoints.map((p) => p.maxReps)) : 0;
+  const allTimeBest1RM = rawPoints.length > 0 ? Math.max(...rawPoints.map(p => p.e1rmKg)) : 0;
+  const allTimeBestWeight =
+    rawPoints.length > 0 ? Math.max(...rawPoints.map(p => p.maxWeightKg)) : 0;
+  const allTimeBestReps = rawPoints.length > 0 ? Math.max(...rawPoints.map(p => p.maxReps)) : 0;
   const current1RM = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].e1rmKg : 0;
   const currentWeight = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxWeightKg : 0;
   const currentReps = rawPoints.length > 0 ? rawPoints[rawPoints.length - 1].maxReps : 0;
 
   // Filter points to timeframe window after calculating true PRs and all-time bests
-  const filteredPoints = cutoffMs > 0 ? rawPoints.filter((p) => p.timestamp >= cutoffMs) : rawPoints;
+  const filteredPoints = cutoffMs > 0 ? rawPoints.filter(p => p.timestamp >= cutoffMs) : rawPoints;
 
   let changePercent1RM = 0;
   let changePercentReps = 0;
@@ -346,6 +440,7 @@ export function extractExerciseProgression(
 
   return {
     exerciseId,
+    trackingType,
     points: filteredPoints,
     summary: {
       allTimeBest1RM,
@@ -362,7 +457,10 @@ export function extractExerciseProgression(
   };
 }
 
-export function isPointPrForMetric(point: ProgressionDataPoint, metric: ProgressionMetric): boolean {
+export function isPointPrForMetric(
+  point: ProgressionDataPoint,
+  metric: ProgressionMetric,
+): boolean {
   if (point.prMetrics) {
     switch (metric) {
       case 'e1rm':
@@ -373,6 +471,14 @@ export function isPointPrForMetric(point: ProgressionDataPoint, metric: Progress
         return Boolean(point.prMetrics.volume);
       case 'max_reps':
         return Boolean(point.prMetrics.maxReps);
+      case 'max_duration':
+        return Boolean(point.prMetrics.maxDuration);
+      case 'total_duration':
+        return Boolean(point.prMetrics.totalDuration);
+      case 'max_distance':
+        return Boolean(point.prMetrics.maxDistance);
+      case 'best_pace':
+        return Boolean(point.prMetrics.bestPace);
     }
   }
   return point.isPr;
@@ -402,15 +508,21 @@ export function buildTrainingDistribution(
     if (Number.isNaN(workoutTime) || workoutTime < cutoffMs) continue;
 
     for (const ex of workout.exercises || []) {
-      const completedSets = (ex.sets || []).filter((s) => s.isCompleted);
+      const completedSets = (ex.sets || []).filter(s => s.isCompleted);
       if (completedSets.length === 0) continue;
 
       const rawMuscles = ex.exercise?.primaryMuscles || [];
-      const muscles = rawMuscles.length > 0
-        ? rawMuscles.map((m) => m.trim().toLowerCase()).filter(Boolean)
-        : ['other'];
+      const muscles =
+        rawMuscles.length > 0
+          ? rawMuscles.map(m => m.trim().toLowerCase()).filter(Boolean)
+          : ['other'];
 
-      const totalExVolume = completedSets.reduce((sum, s) => sum + (s.weightKg || 0) * (s.reps || 0), 0);
+      const trackingType = getTrackingType(ex);
+      const totalExVolume = completedSets.reduce(
+        (sum, s) =>
+          sum + setVolumeKg({ weightKg: s.weightKg || 0, reps: s.reps || 0 }, trackingType),
+        0,
+      );
       const totalExSets = completedSets.length;
       grandTotalVolume += totalExVolume;
       grandTotalSets += totalExSets;
@@ -433,8 +545,10 @@ export function buildTrainingDistribution(
       muscle,
       volumeKg: Number(data.volumeKg.toFixed(1)),
       setsCount: data.setsCount % 1 === 0 ? data.setsCount : Number(data.setsCount.toFixed(1)),
-      percentage: grandTotalVolume > 0 ? Number(((data.volumeKg / grandTotalVolume) * 100).toFixed(1)) : 0,
-      setsPercentage: grandTotalSets > 0 ? Number(((data.setsCount / grandTotalSets) * 100).toFixed(1)) : 0,
+      percentage:
+        grandTotalVolume > 0 ? Number(((data.volumeKg / grandTotalVolume) * 100).toFixed(1)) : 0,
+      setsPercentage:
+        grandTotalSets > 0 ? Number(((data.setsCount / grandTotalSets) * 100).toFixed(1)) : 0,
     }))
     .sort((a, b) => b.volumeKg - a.volumeKg || a.muscle.localeCompare(b.muscle));
 }
@@ -473,11 +587,13 @@ export function buildLifetimeTrainingStats(
 
     let workoutVolume = 0;
     for (const ex of w.exercises || []) {
+      const hasLoad = countsLoad(getTrackingType(ex));
       for (const s of ex.sets || []) {
         if (!s.isCompleted) continue;
         totalSets++;
         const reps = Number.isFinite(s.reps) ? Math.max(0, s.reps) : 0;
-        const weight = Number.isFinite(s.weightKg) ? Math.max(0, setWeightOrZero(s.weightKg)) : 0;
+        const weight =
+          hasLoad && Number.isFinite(s.weightKg) ? Math.max(0, setWeightOrZero(s.weightKg)) : 0;
         totalReps += reps;
         const setVol = weight * reps;
         workoutVolume += setVol;
@@ -621,7 +737,7 @@ export function buildConsistencySummary(
   let currentStreakWeeks = 0;
   // If current week has workouts, start checking from current week.
   // Otherwise, start checking from previous week (streak is still ongoing if last week was active).
-  let checkDate = new Date(currentWeekDate);
+  const checkDate = new Date(currentWeekDate);
   if (currentWeekCount === 0) {
     checkDate.setUTCDate(checkDate.getUTCDate() - 7);
   }

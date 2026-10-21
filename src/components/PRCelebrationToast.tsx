@@ -1,25 +1,25 @@
 import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { AppTouchable } from './ui';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { bestEffortHaptic } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PRAchievement, formatPRDescription } from '../workout/pr';
 import { WeightUnit } from '../utils/units';
 import { colors } from '../theme';
 import { PRMark, PR_RANK_COLORS } from './ui';
 import { formatWeight } from '../utils/units';
+import { formatTrackedSet } from '../workout/tracking';
+import type { TrackingType } from '../types';
 
 export interface PRCelebrationEvent {
   exerciseName: string;
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
+  trackingType?: TrackingType;
   achievement: PRAchievement;
   secondaryCount?: number;
 }
@@ -44,9 +44,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
     if (!event) return;
 
     if (Platform.OS !== 'web') {
-      try {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
+      bestEffortHaptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
     }
 
     // Animate in
@@ -72,6 +70,8 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
+    // Animation handles are refs; restarting the toast only on a new event is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event]);
 
   const handleDismiss = () => {
@@ -93,7 +93,16 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
 
   if (!event) return null;
 
-  const { achievement, exerciseName, weightKg, reps, secondaryCount = 0 } = event;
+  const {
+    achievement,
+    exerciseName,
+    weightKg,
+    reps,
+    durationSeconds,
+    distanceM,
+    trackingType,
+    secondaryCount = 0,
+  } = event;
   const accent = PR_RANK_COLORS[achievement.rank];
   const rankTitle =
     achievement.rank === 1
@@ -103,7 +112,11 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
       : achievement.rank === 2
         ? 'Your 2nd best'
         : 'Your 3rd best';
-  const setText = weightKg > 0 ? `${formatWeight(weightKg, unit)} × ${reps}` : `${reps} reps`;
+  const setText = trackingType
+    ? formatTrackedSet({ weightKg, reps, durationSeconds, distanceM }, trackingType, unit)
+    : weightKg > 0
+      ? `${formatWeight(weightKg, unit)} × ${reps}`
+      : `${reps} reps`;
   const desc = formatPRDescription(achievement, unit);
 
   return (
@@ -117,12 +130,13 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
         },
       ]}
     >
-      <TouchableOpacity
+      <AppTouchable
         style={[styles.card, { borderColor: accent + '55' }]}
         activeOpacity={0.9}
         onPress={handleDismiss}
         accessibilityRole="alert"
         accessibilityLabel={`${rankTitle}: ${exerciseName}, ${setText}. ${desc}`}
+        accessibilityLiveRegion="assertive"
       >
         <PRMark rank={achievement.rank} size={40} />
 
@@ -139,7 +153,7 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
           </Text>
         </View>
 
-        <TouchableOpacity
+        <AppTouchable
           style={styles.closeBtn}
           onPress={handleDismiss}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -147,8 +161,8 @@ export const PRCelebrationToast: React.FC<PRCelebrationToastProps> = ({
           accessibilityLabel="Dismiss PR notification"
         >
           <X size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-      </TouchableOpacity>
+        </AppTouchable>
+      </AppTouchable>
     </Animated.View>
   );
 };

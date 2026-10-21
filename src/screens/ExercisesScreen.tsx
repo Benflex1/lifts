@@ -1,26 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
+import { AppTouchable } from '../components/ui';
 import { Search, X, Plus } from 'lucide-react-native';
-import { Exercise, ExerciseGymScope, Gym } from '../types';
-import {
-  searchExercises,
-  createCustomExercise,
-  updateCustomExercise,
-  getExerciseGymScope,
-  getGyms,
-} from '../database/db';
+import { Exercise, ExerciseGymScope } from '../types';
+import { reportError } from '../utils/errorReporting';
+import { getExerciseGymScope } from '../database/db';
 import { useSettings } from '../context/SettingsContext';
-import { useReloadOnActivate } from '../hooks/useReloadOnActivate';
+import { useExerciseCatalog } from '../hooks/useExerciseCatalog';
+import { useGymProfiles } from '../hooks/useGymProfiles';
+import { MUSCLE_GROUPS, EQUIPMENT_LIST } from '../workout/exercise-options';
+import { CustomExerciseModal, CustomExerciseSaveMode } from '../components/CustomExerciseModal';
 import { ExerciseScopeModal } from '../components/ExerciseScopeModal';
 import { ExerciseDetailModal } from '../components/ExerciseDetailModal';
 
@@ -30,104 +19,21 @@ import { IconButton, ScreenHeader } from '../components/ui';
 import { EXERCISE_LIST_PERFORMANCE_PROPS, ExerciseListRow } from '../components/ExerciseListRow';
 import { useStableCallback } from '../hooks/useStableCallback';
 
-const MUSCLE_GROUPS = [
-  'All',
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Biceps',
-  'Triceps',
-  'Quadriceps',
-  'Hamstrings',
-  'Glutes',
-  'Abdominals',
-  'Calves',
-];
-
-const EQUIPMENT_LIST = [
-  'All',
-  'Barbell',
-  'Dumbbell',
-  'Machine',
-  'Cable',
-  'Body Only',
-];
-
-const CUSTOM_MUSCLE_OPTIONS = [
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Biceps',
-  'Triceps',
-  'Quadriceps',
-  'Hamstrings',
-  'Glutes',
-  'Abdominals',
-  'Calves',
-];
-
-const CUSTOM_EQUIPMENT_OPTIONS = [
-  'Barbell',
-  'Dumbbell',
-  'Machine',
-  'Cable',
-  'Bodyweight',
-];
-
-const MUSCLE_ALIAS_MAP: Record<string, string> = {
-  lats: 'Back',
-  lat: 'Back',
-  traps: 'Back',
-  trap: 'Back',
-  rhomboids: 'Back',
-  lower_back: 'Back',
-  'lower back': 'Back',
-  quads: 'Quadriceps',
-  quad: 'Quadriceps',
-  quadriceps: 'Quadriceps',
-  hamstrings: 'Hamstrings',
-  hamstring: 'Hamstrings',
-  glutes: 'Glutes',
-  glute: 'Glutes',
-  abs: 'Abdominals',
-  core: 'Abdominals',
-  abdominals: 'Abdominals',
-  calves: 'Calves',
-  calf: 'Calves',
-  chest: 'Chest',
-  pectorals: 'Chest',
-  shoulders: 'Shoulders',
-  delts: 'Shoulders',
-  deltoids: 'Shoulders',
-  biceps: 'Biceps',
-  triceps: 'Triceps',
-};
-
-const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
-  barbell: 'Barbell',
-  bb: 'Barbell',
-  dumbbell: 'Dumbbell',
-  db: 'Dumbbell',
-  machine: 'Machine',
-  'smith machine': 'Machine',
-  cable: 'Cable',
-  bodyweight: 'Bodyweight',
-  'body weight': 'Bodyweight',
-  'body only': 'Bodyweight',
-  body: 'Bodyweight',
-  kettlebell: 'Dumbbell',
-  bands: 'Cable',
-  band: 'Cable',
-};
-
 const ExercisesScreenInner: React.FC = () => {
   const { gymTrackingEnabled } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
   const [selectedEquipment, setSelectedEquipment] = useState('All');
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const {
+    exercises,
+    loading: initialLoading,
+    reload: reloadExercises,
+  } = useExerciseCatalog({
+    query: debouncedQuery,
+    muscle: selectedMuscle,
+    equipment: selectedEquipment,
+  });
 
   // Selected exercise for detail view
   const [activeDetail, setActiveDetail] = useState<Exercise | null>(null);
@@ -135,12 +41,9 @@ const ExercisesScreenInner: React.FC = () => {
   // Custom exercise modal (create & edit)
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
-  const [customName, setCustomName] = useState('');
-  const [customMuscle, setCustomMuscle] = useState('Chest');
-  const [customEquipment, setCustomEquipment] = useState('Barbell');
 
   // Exercise scope management
-  const [gyms, setGyms] = useState<Gym[]>([]);
+  const { gyms, reload: reloadGyms } = useGymProfiles();
   const [exerciseScope, setExerciseScope] = useState<ExerciseGymScope | null>(null);
   const [showScopeModal, setShowScopeModal] = useState(false);
   const [scopeRefreshKey, setScopeRefreshKey] = useState(0);
@@ -148,21 +51,17 @@ const ExercisesScreenInner: React.FC = () => {
   const handleOpenScope = async () => {
     if (!activeDetail) return;
     try {
-      const [gymList, scope] = await Promise.all([
-        getGyms(),
-        getExerciseGymScope(activeDetail.id),
-      ]);
-      setGyms(gymList);
+      const [, scope] = await Promise.all([reloadGyms(), getExerciseGymScope(activeDetail.id)]);
       setExerciseScope(scope);
       setShowScopeModal(true);
     } catch (e) {
-      console.error('Error loading scope details:', e);
+      reportError(e, { scope: 'exercises.scope-details' });
     }
   };
 
   const handleScopeSaved = (scope: ExerciseGymScope | null) => {
     setExerciseScope(scope);
-    setScopeRefreshKey((k) => k + 1);
+    setScopeRefreshKey(k => k + 1);
   };
 
   useEffect(() => {
@@ -176,35 +75,8 @@ const ExercisesScreenInner: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    loadExercises();
-  }, [debouncedQuery, selectedMuscle, selectedEquipment]);
-
-  // Custom exercises can be created from the workout picker, so refresh when returning here.
-  useReloadOnActivate(() => void loadExercises());
-
-  const loadExercises = async () => {
-    try {
-      const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
-      // Keep the current array when nothing changed so the long list does not re-render.
-      setExercises(previous =>
-        previous.length === results.length &&
-        previous.every((ex, idx) => ex === results[idx] || (ex.id === results[idx].id && ex.name === results[idx].name && ex.equipment === results[idx].equipment && ex.primaryMuscles.join() === results[idx].primaryMuscles.join()))
-          ? previous
-          : results,
-      );
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setInitialLoading(false);
-    }
-  };
-
   const handleOpenAddCustom = () => {
     setEditingExercise(null);
-    setCustomName('');
-    setCustomMuscle('Chest');
-    setCustomEquipment('Barbell');
     setShowCustomModal(true);
   };
 
@@ -213,57 +85,18 @@ const ExercisesScreenInner: React.FC = () => {
 
   const handleOpenEditCustom = (exercise: Exercise) => {
     setEditingExercise(exercise);
-    setCustomName(exercise.name);
-
-    const rawMuscle = (exercise.primaryMuscles?.[0] || '').toLowerCase().trim();
-    const matchedMuscle =
-      CUSTOM_MUSCLE_OPTIONS.find(m => m.toLowerCase() === rawMuscle) ||
-      MUSCLE_ALIAS_MAP[rawMuscle] ||
-      'Chest';
-    setCustomMuscle(matchedMuscle);
-
-    const rawEquip = (exercise.equipment || '').toLowerCase().trim();
-    const matchedEquip =
-      CUSTOM_EQUIPMENT_OPTIONS.find(eq => eq.toLowerCase() === rawEquip) ||
-      EQUIPMENT_ALIAS_MAP[rawEquip] ||
-      (['kettlebell', 'db'].some(k => rawEquip.includes(k)) ? 'Dumbbell' :
-       rawEquip.includes('body') ? 'Bodyweight' :
-       rawEquip.includes('cable') || rawEquip.includes('band') ? 'Cable' :
-       rawEquip.includes('smith') || rawEquip.includes('machine') ? 'Machine' : 'Barbell');
-    setCustomEquipment(matchedEquip);
-
     setShowCustomModal(true);
   };
 
-  const handleSaveCustom = async () => {
-    const trimmed = customName.trim();
-    if (!trimmed) return;
+  const closeCustomModal = () => {
+    setShowCustomModal(false);
+    setEditingExercise(null);
+  };
 
-    if (editingExercise) {
-      const updated = await updateCustomExercise(editingExercise.id, {
-        name: trimmed,
-        category: editingExercise.category || 'strength',
-        equipment: customEquipment.toLowerCase(),
-        primaryMuscles: [customMuscle.toLowerCase()],
-      });
-      setShowCustomModal(false);
-      setEditingExercise(null);
-      setCustomName('');
-      await loadExercises();
-      if (activeDetail && activeDetail.id === editingExercise.id) {
-        setActiveDetail(updated);
-      }
-    } else {
-      const created = await createCustomExercise({
-        name: trimmed,
-        category: 'strength',
-        equipment: customEquipment.toLowerCase(),
-        primaryMuscles: [customMuscle.toLowerCase()],
-      });
-      setShowCustomModal(false);
-      setCustomName('');
-      await loadExercises();
-      setActiveDetail(created);
+  const handleCustomSaved = async (saved: Exercise, mode: CustomExerciseSaveMode) => {
+    await reloadExercises();
+    if (mode === 'created' || activeDetail?.id === saved.id) {
+      setActiveDetail(saved);
     }
   };
 
@@ -294,9 +127,14 @@ const ExercisesScreenInner: React.FC = () => {
           clearButtonMode="while-editing"
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <AppTouchable
+            onPress={() => setSearchQuery('')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
             <X size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
+          </AppTouchable>
         )}
       </View>
 
@@ -342,7 +180,7 @@ const ExercisesScreenInner: React.FC = () => {
         }}
         onEditCustom={handleOpenEditCustom}
         onEditScope={handleOpenScope}
-        onHistoryTransferred={loadExercises}
+        onHistoryTransferred={reloadExercises}
         refreshKey={scopeRefreshKey}
       />
 
@@ -355,78 +193,13 @@ const ExercisesScreenInner: React.FC = () => {
         onSaved={handleScopeSaved}
       />
 
-      {/* Create / Edit Custom Modal */}
-      <Modal 
-        visible={showCustomModal} 
-        transparent 
-        animationType="fade"
-        onRequestClose={() => {
-          setShowCustomModal(false);
-          setEditingExercise(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.detailHeader}>
-              <Text style={styles.detailHeaderTitle}>
-                {editingExercise ? 'Edit Custom Exercise' : 'Add Custom Exercise'}
-              </Text>
-              <TouchableOpacity onPress={() => {
-                setShowCustomModal(false);
-                setEditingExercise(null);
-              }}>
-                <X size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.fieldLabel}>EXERCISE NAME</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. Incline Machine Chest Press"
-              placeholderTextColor={colors.textMuted}
-              value={customName}
-              onChangeText={setCustomName}
-              autoFocus
-            />
-
-            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>PRIMARY MUSCLE</Text>
-            <View style={styles.modalPills}>
-              {CUSTOM_MUSCLE_OPTIONS.map(m => (
-                <TouchableOpacity
-                  key={m}
-                  style={[styles.modalPill, customMuscle === m && styles.modalPillActive]}
-                  onPress={() => setCustomMuscle(m)}
-                >
-                  <Text style={[styles.modalPillText, customMuscle === m && styles.modalPillTextActive]}>
-                    {m}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={[styles.fieldLabel, { marginTop: 14 }]}>EQUIPMENT</Text>
-            <View style={styles.modalPills}>
-              {CUSTOM_EQUIPMENT_OPTIONS.map(eq => (
-                <TouchableOpacity
-                  key={eq}
-                  style={[styles.modalPill, customEquipment === eq && styles.modalPillActive]}
-                  onPress={() => setCustomEquipment(eq)}
-                >
-                  <Text style={[styles.modalPillText, customEquipment === eq && styles.modalPillTextActive]}>
-                    {eq}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity style={styles.saveCustomBtn} onPress={handleSaveCustom}>
-              <Text style={styles.saveCustomBtnText}>
-                {editingExercise ? 'Save Changes' : 'Save Exercise'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Create / Edit Custom Exercise */}
+      <CustomExerciseModal
+        visible={showCustomModal}
+        exercise={editingExercise}
+        onClose={closeCustomModal}
+        onSaved={handleCustomSaved}
+      />
     </View>
   );
 };
@@ -461,82 +234,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  detailHeaderTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-  },
-  fieldLabel: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  modalInput: {
-    backgroundColor: colors.border,
-    borderRadius: 10,
-    height: 44,
-    color: colors.text,
-    paddingHorizontal: 14,
-    fontSize: 15,
-  },
-  modalPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  modalPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: colors.border,
-    borderRadius: 12,
-  },
-  modalPillActive: {
-    backgroundColor: colors.primary,
-  },
-  modalPillText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  modalPillTextActive: {
-    color: colors.text,
-    fontWeight: '600',
-  },
-  saveCustomBtn: {
-    backgroundColor: colors.success,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  saveCustomBtnText: {
-    color: colors.black,
-    fontSize: 15,
-    fontWeight: '700',
   },
   emptyContainer: {
     paddingVertical: 40,

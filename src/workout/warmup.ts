@@ -22,16 +22,14 @@ export const WARMUP_PRESETS: Record<WarmupPreset, WarmupPresetConfig> = {
     id: 'single',
     name: '1 Set (Quick)',
     description: '1 single warmup set at ~50% of working weight',
-    steps: [
-      { percentage: 0.50, reps: 8 },
-    ],
+    steps: [{ percentage: 0.5, reps: 8 }],
   },
   quick: {
     id: 'quick',
     name: 'Quick / Express',
     description: '2-step fast warmup for time-crunched workouts (50%, 75%)',
     steps: [
-      { percentage: 0.50, reps: 5 },
+      { percentage: 0.5, reps: 5 },
       { percentage: 0.75, reps: 3 },
     ],
   },
@@ -41,8 +39,8 @@ export const WARMUP_PRESETS: Record<WarmupPreset, WarmupPresetConfig> = {
     description: '3-step ramp to prepare joints and prime target muscles (Bar, 60%, 80%)',
     steps: [
       { percentage: 0, reps: 10, useBarIfAvailable: true },
-      { percentage: 0.60, reps: 6 },
-      { percentage: 0.80, reps: 3 },
+      { percentage: 0.6, reps: 6 },
+      { percentage: 0.8, reps: 3 },
     ],
   },
   strength: {
@@ -51,21 +49,22 @@ export const WARMUP_PRESETS: Record<WarmupPreset, WarmupPresetConfig> = {
     description: '4-step ramp optimal for compound strength lifts (Bar, 50%, 70%, 85%)',
     steps: [
       { percentage: 0, reps: 10, useBarIfAvailable: true },
-      { percentage: 0.50, reps: 5 },
-      { percentage: 0.70, reps: 3 },
+      { percentage: 0.5, reps: 5 },
+      { percentage: 0.7, reps: 3 },
       { percentage: 0.85, reps: 1 },
     ],
   },
   heavy: {
     id: 'heavy',
     name: 'Heavy / Powerlifting',
-    description: '5-step gradual ramp for heavy singles and peak PR attempts (Bar, 50%, 65%, 80%, 90%)',
+    description:
+      '5-step gradual ramp for heavy singles and peak PR attempts (Bar, 50%, 65%, 80%, 90%)',
     steps: [
       { percentage: 0, reps: 10, useBarIfAvailable: true },
-      { percentage: 0.50, reps: 5 },
+      { percentage: 0.5, reps: 5 },
       { percentage: 0.65, reps: 3 },
-      { percentage: 0.80, reps: 2 },
-      { percentage: 0.90, reps: 1 },
+      { percentage: 0.8, reps: 2 },
+      { percentage: 0.9, reps: 1 },
     ],
   },
   custom: {
@@ -110,7 +109,7 @@ export function roundToIncrement(value: number, increment: number): number {
 export function getDefaultBarWeight(
   equipment?: string,
   category?: string,
-  unit: WeightUnit = 'kg'
+  unit: WeightUnit = 'kg',
 ): number {
   const equipLower = (equipment || '').toLowerCase();
   const catLower = (category || '').toLowerCase();
@@ -147,15 +146,11 @@ export function getDefaultIncrement(unit: WeightUnit): number {
  * Generates an array of calculated warmup sets based on working weight, preset, and rounding rules.
  */
 export function generateWarmupRamp(options: WarmupOptions): GeneratedWarmupSet[] {
-  const {
-    workingWeightKg,
-    unit,
-    preset,
-    customSteps,
-  } = options;
+  const { workingWeightKg, unit, preset, customSteps } = options;
 
   const defaultInc = getDefaultIncrement(unit);
-  const increment = options.roundIncrement && options.roundIncrement > 0 ? options.roundIncrement : defaultInc;
+  const increment =
+    options.roundIncrement && options.roundIncrement > 0 ? options.roundIncrement : defaultInc;
 
   const workingDisplayWeight = kgToDisplay(workingWeightKg, unit);
 
@@ -164,12 +159,13 @@ export function generateWarmupRamp(options: WarmupOptions): GeneratedWarmupSet[]
     options.barWeightKg !== undefined
       ? kgToDisplay(options.barWeightKg, unit)
       : unit === 'lb'
-      ? 45
-      : 20;
+        ? 45
+        : 20;
 
-  const config = preset === 'custom' && customSteps && customSteps.length > 0
-    ? { steps: customSteps }
-    : WARMUP_PRESETS[preset] || WARMUP_PRESETS.strength;
+  const config =
+    preset === 'custom' && customSteps && customSteps.length > 0
+      ? { steps: customSteps }
+      : WARMUP_PRESETS[preset] || WARMUP_PRESETS.strength;
 
   if (workingDisplayWeight <= 0) {
     return [];
@@ -229,7 +225,7 @@ export function generateWarmupRamp(options: WarmupOptions): GeneratedWarmupSet[]
       plateCalc = calculatePlates(
         stepDisplayWeight,
         barDisplayWeight,
-        unit === 'lb' ? LB_PLATES : KG_PLATES
+        unit === 'lb' ? LB_PLATES : KG_PLATES,
       );
     }
 
@@ -255,7 +251,7 @@ export function generateWarmupRamp(options: WarmupOptions): GeneratedWarmupSet[]
 /**
  * Formats plate calculation summary for display (e.g. "20kg, 10kg/side" or "Empty Bar").
  */
-export function formatPlateBreakdown(calc?: PlateCalculation, unit: WeightUnit = 'kg'): string {
+export function formatPlateBreakdown(calc?: PlateCalculation, _unit: WeightUnit = 'kg'): string {
   if (!calc) return '';
   if (calc.targetWeight <= calc.barWeight) {
     return 'Empty Bar';
@@ -264,6 +260,6 @@ export function formatPlateBreakdown(calc?: PlateCalculation, unit: WeightUnit =
     return 'Empty Bar';
   }
 
-  const parts = calc.plates.map((p) => (p.count > 1 ? `${p.count}×${p.weight}` : `${p.weight}`));
+  const parts = calc.plates.map(p => (p.count > 1 ? `${p.count}×${p.weight}` : `${p.weight}`));
   return `${parts.join(', ')} / side`;
 }

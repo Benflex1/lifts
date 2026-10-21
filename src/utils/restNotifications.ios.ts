@@ -16,7 +16,7 @@ function getNotificationsModule(): NotificationsModule | null {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazily loaded so Node tests can stub expo-notifications
     notificationsModule = require('expo-notifications');
   } catch (error) {
     if ((globalThis as any).__DEV__) {
@@ -69,7 +69,7 @@ export async function initRestNotifications(): Promise<void> {
 
 export async function scheduleRestNotification(
   endsAtMs: number,
-  exerciseName?: string
+  exerciseName?: string,
 ): Promise<string | null> {
   const Notifications = getNotificationsModule();
   if (!Notifications) {
@@ -117,12 +117,23 @@ export async function cancelRestNotification(): Promise<void> {
 
   try {
     if (lastScheduledId) {
-      await Notifications.cancelScheduledNotificationAsync(lastScheduledId).catch(() => {});
+      await Notifications.cancelScheduledNotificationAsync(lastScheduledId).catch(() => {
+        // Best-effort cancel: the notification may already be delivered or cleared.
+      });
       lastScheduledId = null;
     }
-    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
-    await Notifications.dismissAllNotificationsAsync().catch(() => {});
+    await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {
+      // Best-effort cancel: see above.
+    });
+    await Notifications.dismissAllNotificationsAsync().catch(() => {
+      // Best-effort cancel: see above.
+    });
   } catch (e) {
     console.warn('Failed to cancel rest notification:', e);
   }
+}
+
+// Only Android has a native rest cue (see restNotifications.android.ts); here the app buzzes.
+export function isRestCueNative(): boolean {
+  return false;
 }

@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { Timer, Plus, Minus, X } from 'lucide-react-native';
 import { useRestTimer, useWorkout } from '../context/WorkoutContext';
 import { formatTimer } from '../utils/calculator';
 import { colors } from '../theme';
+import { useI18n } from '../i18n';
 
 export interface RestTimerOverlayProps {
   nextUpText?: string | null;
@@ -11,6 +13,7 @@ export interface RestTimerOverlayProps {
 }
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, bottomOffset }) => {
+  const { t } = useI18n();
   const { adjustRestTimer, stopRestTimer } = useWorkout();
   const restTimer = useRestTimer();
 
@@ -23,7 +26,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
 
   const progressPercent = Math.min(
     100,
-    Math.max(0, ((restTimer.totalSeconds - restTimer.remainingSeconds) / restTimer.totalSeconds) * 100)
+    Math.max(
+      0,
+      ((restTimer.totalSeconds - restTimer.remainingSeconds) / restTimer.totalSeconds) * 100,
+    ),
   );
 
   return (
@@ -36,7 +42,12 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
     >
       {/* Progress Line */}
       <View style={styles.progressBarBackground}>
-        <View style={[styles.progressBarFill, { width: `${progressPercent}%`, backgroundColor: accentColor }]} />
+        <View
+          style={[
+            styles.progressBarFill,
+            { width: `${progressPercent}%`, backgroundColor: accentColor },
+          ]}
+        />
       </View>
 
       <View style={styles.contentRow}>
@@ -46,9 +57,17 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
           </View>
           <View>
             <Text style={[styles.timerTitle, isWarning && styles.timerTitleWarning]}>
-              {isWarning ? `Get Ready! (${restTimer.remainingSeconds})` : 'Rest Time'}
+              {isWarning
+                ? t('rest.getReady', { seconds: restTimer.remainingSeconds })
+                : t('rest.title')}
             </Text>
-            <Text style={[styles.timerCountdown, { color: accentColor }]}>
+            <Text
+              style={[styles.timerCountdown, { color: accentColor }]}
+              accessibilityRole="timer"
+              accessibilityLabel={t('rest.remaining')}
+              accessibilityValue={{ text: formatTimer(restTimer.remainingSeconds) }}
+              accessibilityLiveRegion="polite"
+            >
               {formatTimer(restTimer.remainingSeconds)}
             </Text>
           </View>
@@ -56,31 +75,37 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
 
         {/* Controls */}
         <View style={styles.controlsRow}>
-          <TouchableOpacity
+          <AppTouchable
             style={styles.adjustButton}
             onPress={() => adjustRestTimer(-30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('rest.decrease')}
           >
             <Minus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.adjustButton}
             onPress={() => adjustRestTimer(30)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('rest.increase')}
           >
             <Plus size={16} color={colors.textSoft} />
             <Text style={styles.adjustText}>30s</Text>
-          </TouchableOpacity>
+          </AppTouchable>
 
-          <TouchableOpacity
+          <AppTouchable
             style={styles.skipButton}
             onPress={stopRestTimer}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('rest.skip')}
           >
             <X size={18} color={colors.textSoft} />
-          </TouchableOpacity>
+          </AppTouchable>
         </View>
       </View>
 
@@ -88,7 +113,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({ nextUpText, 
       {nextUpText ? (
         <View style={styles.nextUpContainer}>
           <View style={styles.nextUpBadge}>
-            <Text style={styles.nextUpBadgeText}>NEXT</Text>
+            <Text style={styles.nextUpBadgeText}>{t('rest.next')}</Text>
           </View>
           <Text style={styles.nextUpText} numberOfLines={1}>
             {nextUpText}

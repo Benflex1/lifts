@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { buildTrophyRoomSummary } from '../../src/workout/trophy-room';
+import { buildTrophyRoomSummary, filterTrophyRecords } from '../../src/workout/trophy-room';
 import { Exercise, Gym, Workout } from '../../src/types';
 
 describe('Trophy Room Aggregation Engine', () => {
@@ -38,7 +38,13 @@ describe('Trophy Room Aggregation Engine', () => {
 
   const allExercises = [bench, squat, deadlift, pullUps];
 
-  const gymA: Gym = { id: 'gym-a', name: 'Gold Gym', isDefault: true, color: '#F59E0B', createdAt: '2026-01-01' };
+  const gymA: Gym = {
+    id: 'gym-a',
+    name: 'Gold Gym',
+    isDefault: true,
+    color: '#F59E0B',
+    createdAt: '2026-01-01',
+  };
   const allGyms = [gymA];
 
   it('aggregates total medals, best lifts, and computes SBD total', () => {
@@ -54,6 +60,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae1',
           exerciseId: bench.id,
           exercise: bench,
+          restTimerSeconds: 90,
           sets: [
             { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
           ],
@@ -62,6 +69,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae2',
           exerciseId: squat.id,
           exercise: squat,
+          restTimerSeconds: 90,
           sets: [
             { id: 's2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true },
           ],
@@ -70,6 +78,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae3',
           exerciseId: deadlift.id,
           exercise: deadlift,
+          restTimerSeconds: 90,
           sets: [
             { id: 's3', setNumber: 1, type: 'normal', weightKg: 180, reps: 5, isCompleted: true },
           ],
@@ -89,6 +98,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae4',
           exerciseId: bench.id,
           exercise: bench,
+          restTimerSeconds: 90,
           sets: [
             { id: 's4', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: true }, // Gold
           ],
@@ -97,6 +107,7 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae5',
           exerciseId: pullUps.id,
           exercise: pullUps,
+          restTimerSeconds: 90,
           sets: [
             { id: 's5', setNumber: 1, type: 'normal', weightKg: 0, reps: 15, isCompleted: true },
           ],
@@ -133,7 +144,7 @@ describe('Trophy Room Aggregation Engine', () => {
     assert.equal(summary.sbdTotalKg, expectedSBD);
 
     // Bodyweight pullups record
-    const pullupRecord = summary.records.find((r) => r.exerciseId === pullUps.id);
+    const pullupRecord = summary.records.find(r => r.exerciseId === pullUps.id);
     assert.ok(pullupRecord);
     assert.equal(pullupRecord.bestReps?.value, 15);
   });
@@ -178,19 +189,28 @@ describe('Trophy Room Aggregation Engine', () => {
           id: 'ae1',
           exerciseId: barbellBenchStandard.id,
           exercise: barbellBenchStandard,
-          sets: [{ id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true }],
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+          ],
         },
         {
           id: 'ae2',
           exerciseId: barbellSquatStandard.id,
           exercise: barbellSquatStandard,
-          sets: [{ id: 's2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true }],
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true },
+          ],
         },
         {
           id: 'ae3',
           exerciseId: barbellDeadliftStandard.id,
           exercise: barbellDeadliftStandard,
-          sets: [{ id: 's3', setNumber: 1, type: 'normal', weightKg: 180, reps: 5, isCompleted: true }],
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's3', setNumber: 1, type: 'normal', weightKg: 180, reps: 5, isCompleted: true },
+          ],
         },
       ],
     };
@@ -226,5 +246,96 @@ describe('Trophy Room Aggregation Engine', () => {
     });
     assert.equal(searchSquat.records.length, 1);
     assert.equal(searchSquat.records[0].exerciseId, barbellSquatStandard.id);
+  });
+
+  it('derives filtered records identical to a filtered aggregation', () => {
+    const workoutA: Workout = {
+      id: 'w-derived-a',
+      name: 'Power Day',
+      gymId: gymA.id,
+      startTime: '2026-08-01T10:00:00.000Z',
+      durationSeconds: 3600,
+      totalVolumeKg: 3000,
+      exercises: [
+        {
+          id: 'ae-d1',
+          exerciseId: bench.id,
+          exercise: bench,
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's-d1', setNumber: 1, type: 'normal', weightKg: 100, reps: 5, isCompleted: true },
+          ],
+        },
+        {
+          id: 'ae-d2',
+          exerciseId: squat.id,
+          exercise: squat,
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's-d2', setNumber: 1, type: 'normal', weightKg: 140, reps: 5, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const workoutB: Workout = {
+      id: 'w-derived-b',
+      name: 'Pull Day',
+      gymId: gymA.id,
+      startTime: '2026-08-15T10:00:00.000Z',
+      durationSeconds: 3600,
+      totalVolumeKg: 2500,
+      exercises: [
+        {
+          id: 'ae-d3',
+          exerciseId: bench.id,
+          exercise: bench,
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's-d3', setNumber: 1, type: 'normal', weightKg: 110, reps: 5, isCompleted: true },
+          ],
+        },
+        {
+          id: 'ae-d4',
+          exerciseId: pullUps.id,
+          exercise: pullUps,
+          restTimerSeconds: 90,
+          sets: [
+            { id: 's-d4', setNumber: 1, type: 'normal', weightKg: 0, reps: 15, isCompleted: true },
+          ],
+        },
+      ],
+    };
+
+    const workouts = [workoutA, workoutB];
+    const overview = buildTrophyRoomSummary(workouts, allExercises, allGyms, true, undefined, {
+      includeMedalCounts: false,
+    });
+
+    const filterCases: Array<{ categoryFilter?: string; searchQuery?: string }> = [
+      {},
+      { categoryFilter: 'chest' },
+      { categoryFilter: 'legs' },
+      { categoryFilter: 'all' },
+      { searchQuery: 'barbell' },
+      { searchQuery: '  squat  ' },
+      { searchQuery: 'no-such-exercise' },
+      { categoryFilter: 'chest', searchQuery: 'bench' },
+      { categoryFilter: 'back', searchQuery: 'pull' },
+    ];
+
+    for (const filters of filterCases) {
+      const full = buildTrophyRoomSummary(workouts, allExercises, allGyms, true, undefined, {
+        ...filters,
+        includeMedalCounts: false,
+      });
+      const derived = filterTrophyRecords(overview.records, filters);
+
+      assert.deepEqual(
+        derived.map(r => ({ id: r.exerciseId, name: r.exerciseName })),
+        full.records.map(r => ({ id: r.exerciseId, name: r.exerciseName })),
+        `filters ${JSON.stringify(filters)} derive the same records as a full aggregation`,
+      );
+    }
   });
 });

@@ -1,13 +1,10 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme';
+import { reportError } from '../utils/errorReporting';
+import { getDialogActionErrorMessage } from '../utils/dialogAction';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface ConfirmOptions {
   title: string;
@@ -24,6 +21,8 @@ export interface NotifyOptions {
   action?: {
     label: string;
     onPress: () => void | Promise<void>;
+    /** Copy shown when `onPress` rejects. Defaults to the error message. */
+    errorMessage?: string;
   };
 }
 
@@ -52,6 +51,8 @@ interface DialogState {
   cancelLabel: string;
   destructive: boolean;
   action?: NotifyOptions['action'];
+  /** Failure copy for the action; non-null keeps the dialog open. */
+  actionError: string | null;
   resolve: (value: any) => void;
 }
 
@@ -59,7 +60,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   const [currentDialog, setCurrentDialog] = useState<DialogState | null>(null);
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
-    return new Promise<boolean>((resolve) => {
+    return new Promise<boolean>(resolve => {
       setCurrentDialog({
         type: 'confirm',
         title: options.title,
@@ -67,13 +68,14 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         confirmLabel: options.confirmLabel || 'Confirm',
         cancelLabel: options.cancelLabel || 'Cancel',
         destructive: Boolean(options.destructive),
+        actionError: null,
         resolve,
       });
     });
   }, []);
 
   const notify = useCallback((options: NotifyOptions): Promise<void> => {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
       setCurrentDialog({
         type: 'notify',
         title: options.title,
@@ -82,6 +84,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         cancelLabel: '',
         destructive: false,
         action: options.action,
+        actionError: null,
         resolve,
       });
     });
@@ -95,16 +98,26 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   };
 
   const handleAction = async () => {
-    if (!currentDialog?.action) return;
+    const dialog = currentDialog;
+    if (!dialog?.action) return;
     try {
-      await currentDialog.action.onPress();
-    } catch (error) {
-      console.error('Unable to open health permission settings', error);
-    } finally {
+      await dialog.action.onPress();
       handleClose(true);
+    } catch (error) {
+      reportError(error, {
+        scope: 'dialog.action',
+        actionLabel: dialog.action.label,
+        title: dialog.title,
+      });
+      const actionError = getDialogActionErrorMessage(error, dialog.action);
+      // Keep the dialog open and replace any previous failure copy so the user can retry.
+      setCurrentDialog(current => (current ? { ...current, actionError } : current));
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(true);
   return (
     <DialogContext.Provider value={{ confirm, notify }}>
       {children}
@@ -115,7 +128,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
           animationType="fade"
           onRequestClose={() => handleClose(false)}
         >
-          <SafeAreaView style={styles.overlay}>
+          <SafeAreaView ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
             <View
               style={styles.container}
               accessible={true}
@@ -124,6 +137,11 @@ export function DialogProvider({ children }: { children: ReactNode }) {
             >
               <Text style={styles.title}>{currentDialog.title}</Text>
               <Text style={styles.message}>{currentDialog.message}</Text>
+              {currentDialog.actionError && (
+                <Text style={styles.actionError} accessibilityLiveRegion="polite">
+                  {currentDialog.actionError}
+                </Text>
+              )}
               <View style={styles.buttonRow}>
                 {currentDialog.action && (
                   <TouchableOpacity
@@ -203,6 +221,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 20,
     marginBottom: 24,
+  },
+  actionError: {
+    fontSize: 13,
+    color: colors.danger,
+    lineHeight: 18,
+    marginTop: -16,
+    marginBottom: 20,
   },
   buttonRow: {
     flexDirection: 'row',

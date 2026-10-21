@@ -2,20 +2,11 @@ import { Exercise, ExerciseGymScope, Gym, Workout } from '../types';
 import { calculate1RM } from '../utils/calculator';
 import { getAllowedGymIds, resolveExerciseScope } from './gym-scope';
 import { extractExercisePodium } from './pr';
+import { getTrackingType, setRecordValues } from './tracking';
 
-export const MUSCLE_GROUP_MAP: Record<string, string[]> = {
+const MUSCLE_GROUP_MAP: Record<string, string[]> = {
   chest: ['chest', 'pectorals', 'pecs'],
-  back: [
-    'back',
-    'lats',
-    'lat',
-    'middle back',
-    'lower back',
-    'traps',
-    'trap',
-    'rhomboids',
-    'spine',
-  ],
+  back: ['back', 'lats', 'lat', 'middle back', 'lower back', 'traps', 'trap', 'rhomboids', 'spine'],
   legs: [
     'legs',
     'quadriceps',
@@ -36,9 +27,9 @@ export const MUSCLE_GROUP_MAP: Record<string, string[]> = {
   core: ['core', 'abdominals', 'abs', 'obliques', 'waist'],
 };
 
-export function matchesCategory(
+function matchesCategory(
   record: { category: string; primaryMuscles: string[]; exerciseName: string },
-  categoryFilter: string
+  categoryFilter: string,
 ): boolean {
   if (!categoryFilter || categoryFilter === 'all') return true;
   const filterLower = categoryFilter.toLowerCase();
@@ -46,22 +37,22 @@ export function matchesCategory(
 
   // 1. Check primaryMuscles array
   if (record.primaryMuscles && record.primaryMuscles.length > 0) {
-    const hasMuscleMatch = record.primaryMuscles.some((m) => {
+    const hasMuscleMatch = record.primaryMuscles.some(m => {
       const mLower = m.toLowerCase();
-      return targetMuscles.some((t) => mLower.includes(t) || t.includes(mLower));
+      return targetMuscles.some(t => mLower.includes(t) || t.includes(mLower));
     });
     if (hasMuscleMatch) return true;
   }
 
   // 2. Check category field
   const catLower = (record.category || '').toLowerCase();
-  if (targetMuscles.some((t) => catLower.includes(t) || t.includes(catLower))) {
+  if (targetMuscles.some(t => catLower.includes(t) || t.includes(catLower))) {
     return true;
   }
 
   // 3. Fallback check on exercise name
   const nameLower = record.exerciseName.toLowerCase();
-  if (targetMuscles.some((t) => nameLower.includes(t))) {
+  if (targetMuscles.some(t => nameLower.includes(t))) {
     return true;
   }
 
@@ -133,6 +124,29 @@ export interface TrophyRoomOptions {
 }
 
 /**
+ * Applies the category and search filters to an already-aggregated record list.
+ * Order-preserving, so filtering a summary that was sorted by value keeps the
+ * same ranking as aggregating with the filters applied.
+ */
+export function filterTrophyRecords(
+  records: ExerciseRecordSummary[],
+  options?: Pick<TrophyRoomOptions, 'categoryFilter' | 'searchQuery'>,
+): ExerciseRecordSummary[] {
+  let filtered = records;
+
+  if (options?.categoryFilter && options.categoryFilter !== 'all') {
+    filtered = filtered.filter(r => matchesCategory(r, options.categoryFilter!));
+  }
+
+  if (options?.searchQuery && options.searchQuery.trim().length > 0) {
+    const q = options.searchQuery.trim().toLowerCase();
+    filtered = filtered.filter(r => r.exerciseName.toLowerCase().includes(q));
+  }
+
+  return filtered;
+}
+
+/**
  * Builds all-time PR leaderboard data, medal counts, and SBD totals from workout history.
  */
 export function buildTrophyRoomSummary(
@@ -141,10 +155,10 @@ export function buildTrophyRoomSummary(
   gyms: Gym[],
   gymTrackingEnabled: boolean,
   scopesByExercise?: Record<string, ExerciseGymScope | undefined>,
-  options?: TrophyRoomOptions
+  options?: TrophyRoomOptions,
 ): TrophyRoomSummary {
-  const gymMap = new Map(gyms.map((g) => [g.id, g.name]));
-  const exerciseMap = new Map(allExercises.map((e) => [e.id, e]));
+  const gymMap = new Map(gyms.map(g => [g.id, g.name]));
+  const exerciseMap = new Map(allExercises.map(e => [e.id, e]));
 
   // 1. Build exercise-level records
   const recordsByExerciseId = new Map<string, ExerciseRecordSummary>();
@@ -180,16 +194,24 @@ export function buildTrophyRoomSummary(
           exerciseName: exerciseDef.name,
           category: exerciseDef.category,
           equipment: exerciseDef.equipment,
-          primaryMuscles: Array.isArray(exerciseDef.primaryMuscles) ? exerciseDef.primaryMuscles : [],
+          primaryMuscles: Array.isArray(exerciseDef.primaryMuscles)
+            ? exerciseDef.primaryMuscles
+            : [],
         };
         recordsByExerciseId.set(exerciseId, summary);
       }
 
+      const trackingType = getTrackingType(ex);
       for (const s of ex.sets) {
         if (!s.isCompleted || s.type === 'warmup') continue;
+        const values = setRecordValues(
+          s,
+          trackingType,
+          (weightKg, reps) => calculate1RM(weightKg, reps).average,
+        );
 
         // Weight record
-        if (s.weightKg > 0) {
+        if (values.weight > 0) {
           if (!summary.bestWeight || s.weightKg > summary.bestWeight.value) {
             summary.bestWeight = {
               value: s.weightKg,
@@ -222,7 +244,7 @@ export function buildTrophyRoomSummary(
               };
             }
           }
-        } else if (s.reps > 0) {
+        } else if (values.reps > 0) {
           // Reps record for bodyweight
           if (!summary.bestReps || s.reps > summary.bestReps.value) {
             summary.bestReps = {
@@ -258,7 +280,11 @@ export function buildTrophyRoomSummary(
     };
 
     // Squat matching
-    if (nameLower.includes('squat') && !nameLower.includes('split') && !nameLower.includes('hack')) {
+    if (
+      nameLower.includes('squat') &&
+      !nameLower.includes('split') &&
+      !nameLower.includes('hack')
+    ) {
       if (!bestSquat || highlight.oneRMKg > bestSquat.oneRMKg) {
         bestSquat = highlight;
       }
@@ -270,32 +296,32 @@ export function buildTrophyRoomSummary(
       }
     }
     // Deadlift matching
-    else if (nameLower.includes('deadlift') && !nameLower.includes('romanian') && !nameLower.includes('stiff')) {
+    else if (
+      nameLower.includes('deadlift') &&
+      !nameLower.includes('romanian') &&
+      !nameLower.includes('stiff')
+    ) {
       if (!bestDeadlift || highlight.oneRMKg > bestDeadlift.oneRMKg) {
         bestDeadlift = highlight;
       }
     }
     // Overhead press matching
-    else if (nameLower.includes('overhead press') || nameLower.includes('military press') || nameLower.includes('shoulder press')) {
+    else if (
+      nameLower.includes('overhead press') ||
+      nameLower.includes('military press') ||
+      nameLower.includes('shoulder press')
+    ) {
       if (!bestOHP || highlight.oneRMKg > bestOHP.oneRMKg) {
         bestOHP = highlight;
       }
     }
   }
 
-  const sbdTotalKg = (bestSquat?.oneRMKg || 0) + (bestBench?.oneRMKg || 0) + (bestDeadlift?.oneRMKg || 0);
+  const sbdTotalKg =
+    (bestSquat?.oneRMKg || 0) + (bestBench?.oneRMKg || 0) + (bestDeadlift?.oneRMKg || 0);
 
   // 3. Apply category, search, and presence filters
-  let filteredRecords = Array.from(recordsByExerciseId.values());
-
-  if (options?.categoryFilter && options.categoryFilter !== 'all') {
-    filteredRecords = filteredRecords.filter((r) => matchesCategory(r, options.categoryFilter!));
-  }
-
-  if (options?.searchQuery && options.searchQuery.trim().length > 0) {
-    const q = options.searchQuery.trim().toLowerCase();
-    filteredRecords = filteredRecords.filter((r) => r.exerciseName.toLowerCase().includes(q));
-  }
+  const filteredRecords = filterTrophyRecords(Array.from(recordsByExerciseId.values()), options);
 
   // Sort by highest estimated 1RM / weight descending
   filteredRecords.sort((a, b) => {
@@ -313,16 +339,19 @@ export function buildTrophyRoomSummary(
     const exerciseDef = exerciseMap.get(record.exerciseId);
     const scope = scopesByExercise?.[record.exerciseId];
     const currentGymId = options?.selectedGymId || gyms[0]?.id || 'default-gym';
-    const allowedGymIds = exerciseDef && gymTrackingEnabled
-      ? getAllowedGymIds(exerciseDef, scope, currentGymId)
-      : (options?.selectedGymId ? new Set([options.selectedGymId]) : null);
+    const allowedGymIds =
+      exerciseDef && gymTrackingEnabled
+        ? getAllowedGymIds(exerciseDef, scope, currentGymId)
+        : options?.selectedGymId
+          ? new Set([options.selectedGymId])
+          : null;
 
     const podium = extractExercisePodium(workouts, record.exerciseId, gyms, allowedGymIds);
     const primaryPodium = podium.weight.length > 0 ? podium.weight : podium.reps;
 
-    if (primaryPodium.some((p) => p.rank === 1)) totalGold++;
-    if (primaryPodium.some((p) => p.rank === 2)) totalSilver++;
-    if (primaryPodium.some((p) => p.rank === 3)) totalBronze++;
+    if (primaryPodium.some(p => p.rank === 1)) totalGold++;
+    if (primaryPodium.some(p => p.rank === 2)) totalSilver++;
+    if (primaryPodium.some(p => p.rank === 3)) totalBronze++;
   }
 
   return {

@@ -1,21 +1,13 @@
 import React from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-} from 'react-native';
+import { Modal, View, Text, FlatList, StyleSheet } from 'react-native';
+import { AppTouchable } from './ui';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Play, Trash2, X, Clock, Dumbbell } from 'lucide-react-native';
 import { WorkoutDraft } from '../database/contract';
 import { formatDuration } from '../utils/calculator';
-import {
-  getPausedWorkoutModalSubtitle,
-  PAUSED_WORKOUT_MODAL_TITLE,
-} from '../workout/session-copy';
+import { getPausedWorkoutModalSubtitle, PAUSED_WORKOUT_MODAL_TITLE } from '../workout/session-copy';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface DraftRecoveryModalProps {
   visible: boolean;
@@ -32,6 +24,8 @@ export function DraftRecoveryModal({
   onDiscard,
   onClose,
 }: DraftRecoveryModalProps) {
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+  const modalA11yRef = useModalAccessibility(visible);
   if (!visible) return null;
 
   const formatDate = (isoString: string) => {
@@ -50,38 +44,43 @@ export function DraftRecoveryModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <SafeAreaView style={styles.overlay}>
+      <SafeAreaView ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>{PAUSED_WORKOUT_MODAL_TITLE}</Text>
-              <Text style={styles.subtitle}>
-                {getPausedWorkoutModalSubtitle(drafts.length)}
-              </Text>
+              <Text style={styles.subtitle}>{getPausedWorkoutModalSubtitle(drafts.length)}</Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+            <AppTouchable
+              style={styles.closeBtn}
+              onPress={onClose}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Close draft recovery"
+            >
               <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <FlatList
             data={drafts}
-            keyExtractor={(item) => item.workout.id}
+            keyExtractor={item => item.workout.id}
             contentContainerStyle={styles.list}
             renderItem={({ item }) => {
               const exerciseCount = item.workout.exercises?.length || 0;
-              const completedSetsCount = item.workout.exercises?.reduce(
-                (acc, ex) => acc + (ex.sets?.filter((s) => s.isCompleted).length || 0),
-                0
-              ) || 0;
+              const completedSetsCount =
+                item.workout.exercises?.reduce(
+                  (acc, ex) => acc + (ex.sets?.filter(s => s.isCompleted).length || 0),
+                  0,
+                ) || 0;
 
               return (
                 <View style={styles.card}>
                   <View style={styles.cardInfo}>
-                    <Text style={styles.workoutName}>{item.workout.name || 'Untitled Workout'}</Text>
-                    <Text style={styles.cardMeta}>
-                      Saved {formatDate(item.savedAt)}
+                    <Text style={styles.workoutName}>
+                      {item.workout.name || 'Untitled Workout'}
                     </Text>
+                    <Text style={styles.cardMeta}>Saved {formatDate(item.savedAt)}</Text>
                     <View style={styles.badgeRow}>
                       <View style={styles.badge}>
                         <Clock size={12} color={colors.textSecondary} />
@@ -92,28 +91,33 @@ export function DraftRecoveryModal({
                       <View style={styles.badge}>
                         <Dumbbell size={12} color={colors.textSecondary} />
                         <Text style={styles.badgeText}>
-                          {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} • {completedSetsCount} sets
+                          {exerciseCount} {exerciseCount === 1 ? 'exercise' : 'exercises'} •{' '}
+                          {completedSetsCount} sets
                         </Text>
                       </View>
                     </View>
                   </View>
 
                   <View style={styles.cardActions}>
-                    <TouchableOpacity
+                    <AppTouchable
                       style={styles.discardBtn}
                       onPress={() => onDiscard(item.workout.id)}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Discard ${item.workout.name || 'workout'} draft`}
                     >
                       <Trash2 size={16} color={colors.danger} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </AppTouchable>
+                    <AppTouchable
                       style={styles.resumeBtn}
                       onPress={() => onResume(item)}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Continue ${item.workout.name || 'workout'}`}
                     >
                       <Play size={14} color={colors.black} fill={colors.black} />
                       <Text style={styles.resumeText}>Continue</Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   </View>
                 </View>
               );

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, feature/**]
+    branches: ['**']
   pull_request:
     branches: [main, develop]
 
@@ -23,17 +23,40 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier format check
+        run: npm run format:check
+
+      - name: Version sync check
+        run: npm run version:check
+
+      - name: Dependency audit policy
+        run: npm run audit:policy
+
+      - name: Dead code scan
+        run: npm run check:dead-code
+
       - name: TypeScript typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
-      - name: Unit test suite
-        run: npm test
+      - name: TypeScript typecheck (tests)
+        run: npm run typecheck:tests
 
-      - name: Integration test suite
-        run: npm run test:integration
+      - name: Tests and exercised-module coverage (unit + integration)
+        run: npm run test:coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
 
       - name: Android prebuild (applies config plugins)
         run: npx expo prebuild --platform android --clean --no-install
 
-      - name: Web bundle export
-        run: npx expo export --platform web --output-dir dist-ci-web
+      - name: Web bundle export (with PWA shell)
+        run: |
+          npx expo export --platform web --output-dir dist-ci-web
+          node scripts/postprocess-web-export.mjs dist-ci-web

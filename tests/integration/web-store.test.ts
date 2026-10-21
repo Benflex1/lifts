@@ -13,21 +13,37 @@ function openLegacyVersionOneDatabase(name: string): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
       for (const [storeName, keyPath] of [
-        ['exercises', 'id'], ['routines', 'id'], ['workouts', 'id'],
-        ['workout_drafts', 'id'], ['settings', 'key'], ['metadata', 'key'],
+        ['exercises', 'id'],
+        ['routines', 'id'],
+        ['workouts', 'id'],
+        ['workout_drafts', 'id'],
+        ['settings', 'key'],
+        ['metadata', 'key'],
       ] as [string, string][]) {
         db.createObjectStore(storeName, { keyPath });
       }
       const upgradeTx = request.transaction!;
       upgradeTx.objectStore('workouts').put({
-        id: 'legacy-workout', name: 'Legacy', startTime: '2026-09-10T08:00:00.000Z',
-        durationSeconds: 10, totalVolumeKg: 0, exercises: [],
+        id: 'legacy-workout',
+        name: 'Legacy',
+        startTime: '2026-09-10T08:00:00.000Z',
+        durationSeconds: 10,
+        totalVolumeKg: 0,
+        exercises: [],
       });
       upgradeTx.objectStore('workout_drafts').put({
-        id: 'legacy-draft', version: 1, savedAt: '2026-09-10T08:01:00.000Z', revision: 1,
-        restTimer: null, workout: {
-          id: 'legacy-draft', name: 'Draft', startTime: '2026-09-10T08:00:00.000Z',
-          durationSeconds: 10, totalVolumeKg: 0, exercises: [],
+        id: 'legacy-draft',
+        version: 1,
+        savedAt: '2026-09-10T08:01:00.000Z',
+        revision: 1,
+        restTimer: null,
+        workout: {
+          id: 'legacy-draft',
+          name: 'Draft',
+          startTime: '2026-09-10T08:00:00.000Z',
+          durationSeconds: 10,
+          totalVolumeKg: 0,
+          exercises: [],
         },
       });
     };
@@ -38,30 +54,53 @@ function openLegacyVersionOneDatabase(name: string): Promise<IDBDatabase> {
 
 const LEGACY_V3_SENTINELS = {
   routines: {
-    id: 'legacy-routine-v3', name: 'Legacy Routine', folderName: 'Legacy',
-    notes: 'Keep this routine', createdAt: '2026-09-10T07:00:00.000Z', exercises: [],
+    id: 'legacy-routine-v3',
+    name: 'Legacy Routine',
+    folderName: 'Legacy',
+    notes: 'Keep this routine',
+    createdAt: '2026-09-10T07:00:00.000Z',
+    exercises: [],
   },
   workouts: {
-    id: 'legacy-workout-v3', name: 'Legacy Workout', gymId: 'gym-default',
-    startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 10, totalVolumeKg: 20,
+    id: 'legacy-workout-v3',
+    name: 'Legacy Workout',
+    gymId: 'gym-default',
+    startTime: '2026-09-10T08:00:00.000Z',
+    durationSeconds: 10,
+    totalVolumeKg: 20,
     exercises: [],
   },
   workout_drafts: {
-    id: 'legacy-draft-v3', version: 1, savedAt: '2026-09-10T08:01:00.000Z', revision: 1,
+    id: 'legacy-draft-v3',
+    version: 1,
+    savedAt: '2026-09-10T08:01:00.000Z',
+    revision: 1,
     restTimer: null,
     workout: {
-      id: 'legacy-draft-v3', name: 'Legacy Draft', gymId: 'gym-default',
-      startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 10, totalVolumeKg: 0, exercises: [],
+      id: 'legacy-draft-v3',
+      name: 'Legacy Draft',
+      gymId: 'gym-default',
+      startTime: '2026-09-10T08:00:00.000Z',
+      durationSeconds: 10,
+      totalVolumeKg: 0,
+      exercises: [],
     },
   },
   settings: { key: 'legacy-setting-v3', value: 'keep-me' },
   exercise_gym_scopes: { exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'global' },
   health_sync_records: {
-    workoutId: 'legacy-workout-v3', provider: 'healthkit', status: 'pending',
-    attemptedAt: '2026-09-10T08:02:00.000Z', attemptCount: 2, lastError: 'Keep this error',
+    workoutId: 'legacy-workout-v3',
+    provider: 'healthkit',
+    status: 'pending',
+    attemptedAt: '2026-09-10T08:02:00.000Z',
+    attemptCount: 2,
+    lastError: 'Keep this error',
   },
   gyms: {
-    id: 'legacy-gym-v3', name: 'Legacy Gym', color: '#10B981', isDefault: false,
+    id: 'legacy-gym-v3',
+    name: 'Legacy Gym',
+    color: '#10B981',
+    isDefault: false,
     createdAt: '2026-09-10T06:00:00.000Z',
   },
   metadata: { key: 'legacy-metadata-v3', value: 'keep-this-metadata' },
@@ -73,9 +112,14 @@ function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result;
       for (const [storeName, keyPath] of [
-        ['exercises', 'id'], ['routines', 'id'], ['workouts', 'id'],
-        ['workout_drafts', 'id'], ['settings', 'key'], ['metadata', 'key'],
-        ['gyms', 'id'], ['exercise_gym_scopes', 'exerciseId'],
+        ['exercises', 'id'],
+        ['routines', 'id'],
+        ['workouts', 'id'],
+        ['workout_drafts', 'id'],
+        ['settings', 'key'],
+        ['metadata', 'key'],
+        ['gyms', 'id'],
+        ['exercise_gym_scopes', 'exerciseId'],
         ['health_sync_records', ['workoutId', 'provider']],
       ] as [string, string | string[]][]) {
         const store = db.createObjectStore(storeName, { keyPath });
@@ -84,7 +128,8 @@ function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
           store.createIndex('scopeType', 'scopeType', { unique: false });
           store.createIndex('linkedGymIds', 'linkedGymIds', { unique: false, multiEntry: true });
         }
-        if (storeName === 'health_sync_records') store.createIndex('status', 'status', { unique: false });
+        if (storeName === 'health_sync_records')
+          store.createIndex('status', 'status', { unique: false });
       }
 
       const transaction = request.transaction!;
@@ -96,7 +141,8 @@ function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
         primaryMuscles: ['stale-primary'],
         secondaryMuscles: ['stale-secondary'],
         instructions: ['Stale instructions'],
-        instructionUrl: 'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json',
+        instructionUrl:
+          'https://github.com/yuhonas/free-exercise-db/blob/legacy/exercises/Barbell_Bench_Press_-_Medium_Grip.json',
         instructionUrlType: 'website',
         isCustom: false,
       });
@@ -118,7 +164,10 @@ function openLegacyVersionThreeDatabase(name: string): Promise<IDBDatabase> {
       transaction.objectStore('metadata').put({ key: 'exercises_seeded', value: '1' });
       transaction.objectStore('metadata').put({ key: 'exercise_catalog_version', value: '3' });
       transaction.objectStore('gyms').put({
-        id: 'gym-default', name: 'Default Gym', color: '#3B82F6', isDefault: true,
+        id: 'gym-default',
+        name: 'Default Gym',
+        color: '#3B82F6',
+        isDefault: true,
         createdAt: '2026-09-10T00:00:00.000Z',
       });
     };
@@ -139,27 +188,30 @@ function mutateWebDatabase(
   name: string,
   mutate: (stores: { exercises: IDBObjectStore; metadata: IDBObjectStore }) => void,
 ): Promise<void> {
-  return readWebDatabase(name).then((database) => new Promise((resolve, reject) => {
-    database.onversionchange = () => database.close();
-    const transaction = database.transaction(['exercises', 'metadata'], 'readwrite');
-    mutate({
-      exercises: transaction.objectStore('exercises'),
-      metadata: transaction.objectStore('metadata'),
-    });
-    transaction.oncomplete = () => {
-      database.close();
-      resolve();
-    };
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
-  }));
+  return readWebDatabase(name).then(
+    database =>
+      new Promise((resolve, reject) => {
+        database.onversionchange = () => database.close();
+        const transaction = database.transaction(['exercises', 'metadata'], 'readwrite');
+        mutate({
+          exercises: transaction.objectStore('exercises'),
+          metadata: transaction.objectStore('metadata'),
+        });
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => {
+          database.close();
+          reject(transaction.error);
+        };
+      }),
+  );
 }
 
-function upgradeDatabaseToVersionFour(name: string): Promise<void> {
+function upgradeDatabaseToCurrentVersion(name: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(name, 4);
+    const request = indexedDB.open(name, 5);
     request.onsuccess = () => {
       request.result.close();
       resolve();
@@ -169,27 +221,43 @@ function upgradeDatabaseToVersionFour(name: string): Promise<void> {
 }
 
 function readLegacyV3Sentinels(name: string): Promise<Record<string, unknown>> {
-  return readWebDatabase(name).then((database) => new Promise((resolve, reject) => {
-    const storeNames = Object.keys(LEGACY_V3_SENTINELS);
-    const transaction = database.transaction(storeNames, 'readonly');
-    const records: Record<string, unknown> = {};
-    for (const storeName of storeNames) {
-      const key = storeName === 'health_sync_records'
-        ? ['legacy-workout-v3', 'healthkit']
-        : storeName === 'exercise_gym_scopes'
-          ? 'Barbell_Bench_Press_-_Medium_Grip'
-          : (LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as { key?: string; id?: string }).key
-            || (LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as { key?: string; id?: string }).id;
-      const request = transaction.objectStore(storeName).get(key);
-      request.onsuccess = () => { records[storeName] = request.result; };
-      request.onerror = () => reject(request.error);
-    }
-    transaction.oncomplete = () => {
-      database.close();
-      resolve(records);
-    };
-    transaction.onerror = () => reject(transaction.error);
-  }));
+  return readWebDatabase(name).then(
+    database =>
+      new Promise((resolve, reject) => {
+        const storeNames = Object.keys(LEGACY_V3_SENTINELS);
+        const transaction = database.transaction(storeNames, 'readonly');
+        const records: Record<string, unknown> = {};
+        for (const storeName of storeNames) {
+          const key =
+            storeName === 'health_sync_records'
+              ? ['legacy-workout-v3', 'healthkit']
+              : storeName === 'exercise_gym_scopes'
+                ? 'Barbell_Bench_Press_-_Medium_Grip'
+                : (
+                    LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as {
+                      key?: string;
+                      id?: string;
+                    }
+                  ).key ||
+                  (
+                    LEGACY_V3_SENTINELS[storeName as keyof typeof LEGACY_V3_SENTINELS] as {
+                      key?: string;
+                      id?: string;
+                    }
+                  ).id;
+          const request = transaction.objectStore(storeName).get(key as IDBValidKey);
+          request.onsuccess = () => {
+            records[storeName] = request.result;
+          };
+          request.onerror = () => reject(request.error);
+        }
+        transaction.oncomplete = () => {
+          database.close();
+          resolve(records);
+        };
+        transaction.onerror = () => reject(transaction.error);
+      }),
+  );
 }
 
 describe('webStore persistence and lease handling', () => {
@@ -205,7 +273,10 @@ describe('webStore persistence and lease handling', () => {
     const bundled = getBundledExercise('Barbell_Bench_Press_-_Medium_Grip');
     assert.deepEqual(builtIn, { ...bundled, isCustom: false });
     assert.equal(builtIn?.instructionUrl, 'https://musclewiki.com/exercise/barbell-bench-press');
-    assert.ok(await store.getExerciseById('3_4_Sit-Up'), 'missing bundled exercises should be seeded');
+    assert.ok(
+      await store.getExerciseById('3_4_Sit-Up'),
+      'missing bundled exercises should be seeded',
+    );
     assert.deepEqual(await store.getExerciseById('Incline_Dumbbell_Press'), {
       id: 'Incline_Dumbbell_Press',
       name: 'My Custom Exercise',
@@ -220,11 +291,25 @@ describe('webStore persistence and lease handling', () => {
     });
 
     const database = await readWebDatabase(dbName);
-    assert.equal(database.version, 4);
+    assert.equal(database.version, 5);
     assert.deepEqual([...database.objectStoreNames].sort(), [
-      'exercise_gym_scopes', 'exercises', 'gyms', 'health_sync_records',
-      'metadata', 'routines', 'settings', 'workout_drafts', 'workouts',
+      'exercise_gym_scopes',
+      'exercises',
+      'gyms',
+      'health_sync_records',
+      'metadata',
+      'routines',
+      'settings',
+      'workout_drafts',
+      'workouts',
     ]);
+    assert.ok(
+      database
+        .transaction('workouts', 'readonly')
+        .objectStore('workouts')
+        .indexNames.contains('startTime'),
+      'upgraded databases index workouts by start time',
+    );
     database.close();
     assert.deepEqual(await readLegacyV3Sentinels(dbName), LEGACY_V3_SENTINELS);
 
@@ -259,7 +344,10 @@ describe('webStore persistence and lease handling', () => {
         isCustom: false,
       });
     });
-    assert.equal((await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip'))?.name, 'Stale cached bench');
+    assert.equal(
+      (await store.getExerciseById('Barbell_Bench_Press_-_Medium_Grip'))?.name,
+      'Stale cached bench',
+    );
 
     await mutateWebDatabase(dbName, ({ metadata }) => {
       metadata.put({ key: 'exercise_catalog_version', value: '1' });
@@ -276,11 +364,15 @@ describe('webStore persistence and lease handling', () => {
     const dbName = `test-web-catalog-read-only-${Date.now()}`;
     const legacy = await openLegacyVersionThreeDatabase(dbName);
     legacy.close();
-    await upgradeDatabaseToVersionFour(dbName);
+    await upgradeDatabaseToCurrentVersion(dbName);
 
-    let currentTime = 100000;
+    const currentTime = 100000;
     const now = () => currentTime;
-    const writer: any = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    const writer: any = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 5000,
+    });
     await writer.init();
     await mutateWebDatabase(dbName, ({ exercises, metadata }) => {
       exercises.put({
@@ -296,7 +388,11 @@ describe('webStore persistence and lease handling', () => {
       metadata.put({ key: 'exercise_catalog_version', value: '1' });
     });
 
-    const reader: any = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    const reader: any = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 5000,
+    });
     await reader.init();
     assert.equal(reader.isReadOnly(), true);
     assert.deepEqual(await reader.getExerciseById('Barbell_Bench_Press_-_Medium_Grip'), {
@@ -330,7 +426,10 @@ describe('webStore persistence and lease handling', () => {
 
     const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await store.init();
-    assert.deepEqual((await store.getGyms()).map((gym: any) => gym.id), ['gym-default']);
+    assert.deepEqual(
+      (await store.getGyms()).map((gym: any) => gym.id),
+      ['gym-default'],
+    );
     assert.equal((await store.getWorkoutDetail('legacy-workout')).gymId, 'gym-default');
     assert.equal((await store.getWorkoutDrafts())[0].workout.gymId, 'gym-default');
 
@@ -338,16 +437,29 @@ describe('webStore persistence and lease handling', () => {
     assert.equal(gym.name, 'Downtown');
     await store.updateGym(gym.id, { name: 'Downtown 2' });
     await store.setDefaultGym(gym.id);
-    await assert.rejects(() => store.deleteGym(gym.id, gym.id), /Replacement gym must be different/);
-    await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'global' });
-    assert.equal((await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType, 'global');
+    await assert.rejects(
+      () => store.deleteGym(gym.id, gym.id),
+      /replacement gym must be different/i,
+    );
+    await store.saveExerciseGymScope({
+      exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+      scopeType: 'global',
+    });
+    assert.equal(
+      (await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType,
+      'global',
+    );
     const snapshot = await store.readSnapshot();
-    assert.deepEqual(snapshot.gyms.map((g: any) => g.id), [gym.id, 'gym-default']);
+    assert.deepEqual(
+      snapshot.gyms.map((g: any) => g.id),
+      [gym.id, 'gym-default'],
+    );
     assert.equal(snapshot.exerciseGymScopes.length, 1);
     await store.close();
     await new Promise<void>((resolve, reject) => {
       const req = indexedDB.deleteDatabase(dbName);
-      req.onsuccess = () => resolve(); req.onerror = () => reject(req.error);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
     });
   });
 
@@ -356,14 +468,35 @@ describe('webStore persistence and lease handling', () => {
     const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await store.init();
     const gym = await store.createGym('Temporary');
-    const workout = { id: 'gym-workout', name: 'Gym workout', gymId: gym.id, startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [] };
+    const workout = {
+      id: 'gym-workout',
+      name: 'Gym workout',
+      gymId: gym.id,
+      startTime: '2026-09-10T08:00:00.000Z',
+      durationSeconds: 1,
+      totalVolumeKg: 0,
+      exercises: [],
+    };
     await store.saveCompletedWorkout(workout);
-    await store.saveDraft({ version: 1, workout: { ...workout, id: 'gym-draft', endTime: '2026-09-10T09:00:00.000Z' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
-    await store.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'linked_group', linkedGymIds: [gym.id, 'gym-default'] });
+    await store.saveDraft({
+      version: 1,
+      workout: { ...workout, id: 'gym-draft', endTime: '2026-09-10T09:00:00.000Z' },
+      savedAt: '2026-09-10T08:01:00.000Z',
+      revision: 1,
+      restTimer: null,
+    });
+    await store.saveExerciseGymScope({
+      exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+      scopeType: 'linked_group',
+      linkedGymIds: [gym.id, 'gym-default'],
+    });
     await store.deleteGym(gym.id, 'gym-default');
     assert.equal((await store.getWorkoutDetail('gym-workout')).gymId, 'gym-default');
     assert.equal((await store.getWorkoutDraft('gym-draft')).workout.gymId, 'gym-default');
-    assert.equal((await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType, 'gym_specific');
+    assert.equal(
+      (await store.getExerciseGymScope('Barbell_Bench_Press_-_Medium_Grip')).scopeType,
+      'gym_specific',
+    );
     await store.close();
   });
 
@@ -381,8 +514,14 @@ describe('webStore persistence and lease handling', () => {
         totalVolumeKg: 0,
         exercises: [],
       });
-      await assert.rejects(() => store.saveCompletedWorkout(workout('missing-gym')), /unknown gym/i);
-      await assert.rejects(() => store.saveCompletedWorkout(workout('  ')), /gym ID cannot be empty/i);
+      await assert.rejects(
+        () => store.saveCompletedWorkout(workout('missing-gym')),
+        /unknown gym/i,
+      );
+      await assert.rejects(
+        () => store.saveCompletedWorkout(workout('  ')),
+        /gym ID cannot be empty/i,
+      );
       assert.equal(await store.getWorkoutDetail('invalid-gym-missing-gym'), null);
       assert.equal(await store.getWorkoutDetail('invalid-gym-empty'), null);
       assert.deepEqual(await store.getWorkoutHistory(), []);
@@ -418,17 +557,66 @@ describe('webStore persistence and lease handling', () => {
     }
   });
 
+  it('streams history through the startTime index without materializing the store', async () => {
+    const dbName = `test-web-history-index-${Date.now()}`;
+    const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
+    await store.init();
+    await store.saveCompletedWorkout({
+      id: 'indexed-history',
+      name: 'Indexed history',
+      gymId: 'gym-default',
+      startTime: '2026-09-10T08:00:00.000Z',
+      durationSeconds: 1,
+      totalVolumeKg: 0,
+      exercises: [],
+    });
+
+    const database = await readWebDatabase(dbName);
+    const workoutStore = database.transaction('workouts', 'readonly').objectStore('workouts');
+    assert.ok(workoutStore.indexNames.contains('startTime'), 'startTime index exists');
+    const prototype = Object.getPrototypeOf(workoutStore);
+    const originalGetAll = prototype.getAll;
+    prototype.getAll = () => {
+      throw new Error('history reads must not call getAll');
+    };
+    try {
+      const history = await store.getWorkoutHistory();
+      assert.deepEqual(
+        history.map((row: { id: string }) => row.id),
+        ['indexed-history'],
+      );
+    } finally {
+      prototype.getAll = originalGetAll;
+      database.close();
+      await store.close();
+    }
+  });
+
   it('rejects invalid scope references and all new writes in a read-only tab', async () => {
     const dbName = `test-web-gym-validation-${Date.now()}`;
     const first: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await first.init();
     const second: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await second.init();
-    await assert.rejects(() => first.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }), /Exercise not found/);
-    await assert.rejects(() => first.saveExerciseGymScope({ exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', scopeType: 'invalid' }), /scope type/i);
+    await assert.rejects(
+      () => first.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }),
+      /Exercise not found/,
+    );
+    await assert.rejects(
+      () =>
+        first.saveExerciseGymScope({
+          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+          scopeType: 'invalid',
+        }),
+      /scope type/i,
+    );
     await assert.rejects(() => second.createGym('Read only'), /read-only mode/);
-    await assert.rejects(() => second.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }), /read-only mode/);
-    await first.close(); await second.close();
+    await assert.rejects(
+      () => second.saveExerciseGymScope({ exerciseId: 'missing', scopeType: 'global' }),
+      /read-only mode/,
+    );
+    await first.close();
+    await second.close();
   });
 
   it('matches canonical gym validation and default-first name ordering', async () => {
@@ -438,9 +626,12 @@ describe('webStore persistence and lease handling', () => {
     await assert.rejects(() => store.createGym('  '), /gym name cannot be empty/i);
     await assert.rejects(() => store.createGym('valid', '#06B6D4'), /approved palette/);
     const zulu = await store.createGym('Zulu');
-    const alpha = await store.createGym('Alpha');
+    await store.createGym('Alpha');
     await store.setDefaultGym(zulu.id);
-    assert.deepEqual((await store.getGyms()).map((gym: any) => gym.name), ['Zulu', 'Alpha', 'Default Gym']);
+    assert.deepEqual(
+      (await store.getGyms()).map((gym: any) => gym.name),
+      ['Zulu', 'Alpha', 'Default Gym'],
+    );
     await store.close();
   });
 
@@ -456,14 +647,24 @@ describe('webStore persistence and lease handling', () => {
     const readOnly: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await readOnly.init();
     const raw = await new Promise<any>((resolve, reject) => {
-      const req = (indexedDB as any).open(dbName, 4);
-      req.onsuccess = () => { const db = req.result; const tx = db.transaction('workouts', 'readonly'); const get = tx.objectStore('workouts').get('legacy-workout'); get.onsuccess = () => { db.close(); resolve(get.result); }; get.onerror = () => reject(get.error); };
+      const req = (indexedDB as any).open(dbName, 5);
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction('workouts', 'readonly');
+        const get = tx.objectStore('workouts').get('legacy-workout');
+        get.onsuccess = () => {
+          db.close();
+          resolve(get.result);
+        };
+        get.onerror = () => reject(get.error);
+      };
       req.onerror = () => reject(req.error);
     });
     assert.equal(raw.gymId, 'gym-default');
     assert.equal((await readOnly.getWorkoutDetail('legacy-workout')).gymId, 'gym-default');
     assert.equal((await reopened.getGyms()).filter((gym: any) => gym.isDefault).length, 1);
-    await reopened.close(); await readOnly.close();
+    await reopened.close();
+    await readOnly.close();
   });
 
   it('rejects invalid snapshot scopes without partially merging any data', async () => {
@@ -471,12 +672,40 @@ describe('webStore persistence and lease handling', () => {
     const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await store.init();
     const before = await store.readSnapshot();
-    await assert.rejects(() => store.mergeSnapshot({
-      ...before,
-      exercises: [...before.exercises, { id: 'new-exercise', name: 'New', category: 'Test', equipment: 'barbell', primaryMuscles: [] }],
-      gyms: [...before.gyms, { id: 'gym-new', name: 'New Gym', color: '#10B981', isDefault: false, createdAt: '2026-09-10T00:00:01.000Z' }],
-      exerciseGymScopes: [{ exerciseId: 'missing-exercise', scopeType: 'linked_group', linkedGymIds: ['gym-new', 'gym-new'] }],
-    }), /duplicate|unknown exercise|at least two/i);
+    await assert.rejects(
+      () =>
+        store.mergeSnapshot({
+          ...before,
+          exercises: [
+            ...before.exercises,
+            {
+              id: 'new-exercise',
+              name: 'New',
+              category: 'Test',
+              equipment: 'barbell',
+              primaryMuscles: [],
+            },
+          ],
+          gyms: [
+            ...before.gyms,
+            {
+              id: 'gym-new',
+              name: 'New Gym',
+              color: '#10B981',
+              isDefault: false,
+              createdAt: '2026-09-10T00:00:01.000Z',
+            },
+          ],
+          exerciseGymScopes: [
+            {
+              exerciseId: 'missing-exercise',
+              scopeType: 'linked_group',
+              linkedGymIds: ['gym-new', 'gym-new'],
+            },
+          ],
+        }),
+      /duplicate|unknown exercise|at least two/i,
+    );
     const after = await store.readSnapshot();
     assert.deepEqual(after, before);
     await store.close();
@@ -487,13 +716,33 @@ describe('webStore persistence and lease handling', () => {
     const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await store.init();
     const secondary = await store.createGym('Secondary');
-    const workout = { id: 'default-gym-workout', name: 'Default gym workout', gymId: 'gym-default', startTime: '2026-09-10T08:00:00.000Z', durationSeconds: 1, totalVolumeKg: 0, exercises: [] };
+    const workout = {
+      id: 'default-gym-workout',
+      name: 'Default gym workout',
+      gymId: 'gym-default',
+      startTime: '2026-09-10T08:00:00.000Z',
+      durationSeconds: 1,
+      totalVolumeKg: 0,
+      exercises: [],
+    };
     await store.saveCompletedWorkout(workout);
-    await store.saveDraft({ version: 1, workout: { ...workout, id: 'default-gym-draft', endTime: '2026-09-10T09:00:00.000Z' }, savedAt: '2026-09-10T08:01:00.000Z', revision: 1, restTimer: null });
+    await store.saveDraft({
+      version: 1,
+      workout: { ...workout, id: 'default-gym-draft', endTime: '2026-09-10T09:00:00.000Z' },
+      savedAt: '2026-09-10T08:01:00.000Z',
+      revision: 1,
+      restTimer: null,
+    });
     const beforeInvalidDelete = await store.readSnapshot();
-    await assert.rejects(() => store.deleteGym('gym-default', 'missing-gym'), /unknown replacement gym/i);
+    await assert.rejects(
+      () => store.deleteGym('gym-default', 'missing-gym'),
+      /unknown replacement gym/i,
+    );
     assert.deepEqual(await store.readSnapshot(), beforeInvalidDelete);
-    await assert.rejects(() => store.deleteGym(secondary.id, secondary.id), /replacement gym must be different/i);
+    await assert.rejects(
+      () => store.deleteGym(secondary.id, secondary.id),
+      /replacement gym must be different/i,
+    );
 
     await store.deleteGym('gym-default', secondary.id);
     const gyms = await store.getGyms();
@@ -509,7 +758,10 @@ describe('webStore persistence and lease handling', () => {
     const store: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await store.init();
     const before = await store.getGyms();
-    await assert.rejects(() => store.deleteGym('gym-default', 'replacement-that-does-not-exist'), /at least two gyms/i);
+    await assert.rejects(
+      () => store.deleteGym('gym-default', 'replacement-that-does-not-exist'),
+      /at least two gyms/i,
+    );
     assert.deepEqual(await store.getGyms(), before);
     await store.close();
   });
@@ -530,12 +782,15 @@ describe('webStore persistence and lease handling', () => {
         totalVolumeKg: 0,
         exercises: [],
       });
-      await assert.rejects(
-        () => store.deleteGym('gym-default', replacement.id),
-        /active workout/i,
+      await assert.rejects(() => store.deleteGym('gym-default', replacement.id), /active workout/i);
+      assert.deepEqual(
+        (await store.getGyms()).map((gym: any) => gym.id),
+        ['gym-default', replacement.id],
       );
-      assert.deepEqual((await store.getGyms()).map((gym: any) => gym.id), ['gym-default', replacement.id]);
-      assert.equal((await store.getWorkoutDraft('active-web-delete-guard'))?.workout.gymId, 'gym-default');
+      assert.equal(
+        (await store.getWorkoutDraft('active-web-delete-guard'))?.workout.gymId,
+        'gym-default',
+      );
       await controller.discard();
     } finally {
       await store.close();
@@ -550,11 +805,15 @@ describe('webStore persistence and lease handling', () => {
     const before = await writer.getGyms();
     const reader: any = await createWebStore(dbName, { idbFactory: indexedDB });
     await reader.init();
-    await assert.rejects(() => reader.updateGym(secondary.id, { name: 'Changed' }), /read-only mode/);
+    await assert.rejects(
+      () => reader.updateGym(secondary.id, { name: 'Changed' }),
+      /read-only mode/,
+    );
     await assert.rejects(() => reader.setDefaultGym(secondary.id), /read-only mode/);
     await assert.rejects(() => reader.deleteGym(secondary.id, 'gym-default'), /read-only mode/);
     assert.deepEqual(await writer.getGyms(), before);
-    await writer.close(); await reader.close();
+    await writer.close();
+    await reader.close();
   });
   it('persists every user record type across store recreation and matches snapshot', async () => {
     const fixture = await createStoreFixture('web');
@@ -575,10 +834,8 @@ describe('webStore persistence and lease handling', () => {
     const routineId = await fixture.store.saveRoutine(
       'Upper Power',
       'Hypertrophy',
-      [
-        { exerciseId: customEx.id, targetSets: 4, targetReps: '10-12', restTimerSeconds: 60 },
-      ],
-      'Focus on mind-muscle connection'
+      [{ exerciseId: customEx.id, targetSets: 4, targetReps: '10-12', restTimerSeconds: 60 }],
+      'Focus on mind-muscle connection',
     );
 
     // 4. Save completed workout
@@ -638,7 +895,11 @@ describe('webStore persistence and lease handling', () => {
     const reopened = await fixture.reopen();
     const after = await reopened.readSnapshot();
 
-    assert.deepEqual(after, before, 'All user data and settings must match perfectly across reload');
+    assert.deepEqual(
+      after,
+      before,
+      'All user data and settings must match perfectly across reload',
+    );
     await fixture.dispose();
   });
 
@@ -648,12 +909,20 @@ describe('webStore persistence and lease handling', () => {
     const dbName = `test-lease-${Date.now()}`;
 
     // Tab 1 opens and gets lease
-    const tab1 = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    const tab1 = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 5000,
+    });
     await tab1.init();
     assert.equal(tab1.isReadOnly(), false, 'Tab 1 should be writer');
 
     // Tab 2 opens same DB while Tab 1 lease is fresh
-    const tab2 = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    const tab2 = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 5000,
+    });
     await tab2.init();
     assert.equal(tab2.isReadOnly(), true, 'Tab 2 should be read-only while Tab 1 holds lease');
 
@@ -708,11 +977,15 @@ describe('webStore persistence and lease handling', () => {
     const now = () => currentTime;
     const dbName = `test-notify-${Date.now()}`;
 
-    const tab1 = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    const tab1 = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 5000,
+    });
     await tab1.init();
 
     const tab1StateChanges: boolean[] = [];
-    const unsub = tab1.onReadOnlyChange((isReadOnly) => {
+    const unsub = tab1.onReadOnlyChange(isReadOnly => {
       tab1StateChanges.push(isReadOnly);
     });
 
@@ -722,7 +995,11 @@ describe('webStore persistence and lease handling', () => {
     currentTime += 6000;
 
     // Tab 2 acquires the expired lease
-    const tab2 = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 5000 });
+    const tab2 = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 5000,
+    });
     await tab2.init();
     assert.equal(tab2.isReadOnly(), false, 'Tab 2 acquired the lease');
 
@@ -732,7 +1009,10 @@ describe('webStore persistence and lease handling', () => {
     }, /Cannot write: lease has expired or was acquired by another tab/);
 
     assert.equal(tab1.isReadOnly(), true, 'Tab 1 is now read-only');
-    assert.ok(tab1StateChanges.includes(true), 'onReadOnlyChange listener must be notified with true');
+    assert.ok(
+      tab1StateChanges.includes(true),
+      'onReadOnlyChange listener must be notified with true',
+    );
 
     unsub();
     if (tab1.close) await tab1.close();
@@ -744,7 +1024,11 @@ describe('webStore persistence and lease handling', () => {
     const now = () => currentTime;
     const dbName = `test-smoke-${Date.now()}`;
 
-    const store = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    const store = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 10000,
+    });
     await store.init();
 
     // 1. Verify attempting to restore corrupt draft (invalid timestamp and exercises: null) fails and mutates nothing
@@ -769,7 +1053,15 @@ describe('webStore persistence and lease handling', () => {
         },
       ],
       settings: {},
-      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      gyms: [
+        {
+          id: 'gym-default',
+          name: 'Default Gym',
+          isDefault: true,
+          color: '#3B82F6',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
       exerciseGymScopes: [],
     });
 
@@ -821,7 +1113,11 @@ describe('webStore persistence and lease handling', () => {
     // 3. Close old store and reopen (simulating page reload in browser)
     await store.close();
 
-    const reopened = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    const reopened = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 10000,
+    });
     await reopened.init();
     const storedDrafts = await reopened.getWorkoutDrafts();
     assert.equal(storedDrafts.length, 1);
@@ -887,7 +1183,12 @@ describe('webStore persistence and lease handling', () => {
 
     await assert.rejects(async () => {
       await store.saveRoutine('Bad Reps Routine', 'Folder', [
-        { exerciseId: 'Barbell_Bench_Press_-_Medium_Grip', targetSets: 3, targetReps: '7&x-9', restTimerSeconds: 60 },
+        {
+          exerciseId: 'Barbell_Bench_Press_-_Medium_Grip',
+          targetSets: 3,
+          targetReps: '7&x-9',
+          restTimerSeconds: 60,
+        },
       ]);
     }, /Invalid target reps/);
 
@@ -899,11 +1200,11 @@ describe('webStore persistence and lease handling', () => {
     const store = await createWebStore(dbName, { idbFactory: indexedDB });
     await store.init();
 
-    let currentTime = new Date('2026-09-07T12:00:00.000Z').getTime();
+    const currentTime = new Date('2026-09-07T12:00:00.000Z').getTime();
     const controller = createSessionController(store, () => currentTime, { maxDirtyTimeMs: 1000 });
 
     const publishedStates: any[] = [];
-    controller.subscribe((state) => {
+    controller.subscribe(state => {
       publishedStates.push(state);
     });
 
@@ -965,7 +1266,11 @@ describe('webStore persistence and lease handling', () => {
       controller.update(updated);
     }
 
-    assert.equal(publishedStates.length, baseCount + 2, 'Every rapid update must notify subscribers');
+    assert.equal(
+      publishedStates.length,
+      baseCount + 2,
+      'Every rapid update must notify subscribers',
+    );
     const firstTypedState = publishedStates[publishedStates.length - 2];
     const secondTypedState = publishedStates[publishedStates.length - 1];
 
@@ -1048,7 +1353,15 @@ describe('webStore persistence and lease handling', () => {
       exercises: [],
       drafts: [],
       settings: { weight_unit: 'kg' },
-      gyms: [{ id: 'gym-default', name: 'Default Gym', isDefault: true, color: '#3B82F6', createdAt: '2026-01-01T00:00:00.000Z' }],
+      gyms: [
+        {
+          id: 'gym-default',
+          name: 'Default Gym',
+          isDefault: true,
+          color: '#3B82F6',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
       exerciseGymScopes: [],
     });
 
@@ -1057,7 +1370,7 @@ describe('webStore persistence and lease handling', () => {
 
     // Verify routine in IndexedDB
     const routines = await store.getRoutines();
-    const legacyRoutine = routines.find((r) => r.id === 'routine-legacy-browser-1');
+    const legacyRoutine = routines.find(r => r.id === 'routine-legacy-browser-1');
     assert.ok(legacyRoutine, 'Legacy routine should exist in IndexedDB');
     assert.equal(legacyRoutine.exercises[0].targetReps, '8 each side');
 
@@ -1076,7 +1389,11 @@ describe('webStore persistence and lease handling', () => {
     const now = () => currentTime;
     const dbName = `test-browser-multi-exercise-${Date.now()}`;
 
-    const store = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    const store = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 10000,
+    });
     await store.init();
 
     const controller = createSessionController(store, now, { maxDirtyTimeMs: 1000 });
@@ -1097,7 +1414,7 @@ describe('webStore persistence and lease handling', () => {
         exercise: ex,
         targetReps: '10',
         restTimerSeconds: 90,
-        sets: [1, 2, 3].map((setNum) => ({
+        sets: [1, 2, 3].map(setNum => ({
           id: `set-init-${idx}-${setNum}`,
           setNumber: setNum,
           type: 'normal' as const,
@@ -1191,16 +1508,20 @@ describe('webStore persistence and lease handling', () => {
 
     // Verify in-memory controller state
     const workoutAfterAdd = controller.getState().workout!;
-    assert.equal(workoutAfterAdd.exercises.length, 6, 'Active workout should contain all 6 exercises');
+    assert.equal(
+      workoutAfterAdd.exercises.length,
+      6,
+      'Active workout should contain all 6 exercises',
+    );
     const totalSetsAfterAdd = workoutAfterAdd.exercises.reduce((sum, e) => sum + e.sets.length, 0);
     assert.equal(totalSetsAfterAdd, 18, 'Total sets must increase from 12 to 18 (not 15)');
     assert.ok(
-      workoutAfterAdd.exercises.some((e) => e.exerciseId === 'Air_Bike'),
-      'Air Bike must be present'
+      workoutAfterAdd.exercises.some(e => e.exerciseId === 'Air_Bike'),
+      'Air Bike must be present',
     );
     assert.ok(
-      workoutAfterAdd.exercises.some((e) => e.exerciseId === 'Alternate_Hammer_Curl'),
-      'Alternate Hammer Curl must be present'
+      workoutAfterAdd.exercises.some(e => e.exerciseId === 'Alternate_Hammer_Curl'),
+      'Alternate Hammer Curl must be present',
     );
 
     // 3. Flush to IndexedDB
@@ -1209,14 +1530,25 @@ describe('webStore persistence and lease handling', () => {
     // Verify draft in IndexedDB before browser reload
     const draftsBefore = await store.getWorkoutDrafts();
     assert.equal(draftsBefore.length, 1, 'IndexedDB must contain 1 draft');
-    assert.equal(draftsBefore[0].workout.exercises.length, 6, 'Draft in IndexedDB must contain 6 exercises');
-    const draftSetsBefore = draftsBefore[0].workout.exercises.reduce((sum, e) => sum + e.sets.length, 0);
+    assert.equal(
+      draftsBefore[0].workout.exercises.length,
+      6,
+      'Draft in IndexedDB must contain 6 exercises',
+    );
+    const draftSetsBefore = draftsBefore[0].workout.exercises.reduce(
+      (sum, e) => sum + e.sets.length,
+      0,
+    );
     assert.equal(draftSetsBefore, 18, 'Draft in IndexedDB must contain all 18 sets');
 
     // 4. Simulate page reload / store recreation
     await store.close();
 
-    const reopened = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    const reopened = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 10000,
+    });
     await reopened.init();
 
     // Verify drafts survived browser reload
@@ -1227,12 +1559,12 @@ describe('webStore persistence and lease handling', () => {
     const reloadedSetsCount = reloadedWorkout.exercises.reduce((sum, e) => sum + e.sets.length, 0);
     assert.equal(reloadedSetsCount, 18, 'Reloaded draft must retain all 18 sets');
     assert.ok(
-      reloadedWorkout.exercises.some((e) => e.exerciseId === 'Air_Bike'),
-      'Air Bike must survive reload'
+      reloadedWorkout.exercises.some(e => e.exerciseId === 'Air_Bike'),
+      'Air Bike must survive reload',
     );
     assert.ok(
-      reloadedWorkout.exercises.some((e) => e.exerciseId === 'Alternate_Hammer_Curl'),
-      'Alternate Hammer Curl must survive reload'
+      reloadedWorkout.exercises.some(e => e.exerciseId === 'Alternate_Hammer_Curl'),
+      'Alternate Hammer Curl must survive reload',
     );
 
     // 5. Resume draft in new session controller
@@ -1275,17 +1607,24 @@ describe('webStore persistence and lease handling', () => {
     const detail = await reopened.getWorkoutDetail('w-browser-multi-1');
     assert.ok(detail);
     assert.equal(detail!.exercises.length, 6);
-    assert.equal(detail!.exercises.reduce((sum, e) => sum + e.sets.length, 0), 18);
+    assert.equal(
+      detail!.exercises.reduce((sum, e) => sum + e.sets.length, 0),
+      18,
+    );
 
     if (reopened.close) await reopened.close();
   });
 
   it('browser regression: concurrent asynchronous exercise additions do not overwrite earlier additions', async () => {
-    let currentTime = new Date('2026-09-08T09:00:00.000Z').getTime();
+    const currentTime = new Date('2026-09-08T09:00:00.000Z').getTime();
     const now = () => currentTime;
     const dbName = `test-browser-concurrent-add-${Date.now()}`;
 
-    const store = await createWebStore(dbName, { idbFactory: indexedDB, now, leaseDurationMs: 10000 });
+    const store = await createWebStore(dbName, {
+      idbFactory: indexedDB,
+      now,
+      leaseDurationMs: 10000,
+    });
     await store.init();
 
     const controller = createSessionController(store, now, { maxDirtyTimeMs: 1000 });
@@ -1311,13 +1650,13 @@ describe('webStore persistence and lease handling', () => {
       if (currentState.phase !== 'active' || !currentState.workout) return;
 
       const occurrenceIndex = currentState.workout.exercises.filter(
-        (e) => e.exerciseId === exercise.id
+        e => e.exerciseId === exercise.id,
       ).length;
       const activeExId = `ae-${currentState.workout.id}-${exercise.id}-occ${occurrenceIndex}-${Math.random().toString(36).slice(2, 8)}`;
 
       // Asynchronous lookup
-      const prevSets = await store.getPreviousSetsForExercise(exercise.id, occurrenceIndex);
-      const initialSets = [1, 2, 3].map((setNum) => ({
+      await store.getPreviousSetsForExercise(exercise.id, occurrenceIndex);
+      const initialSets = [1, 2, 3].map(setNum => ({
         id: `set-${activeExId}-${setNum}`,
         setNumber: setNum,
         type: 'normal' as const,
@@ -1350,17 +1689,17 @@ describe('webStore persistence and lease handling', () => {
     };
 
     // Run both additions concurrently (like concurrent addExerciseToWorkout calls)
-    await Promise.all([
-      addSingleExercise(airBike),
-      addSingleExercise(hammerCurl),
-    ]);
+    await Promise.all([addSingleExercise(airBike), addSingleExercise(hammerCurl)]);
 
     // Verify both exercises are retained and neither clobbered the other
     const state = controller.getState();
     assert.equal(state.workout?.exercises.length, 2, 'Both concurrent additions must be retained');
-    assert.ok(state.workout?.exercises.some((e) => e.exerciseId === 'Air_Bike'));
-    assert.ok(state.workout?.exercises.some((e) => e.exerciseId === 'Alternate_Hammer_Curl'));
-    assert.equal(state.workout?.exercises.reduce((sum, e) => sum + e.sets.length, 0), 6);
+    assert.ok(state.workout?.exercises.some(e => e.exerciseId === 'Air_Bike'));
+    assert.ok(state.workout?.exercises.some(e => e.exerciseId === 'Alternate_Hammer_Curl'));
+    assert.equal(
+      state.workout?.exercises.reduce((sum, e) => sum + e.sets.length, 0),
+      6,
+    );
 
     await controller.flush();
     const drafts = await store.getWorkoutDrafts();
@@ -1398,13 +1737,15 @@ describe('webStore persistence and lease handling', () => {
       startTime: '2026-09-10T08:00:00.000Z',
       durationSeconds: 60,
       totalVolumeKg: 0,
-      exercises: [{
-        id: 'custom-url-workout-exercise',
-        exerciseId: created.id,
-        exercise: created,
-        restTimerSeconds: 60,
-        sets: [],
-      }],
+      exercises: [
+        {
+          id: 'custom-url-workout-exercise',
+          exerciseId: created.id,
+          exercise: created,
+          restTimerSeconds: 60,
+          sets: [],
+        },
+      ],
     });
 
     // 3. Update the custom exercise
@@ -1433,12 +1774,18 @@ describe('webStore persistence and lease handling', () => {
     const routine = await store.getRoutineById(routineId);
     assert.ok(routine);
     assert.equal(routine.exercises[0].exercise.name, 'Updated Web Custom Press');
-    assert.equal(routine.exercises[0].exercise.instructionUrl, 'https://example.com/web-custom-press');
+    assert.equal(
+      routine.exercises[0].exercise.instructionUrl,
+      'https://example.com/web-custom-press',
+    );
     assert.equal(routine.exercises[0].exercise.instructionUrlType, 'website');
 
     const workout = await store.getWorkoutDetail('custom-url-workout');
     assert.ok(workout);
-    assert.equal(workout.exercises[0].exercise.instructionUrl, 'https://example.com/web-custom-press');
+    assert.equal(
+      workout.exercises[0].exercise.instructionUrl,
+      'https://example.com/web-custom-press',
+    );
     assert.equal(workout.exercises[0].exercise.instructionUrlType, 'website');
 
     // 4. Reject editing built-in exercise
@@ -1495,23 +1842,30 @@ describe('webStore persistence and lease handling', () => {
         },
       );
 
-      const updated = await webFixture.store.updateCustomExercise(webCreated.id, { name: 'Updated Legacy Boundary Exercise' });
+      const updated = await webFixture.store.updateCustomExercise(webCreated.id, {
+        name: 'Updated Legacy Boundary Exercise',
+      });
       assert.deepEqual(updated.secondaryMuscles, []);
       assert.deepEqual(updated.instructions, []);
-      assert.deepEqual((await webFixture.store.getExerciseById(webCreated.id))?.secondaryMuscles, []);
+      assert.deepEqual(
+        (await webFixture.store.getExerciseById(webCreated.id))?.secondaryMuscles,
+        [],
+      );
       assert.deepEqual((await webFixture.store.getExerciseById(webCreated.id))?.instructions, []);
 
       await webFixture.store.mergeSnapshot({
         workouts: [],
         routines: [],
-        exercises: [{
-          id: 'merged-legacy-custom',
-          name: 'Merged Legacy Custom',
-          category: 'strength',
-          equipment: 'other',
-          primaryMuscles: ['back'],
-          isCustom: true,
-        }],
+        exercises: [
+          {
+            id: 'merged-legacy-custom',
+            name: 'Merged Legacy Custom',
+            category: 'strength',
+            equipment: 'other',
+            primaryMuscles: ['back'],
+            isCustom: true,
+          },
+        ],
         drafts: [],
         settings: {},
         gyms: [],
@@ -1521,7 +1875,9 @@ describe('webStore persistence and lease handling', () => {
       const merged = await webFixture.store.getExerciseById('merged-legacy-custom');
       assert.deepEqual(merged?.secondaryMuscles, []);
       assert.deepEqual(merged?.instructions, []);
-      const snapshotExercise = (await webFixture.store.readSnapshot()).exercises.find(exercise => exercise.id === 'merged-legacy-custom');
+      const snapshotExercise = (await webFixture.store.readSnapshot()).exercises.find(
+        exercise => exercise.id === 'merged-legacy-custom',
+      );
       assert.deepEqual(snapshotExercise?.secondaryMuscles, []);
       assert.deepEqual(snapshotExercise?.instructions, []);
     } finally {
@@ -1560,7 +1916,7 @@ describe('webStore persistence and lease handling', () => {
           restTimerSeconds: 60,
         },
       ],
-      'Test web superset routine'
+      'Test web superset routine',
     );
 
     const routine = await store.getRoutineById(routineId);

@@ -47,7 +47,7 @@ const STAPLE_EXERCISES: Record<string, number> = {
   'barbell full squat': 3000,
   'barbell deadlift': 3000,
   'standing military press': 3000,
-  'pullups': 3000,
+  pullups: 3000,
   'wide-grip lat pulldown': 2800,
   'bent over barbell row': 2800,
   'incline dumbbell press': 2800,
@@ -91,109 +91,150 @@ function normalizeText(text: string): string {
     .trim();
 }
 
+interface ExerciseSearchIndex {
+  normName: string;
+  normNameCompact: string;
+  normMuscle: string;
+  normEquip: string;
+  fullNormalized: string;
+  stapleScore: number;
+}
+
+// Normalization runs four or more regex passes per exercise; the catalog is
+// immutable between syncs, so each exercise object is indexed once.
+const searchIndexCache = new WeakMap<Exercise, ExerciseSearchIndex>();
+
+function getSearchIndex(exercise: Exercise): ExerciseSearchIndex {
+  const cached = searchIndexCache.get(exercise);
+  if (cached) return cached;
+
+  const rawName = exercise.name.toLowerCase();
+  const normName = normalizeText(exercise.name);
+  const normCategory = normalizeText(exercise.category || '');
+  const normMuscle = normalizeText(exercise.primaryMuscles.join(' '));
+  const normEquip = normalizeText(exercise.equipment || '');
+  const exactStaple = STAPLE_EXERCISES[rawName];
+  const stapleScore =
+    exactStaple !== undefined
+      ? exactStaple
+      : POPULAR_FALLBACKS.some(p => rawName.includes(p))
+        ? 500
+        : 0;
+
+  const index: ExerciseSearchIndex = {
+    normName,
+    normNameCompact: normName.replace(/\s+/g, ''),
+    normMuscle,
+    normEquip,
+    fullNormalized: `${normName} ${normMuscle} ${normEquip} ${normCategory}`,
+    stapleScore,
+  };
+  searchIndexCache.set(exercise, index);
+  return index;
+}
+
+// The unfiltered empty-query list is also queried repeatedly (opening the picker
+// with no text); sort it once per catalog array identity.
+const emptyQueryTop100Cache = new WeakMap<Exercise[], Exercise[]>();
+
+function compareByStapleThenName(a: Exercise, b: Exercise): number {
+  const aStaple = getSearchIndex(a).stapleScore;
+  const bStaple = getSearchIndex(b).stapleScore;
+  if (aStaple !== bStaple) return bStaple - aStaple;
+  return a.name.localeCompare(b.name);
+}
+
 export function smartSearchExercises(
   allExercises: Exercise[],
   query: string = '',
   muscle: string = 'All',
-  equipment: string = 'All'
+  equipment: string = 'All',
 ): Exercise[] {
   let list = allExercises;
 
   // Filter by muscle
   if (muscle && muscle !== 'All') {
     const m = muscle.toLowerCase();
-    list = list.filter(e =>
-      e.primaryMuscles.some(pm => pm.toLowerCase().includes(m))
-    );
+    list = list.filter(e => e.primaryMuscles.some(pm => pm.toLowerCase().includes(m)));
   }
 
   // Filter by equipment
   if (equipment && equipment !== 'All') {
     const eq = equipment.toLowerCase();
-    list = list.filter(e =>
-      (e.equipment || '').toLowerCase().includes(eq)
-    );
+    list = list.filter(e => (e.equipment || '').toLowerCase().includes(eq));
   }
 
   const rawClean = query.trim().toLowerCase();
 
   // If query is empty, sort staples first, then alphabetical
   if (!rawClean) {
-    return [...list]
-      .sort((a, b) => {
-        const aName = a.name.toLowerCase();
-        const bName = b.name.toLowerCase();
-        const aStaple = STAPLE_EXERCISES[aName] || (POPULAR_FALLBACKS.some(p => aName.includes(p)) ? 500 : 0);
-        const bStaple = STAPLE_EXERCISES[bName] || (POPULAR_FALLBACKS.some(p => bName.includes(p)) ? 500 : 0);
-        if (aStaple !== bStaple) return bStaple - aStaple;
-        return a.name.localeCompare(b.name);
-      })
-      .slice(0, 100);
+    const unfiltered = list === allExercises;
+    if (unfiltered) {
+      const cached = emptyQueryTop100Cache.get(allExercises);
+      if (cached) return cached.slice();
+      const sorted = [...allExercises].sort(compareByStapleThenName).slice(0, 100);
+      emptyQueryTop100Cache.set(allExercises, sorted);
+      return sorted.slice();
+    }
+    return [...list].sort(compareByStapleThenName).slice(0, 100);
   }
 
   const normalizedQuery = normalizeText(rawClean);
   const rawTokens = normalizedQuery.split(' ').filter(Boolean);
 
   // Expand aliases: each query token could match its alias expansions
-  const expandedTokenGroups: string[][] = rawTokens.map(token => {
-    const aliases = ALIAS_MAP[token] || [];
-    return [token, ...aliases.map(a => normalizeText(a))];
+  const expandedTokenGroups = rawTokens.map(token => {
+    const tokens = [token, ...(ALIAS_MAP[token] || []).map(a => normalizeText(a))];
+    return { tokens, compact: tokens.map(t => t.replace(/\s+/g, '')) };
   });
 
   const scored: { item: Exercise; score: number }[] = [];
 
   for (const item of list) {
-    const rawName = item.name.toLowerCase();
-    const normName = normalizeText(item.name);
-    const normMuscle = normalizeText(item.primaryMuscles.join(' '));
-    const normEquip = normalizeText(item.equipment || '');
-    const normCategory = normalizeText(item.category || '');
-    const fullNormalized = `${normName} ${normMuscle} ${normEquip} ${normCategory}`;
+    const index = getSearchIndex(item);
 
     // Verify all token groups have at least one match in metadata
     const matchesAll = expandedTokenGroups.every(group =>
-      group.some(t => fullNormalized.includes(t) || normName.replace(/\s+/g, '').includes(t.replace(/\s+/g, '')))
+      group.tokens.some(
+        (t, i) =>
+          index.fullNormalized.includes(t) || index.normNameCompact.includes(group.compact[i]),
+      ),
     );
     if (!matchesAll) continue;
 
-    let score = 0;
-
-    // Staple exercise baseline boost
-    if (STAPLE_EXERCISES[rawName]) {
-      score += STAPLE_EXERCISES[rawName];
-    }
+    let score = index.stapleScore;
 
     // Exact name match
-    if (normName === normalizedQuery) {
+    if (index.normName === normalizedQuery) {
       score += 5000;
     }
     // Name starts with full query
-    else if (normName.startsWith(normalizedQuery)) {
+    else if (index.normName.startsWith(normalizedQuery)) {
       score += 2500;
     }
     // Name contains full phrase
-    else if (normName.includes(normalizedQuery)) {
+    else if (index.normName.includes(normalizedQuery)) {
       score += 1200;
     }
 
     // Token position & precision scoring
     for (const group of expandedTokenGroups) {
-      const primaryToken = group[0];
-      if (normName.startsWith(primaryToken)) {
+      const primaryToken = group.tokens[0];
+      if (index.normName.startsWith(primaryToken)) {
         score += 300;
-      } else if (normName.includes(primaryToken)) {
+      } else if (index.normName.includes(primaryToken)) {
         score += 150;
-      } else if (group.some(alias => normName.includes(alias))) {
+      } else if (group.tokens.some(alias => index.normName.includes(alias))) {
         score += 120;
-      } else if (normMuscle.includes(primaryToken)) {
+      } else if (index.normMuscle.includes(primaryToken)) {
         score += 80;
-      } else if (normEquip.includes(primaryToken)) {
+      } else if (index.normEquip.includes(primaryToken)) {
         score += 50;
       }
     }
 
     // Shorter exercise names are generally more core than long variations
-    score += Math.max(0, 100 - normName.length);
+    score += Math.max(0, 100 - index.normName.length);
 
     // Custom user exercises boost
     if (item.isCustom) {

@@ -1,17 +1,5 @@
-import { buildBackupJson } from './backup';
-
-import { getBackupFilename, type SaveBackupResult } from './saveBackupCommon';
-
-export { getBackupFilename, type SaveBackupResult };
-
-export async function saveBackupToFiles(): Promise<SaveBackupResult> {
-  const json = await buildBackupJson();
-  const filename = getBackupFilename();
-  if (typeof document !== 'undefined') {
-    const { saveBackupJson } = await import('./saveBackup.web');
-    return saveBackupJson(json, filename);
-  }
-
-  const { saveBackupJson } = await import('./saveBackup.native');
-  return saveBackupJson(json, filename);
-}
+// Node/test fallback entry point. Metro resolves saveBackup.native.ts on
+// Android/iOS and saveBackup.web.ts on web; the base file only exists for Node
+// tooling and never selects a variant at runtime. See docs/platform-dispatch.md.
+export { getBackupFilename, type SaveBackupResult } from './saveBackupCommon';
+export { saveBackupToFiles, saveBackupJson } from './saveBackup.web';

@@ -3,10 +3,8 @@ import * as assert from 'node:assert/strict';
 import {
   roundToIncrement,
   getDefaultBarWeight,
-  getDefaultIncrement,
   generateWarmupRamp,
   formatPlateBreakdown,
-  WARMUP_PRESETS,
 } from '../../src/workout/warmup';
 
 describe('Warmup Set Progression Calculator', () => {
@@ -181,11 +179,11 @@ describe('Warmup Set Progression Calculator', () => {
     // 50% of 30 is 15kg (< 20kg bar) -> clamps to 20kg bar
     // 70% of 30 is 21kg -> rounds to 20kg or 22.5kg
     // The duplicate 20kg bar sets must be deduplicated!
-    const weights = ramp.map((s) => s.displayWeight);
+    const weights = ramp.map(s => s.displayWeight);
     const uniqueWeights = new Set(weights);
     assert.equal(weights.length, uniqueWeights.size);
     // Warmup sets must not exceed or equal 30kg
-    assert.ok(weights.every((w) => w < 30));
+    assert.ok(weights.every(w => w < 30));
   });
 
   it('handles empty or zero working weight gracefully', () => {
@@ -217,9 +215,9 @@ describe('Warmup Set Progression Calculator', () => {
       preset: 'custom',
       customSteps: [
         { percentage: 0, reps: 10, useBarIfAvailable: true },
-        { percentage: 0.40, reps: 8 },
-        { percentage: 0.60, reps: 4 },
-        { percentage: 0.80, reps: 2 },
+        { percentage: 0.4, reps: 8 },
+        { percentage: 0.6, reps: 4 },
+        { percentage: 0.8, reps: 2 },
       ],
     });
 
@@ -247,8 +245,8 @@ describe('Warmup Set Progression Calculator', () => {
     const customReps: Record<number, number> = { 2: 6, 3: 4 };
 
     const applied = ramp
-      .filter((s) => !excluded.has(s.setIndex))
-      .map((s) => ({
+      .filter(s => !excluded.has(s.setIndex))
+      .map(s => ({
         weightKg: s.weightKg,
         reps: customReps[s.setIndex] ?? s.reps,
       }));
@@ -290,17 +288,52 @@ describe('Warmup Set Progression Calculator', () => {
 
   it('preserves already completed warmup sets when replacing warmups', () => {
     const existingSets = [
-      { id: 'w1', setNumber: 1, type: 'warmup' as const, weightKg: 20, reps: 10, isCompleted: true },
-      { id: 'w2', setNumber: 2, type: 'warmup' as const, weightKg: 50, reps: 5, isCompleted: false }, // not completed
-      { id: 'work1', setNumber: 3, type: 'normal' as const, weightKg: 100, reps: 5, isCompleted: false },
+      {
+        id: 'w1',
+        setNumber: 1,
+        type: 'warmup' as const,
+        weightKg: 20,
+        reps: 10,
+        isCompleted: true,
+      },
+      {
+        id: 'w2',
+        setNumber: 2,
+        type: 'warmup' as const,
+        weightKg: 50,
+        reps: 5,
+        isCompleted: false,
+      }, // not completed
+      {
+        id: 'work1',
+        setNumber: 3,
+        type: 'normal' as const,
+        weightKg: 100,
+        reps: 5,
+        isCompleted: false,
+      },
     ];
 
-    const completedWarmups = existingSets.filter((s) => s.type === 'warmup' && s.isCompleted);
-    const nonWarmups = existingSets.filter((s) => s.type !== 'warmup');
+    const completedWarmups = existingSets.filter(s => s.type === 'warmup' && s.isCompleted);
+    const nonWarmups = existingSets.filter(s => s.type !== 'warmup');
 
     const newWarmups = [
-      { id: 'new-w2', setNumber: 1, type: 'warmup' as const, weightKg: 60, reps: 4, isCompleted: false },
-      { id: 'new-w3', setNumber: 2, type: 'warmup' as const, weightKg: 80, reps: 2, isCompleted: false },
+      {
+        id: 'new-w2',
+        setNumber: 1,
+        type: 'warmup' as const,
+        weightKg: 60,
+        reps: 4,
+        isCompleted: false,
+      },
+      {
+        id: 'new-w3',
+        setNumber: 2,
+        type: 'warmup' as const,
+        weightKg: 80,
+        reps: 2,
+        isCompleted: false,
+      },
     ];
 
     const combined = [...completedWarmups, ...newWarmups, ...nonWarmups].map((s, idx) => ({

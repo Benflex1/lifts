@@ -18,6 +18,8 @@ export function displayToKg(displayValue: number, unit: WeightUnit): number {
 
 export function formatWeight(weightKg: number, unit: WeightUnit): string {
   const display = kgToDisplay(weightKg, unit);
-  const trimmed = Number.isInteger(display) ? display.toString() : display.toFixed(1).replace(/\.0$/, '');
+  const trimmed = Number.isInteger(display)
+    ? display.toString()
+    : display.toFixed(1).replace(/\.0$/, '');
   return `${trimmed} ${unit}`;
 }

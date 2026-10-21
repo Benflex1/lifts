@@ -18,6 +18,8 @@ const METRIC_LABELS: Record<PRAchievement['metric'], string> = {
   '1rm': 'e1RM',
   volume: 'Volume',
   reps: 'Reps',
+  duration: 'Time',
+  distance: 'Distance',
 };
 
 /**
@@ -46,7 +48,10 @@ export const PRBadge: React.FC<PRBadgeProps> = ({
       ]}
     >
       <Trophy size={compact ? 11 : 12} color={accent} strokeWidth={2.4} />
-      <Text style={[styles.text, compact && styles.textCompact, { color: textColor }]} numberOfLines={1}>
+      <Text
+        style={[styles.text, compact && styles.textCompact, { color: textColor }]}
+        numberOfLines={1}
+      >
         {compact ? badgeText : `${badgeText} · ${metricLabel}`}
       </Text>
       {additionalCount > 0 && (

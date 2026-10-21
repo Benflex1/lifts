@@ -7,7 +7,10 @@ export interface MigrationOptions {
   failAtVersion?: number;
 }
 
-export async function applyMigrations(driver: SqliteDriver, options?: MigrationOptions): Promise<void> {
+export async function applyMigrations(
+  driver: SqliteDriver,
+  options?: MigrationOptions,
+): Promise<void> {
   await driver.execAsync('PRAGMA foreign_keys = ON;');
 
   await driver.execAsync(`
@@ -18,7 +21,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
   `);
 
   const appliedRows = await driver.getAllAsync<{ version: number }>(
-    'SELECT version FROM schema_migrations ORDER BY version ASC'
+    'SELECT version FROM schema_migrations ORDER BY version ASC',
   );
   const applied = new Set(appliedRows.map(r => r.version));
 
@@ -111,7 +114,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
 
       await driver.runAsync(
         'INSERT INTO schema_migrations (version, applied_at) VALUES (1, ?)',
-        new Date().toISOString()
+        new Date().toISOString(),
       );
     });
   }
@@ -131,16 +134,16 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       `);
 
       const workoutColumns = await driver.getAllAsync<{ name: string }>(
-        'PRAGMA table_info(workouts);'
+        'PRAGMA table_info(workouts);',
       );
       if (!workoutColumns.some(column => column.name === 'in_progress')) {
         await driver.execAsync(
-          'ALTER TABLE workouts ADD COLUMN in_progress INTEGER NOT NULL DEFAULT 0;'
+          'ALTER TABLE workouts ADD COLUMN in_progress INTEGER NOT NULL DEFAULT 0;',
         );
       }
 
       const inProgressWorkouts = await driver.getAllAsync<any>(
-        'SELECT * FROM workouts WHERE in_progress = 1'
+        'SELECT * FROM workouts WHERE in_progress = 1',
       );
 
       for (const w of inProgressWorkouts) {
@@ -151,14 +154,14 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
            LEFT JOIN exercises e ON we.exercise_id = e.id
            WHERE we.workout_id = ?
            ORDER BY we.order_index ASC`,
-          w.id
+          w.id,
         );
 
         const exercises: ActiveExercise[] = [];
         for (const we of weRows) {
           const sRows = await driver.getAllAsync<any>(
             'SELECT * FROM exercise_sets WHERE workout_exercise_id = ? ORDER BY set_number ASC',
-            we.id
+            we.id,
           );
 
           exercises.push({
@@ -214,7 +217,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
           draft.savedAt,
           null,
           null,
-          JSON.stringify(draft)
+          JSON.stringify(draft),
         );
 
         await driver.runAsync('DELETE FROM workouts WHERE id = ?', w.id);
@@ -226,7 +229,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
 
       await driver.runAsync(
         'INSERT INTO schema_migrations (version, applied_at) VALUES (2, ?)',
-        new Date().toISOString()
+        new Date().toISOString(),
       );
     });
   }
@@ -234,7 +237,9 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
   // Migration 3: Add target_reps to workout_exercises
   if (!applied.has(3) && (options?.maxVersion === undefined || options.maxVersion >= 3)) {
     await driver.withTransactionAsync(async () => {
-      const tableInfo = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workout_exercises);');
+      const tableInfo = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(workout_exercises);',
+      );
       const hasCol = tableInfo.some(c => c.name === 'target_reps');
       if (!hasCol) {
         await driver.execAsync('ALTER TABLE workout_exercises ADD COLUMN target_reps TEXT;');
@@ -246,7 +251,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
 
       await driver.runAsync(
         'INSERT INTO schema_migrations (version, applied_at) VALUES (3, ?)',
-        new Date().toISOString()
+        new Date().toISOString(),
       );
     });
   }
@@ -258,7 +263,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       const hasInProgress = tableInfo.some(column => column.name === 'in_progress');
       if (!hasInProgress) {
         await driver.execAsync(
-          'ALTER TABLE workouts ADD COLUMN in_progress INTEGER NOT NULL DEFAULT 0;'
+          'ALTER TABLE workouts ADD COLUMN in_progress INTEGER NOT NULL DEFAULT 0;',
         );
       }
 
@@ -268,7 +273,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
 
       await driver.runAsync(
         'INSERT INTO schema_migrations (version, applied_at) VALUES (4, ?)',
-        new Date().toISOString()
+        new Date().toISOString(),
       );
     });
   }
@@ -295,47 +300,71 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       `);
       await driver.runAsync(
         `INSERT OR IGNORE INTO gyms (id, name, is_default, color, created_at) VALUES (?, ?, 1, ?, ?)`,
-        'gym-default', 'Default Gym', '#3B82F6', new Date().toISOString()
+        'gym-default',
+        'Default Gym',
+        '#3B82F6',
+        new Date().toISOString(),
       );
-      const defaultGym = await driver.getFirstAsync<{ id: string }>('SELECT id FROM gyms WHERE is_default = 1');
-      if (!defaultGym) await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', 'gym-default');
+      const defaultGym = await driver.getFirstAsync<{ id: string }>(
+        'SELECT id FROM gyms WHERE is_default = 1',
+      );
+      if (!defaultGym)
+        await driver.runAsync('UPDATE gyms SET is_default = 1 WHERE id = ?', 'gym-default');
 
-      const workoutColumns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workouts);');
+      const workoutColumns = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(workouts);',
+      );
       if (!workoutColumns.some(column => column.name === 'gym_id')) {
         await driver.execAsync('ALTER TABLE workouts ADD COLUMN gym_id TEXT REFERENCES gyms(id);');
       }
       await driver.runAsync('UPDATE workouts SET gym_id = ? WHERE gym_id IS NULL', 'gym-default');
 
-      const draftRows = await driver.getAllAsync<{ id: string; data: string }>('SELECT id, data FROM workout_drafts');
+      const draftRows = await driver.getAllAsync<{ id: string; data: string }>(
+        'SELECT id, data FROM workout_drafts',
+      );
       for (const row of draftRows) {
         try {
           const payload = JSON.parse(row.data) as WorkoutDraft;
           if (payload && payload.workout && !payload.workout.gymId) {
             payload.workout.gymId = 'gym-default';
-            await driver.runAsync('UPDATE workout_drafts SET data = ? WHERE id = ?', JSON.stringify(payload), row.id);
+            await driver.runAsync(
+              'UPDATE workout_drafts SET data = ? WHERE id = ?',
+              JSON.stringify(payload),
+              row.id,
+            );
           }
         } catch (_) {
           // Preserve malformed legacy payloads for the existing reader to ignore.
         }
       }
       if (options?.failAtVersion === 5) throw new Error('Injected migration failure at version 5');
-      await driver.runAsync('INSERT INTO schema_migrations (version, applied_at) VALUES (5, ?)', new Date().toISOString());
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (5, ?)',
+        new Date().toISOString(),
+      );
     });
   }
 
   // Migration 6: superset support for workout and routine exercises
   if (!applied.has(6) && (options?.maxVersion === undefined || options.maxVersion >= 6)) {
     await driver.withTransactionAsync(async () => {
-      const reCols = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(routine_exercises);');
+      const reCols = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(routine_exercises);',
+      );
       if (!reCols.some(c => c.name === 'superset_id')) {
         await driver.execAsync('ALTER TABLE routine_exercises ADD COLUMN superset_id TEXT;');
       }
-      const weCols = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(workout_exercises);');
+      const weCols = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(workout_exercises);',
+      );
       if (!weCols.some(c => c.name === 'superset_id')) {
         await driver.execAsync('ALTER TABLE workout_exercises ADD COLUMN superset_id TEXT;');
       }
       if (options?.failAtVersion === 6) throw new Error('Injected migration failure at version 6');
-      await driver.runAsync('INSERT INTO schema_migrations (version, applied_at) VALUES (6, ?)', new Date().toISOString());
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (6, ?)',
+        new Date().toISOString(),
+      );
     });
   }
 
@@ -361,7 +390,7 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       if (options?.failAtVersion === 7) throw new Error('Injected migration failure at version 7');
       await driver.runAsync(
         'INSERT INTO schema_migrations (version, applied_at) VALUES (7, ?)',
-        new Date().toISOString()
+        new Date().toISOString(),
       );
     });
   }
@@ -369,7 +398,9 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
   // Migration 8: native exercise instruction links and catalog sync marker
   if (!applied.has(8) && (options?.maxVersion === undefined || options.maxVersion >= 8)) {
     await driver.withTransactionAsync(async () => {
-      const exerciseColumns = await driver.getAllAsync<{ name: string }>('PRAGMA table_info(exercises);');
+      const exerciseColumns = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(exercises);',
+      );
       if (!exerciseColumns.some(column => column.name === 'instruction_url')) {
         await driver.execAsync('ALTER TABLE exercises ADD COLUMN instruction_url TEXT;');
       }
@@ -386,6 +417,56 @@ export async function applyMigrations(driver: SqliteDriver, options?: MigrationO
       if (options?.failAtVersion === 8) throw new Error('Injected migration failure at version 8');
       await driver.runAsync(
         'INSERT INTO schema_migrations (version, applied_at) VALUES (8, ?)',
+        new Date().toISOString(),
+      );
+    });
+  }
+
+  // Migration 9: exercise tracking types (time, distance, bodyweight). Only adds empty columns:
+  // existing sets keep reading as weight × reps.
+  if (!applied.has(9) && (options?.maxVersion === undefined || options.maxVersion >= 9)) {
+    await driver.withTransactionAsync(async () => {
+      const weCols = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(workout_exercises);',
+      );
+      if (!weCols.some(c => c.name === 'tracking_type')) {
+        await driver.execAsync('ALTER TABLE workout_exercises ADD COLUMN tracking_type TEXT;');
+      }
+      const setCols = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(exercise_sets);',
+      );
+      if (!setCols.some(c => c.name === 'duration_seconds')) {
+        await driver.execAsync('ALTER TABLE exercise_sets ADD COLUMN duration_seconds INTEGER;');
+      }
+      if (!setCols.some(c => c.name === 'distance_m')) {
+        await driver.execAsync('ALTER TABLE exercise_sets ADD COLUMN distance_m REAL;');
+      }
+      if (options?.failAtVersion === 9) throw new Error('Injected migration failure at version 9');
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (9, ?)',
+        new Date().toISOString(),
+      );
+    });
+  }
+
+  // Migration 10: indexes for history, analytics, and per-exercise history reads
+  if (!applied.has(10) && (options?.maxVersion === undefined || options.maxVersion >= 10)) {
+    await driver.withTransactionAsync(async () => {
+      await driver.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_workouts_in_progress_start
+          ON workouts(in_progress, start_time DESC);
+        CREATE INDEX IF NOT EXISTS idx_workout_exercises_workout
+          ON workout_exercises(workout_id);
+        CREATE INDEX IF NOT EXISTS idx_workout_exercises_exercise
+          ON workout_exercises(exercise_id);
+        CREATE INDEX IF NOT EXISTS idx_exercise_sets_workout_exercise
+          ON exercise_sets(workout_exercise_id);
+      `);
+
+      if (options?.failAtVersion === 10)
+        throw new Error('Injected migration failure at version 10');
+      await driver.runAsync(
+        'INSERT INTO schema_migrations (version, applied_at) VALUES (10, ?)',
         new Date().toISOString(),
       );
     });

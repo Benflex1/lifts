@@ -3,27 +3,39 @@ import { restNotificationContent } from './restNotificationContent';
 let lastWebTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function initRestNotifications(): Promise<void> {
-  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+  if (
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    Notification.permission === 'default'
+  ) {
     try {
       await Notification.requestPermission();
-    } catch {}
+    } catch {
+      // Intentional: the in-app timer remains the fallback when permission cannot be requested.
+    }
   }
 }
 
 export async function scheduleRestNotification(
   endsAtMs: number,
-  exerciseName?: string
+  exerciseName?: string,
 ): Promise<string | null> {
   await cancelRestNotification();
   const diffMs = endsAtMs - Date.now();
   if (diffMs <= 1000) return null;
 
-  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+  if (
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    Notification.permission === 'granted'
+  ) {
     lastWebTimer = setTimeout(() => {
       try {
         const { title, body } = restNotificationContent(exerciseName);
         new Notification(title, { body, icon: '/favicon.png' });
-      } catch {}
+      } catch {
+        // Intentional: a blocked or unsupported notification must not break the timer.
+      }
     }, diffMs);
     return 'web-timer';
   }
@@ -35,4 +47,9 @@ export async function cancelRestNotification(): Promise<void> {
     clearTimeout(lastWebTimer);
     lastWebTimer = null;
   }
+}
+
+// Only Android has a native rest cue (see restNotifications.android.ts); here the app buzzes.
+export function isRestCueNative(): boolean {
+  return false;
 }

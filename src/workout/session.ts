@@ -1,5 +1,8 @@
 import { Store, WorkoutDraft } from '../database/contract';
 import { Workout } from '../types';
+import { reportError } from '../utils/errorReporting';
+import { toError } from '../utils/invariant';
+import { workoutVolumeKg } from './tracking';
 
 export type SessionPhase = 'idle' | 'starting' | 'active' | 'finishing' | 'discarding';
 
@@ -30,7 +33,7 @@ export interface SessionController {
 export function createSessionController(
   store: Store,
   nowFn: () => number = () => Date.now(),
-  options?: SessionControllerOptions
+  options?: SessionControllerOptions,
 ): SessionController {
   let getNow = nowFn;
   const maxDirtyTimeMs = options?.maxDirtyTimeMs || 3000;
@@ -45,7 +48,6 @@ export function createSessionController(
 
   const listeners = new Set<(s: SessionState) => void>();
   let saveTimer: any = null;
-  let isDirty = false;
   let firstDirtyTime: number | null = null;
   let inFlightWrite: Promise<void> | null = null;
 
@@ -54,7 +56,9 @@ export function createSessionController(
     for (const listener of listeners) {
       try {
         listener(snapshot);
-      } catch (_) {}
+      } catch (error) {
+        reportError(error, { scope: 'session.listener' });
+      }
     }
   }
 
@@ -63,7 +67,6 @@ export function createSessionController(
       clearTimeout(saveTimer);
       saveTimer = null;
     }
-    isDirty = false;
     firstDirtyTime = null;
   }
 
@@ -71,7 +74,9 @@ export function createSessionController(
     if (inFlightWrite) {
       try {
         await inFlightWrite;
-      } catch (_) {}
+      } catch {
+        // Best-effort drain: flush() records the failure on state and rethrows it to its caller.
+      }
     }
   }
 
@@ -88,7 +93,10 @@ export function createSessionController(
     notify();
 
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000),
+    );
     const activeWorkout: Workout = {
       ...workout,
       durationSeconds,
@@ -112,12 +120,12 @@ export function createSessionController(
         revision: 1,
       };
       notify();
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         phase: 'idle',
         workout: null,
         restTimer: null,
-        persistenceError: err,
+        persistenceError: toError(err),
         revision: 0,
       };
       notify();
@@ -125,13 +133,19 @@ export function createSessionController(
     }
   }
 
-  function update(workout: Workout, restTimer?: { endsAt: number; totalSeconds: number } | null): void {
+  function update(
+    workout: Workout,
+    restTimer?: { endsAt: number; totalSeconds: number } | null,
+  ): void {
     if (state.phase !== 'active' || !state.workout) {
       return;
     }
 
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(workout.startTime).getTime()) / 1000),
+    );
 
     state = {
       ...state,
@@ -144,7 +158,6 @@ export function createSessionController(
     };
     notify();
 
-    isDirty = true;
     if (firstDirtyTime === null) {
       firstDirtyTime = currentNow;
     }
@@ -156,12 +169,16 @@ export function createSessionController(
 
     const elapsedDirty = currentNow - firstDirtyTime;
     if (elapsedDirty >= maxDirtyTimeMs) {
-      flush().catch(() => {});
+      flush().catch(() => {
+        // Failure is recorded on state.persistenceError and surfaced by the persistence banner.
+      });
     } else {
       const waitTime = Math.min(1000, maxDirtyTimeMs - elapsedDirty);
       saveTimer = setTimeout(() => {
         saveTimer = null;
-        flush().catch(() => {});
+        flush().catch(() => {
+          // Failure is recorded on state.persistenceError and surfaced by the persistence banner.
+        });
       }, waitTime);
     }
   }
@@ -180,7 +197,10 @@ export function createSessionController(
 
     const targetRevision = state.revision;
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(state.workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(state.workout.startTime).getTime()) / 1000),
+    );
     const draftWorkout: Workout = {
       ...state.workout,
       durationSeconds,
@@ -206,10 +226,10 @@ export function createSessionController(
         };
         notify();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         ...state,
-        persistenceError: err,
+        persistenceError: toError(err),
       };
       notify();
       throw err;
@@ -228,7 +248,10 @@ export function createSessionController(
     clearAutosave();
 
     const currentNow = getNow();
-    const durationSeconds = Math.max(0, Math.floor((currentNow - new Date(draft.workout.startTime).getTime()) / 1000));
+    const durationSeconds = Math.max(
+      0,
+      Math.floor((currentNow - new Date(draft.workout.startTime).getTime()) / 1000),
+    );
 
     let restTimer = draft.restTimer;
     if (restTimer && restTimer.endsAt <= currentNow) {
@@ -264,16 +287,15 @@ export function createSessionController(
     await drainInFlightWrite();
 
     const finalNow = getNow();
-    const finalDuration = durationSecondsOverride !== undefined && durationSecondsOverride >= 0
-      ? Math.floor(durationSecondsOverride)
-      : Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
-    const calculatedVolume = (currentWorkout.exercises || []).reduce(
-      (sum, ex) =>
-        sum +
-        (ex.sets || [])
-          .filter((s) => s.isCompleted)
-          .reduce((sSum, s) => sSum + s.weightKg * s.reps, 0),
-      0
+    const finalDuration =
+      durationSecondsOverride !== undefined && durationSecondsOverride >= 0
+        ? Math.floor(durationSecondsOverride)
+        : Math.max(0, Math.floor((finalNow - new Date(currentWorkout.startTime).getTime()) / 1000));
+    const calculatedVolume = workoutVolumeKg(
+      (currentWorkout.exercises || []).map(ex => ({
+        ...ex,
+        sets: ex.sets || [],
+      })),
     );
 
     const completedWorkout: Workout = {
@@ -294,11 +316,11 @@ export function createSessionController(
       };
       notify();
       return completedWorkout;
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         ...state,
         phase: 'active',
-        persistenceError: err,
+        persistenceError: toError(err),
       };
       notify();
       throw err;
@@ -330,11 +352,11 @@ export function createSessionController(
         revision: 0,
       };
       notify();
-    } catch (err: any) {
+    } catch (err: unknown) {
       state = {
         ...state,
         phase: 'active',
-        persistenceError: err,
+        persistenceError: toError(err),
       };
       notify();
       throw err;

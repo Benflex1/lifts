@@ -12,6 +12,7 @@ import { Check, MapPin, X } from 'lucide-react-native';
 import { Gym } from '../types';
 import { resolveInitialStartGymId } from '../workout/gym-session';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 export interface WorkoutStartModalProps {
   visible: boolean;
@@ -38,7 +39,7 @@ export function WorkoutStartModal({
     setSelectedId(selectedGymId || resolveInitialStartGymId(gyms));
   }, [gyms, selectedGymId, visible]);
 
-  const selectedGym = gyms.find((gym) => gym.id === selectedId);
+  const selectedGym = gyms.find(gym => gym.id === selectedId);
 
   const handleClose = () => {
     if (!isStarting) onClose();
@@ -58,6 +59,9 @@ export function WorkoutStartModal({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal
       visible={visible}
@@ -66,8 +70,13 @@ export function WorkoutStartModal({
       onRequestClose={handleClose}
       accessibilityViewIsModal
     >
-      <Pressable style={styles.overlay} onPress={handleClose}>
-        <View style={styles.container} onStartShouldSetResponder={() => true}>
+      <Pressable style={styles.overlay} onPress={handleClose} accessible={false}>
+        <View
+          ref={modalA11yRef}
+          accessibilityViewIsModal
+          style={styles.container}
+          onStartShouldSetResponder={() => true}
+        >
           <View style={styles.header}>
             <View style={styles.headerCopy}>
               <Text style={styles.title}>Start Workout</Text>
@@ -100,7 +109,7 @@ export function WorkoutStartModal({
           </View>
 
           <View style={styles.gymList}>
-            {gyms.map((gym) => {
+            {gyms.map(gym => {
               const selected = gym.id === selectedId;
               return (
                 <TouchableOpacity
@@ -122,9 +131,7 @@ export function WorkoutStartModal({
                 </TouchableOpacity>
               );
             })}
-            {gyms.length === 0 && (
-              <Text style={styles.emptyText}>No gyms are available yet.</Text>
-            )}
+            {gyms.length === 0 && <Text style={styles.emptyText}>No gyms are available yet.</Text>}
           </View>
 
           <TouchableOpacity

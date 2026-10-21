@@ -2,9 +2,10 @@ import { createContext, useContext, useEffect, useRef } from 'react';
 import { InteractionManager } from 'react-native';
 
 /**
- * Tabs stay mounted (hidden) once visited so switching back is instant. Each tab gets an
- * activation emitter through context; because the emitter object never changes, a hidden tab is
- * never re-rendered just because the selected tab changed.
+ * Tabs mount on first visit and stay mounted (hidden) so switching back is instant; heavy tabs
+ * are released again after a retention window (PERF-11). Each tab gets an activation emitter
+ * through context; because the emitter object never changes, a hidden tab is never re-rendered
+ * just because the selected tab changed.
  */
 export interface ActivationEmitter {
   subscribe: (listener: () => void) => () => void;

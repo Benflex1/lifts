@@ -1,4 +1,6 @@
 import { ActiveExercise, Exercise, PreviousSetSuggestion, WorkoutSet } from '../types';
+import { withPreviousTracked } from './tracking';
+import { withoutPreviousEffort } from './overload';
 
 export type ExerciseMoveDirection = -1 | 1;
 
@@ -10,7 +12,7 @@ export interface ExerciseLayout {
 export function moveActiveExerciseToIndex(
   exercises: ActiveExercise[],
   activeExerciseId: string,
-  targetIndex: number
+  targetIndex: number,
 ): ActiveExercise[] {
   const currentIndex = exercises.findIndex(exercise => exercise.id === activeExerciseId);
 
@@ -32,7 +34,7 @@ export function moveActiveExerciseToIndex(
 export function moveActiveExercise(
   exercises: ActiveExercise[],
   activeExerciseId: string,
-  direction: ExerciseMoveDirection
+  direction: ExerciseMoveDirection,
 ): ActiveExercise[] {
   const currentIndex = exercises.findIndex(exercise => exercise.id === activeExerciseId);
   const targetIndex = currentIndex + direction;
@@ -44,26 +46,11 @@ export function moveActiveExercise(
   return moveActiveExerciseToIndex(exercises, activeExerciseId, targetIndex);
 }
 
-export function computeExerciseLayouts(
-  exerciseIds: string[],
-  heights: Record<string, number>,
-  spacing = 12
-): Record<string, ExerciseLayout> {
-  const layouts: Record<string, ExerciseLayout> = {};
-  let currentY = 0;
-  for (const id of exerciseIds) {
-    const h = heights[id] || 80;
-    layouts[id] = { y: currentY, height: h };
-    currentY += h + spacing;
-  }
-  return layouts;
-}
-
 export function getExerciseDropIndex(
   exerciseIds: string[],
   layouts: Record<string, ExerciseLayout>,
   activeExerciseId: string,
-  deltaY: number
+  deltaY: number,
 ): number {
   const currentIndex = exerciseIds.indexOf(activeExerciseId);
   const currentLayout = layouts[activeExerciseId];
@@ -82,7 +69,7 @@ export function getExerciseDropIndex(
       if (!layout) continue;
       const threshold = Math.min(
         layout.y + layout.height / 2,
-        currentCenter + (index - currentIndex) * 150
+        currentCenter + (index - currentIndex) * 150,
       );
       if (draggedCenter > threshold) {
         targetIndex = index;
@@ -94,7 +81,7 @@ export function getExerciseDropIndex(
       if (!layout) continue;
       const threshold = Math.max(
         layout.y + layout.height / 2,
-        currentCenter - (currentIndex - index) * 150
+        currentCenter - (currentIndex - index) * 150,
       );
       if (draggedCenter < threshold) {
         targetIndex = index;
@@ -120,11 +107,14 @@ export function replaceActiveExercise(
     }
 
     const updatedSets: WorkoutSet[] = exercise.sets.map((set, idx) => {
-      if (set.isCompleted) return set;
-      const ghost = suggestions[idx] ?? (suggestions.length > 0 ? suggestions[suggestions.length - 1] : undefined);
+      if (set.isCompleted) return withoutPreviousEffort(set);
+      const ghost =
+        suggestions[idx] ??
+        (suggestions.length > 0 ? suggestions[suggestions.length - 1] : undefined);
       const isSameGym = Boolean(currentGymId && ghost?.sourceGymId === currentGymId);
+      const { durationSeconds: _duration, distanceM: _distance, ...rest } = set;
       return {
-        ...set,
+        ...withPreviousTracked(rest, ghost),
         weightKg: 0,
         reps: 0,
         isWeightEdited: false,
@@ -143,4 +133,3 @@ export function replaceActiveExercise(
     };
   });
 }
-

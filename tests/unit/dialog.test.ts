@@ -4,9 +4,10 @@ import * as assert from 'node:assert/strict';
 describe('Dialog semantics', () => {
   it('confirm resolves true on explicit confirmation and false on cancel', async () => {
     let pendingResolve: ((val: boolean) => void) | null = null;
-    const confirm = () => new Promise<boolean>((resolve) => {
-      pendingResolve = resolve;
-    });
+    const confirm = () =>
+      new Promise<boolean>(resolve => {
+        pendingResolve = resolve;
+      });
 
     // Simulate user confirming
     const promise1 = confirm();
@@ -24,9 +25,10 @@ describe('Dialog semantics', () => {
   it('notify resolves when acknowledged', async () => {
     let acknowledged = false;
     let pendingResolve: (() => void) | null = null;
-    const notify = () => new Promise<void>((resolve) => {
-      pendingResolve = resolve;
-    });
+    const notify = () =>
+      new Promise<void>(resolve => {
+        pendingResolve = resolve;
+      });
 
     const promise = notify().then(() => {
       acknowledged = true;

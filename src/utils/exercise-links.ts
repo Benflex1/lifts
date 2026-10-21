@@ -1,5 +1,5 @@
 import { Exercise } from '../types';
-import { DEFAULT_EXERCISES } from '../database/seedData';
+import { getDefaultExercises } from '../database/seedData';
 import { getMuscleWikiGuideUrl } from '../database/exercise-guides';
 import { Linking } from 'react-native';
 
@@ -15,17 +15,22 @@ const isYouTubeUrl = (url: URL): boolean => {
   return hostname === 'youtu.be' || hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
 };
 
-const bundledExerciseIds = new Set(DEFAULT_EXERCISES.map(exercise => exercise.id));
+let bundledExerciseIdCache: Set<string> | null = null;
+
+// Built lazily so importing this module never parses the bundled catalog (PERF-06).
+function getBundledExerciseIds(): Set<string> {
+  if (!bundledExerciseIdCache) {
+    bundledExerciseIdCache = new Set(getDefaultExercises().map(exercise => exercise.id));
+  }
+  return bundledExerciseIdCache;
+}
 
 const isGitHubHost = (hostname: string): boolean => {
   const normalized = hostname.toLowerCase().replace(/\.+$/, '');
   return normalized === 'github.com' || normalized.endsWith('.github.com');
 };
 
-const isValidCuratedLink = (
-  url: unknown,
-  type: unknown,
-): url is string => {
+const isValidCuratedLink = (url: unknown, type: unknown): url is string => {
   if (typeof url !== 'string' || !url || url.trim() !== url) return false;
   if (type !== 'website' && type !== 'youtube') return false;
 
@@ -36,14 +41,18 @@ const isValidCuratedLink = (
     return false;
   }
 
-  if (!parsed.hostname || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) return false;
+  if (!parsed.hostname || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:'))
+    return false;
   if (isGitHubHost(parsed.hostname)) return false;
   return (type === 'youtube') === isYouTubeUrl(parsed);
 };
 
 export function getExerciseInstructionLink(exercise: Exercise): ExerciseInstructionLink {
   const type = exercise.instructionUrlType;
-  if (isValidCuratedLink(exercise.instructionUrl, type) && (type === 'website' || type === 'youtube')) {
+  if (
+    isValidCuratedLink(exercise.instructionUrl, type) &&
+    (type === 'website' || type === 'youtube')
+  ) {
     return {
       url: exercise.instructionUrl,
       type,
@@ -52,7 +61,7 @@ export function getExerciseInstructionLink(exercise: Exercise): ExerciseInstruct
     };
   }
 
-  if (exercise.isCustom !== true && bundledExerciseIds.has(exercise.id)) {
+  if (exercise.isCustom !== true && getBundledExerciseIds().has(exercise.id)) {
     const muscleWikiGuideUrl = getMuscleWikiGuideUrl(exercise.id);
     if (muscleWikiGuideUrl) {
       return {

@@ -1,11 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import React, { Suspense, useState, useEffect, useMemo, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Dumbbell, History, BookOpen, TrendingUp } from 'lucide-react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,48 +8,96 @@ import { WorkoutProvider, useWorkout } from './src/context/WorkoutContext';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { WorkoutScreen } from './src/screens/WorkoutScreen';
 import { ActiveWorkoutScreen } from './src/screens/ActiveWorkoutScreen';
-import { HistoryScreen } from './src/screens/HistoryScreen';
 import { ExercisesScreen } from './src/screens/ExercisesScreen';
-import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
+
+// PERF-11: History and Analytics are code-split, so the analytics stack (including the
+// progression chart) no longer ships in the initial bundle.
+const HistoryScreen = React.lazy(() =>
+  import('./src/screens/HistoryScreen').then(module => ({ default: module.HistoryScreen })),
+);
+const AnalyticsScreen = React.lazy(() =>
+  import('./src/screens/AnalyticsScreen').then(module => ({ default: module.AnalyticsScreen })),
+);
 
 import { ActiveWorkoutMiniBar } from './src/components/ActiveWorkoutMiniBar';
 import { DraftResumeBanner } from './src/components/DraftResumeBanner';
 import { ReadOnlyBanner } from './src/components/ReadOnlyBanner';
+import { PersistenceErrorBanner } from './src/components/PersistenceErrorBanner';
+import { AppErrorBoundary } from './src/components/AppErrorBoundary';
+import { setErrorSink } from './src/utils/errorReporting';
+import { setSetting } from './src/database/db';
 import { DialogProvider } from './src/context/DialogContext';
 import { WorkoutSummaryModal } from './src/components/WorkoutSummaryModal';
 import { Workout } from './src/types';
 import { saveCompletedWorkout } from './src/database/db';
+import { saveCompletedWorkoutEdit } from './src/workout/completion';
 import { colors } from './src/theme';
 import {
   ActivationEmitter,
   TabActivationContext,
   createActivationEmitter,
 } from './src/hooks/useReloadOnActivate';
+import { useTabRetention } from './src/hooks/useTabRetention';
+import type { TabKey } from './src/navigation/tabRoutes';
+import { useWebTabHistory } from './src/navigation/useWebTabHistory';
+import { useAndroidBackToWorkout } from './src/navigation/useAndroidBackToWorkout';
+import { I18nProvider, useI18n, type MessageKey } from './src/i18n';
 
-type Tab = 'workout' | 'history' | 'exercises' | 'analytics';
+type Tab = TabKey;
 
-const TABS: { key: Tab; label: string; icon: typeof Dumbbell }[] = [
-  { key: 'workout', label: 'Workout', icon: Dumbbell },
-  { key: 'history', label: 'History', icon: History },
-  { key: 'exercises', label: 'Exercises', icon: BookOpen },
-  { key: 'analytics', label: 'Progress', icon: TrendingUp },
+const TABS: { key: Tab; labelKey: MessageKey; icon: typeof Dumbbell }[] = [
+  { key: 'workout', labelKey: 'nav.workout', icon: Dumbbell },
+  { key: 'history', labelKey: 'nav.history', icon: History },
+  { key: 'exercises', labelKey: 'nav.exercises', icon: BookOpen },
+  { key: 'analytics', labelKey: 'nav.progress', icon: TrendingUp },
 ];
 
+/** Delay before the code-split tabs are warmed in the background, keeping the first switch fast. */
+const TAB_PREFETCH_DELAY_MS = 1_500;
+
+/** Lightweight placeholder while a code-split tab is downloaded. */
+function TabLoadingFallback() {
+  return (
+    <View style={styles.tabLoadingFallback}>
+      <ActivityIndicator size="small" color={colors.textMuted} />
+    </View>
+  );
+}
+
 function MainAppContent() {
-  const { isWorkingOut, isMinimized, gyms } = useWorkout();
+  const { isWorkingOut, isMinimized, gyms, activeWorkout } = useWorkout();
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const [currentTab, setCurrentTab] = useState<Tab>('workout');
-  // Tabs are mounted on first visit and then kept alive (hidden) so switching back is instant.
-  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<Tab>>(() => new Set<Tab>(['workout']));
+  const showLogger = isWorkingOut && !isMinimized;
+  const visibleTab: Tab | null = showLogger ? null : currentTab;
+
+  // Mount on first visit, then preserve filters and scroll state across tabs and the logger.
+  const { mountedTabs, mountTab } = useTabRetention<Tab>({
+    initialTab: 'workout',
+  });
 
   const selectTab = (tab: Tab) => {
     setCurrentTab(tab);
-    setVisitedTabs(prev => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+    mountTab(tab);
   };
+
+  // ARCH-09/PROD-05: web URL history and shell-level Android back navigation.
+  useWebTabHistory({ tab: currentTab, onSelectTab: selectTab });
+  useAndroidBackToWorkout(currentTab, selectTab);
+
+  // Warm the lazy screens shortly after startup so their first visit does not wait on the
+  // network, without putting them back into the initial bundle.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void import('./src/screens/HistoryScreen');
+      void import('./src/screens/AnalyticsScreen');
+    }, TAB_PREFETCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [completedWorkout, setCompletedWorkout] = useState<Workout | null>(null);
   const [historyWorkoutUpdate, setHistoryWorkoutUpdate] = useState<Workout | null>(null);
-
-  const showLogger = isWorkingOut && !isMinimized;
 
   // One stable emitter per tab; firing it asks that tab to refresh its data in the background.
   const tabEmitters = useMemo(
@@ -66,7 +108,6 @@ function MainAppContent() {
       >,
     [],
   );
-  const visibleTab: Tab | null = showLogger ? null : currentTab;
   const previousVisibleTabRef = useRef<Tab | null>(visibleTab);
   const shownTabsRef = useRef<Set<Tab>>(new Set(visibleTab ? [visibleTab] : []));
 
@@ -95,7 +136,7 @@ function MainAppContent() {
   };
 
   const handleSummaryWorkoutUpdate = async (updated: Workout) => {
-    await saveCompletedWorkout(updated);
+    await saveCompletedWorkoutEdit(updated, saveCompletedWorkout);
     setCompletedWorkout(updated);
     setHistoryWorkoutUpdate(updated);
   };
@@ -103,6 +144,9 @@ function MainAppContent() {
   return (
     <View style={styles.appWrapper}>
       <StatusBar style="light" />
+
+      {/* Autosave failures must stay visible over both tabs and the logger. */}
+      <PersistenceErrorBanner workout={activeWorkout} />
 
       {/* Completion summary modal surviving logger unmount */}
       <WorkoutSummaryModal
@@ -116,7 +160,9 @@ function MainAppContent() {
       {showLogger && (
         <View style={styles.appWrapper}>
           <ReadOnlyBanner />
-          <ActiveWorkoutScreen onFinish={handleWorkoutCompleted} />
+          <AppErrorBoundary label="Active workout">
+            <ActiveWorkoutScreen onFinish={handleWorkoutCompleted} />
+          </AppErrorBoundary>
         </View>
       )}
 
@@ -125,14 +171,23 @@ function MainAppContent() {
         <View style={styles.screenContent}>
           <ReadOnlyBanner />
           {TABS.map(tab =>
-            visitedTabs.has(tab.key) ? (
+            mountedTabs.has(tab.key) ? (
               <View key={tab.key} style={[styles.tabPane, currentTab !== tab.key && styles.hidden]}>
-                <TabActivationContext.Provider value={tabEmitters[tab.key]}>
-                  {tab.key === 'workout' && <WorkoutScreen />}
-                  {tab.key === 'history' && <HistoryScreen workoutUpdate={historyWorkoutUpdate} />}
-                  {tab.key === 'exercises' && <ExercisesScreen />}
-                  {tab.key === 'analytics' && <AnalyticsScreen />}
-                </TabActivationContext.Provider>
+                <AppErrorBoundary
+                  label={t(tab.labelKey)}
+                  resetKey={currentTab === tab.key ? `${tab.key}:visible` : `${tab.key}:hidden`}
+                >
+                  <TabActivationContext.Provider value={tabEmitters[tab.key]}>
+                    <Suspense fallback={<TabLoadingFallback />}>
+                      {tab.key === 'workout' && <WorkoutScreen />}
+                      {tab.key === 'history' && (
+                        <HistoryScreen workoutUpdate={historyWorkoutUpdate} />
+                      )}
+                      {tab.key === 'exercises' && <ExercisesScreen />}
+                      {tab.key === 'analytics' && <AnalyticsScreen />}
+                    </Suspense>
+                  </TabActivationContext.Provider>
+                </AppErrorBoundary>
               </View>
             ) : null,
           )}
@@ -156,7 +211,7 @@ function MainAppContent() {
                 onPress={() => selectTab(tab.key)}
                 activeOpacity={0.7}
                 accessibilityRole="tab"
-                accessibilityLabel={tab.label}
+                accessibilityLabel={t(tab.labelKey)}
                 accessibilityState={{ selected: active }}
               >
                 <Icon
@@ -164,7 +219,9 @@ function MainAppContent() {
                   color={active ? colors.primary : colors.textMuted}
                   strokeWidth={active ? 2.4 : 1.9}
                 />
-                <Text style={[styles.navLabel, active && styles.navLabelActive]}>{tab.label}</Text>
+                <Text style={[styles.navLabel, active && styles.navLabelActive]}>
+                  {t(tab.labelKey)}
+                </Text>
                 <View style={[styles.navDot, active && styles.navDotActive]} />
               </TouchableOpacity>
             );
@@ -217,13 +274,38 @@ function AppRoot() {
 }
 
 export default function App() {
+  // Persist the latest error breadcrumb so a crash survives a reload and can be
+  // inspected afterwards. Best-effort: storage may be the failing dependency, so
+  // write failures are intentionally ignored here.
+  useEffect(() => {
+    let lastRecord = '';
+    setErrorSink((error, context) => {
+      const record = JSON.stringify({
+        message: error.message,
+        scope: context.scope,
+        componentStack: typeof context.componentStack === 'string' ? context.componentStack : null,
+        at: new Date().toISOString(),
+      });
+      if (record === lastRecord) return;
+      lastRecord = record;
+      setSetting('last_app_error', record).catch(() => {
+        // Intentional: the in-memory breadcrumb is already recorded.
+      });
+    });
+    return () => setErrorSink(null);
+  }, []);
+
   return (
     <SafeAreaProvider>
-      <StorageProvider>
-        <DialogProvider>
-          <AppRoot />
-        </DialogProvider>
-      </StorageProvider>
+      <AppErrorBoundary label="App">
+        <I18nProvider>
+          <StorageProvider>
+            <DialogProvider>
+              <AppRoot />
+            </DialogProvider>
+          </StorageProvider>
+        </I18nProvider>
+      </AppErrorBoundary>
     </SafeAreaProvider>
   );
 }
@@ -238,6 +320,11 @@ const styles = StyleSheet.create({
   },
   tabPane: {
     flex: 1,
+  },
+  tabLoadingFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hidden: {
     display: 'none',

@@ -1,0 +1,9 @@
+# Default owner: maintainer review for every change.
+* @Benflex1
+
+# Release, CI, and store metadata need extra care.
+/.github/ @Benflex1
+/.fdroid.yml @Benflex1
+/fastlane/ @Benflex1
+/app.json @Benflex1
+/plugins/ @Benflex1

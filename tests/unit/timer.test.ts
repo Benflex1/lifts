@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeElapsedSeconds, computeRemaining } from '../../src/utils/timer';
+import {
+  computeElapsedSeconds,
+  computeRemaining,
+  nextRemainingTickDelay,
+} from '../../src/utils/timer';
 
 describe('computeElapsedSeconds', () => {
   it('returns 0 when now equals startTime', () => {
@@ -50,5 +54,31 @@ describe('computeRemaining', () => {
     const staleExpiry = now - 15_000;
     const isRecentlyExpiredStale = Math.abs(now - staleExpiry) < 1500;
     assert.equal(isRecentlyExpiredStale, false);
+  });
+});
+
+describe('nextRemainingTickDelay', () => {
+  it('schedules the next wakeup at the second boundary', () => {
+    const now = 1_000_000;
+    const endsAt = now + 90_000;
+    assert.equal(nextRemainingTickDelay(endsAt, now), 1_000);
+  });
+
+  it('wakes up mid-second once the remaining time is fractional', () => {
+    const endsAt = 2_000_000;
+    const now = endsAt - 250;
+    assert.equal(nextRemainingTickDelay(endsAt, now), 250);
+  });
+
+  it('returns a full second when exactly on a boundary', () => {
+    const endsAt = 2_000_000;
+    const now = endsAt - 1_000;
+    assert.equal(nextRemainingTickDelay(endsAt, now), 1_000);
+  });
+
+  it('returns 0 once the timer has expired', () => {
+    const endsAt = 2_000_000;
+    assert.equal(nextRemainingTickDelay(endsAt, endsAt), 0);
+    assert.equal(nextRemainingTickDelay(endsAt, endsAt + 500), 0);
   });
 });

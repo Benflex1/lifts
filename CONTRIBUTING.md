@@ -6,7 +6,7 @@ Thank you for contributing to Lifts! Lifts is a free, local-first, open-source g
 
 ## 1. Prerequisites & Toolchain
 
-- **Node.js**: v18.0.0 or higher (LTS recommended)
+- **Node.js**: v22.5.0 or higher (Node 24 recommended; see `.nvmrc`)
 - **npm**: v9.0.0 or higher
 - **Expo CLI**: bundled via local dependencies
 - **Git**: modern git client
@@ -44,17 +44,43 @@ Thank you for contributing to Lifts! Lifts is a free, local-first, open-source g
 Every change must pass our verification suite before submitting a pull request:
 
 ```bash
-# 1. Type check
-npx tsc --noEmit
+# 1. Lint (errors block CI; warnings are tracked in the audit backlog)
+npm run lint
 
-# 2. Fast unit tests
+# 2. Formatting check
+npm run format:check
+
+# 3. Type check
+npm run typecheck
+
+# 4. Type check the test suite
+npm run typecheck:tests
+
+# 5. Fast unit tests
 npm test
 
-# 3. Cross-platform integration tests (Native SQLite + Web IndexedDB)
+# 6. Cross-platform integration tests (Native SQLite + Web IndexedDB)
 npm run test:integration
 
-# 4. Web production export smoke test
+# 7. Web production export smoke test (with the manifest and service worker)
 npx expo export --platform web --output-dir dist-audit-web
+node scripts/postprocess-web-export.mjs dist-audit-web
+```
+
+Run `npm run format` before committing to apply the shared Prettier configuration.
+
+### Coverage scope
+
+`npm run test:coverage` enforces thresholds over modules executed by the Node test suite. It does not measure all application source files: an unimported screen or app shell is absent from the denominator. The generated LCOV report is ignored by Git and uploaded as a CI artifact. Use component regressions and the emulator journey to verify wiring; these percentages do not establish complete UI, accessibility, or device-performance coverage.
+
+### End-to-end smoke journey
+
+The device-level journey (start a routine, log a set, minimize, resume, finish) lives in `.maestro/smoke-journey.yml` and runs on an Android emulator in CI (`.github/workflows/e2e.yml`). It runs for relevant pull requests into `main` or `develop`, and relevant pushes to those branches. Branch protection must require `emulator-journey` to make it a merge gate.
+
+With a device or emulator connected and the app installed, run it locally:
+
+```bash
+maestro test .maestro/smoke-journey.yml
 ```
 
 ---
@@ -85,6 +111,10 @@ When contributing code, adhere strictly to these core principles:
    - Ensure all touch targets are at least 44x44 pt.
    - Provide appropriate `accessibilityRole` and `accessibilityLabel` attributes on all touchable elements.
 
+6. **Platform Dispatch**:
+   - Select platform-specific modules with Metro file extensions (`*.native.ts`, `*.android.ts`, `*.ios.ts`, `*.web.ts`); base `.ts` files are Node/test fallbacks only.
+   - Reserve `Platform.OS` for in-module behavior differences. See [docs/platform-dispatch.md](docs/platform-dispatch.md).
+
 ---
 
 ## 5. Submitting Pull Requests
@@ -97,6 +127,7 @@ When contributing code, adhere strictly to these core principles:
    ```bash
    git commit -m "feat: descriptive message in lowercase without emojis"
    ```
-3. Run the full verification suite (`npx tsc --noEmit && npm test && npm run test:integration`).
+3. Run the full verification suite (`npm run lint && npm run format:check && npm run typecheck && npm run typecheck:tests && npm test && npm run test:integration`).
 4. Push your branch to GitHub and open a Pull Request against `main`.
 5. Clearly describe the motivation, test evidence, and verified platforms in your PR description.
+6. Use the repository templates for issues and pull requests (the PR checklist mirrors the verification suite). Report vulnerabilities privately through `SECURITY.md`, never in a public issue.

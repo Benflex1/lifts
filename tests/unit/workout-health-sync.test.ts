@@ -39,8 +39,12 @@ type HookRenderer = {
 let activeRenderer: HookRenderer | null = null;
 
 function sameDeps(left: unknown[] | undefined, right: unknown[] | undefined): boolean {
-  return left !== undefined && right !== undefined &&
-    left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.length === right.length &&
+    left.every((value, index) => Object.is(value, right[index]))
+  );
 }
 
 function createHookRenderer(): HookRenderer {
@@ -59,7 +63,7 @@ function createHookRenderer(): HookRenderer {
     async flushEffects(): Promise<void> {
       const effects = pendingEffects.splice(0);
       for (const effect of effects) effect();
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      await new Promise<void>(resolve => setImmediate(resolve));
     },
     useState<T>(initial: T | (() => T)) {
       const index = hookIndex++;
@@ -67,9 +71,8 @@ function createHookRenderer(): HookRenderer {
         hookStates[index] = typeof initial === 'function' ? (initial as () => T)() : initial;
       }
       const setState = (next: T | ((previous: T) => T)) => {
-        hookStates[index] = typeof next === 'function'
-          ? (next as (previous: T) => T)(hookStates[index] as T)
-          : next;
+        hookStates[index] =
+          typeof next === 'function' ? (next as (previous: T) => T)(hookStates[index] as T) : next;
       };
       return [hookStates[index] as T, setState] as const;
     },
@@ -132,19 +135,23 @@ function loadWorkoutContext() {
         return context;
       },
       useContext: (context: { currentValue: unknown }) => context.currentValue,
-      useState: <T,>(initial: T | (() => T)) => activeRenderer!.useState(initial),
-      useRef: <T,>(initial: T) => activeRenderer!.useRef(initial),
+      useState: <T>(initial: T | (() => T)) => activeRenderer!.useState(initial),
+      useRef: <T>(initial: T) => activeRenderer!.useRef(initial),
       useCallback: <T extends (...args: any[]) => any>(callback: T, deps: unknown[]) =>
         activeRenderer!.useCallback(callback, deps),
-      useMemo: <T,>(factory: () => T, deps: unknown[]) => activeRenderer!.useMemo(factory, deps),
+      useMemo: <T>(factory: () => T, deps: unknown[]) => activeRenderer!.useMemo(factory, deps),
       useEffect: (effect: () => void | (() => void), deps?: unknown[]) =>
         activeRenderer!.useEffect(effect, deps),
-      createElement: (type: unknown, props: Record<string, unknown> | null, ...children: unknown[]) => {
+      createElement: (
+        type: unknown,
+        props: Record<string, unknown> | null,
+        ...children: unknown[]
+      ) => {
         if (typeof type !== 'function') return null;
         return type({ ...(props || {}), children: children.length <= 1 ? children[0] : children });
       },
       Fragment: component,
-      default: undefined,
+      default: undefined as unknown,
     };
     fakeReact.default = fakeReact;
     mockModule('react/jsx-runtime', {
@@ -190,7 +197,11 @@ function loadWorkoutContext() {
   return contextModulePromise;
 }
 
-async function createProviderHarness(options: { healthSyncEnabled: boolean; loading: boolean; finishFails?: boolean }) {
+async function createProviderHarness(options: {
+  healthSyncEnabled: boolean;
+  loading: boolean;
+  finishFails?: boolean;
+}) {
   const context = await loadWorkoutContext();
   settingsState = { healthSyncEnabled: options.healthSyncEnabled, loading: options.loading };
   settingsReads = 0;
@@ -243,7 +254,7 @@ test('enqueues health sync only after local completion resolves', async () => {
       return completedWorkout;
     },
     true,
-    (workout) => {
+    workout => {
       events.push('sync-enqueued');
       enqueued.push(workout);
     },
@@ -259,15 +270,16 @@ test('does not enqueue health sync when local completion rejects', async () => {
   let enqueueCalls = 0;
 
   await assert.rejects(
-    () => finishWorkoutWithHealthSync(
-      async () => {
-        throw new Error('local persistence failed');
-      },
-      true,
-      () => {
-        enqueueCalls += 1;
-      },
-    ),
+    () =>
+      finishWorkoutWithHealthSync(
+        async () => {
+          throw new Error('local persistence failed');
+        },
+        true,
+        () => {
+          enqueueCalls += 1;
+        },
+      ),
     /local persistence failed/,
   );
 
@@ -276,23 +288,17 @@ test('does not enqueue health sync when local completion rejects', async () => {
 
 test('health sync rejection does not reject completion or block navigation', async () => {
   const { finishWorkoutWithHealthSync } = await loadWorkoutContext();
-  let navigatedWith: Workout | null = null;
 
   const completed = await finishWorkoutWithHealthSync(
     async () => completedWorkout,
     true,
-    (workout, enabled) => enqueueCompletedWorkoutSync(
-      workout,
-      enabled,
-      async () => {
+    (workout, enabled) =>
+      enqueueCompletedWorkoutSync(workout, enabled, async () => {
         throw new Error('health provider failed');
-      },
-    ),
+      }),
   );
 
-  navigatedWith = completed;
-
-  assert.equal(navigatedWith, completedWorkout);
+  assert.equal(completed, completedWorkout);
 });
 
 test('disabled setting does not call the injected health sync', () => {
@@ -309,7 +315,7 @@ test('enabled setting enqueues exactly once with the completed workout', () => {
   let syncCalls = 0;
   let syncedWorkout: Workout | null = null;
 
-  enqueueCompletedWorkoutSync(completedWorkout, true, async (workout) => {
+  enqueueCompletedWorkoutSync(completedWorkout, true, async workout => {
     syncCalls += 1;
     syncedWorkout = workout;
   });

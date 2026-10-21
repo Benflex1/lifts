@@ -1,29 +1,34 @@
+import { isBackupExcludedSetting } from './settings';
 import { DataSnapshot, Store, WorkoutDraft } from '../database/contract';
-import { DEFAULT_EXERCISES } from '../database/seedData';
-import { ActiveExercise, Exercise, ExerciseGymScope, Gym, Routine, RoutineExercise, Workout, WorkoutSet } from '../types';
+import { getDefaultExercises } from '../database/seedData';
+import {
+  ActiveExercise,
+  Exercise,
+  ExerciseGymScope,
+  Gym,
+  Routine,
+  RoutineExercise,
+  Workout,
+} from '../types';
 import { DEFAULT_GYM_COLOR, validateGymColor, validateGymName } from '../workout/gym-profile';
 import { validateExerciseGymScope } from '../workout/gym-scope';
-import { validateTargetReps } from '../workout/sets';
 import { validateSnapshotStructure } from '../database/snapshot-validation';
+import { errorMessage } from './invariant';
 
 export const MAX_BACKUP_SIZE_BYTES = 50 * 1024 * 1024; // 50 MiB
 
-export interface BackupV2 {
-  version: 2;
-  exportedAt: string;
-  workouts: Workout[];
-  routines: Routine[];
-  exercises: Exercise[];
-  drafts: import('../database/contract').WorkoutDraft[];
-  settings: Record<string, string>;
-}
+// The Schema v2 backup shape lives in the import path (backup.ts validates v2
+// snapshots); only the current export shape stays declared here.
 
 export interface BackupV3 extends DataSnapshot {
-  version: 3;
+  // Version 4 is version 3 plus time, distance and tracking types. It is written only when a
+  // backup contains such sets, so older app versions refuse it instead of dropping that data.
+  version: 3 | 4;
   exportedAt: string;
 }
 
-type SerializedExercise = Omit<Exercise, 'primaryMuscles'> & Partial<Pick<Exercise, 'primaryMuscles'>>;
+type SerializedExercise = Omit<Exercise, 'primaryMuscles'> &
+  Partial<Pick<Exercise, 'primaryMuscles'>>;
 type SerializedRoutine = Omit<Routine, 'exercises'> & {
   exercises: Array<Omit<RoutineExercise, 'exercise'> & { exercise: SerializedExercise }>;
 };
@@ -32,7 +37,9 @@ type SerializedWorkout = Omit<Workout, 'exercises'> & {
 };
 type SerializedDraft = Omit<WorkoutDraft, 'workout'> & { workout: SerializedWorkout };
 
-function curatedInstructionFields(exercise: Exercise): Pick<Exercise, 'instructionUrl' | 'instructionUrlType'> {
+function curatedInstructionFields(
+  exercise: Exercise,
+): Pick<Exercise, 'instructionUrl' | 'instructionUrlType'> {
   const candidate = exercise as Exercise & {
     instructionUrl?: string | null;
     instructionUrlType?: 'website' | 'youtube' | null;
@@ -53,18 +60,24 @@ function serializeExercise(exercise: Exercise): SerializedExercise {
     name: exercise.name,
     category: exercise.category,
     equipment: exercise.equipment,
-    ...(Array.isArray(exercise.primaryMuscles) ? { primaryMuscles: [...exercise.primaryMuscles] } : {}),
-    ...(Array.isArray(exercise.secondaryMuscles) ? { secondaryMuscles: [...exercise.secondaryMuscles] } : {}),
+    ...(Array.isArray(exercise.primaryMuscles)
+      ? { primaryMuscles: [...exercise.primaryMuscles] }
+      : {}),
+    ...(Array.isArray(exercise.secondaryMuscles)
+      ? { secondaryMuscles: [...exercise.secondaryMuscles] }
+      : {}),
     ...(Array.isArray(exercise.instructions) ? { instructions: [...exercise.instructions] } : {}),
     ...curatedInstructionFields(exercise),
-    ...(exercise.isCustom === undefined || exercise.isCustom === null ? {} : { isCustom: exercise.isCustom }),
+    ...(exercise.isCustom === undefined || exercise.isCustom === null
+      ? {}
+      : { isCustom: exercise.isCustom }),
   };
 }
 
 function serializeRoutine(routine: Routine): SerializedRoutine {
   return {
     ...routine,
-    exercises: routine.exercises.map((exercise) => ({
+    exercises: routine.exercises.map(exercise => ({
       ...exercise,
       exercise: serializeExercise(exercise.exercise),
     })),
@@ -74,7 +87,7 @@ function serializeRoutine(routine: Routine): SerializedRoutine {
 function serializeWorkout(workout: Workout): SerializedWorkout {
   return {
     ...workout,
-    exercises: workout.exercises.map((exercise) => ({
+    exercises: workout.exercises.map(exercise => ({
       ...exercise,
       exercise: serializeExercise(exercise.exercise),
     })),
@@ -88,14 +101,22 @@ function serializeDraft(draft: WorkoutDraft): SerializedDraft {
   };
 }
 
-function instructionLinkFallback(definition: Exercise, bundled?: Exercise): Pick<Exercise, 'instructionUrl' | 'instructionUrlType'> {
-  const source = definition.instructionUrl !== undefined && definition.instructionUrlType !== undefined
-    ? definition
-    : bundled;
+function instructionLinkFallback(
+  definition: Exercise,
+  bundled?: Exercise,
+): Pick<Exercise, 'instructionUrl' | 'instructionUrlType'> {
+  const source =
+    definition.instructionUrl !== undefined && definition.instructionUrlType !== undefined
+      ? definition
+      : bundled;
   return source ? curatedInstructionFields(source) : {};
 }
 
-function applyInstructionLinkFallback(target: Record<string, any>, definition: Exercise, bundled?: Exercise): void {
+function applyInstructionLinkFallback(
+  target: Record<string, any>,
+  definition: Exercise,
+  bundled?: Exercise,
+): void {
   const fallback = instructionLinkFallback(definition, bundled);
   if (target.instructionUrl === undefined && fallback.instructionUrl !== undefined) {
     target.instructionUrl = fallback.instructionUrl;
@@ -126,7 +147,11 @@ function validateGyms(gyms: unknown): asserts gyms is Gym[] {
     }
     candidate.name = validateGymName(candidate.name);
     validateGymColor(candidate.color);
-    if (typeof candidate.createdAt !== 'string' || !candidate.createdAt || isNaN(Date.parse(candidate.createdAt))) {
+    if (
+      typeof candidate.createdAt !== 'string' ||
+      !candidate.createdAt ||
+      isNaN(Date.parse(candidate.createdAt))
+    ) {
       throw new Error(`Invalid createdAt timestamp in gym: ${candidate.id}`);
     }
     if (candidate.isDefault) defaultCount++;
@@ -134,12 +159,17 @@ function validateGyms(gyms: unknown): asserts gyms is Gym[] {
   if (defaultCount !== 1) throw new Error('Backup must contain exactly one default gym');
 }
 
-function validateScopes(scopes: unknown, gyms: readonly Gym[], knownExerciseIds: ReadonlySet<string>): void {
+function validateScopes(
+  scopes: unknown,
+  gyms: readonly Gym[],
+  knownExerciseIds: ReadonlySet<string>,
+): void {
   if (!Array.isArray(scopes)) throw new Error('Invalid exerciseGymScopes format: expected array');
   const scopeExerciseIds = new Set<string>();
-  const knownGymIds = new Set(gyms.map((gym) => gym.id));
+  const knownGymIds = new Set(gyms.map(gym => gym.id));
   for (const scope of scopes) {
-    if (!scope || typeof scope !== 'object') throw new Error('Invalid exercise gym scope in backup');
+    if (!scope || typeof scope !== 'object')
+      throw new Error('Invalid exercise gym scope in backup');
     const candidate = scope as ExerciseGymScope;
     if (scopeExerciseIds.has(candidate.exerciseId)) {
       throw new Error(`Duplicate exercise scope ID in backup: ${candidate.exerciseId}`);
@@ -149,7 +179,10 @@ function validateScopes(scopes: unknown, gyms: readonly Gym[], knownExerciseIds:
       throw new Error(`Missing exercise definition for scope: ${candidate.exerciseId}`);
     }
     if (candidate.linkedGymIds !== undefined) {
-      if (!Array.isArray(candidate.linkedGymIds) || candidate.linkedGymIds.some((id) => typeof id !== 'string')) {
+      if (
+        !Array.isArray(candidate.linkedGymIds) ||
+        candidate.linkedGymIds.some(id => typeof id !== 'string')
+      ) {
         throw new Error(`Invalid linked gym IDs in scope: ${candidate.exerciseId}`);
       }
       candidate.linkedGymIds.forEach(validateGymId);
@@ -170,8 +203,8 @@ export function parseBackup(json: string): BackupV3 {
   let parsed: any;
   try {
     parsed = JSON.parse(json);
-  } catch (e: any) {
-    throw new Error(`Invalid JSON in backup file: ${e.message}`);
+  } catch (e: unknown) {
+    throw new Error(`Invalid JSON in backup file: ${errorMessage(e)}`, { cause: e });
   }
 
   if (!parsed || typeof parsed !== 'object') {
@@ -180,15 +213,19 @@ export function parseBackup(json: string): BackupV3 {
 
   if (parsed.version === 1) {
     throw new Error(
-      'Version 1 backups contain only summary data and cannot restore workout sets. Please use a complete v2 backup.'
+      'Version 1 backups contain only summary data and cannot restore workout sets. Please use a complete v2 backup.',
     );
   }
 
-  if (parsed.version !== 2 && parsed.version !== 3) {
+  if (parsed.version !== 2 && parsed.version !== 3 && parsed.version !== 4) {
     throw new Error(`Unsupported backup version: ${parsed.version}`);
   }
 
-  if (typeof parsed.exportedAt !== 'string' || !parsed.exportedAt || isNaN(Date.parse(parsed.exportedAt))) {
+  if (
+    typeof parsed.exportedAt !== 'string' ||
+    !parsed.exportedAt ||
+    isNaN(Date.parse(parsed.exportedAt))
+  ) {
     throw new Error('Invalid exportedAt timestamp in backup file');
   }
 
@@ -211,15 +248,20 @@ export function parseBackup(json: string): BackupV3 {
   const isLegacyV2 = parsed.version === 2;
   if (isLegacyV2) {
     parsed.version = 3;
-    parsed.gyms = [{
-      id: 'gym-default',
-      name: 'Default Gym',
-      color: DEFAULT_GYM_COLOR,
-      isDefault: true,
-      createdAt: parsed.exportedAt,
-    } satisfies Gym];
+    parsed.gyms = [
+      {
+        id: 'gym-default',
+        name: 'Default Gym',
+        color: DEFAULT_GYM_COLOR,
+        isDefault: true,
+        createdAt: parsed.exportedAt,
+      } satisfies Gym,
+    ];
     parsed.exerciseGymScopes = [];
-    parsed.workouts = parsed.workouts.map((workout: Workout) => ({ ...workout, gymId: 'gym-default' }));
+    parsed.workouts = parsed.workouts.map((workout: Workout) => ({
+      ...workout,
+      gymId: 'gym-default',
+    }));
     parsed.drafts = parsed.drafts.map((draft: import('../database/contract').WorkoutDraft) => ({
       ...draft,
       workout: { ...draft.workout, gymId: 'gym-default' },
@@ -254,7 +296,10 @@ export function parseBackup(json: string): BackupV3 {
     ...(isLegacyV2 && workout.durationSeconds === undefined ? { durationSeconds: 0 } : {}),
     ...(isLegacyV2 && workout.totalVolumeKg === undefined ? { totalVolumeKg: 0 } : {}),
     exercises: Array.isArray(workout.exercises)
-      ? workout.exercises.map((exercise: any) => ({ ...exercise, restTimerSeconds: exercise.restTimerSeconds ?? 0 }))
+      ? workout.exercises.map((exercise: any) => ({
+          ...exercise,
+          restTimerSeconds: exercise.restTimerSeconds ?? 0,
+        }))
       : workout.exercises,
   }));
   parsed.drafts = parsed.drafts.map((draft: any) => ({
@@ -267,7 +312,10 @@ export function parseBackup(json: string): BackupV3 {
       ...(isLegacyV2 && draft.workout.durationSeconds === undefined ? { durationSeconds: 0 } : {}),
       ...(isLegacyV2 && draft.workout.totalVolumeKg === undefined ? { totalVolumeKg: 0 } : {}),
       exercises: Array.isArray(draft.workout.exercises)
-        ? draft.workout.exercises.map((exercise: any) => ({ ...exercise, restTimerSeconds: exercise.restTimerSeconds ?? 0 }))
+        ? draft.workout.exercises.map((exercise: any) => ({
+            ...exercise,
+            restTimerSeconds: exercise.restTimerSeconds ?? 0,
+          }))
         : draft.workout.exercises,
     },
   }));
@@ -276,7 +324,7 @@ export function parseBackup(json: string): BackupV3 {
 
   // Map of available exercises: bundled seed exercises + backup exercises
   const knownExercisesMap = new Map<string, Exercise>();
-  for (const de of DEFAULT_EXERCISES) {
+  for (const de of getDefaultExercises()) {
     knownExercisesMap.set(de.id, de);
   }
   const exerciseIdsInBackup = new Set<string>();
@@ -288,11 +336,14 @@ export function parseBackup(json: string): BackupV3 {
       throw new Error(`Duplicate exercise ID in backup: ${ex.id}`);
     }
     if (ex.primaryMuscles !== undefined) {
-      if (!Array.isArray(ex.primaryMuscles) || ex.primaryMuscles.some((m: any) => typeof m !== 'string')) {
+      if (
+        !Array.isArray(ex.primaryMuscles) ||
+        ex.primaryMuscles.some((m: any) => typeof m !== 'string')
+      ) {
         throw new Error(`Invalid primaryMuscles in exercise: ${ex.id}`);
       }
     }
-    const bundled = DEFAULT_EXERCISES.find((d) => d.id === ex.id);
+    const bundled = getDefaultExercises().find(d => d.id === ex.id);
     if (!ex.primaryMuscles) {
       if (bundled?.primaryMuscles && bundled.primaryMuscles.length > 0) {
         ex.primaryMuscles = [...bundled.primaryMuscles];
@@ -329,17 +380,28 @@ export function parseBackup(json: string): BackupV3 {
         throw new Error(`Missing exercise definition for routine exercise: ${re.exerciseId}`);
       }
       const def = knownExercisesMap.get(re.exerciseId)!;
-      const bundled = DEFAULT_EXERCISES.find((d) => d.id === re.exerciseId);
+      const bundled = getDefaultExercises().find(d => d.id === re.exerciseId);
       if (!re.exercise || typeof re.exercise !== 'object') {
-        const primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
-          ? [...def.primaryMuscles]
-          : ((def as any).targetMuscle ? [(def as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
-        const secondaryMuscles = (Array.isArray(def.secondaryMuscles) && def.secondaryMuscles.length > 0)
-          ? [...def.secondaryMuscles]
-          : (bundled?.secondaryMuscles ? [...bundled.secondaryMuscles] : []);
-        const instructions = (Array.isArray(def.instructions) && def.instructions.length > 0)
-          ? [...def.instructions]
-          : (bundled?.instructions ? [...bundled.instructions] : []);
+        const primaryMuscles =
+          Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0
+            ? [...def.primaryMuscles]
+            : (def as any).targetMuscle
+              ? [(def as any).targetMuscle]
+              : bundled?.primaryMuscles
+                ? [...bundled.primaryMuscles]
+                : [];
+        const secondaryMuscles =
+          Array.isArray(def.secondaryMuscles) && def.secondaryMuscles.length > 0
+            ? [...def.secondaryMuscles]
+            : bundled?.secondaryMuscles
+              ? [...bundled.secondaryMuscles]
+              : [];
+        const instructions =
+          Array.isArray(def.instructions) && def.instructions.length > 0
+            ? [...def.instructions]
+            : bundled?.instructions
+              ? [...bundled.instructions]
+              : [];
 
         re.exercise = {
           id: def.id,
@@ -353,17 +415,28 @@ export function parseBackup(json: string): BackupV3 {
           isCustom: Boolean(def.isCustom),
         };
       } else {
-        if (re.exercise.name !== undefined && (typeof re.exercise.name !== 'string' || !re.exercise.name.trim())) {
+        if (
+          re.exercise.name !== undefined &&
+          (typeof re.exercise.name !== 'string' || !re.exercise.name.trim())
+        ) {
           throw new Error(`Invalid exercise name in routine exercise: ${re.exerciseId}`);
         }
         if (re.exercise.primaryMuscles !== undefined) {
-          if (!Array.isArray(re.exercise.primaryMuscles) || re.exercise.primaryMuscles.some((m: any) => typeof m !== 'string')) {
+          if (
+            !Array.isArray(re.exercise.primaryMuscles) ||
+            re.exercise.primaryMuscles.some((m: any) => typeof m !== 'string')
+          ) {
             throw new Error(`Invalid primaryMuscles in routine exercise: ${re.exerciseId}`);
           }
         } else {
-          re.exercise.primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
-            ? [...def.primaryMuscles]
-            : ((re.exercise as any).targetMuscle ? [(re.exercise as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
+          re.exercise.primaryMuscles =
+            Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0
+              ? [...def.primaryMuscles]
+              : (re.exercise as any).targetMuscle
+                ? [(re.exercise as any).targetMuscle]
+                : bundled?.primaryMuscles
+                  ? [...bundled.primaryMuscles]
+                  : [];
         }
         if (re.exercise.equipment !== undefined && typeof re.exercise.equipment !== 'string') {
           throw new Error(`Invalid equipment in routine exercise: ${re.exerciseId}`);
@@ -374,7 +447,8 @@ export function parseBackup(json: string): BackupV3 {
         re.exercise.id = re.exercise.id || def.id;
         re.exercise.name = re.exercise.name || def.name || bundled?.name || re.exerciseId;
         re.exercise.category = re.exercise.category || def.category || bundled?.category || 'other';
-        re.exercise.equipment = re.exercise.equipment || def.equipment || bundled?.equipment || 'other';
+        re.exercise.equipment =
+          re.exercise.equipment || def.equipment || bundled?.equipment || 'other';
         applyInstructionLinkFallback(re.exercise, def, bundled);
       }
 
@@ -391,7 +465,7 @@ export function parseBackup(json: string): BackupV3 {
     w: any,
     knownExercisesMap: Map<string, Exercise>,
     entityLabel: string,
-    knownGymIds: ReadonlySet<string>
+    knownGymIds: ReadonlySet<string>,
   ): void {
     if (!w || typeof w !== 'object') {
       throw new Error(`Invalid ${entityLabel}: expected object`);
@@ -412,12 +486,20 @@ export function parseBackup(json: string): BackupV3 {
       throw new Error(`Invalid timestamp in ${entityLabel} ${w.id}: ${w.endTime}`);
     }
     if (w.durationSeconds !== undefined && w.durationSeconds !== null) {
-      if (typeof w.durationSeconds !== 'number' || !isFinite(w.durationSeconds) || w.durationSeconds < 0) {
+      if (
+        typeof w.durationSeconds !== 'number' ||
+        !isFinite(w.durationSeconds) ||
+        w.durationSeconds < 0
+      ) {
         throw new Error(`Invalid durationSeconds in ${entityLabel} ${w.id}: ${w.durationSeconds}`);
       }
     }
     if (w.totalVolumeKg !== undefined && w.totalVolumeKg !== null) {
-      if (typeof w.totalVolumeKg !== 'number' || !isFinite(w.totalVolumeKg) || w.totalVolumeKg < 0) {
+      if (
+        typeof w.totalVolumeKg !== 'number' ||
+        !isFinite(w.totalVolumeKg) ||
+        w.totalVolumeKg < 0
+      ) {
         throw new Error(`Invalid totalVolumeKg in ${entityLabel} ${w.id}: ${w.totalVolumeKg}`);
       }
     }
@@ -432,26 +514,41 @@ export function parseBackup(json: string): BackupV3 {
         throw new Error(`Invalid exercise entry in ${entityLabel} ${w.id}`);
       }
       if (!we.exerciseId || typeof we.exerciseId !== 'string') {
-        throw new Error(`Missing exercise definition for ${entityLabel} exercise: ${we?.exerciseId}`);
+        throw new Error(
+          `Missing exercise definition for ${entityLabel} exercise: ${we?.exerciseId}`,
+        );
       }
       if (!knownExercisesMap.has(we.exerciseId)) {
-        throw new Error(`Missing exercise definition for ${entityLabel} exercise: ${we.exerciseId}`);
+        throw new Error(
+          `Missing exercise definition for ${entityLabel} exercise: ${we.exerciseId}`,
+        );
       }
 
       const def = knownExercisesMap.get(we.exerciseId)!;
-      const bundled = DEFAULT_EXERCISES.find((d) => d.id === we.exerciseId);
+      const bundled = getDefaultExercises().find(d => d.id === we.exerciseId);
 
       // Reconstruct or validate embedded exercise object
       if (!we.exercise || typeof we.exercise !== 'object') {
-        const primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
-          ? [...def.primaryMuscles]
-          : ((def as any).targetMuscle ? [(def as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
-        const secondaryMuscles = (Array.isArray(def.secondaryMuscles) && def.secondaryMuscles.length > 0)
-          ? [...def.secondaryMuscles]
-          : (bundled?.secondaryMuscles ? [...bundled.secondaryMuscles] : []);
-        const instructions = (Array.isArray(def.instructions) && def.instructions.length > 0)
-          ? [...def.instructions]
-          : (bundled?.instructions ? [...bundled.instructions] : []);
+        const primaryMuscles =
+          Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0
+            ? [...def.primaryMuscles]
+            : (def as any).targetMuscle
+              ? [(def as any).targetMuscle]
+              : bundled?.primaryMuscles
+                ? [...bundled.primaryMuscles]
+                : [];
+        const secondaryMuscles =
+          Array.isArray(def.secondaryMuscles) && def.secondaryMuscles.length > 0
+            ? [...def.secondaryMuscles]
+            : bundled?.secondaryMuscles
+              ? [...bundled.secondaryMuscles]
+              : [];
+        const instructions =
+          Array.isArray(def.instructions) && def.instructions.length > 0
+            ? [...def.instructions]
+            : bundled?.instructions
+              ? [...bundled.instructions]
+              : [];
 
         we.exercise = {
           id: def.id,
@@ -465,17 +562,28 @@ export function parseBackup(json: string): BackupV3 {
           isCustom: Boolean(def.isCustom),
         };
       } else {
-        if (we.exercise.name !== undefined && (typeof we.exercise.name !== 'string' || !we.exercise.name.trim())) {
+        if (
+          we.exercise.name !== undefined &&
+          (typeof we.exercise.name !== 'string' || !we.exercise.name.trim())
+        ) {
           throw new Error(`Invalid exercise name in ${entityLabel} exercise: ${we.exerciseId}`);
         }
         if (we.exercise.primaryMuscles !== undefined) {
-          if (!Array.isArray(we.exercise.primaryMuscles) || we.exercise.primaryMuscles.some((m: any) => typeof m !== 'string')) {
+          if (
+            !Array.isArray(we.exercise.primaryMuscles) ||
+            we.exercise.primaryMuscles.some((m: any) => typeof m !== 'string')
+          ) {
             throw new Error(`Invalid primaryMuscles in ${entityLabel} exercise: ${we.exerciseId}`);
           }
         } else {
-          we.exercise.primaryMuscles = (Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0)
-            ? [...def.primaryMuscles]
-            : ((we.exercise as any).targetMuscle ? [(we.exercise as any).targetMuscle] : (bundled?.primaryMuscles ? [...bundled.primaryMuscles] : []));
+          we.exercise.primaryMuscles =
+            Array.isArray(def.primaryMuscles) && def.primaryMuscles.length > 0
+              ? [...def.primaryMuscles]
+              : (we.exercise as any).targetMuscle
+                ? [(we.exercise as any).targetMuscle]
+                : bundled?.primaryMuscles
+                  ? [...bundled.primaryMuscles]
+                  : [];
         }
         if (we.exercise.equipment !== undefined && typeof we.exercise.equipment !== 'string') {
           throw new Error(`Invalid equipment in ${entityLabel} exercise: ${we.exerciseId}`);
@@ -486,14 +594,26 @@ export function parseBackup(json: string): BackupV3 {
         we.exercise.id = we.exercise.id || def.id;
         we.exercise.name = we.exercise.name || def.name || bundled?.name || we.exerciseId;
         we.exercise.category = we.exercise.category || def.category || bundled?.category || 'other';
-        we.exercise.equipment = we.exercise.equipment || def.equipment || bundled?.equipment || 'other';
+        we.exercise.equipment =
+          we.exercise.equipment || def.equipment || bundled?.equipment || 'other';
         we.exercise.secondaryMuscles = Array.isArray(we.exercise.secondaryMuscles)
           ? we.exercise.secondaryMuscles
-          : (Array.isArray(def.secondaryMuscles) ? [...def.secondaryMuscles] : (bundled?.secondaryMuscles ? [...bundled.secondaryMuscles] : []));
+          : Array.isArray(def.secondaryMuscles)
+            ? [...def.secondaryMuscles]
+            : bundled?.secondaryMuscles
+              ? [...bundled.secondaryMuscles]
+              : [];
         we.exercise.instructions = Array.isArray(we.exercise.instructions)
           ? we.exercise.instructions
-          : (Array.isArray(def.instructions) ? [...def.instructions] : (bundled?.instructions ? [...bundled.instructions] : []));
-        we.exercise.isCustom = we.exercise.isCustom !== undefined ? Boolean(we.exercise.isCustom) : Boolean(def.isCustom);
+          : Array.isArray(def.instructions)
+            ? [...def.instructions]
+            : bundled?.instructions
+              ? [...bundled.instructions]
+              : [];
+        we.exercise.isCustom =
+          we.exercise.isCustom !== undefined
+            ? Boolean(we.exercise.isCustom)
+            : Boolean(def.isCustom);
         applyInstructionLinkFallback(we.exercise, def, bundled);
       }
 
@@ -552,7 +672,12 @@ export function parseBackup(json: string): BackupV3 {
     }
     workoutIds.add(w.id);
 
-    validateWorkoutStructure(w, knownExercisesMap, 'workout', new Set(parsed.gyms.map((gym: Gym) => gym.id)));
+    validateWorkoutStructure(
+      w,
+      knownExercisesMap,
+      'workout',
+      new Set(parsed.gyms.map((gym: Gym) => gym.id)),
+    );
   }
 
   // Validate drafts
@@ -561,7 +686,12 @@ export function parseBackup(json: string): BackupV3 {
     if (!d || typeof d !== 'object') {
       throw new Error('Invalid draft in backup: expected object');
     }
-    if (!d.workout || typeof d.workout !== 'object' || !d.workout.id || typeof d.workout.id !== 'string') {
+    if (
+      !d.workout ||
+      typeof d.workout !== 'object' ||
+      !d.workout.id ||
+      typeof d.workout.id !== 'string'
+    ) {
       throw new Error('Invalid draft in backup: missing workout or workout.id');
     }
     if (draftIds.has(d.workout.id)) {
@@ -592,13 +722,32 @@ export function parseBackup(json: string): BackupV3 {
       }
     }
 
-    validateWorkoutStructure(d.workout, knownExercisesMap, 'draft workout', new Set(parsed.gyms.map((gym: Gym) => gym.id)));
+    validateWorkoutStructure(
+      d.workout,
+      knownExercisesMap,
+      'draft workout',
+      new Set(parsed.gyms.map((gym: Gym) => gym.id)),
+    );
   }
 
   validateScopes(parsed.exerciseGymScopes, parsed.gyms, new Set(knownExercisesMap.keys()));
-  validateSnapshotStructure(parsed, { knownExerciseIds: new Set(knownExercisesMap.keys()), requireDefaultGym: true });
+  validateSnapshotStructure(parsed, {
+    knownExerciseIds: new Set(knownExercisesMap.keys()),
+    requireDefaultGym: true,
+  });
 
   return parsed as BackupV3;
+}
+
+function hasTrackedData(snapshot: DataSnapshot): boolean {
+  const workouts = [...snapshot.workouts, ...snapshot.drafts.map(draft => draft.workout)];
+  return workouts.some(workout =>
+    workout.exercises.some(
+      exercise =>
+        exercise.trackingType !== undefined ||
+        exercise.sets.some(set => set.durationSeconds !== undefined || set.distanceM !== undefined),
+    ),
+  );
 }
 
 export async function buildBackupJson(store?: Store): Promise<string> {
@@ -611,19 +760,13 @@ export async function buildBackupJson(store?: Store): Promise<string> {
 
   const safeSettings: Record<string, string> = {};
   for (const [k, v] of Object.entries(snapshot.settings || {})) {
-    if (
-      !k.startsWith('schema_') &&
-      !k.startsWith('writer_') &&
-      !k.startsWith('migration_') &&
-      k !== 'writer_lease' &&
-      k !== 'health_sync_enabled'
-    ) {
+    if (!isBackupExcludedSetting(k)) {
       safeSettings[k] = v;
     }
   }
 
   const backup = {
-    version: 3,
+    version: hasTrackedData(snapshot) ? 4 : 3,
     exportedAt: new Date().toISOString(),
     workouts: snapshot.workouts.map(serializeWorkout),
     routines: snapshot.routines.map(serializeRoutine),

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { computeCsvImportPlan } from '../../src/utils/importer/import-planner';
 import { DataSnapshot } from '../../src/database/contract';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
+import { getDefaultExercises } from '../../src/database/seedData';
 
 describe('CSV Import Planner', () => {
   const baseSnapshot: DataSnapshot = {
@@ -18,7 +18,7 @@ describe('CSV Import Planner', () => {
       },
     ],
     routines: [],
-    exercises: DEFAULT_EXERCISES,
+    exercises: getDefaultExercises(),
     drafts: [],
     settings: {},
     gyms: [
@@ -91,9 +91,14 @@ describe('CSV Import Planner', () => {
 "Morning Session A","2024-08-01T08:00:00.000Z","2024-08-01T09:00:00.000Z","","Squat (Barbell)",1,"normal",120,5,8
 "Morning Session B","2024-08-01T08:00:00.000Z","2024-08-01T09:00:00.000Z","","Squat (Barbell)",1,"normal",120,5,8`;
 
-    const plan = computeCsvImportPlan(csvWithInFileDup, { ...baseSnapshot, workouts: [] }, {
-      skipExistingWorkouts: true,
-    });
+    const plan = computeCsvImportPlan(
+      csvWithInFileDup,
+      { ...baseSnapshot, workouts: [] },
+      {
+        targetGymId: 'gym-default',
+        skipExistingWorkouts: true,
+      },
+    );
 
     assert.equal(plan.totalWorkouts, 2);
     assert.equal(plan.duplicateWorkoutsCount, 1);

@@ -27,7 +27,8 @@ describe('CSV Tokenizer', () => {
   });
 
   it('handles quotes with embedded delimiters', () => {
-    const csv = '"Date","Workout Name","Exercise"\n"2024-05-01","Push Day, Heavy","Bench Press, Paused"';
+    const csv =
+      '"Date","Workout Name","Exercise"\n"2024-05-01","Push Day, Heavy","Bench Press, Paused"';
     const rows = tokenizeCsv(csv);
     assert.equal(rows.length, 2);
     assert.deepEqual(rows[1], ['2024-05-01', 'Push Day, Heavy', 'Bench Press, Paused']);

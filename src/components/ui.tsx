@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  AccessibilityRole,
   Easing,
   Modal,
   View,
   Text,
   TouchableOpacity,
+  TouchableOpacityProps,
   StyleSheet,
   StyleProp,
   Platform,
@@ -15,12 +17,38 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Trophy } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { colors, radii, spacing, type, HEADER_TOP_FALLBACK } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 /**
  * Shared building blocks for the Lifts UI. Screens compose these instead of
  * restyling headers, chips and menus individually, which keeps spacing and
  * hierarchy consistent across the app.
  */
+
+// ---------------------------------------------------------------------------
+// AppTouchable
+// ---------------------------------------------------------------------------
+
+export type AppTouchableProps = Omit<
+  TouchableOpacityProps,
+  'accessibilityLabel' | 'accessibilityRole'
+> & { accessibilityRole?: AccessibilityRole } & (
+    | { accessibilityLabel: string }
+    | {
+        /** Dismiss scrims are intentionally invisible to screen readers. */
+        accessible: false;
+        accessibilityLabel?: string;
+      }
+  );
+
+/**
+ * The required-label primitive (A11Y-05). Interactive components compose this
+ * instead of raw TouchableOpacity, so a missing label is a type error, and the
+ * labelled surfaces restrict raw touchables in ESLint.
+ */
+export function AppTouchable({ accessibilityRole = 'button', ...rest }: AppTouchableProps) {
+  return <TouchableOpacity accessibilityRole={accessibilityRole} {...rest} />;
+}
 
 // ---------------------------------------------------------------------------
 // Screen header
@@ -151,9 +179,13 @@ export function SegmentedControl<T extends string>({
             onPress={() => onChange(option.key)}
             activeOpacity={0.8}
             accessibilityRole="tab"
+            accessibilityLabel={option.label}
             accessibilityState={{ selected }}
           >
-            <Text style={[styles.segmentText, selected && styles.segmentTextActive]} numberOfLines={1}>
+            <Text
+              style={[styles.segmentText, selected && styles.segmentTextActive]}
+              numberOfLines={1}
+            >
               {option.label}
             </Text>
           </TouchableOpacity>
@@ -176,7 +208,14 @@ interface ChipProps {
   accessibilityLabel?: string;
 }
 
-export function Chip({ label, selected, onPress, leading, size = 'md', accessibilityLabel }: ChipProps) {
+export function Chip({
+  label,
+  selected,
+  onPress,
+  leading,
+  size = 'md',
+  accessibilityLabel,
+}: ChipProps) {
   return (
     <TouchableOpacity
       style={[
@@ -229,6 +268,7 @@ export function SectionHeader({ title, meta, actionLabel, onAction, style }: Sec
           onPress={onAction}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
+          accessibilityLabel={actionLabel}
         >
           <Text style={styles.sectionAction}>{actionLabel}</Text>
         </TouchableOpacity>
@@ -302,6 +342,9 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
 
   const sheetTranslate = progress.interpolate({ inputRange: [0, 1], outputRange: [360, 0] });
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal
       visible={visible}
@@ -310,13 +353,15 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
       onRequestClose={onClose}
       onDismiss={runPendingAction}
     >
-      <View style={styles.sheetRoot}>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.sheetRoot}>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, styles.sheetBackdrop, { opacity: progress }]}
+        >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={onClose}
-            accessibilityLabel="Close menu"
+            accessible={false}
           />
         </Animated.View>
         <Animated.View
@@ -374,6 +419,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
             onPress={onClose}
             activeOpacity={0.7}
             accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
             <Text style={styles.sheetCancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -387,7 +433,7 @@ export function ActionSheet({ visible, title, subtitle, actions, onClose }: Acti
 // PR mark
 // ---------------------------------------------------------------------------
 
-export type PRRankLevel = 1 | 2 | 3;
+type PRRankLevel = 1 | 2 | 3;
 
 /** Accent per record rank: gold for a new best, quieter metals for 2nd and 3rd best. */
 export const PR_RANK_COLORS: Record<PRRankLevel, string> = {
@@ -396,7 +442,7 @@ export const PR_RANK_COLORS: Record<PRRankLevel, string> = {
   3: '#D4925B',
 };
 
-export const PR_RANK_LABELS: Record<PRRankLevel, string> = {
+const PR_RANK_LABELS: Record<PRRankLevel, string> = {
   1: 'PR',
   2: '2nd best',
   3: '3rd best',
@@ -423,29 +469,6 @@ export function PRMark({ rank, size = 28 }: PRMarkProps) {
       }}
     >
       <Trophy size={Math.round(size * 0.52)} color={color} strokeWidth={2.2} />
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Stat tile
-// ---------------------------------------------------------------------------
-
-interface StatProps {
-  label: string;
-  value: string;
-  accent?: string;
-}
-
-export function Stat({ label, value, accent }: StatProps) {
-  return (
-    <View style={styles.stat}>
-      <Text style={[styles.statValue, accent ? { color: accent } : null]} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={styles.statLabel} numberOfLines={1}>
-        {label}
-      </Text>
     </View>
   );
 }
@@ -655,19 +678,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.textSecondary,
-  },
-  stat: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.text,
-    letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'],
-  },
-  statLabel: {
-    ...type.caption,
-    marginTop: 2,
   },
 });

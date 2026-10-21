@@ -1,12 +1,4 @@
-import { ActiveExercise, RoutineExercise, Workout, WorkoutSet } from '../types';
-
-export interface SupersetGroupInfo {
-  id: string; // supersetId
-  label: string; // 'SUPERSET A', 'GIANT SET B', etc.
-  type: 'superset' | 'giant_set';
-  color: string;
-  exerciseIds: string[];
-}
+import { Workout } from '../types';
 
 export interface ExerciseSupersetMeta {
   groupId: string;
@@ -33,7 +25,7 @@ export const SUPERSET_PALETTE = [
  * and returns grouped metadata keyed by exercise ID.
  */
 export function getSupersetMetadata(
-  exercises: Array<{ id: string; supersetId?: string }>
+  exercises: Array<{ id: string; supersetId?: string }>,
 ): Map<string, ExerciseSupersetMeta> {
   const result = new Map<string, ExerciseSupersetMeta>();
 
@@ -52,7 +44,7 @@ export function getSupersetMetadata(
   }
 
   // Filter out singleton groups (must have at least 2 exercises to qualify as superset)
-  const validGroups = groupsOrder.filter((gid) => (groupMembers.get(gid)?.length || 0) >= 2);
+  const validGroups = groupsOrder.filter(gid => (groupMembers.get(gid)?.length || 0) >= 2);
 
   validGroups.forEach((gid, groupIndex) => {
     const memberIds = groupMembers.get(gid)!;
@@ -93,12 +85,12 @@ export interface NextSupersetTarget {
 export function resolveNextSupersetTarget(
   workout: Workout,
   completedExerciseId: string,
-  completedSetId: string
+  completedSetId: string,
 ): NextSupersetTarget | null {
-  const currentEx = workout.exercises.find((e) => e.id === completedExerciseId);
+  const currentEx = workout.exercises.find(e => e.id === completedExerciseId);
   if (!currentEx || !currentEx.supersetId) return null;
 
-  const currentSet = currentEx.sets.find((s) => s.id === completedSetId);
+  const currentSet = currentEx.sets.find(s => s.id === completedSetId);
   if (!currentSet) return null;
 
   // Warmup sets do not trigger superset circuit switching.
@@ -108,17 +100,15 @@ export function resolveNextSupersetTarget(
   }
 
   // Working sets in current exercise
-  const currentWorkingSets = currentEx.sets.filter((s) => s.type !== 'warmup');
-  const currentWorkingIndex = currentWorkingSets.findIndex((s) => s.id === completedSetId);
+  const currentWorkingSets = currentEx.sets.filter(s => s.type !== 'warmup');
+  const currentWorkingIndex = currentWorkingSets.findIndex(s => s.id === completedSetId);
   if (currentWorkingIndex === -1) return null;
 
   // Find all exercises belonging to the same superset
-  const supersetExercises = workout.exercises.filter(
-    (e) => e.supersetId === currentEx.supersetId
-  );
+  const supersetExercises = workout.exercises.filter(e => e.supersetId === currentEx.supersetId);
   if (supersetExercises.length < 2) return null;
 
-  const currentExGroupIndex = supersetExercises.findIndex((e) => e.id === completedExerciseId);
+  const currentExGroupIndex = supersetExercises.findIndex(e => e.id === completedExerciseId);
   if (currentExGroupIndex === -1) return null;
 
   const isLastExerciseInGroup = currentExGroupIndex === supersetExercises.length - 1;
@@ -126,13 +116,13 @@ export function resolveNextSupersetTarget(
   if (!isLastExerciseInGroup) {
     // Next exercise in the same working set round
     const nextEx = supersetExercises[currentExGroupIndex + 1];
-    const nextWorkingSets = nextEx.sets.filter((s) => s.type !== 'warmup');
+    const nextWorkingSets = nextEx.sets.filter(s => s.type !== 'warmup');
 
     // Find corresponding working set index or first incomplete working set in nextEx
     const matchingSet =
       (!nextWorkingSets[currentWorkingIndex]?.isCompleted
         ? nextWorkingSets[currentWorkingIndex]
-        : undefined) ?? nextWorkingSets.find((s) => !s.isCompleted);
+        : undefined) ?? nextWorkingSets.find(s => !s.isCompleted);
 
     if (matchingSet && !matchingSet.isCompleted) {
       return {
@@ -147,11 +137,11 @@ export function resolveNextSupersetTarget(
     // Last exercise in group completed this working set -> this round is complete!
     // Check if subsequent working rounds remain in the superset
     const firstEx = supersetExercises[0];
-    const firstExWorkingSets = firstEx.sets.filter((s) => s.type !== 'warmup');
+    const firstExWorkingSets = firstEx.sets.filter(s => s.type !== 'warmup');
     const nextRoundIndex = currentWorkingIndex + 1;
 
-    const hasMoreSets = supersetExercises.some((e) => {
-      const wSets = e.sets.filter((s) => s.type !== 'warmup');
+    const hasMoreSets = supersetExercises.some(e => {
+      const wSets = e.sets.filter(s => s.type !== 'warmup');
       return wSets.length > nextRoundIndex && !wSets[nextRoundIndex].isCompleted;
     });
 
@@ -186,7 +176,7 @@ export function linkExercisesInGroup<T extends { supersetId?: string }>(
   items: T[],
   firstIndex: number,
   secondIndex: number,
-  fallbackNewId: string
+  fallbackNewId: string,
 ): T[] {
   if (
     firstIndex < 0 ||
@@ -221,7 +211,7 @@ export function linkExercisesInGroup<T extends { supersetId?: string }>(
  */
 export function unlinkExerciseFromGroup<T extends { supersetId?: string }>(
   items: T[],
-  targetIndex: number
+  targetIndex: number,
 ): T[] {
   if (targetIndex < 0 || targetIndex >= items.length) return items;
   const target = items[targetIndex];
@@ -229,12 +219,12 @@ export function unlinkExerciseFromGroup<T extends { supersetId?: string }>(
   const oldId = target.supersetId;
 
   const updated = items.map((item, idx) =>
-    idx === targetIndex ? { ...item, supersetId: undefined } : item
+    idx === targetIndex ? { ...item, supersetId: undefined } : item,
   );
-  const remainingCount = updated.filter((item) => item.supersetId === oldId).length;
+  const remainingCount = updated.filter(item => item.supersetId === oldId).length;
   if (remainingCount < 2) {
-    return updated.map((item) =>
-      item.supersetId === oldId ? { ...item, supersetId: undefined } : item
+    return updated.map(item =>
+      item.supersetId === oldId ? { ...item, supersetId: undefined } : item,
     );
   }
   return updated;
@@ -257,14 +247,14 @@ export function unlinkExerciseFromGroup<T extends { supersetId?: string }>(
 export function setSupersetGroupInList<T extends { id: string; supersetId?: string }>(
   items: T[],
   selectedExerciseIds: string[],
-  fallbackNewId: string = `ss-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+  fallbackNewId: string = `ss-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
 ): T[] {
   const selectedSet = new Set(selectedExerciseIds);
 
   if (selectedSet.size < 2) {
     // Ungroup the exercises that were selected, and clean up any groups left with < 2 members
-    let updated = items.map((item) =>
-      selectedSet.has(item.id) ? { ...item, supersetId: undefined } : item
+    const updated = items.map(item =>
+      selectedSet.has(item.id) ? { ...item, supersetId: undefined } : item,
     );
     const counts = new Map<string, number>();
     for (const it of updated) {
@@ -272,7 +262,7 @@ export function setSupersetGroupInList<T extends { id: string; supersetId?: stri
         counts.set(it.supersetId, (counts.get(it.supersetId) || 0) + 1);
       }
     }
-    return updated.map((it) => {
+    return updated.map(it => {
       if (it.supersetId && (counts.get(it.supersetId) || 0) < 2) {
         return { ...it, supersetId: undefined };
       }
@@ -296,7 +286,7 @@ export function setSupersetGroupInList<T extends { id: string; supersetId?: stri
   // Update superset IDs:
   // - Selected exercises receive chosenSupersetId
   // - Unselected exercises that belonged to one of the involved groups lose their supersetId
-  let updatedItems = items.map((item) => {
+  let updatedItems = items.map(item => {
     if (selectedSet.has(item.id)) {
       return { ...item, supersetId: chosenSupersetId };
     }
@@ -313,7 +303,7 @@ export function setSupersetGroupInList<T extends { id: string; supersetId?: stri
       counts.set(it.supersetId, (counts.get(it.supersetId) || 0) + 1);
     }
   }
-  updatedItems = updatedItems.map((it) => {
+  updatedItems = updatedItems.map(it => {
     if (it.supersetId && (counts.get(it.supersetId) || 0) < 2) {
       return { ...it, supersetId: undefined };
     }
@@ -321,7 +311,7 @@ export function setSupersetGroupInList<T extends { id: string; supersetId?: stri
   });
 
   // Arrange selected exercises consecutively starting at the index of the first selected item
-  const firstSelectedIndex = items.findIndex((it) => selectedSet.has(it.id));
+  const firstSelectedIndex = items.findIndex(it => selectedSet.has(it.id));
   if (firstSelectedIndex === -1) return updatedItems;
 
   const selectedItems: T[] = [];
@@ -331,7 +321,7 @@ export function setSupersetGroupInList<T extends { id: string; supersetId?: stri
     }
   }
 
-  const nonSelectedItems = updatedItems.filter((it) => !selectedSet.has(it.id));
+  const nonSelectedItems = updatedItems.filter(it => !selectedSet.has(it.id));
 
   return [
     ...nonSelectedItems.slice(0, firstSelectedIndex),
@@ -345,9 +335,7 @@ export function setSupersetGroupInList<T extends { id: string; supersetId?: stri
  */
 export function dissolveSupersetInList<T extends { id: string; supersetId?: string }>(
   items: T[],
-  supersetId: string
+  supersetId: string,
 ): T[] {
-  return items.map((it) =>
-    it.supersetId === supersetId ? { ...it, supersetId: undefined } : it
-  );
+  return items.map(it => (it.supersetId === supersetId ? { ...it, supersetId: undefined } : it));
 }

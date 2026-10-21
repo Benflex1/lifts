@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { AppTouchable } from './ui';
 import { AlertCircle } from 'lucide-react-native';
 import { useStorage } from '../context/StorageContext';
 import { colors } from '../theme';
@@ -32,18 +33,21 @@ export function ReadOnlyBanner() {
           </Text>
         </View>
       </View>
-      <TouchableOpacity
+      <AppTouchable
         style={styles.actionButton}
         onPress={handleTakeOver}
         disabled={loading}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Take over editing session"
+        accessibilityState={{ busy: loading, disabled: loading }}
       >
         {loading ? (
           <ActivityIndicator size="small" color={colors.black} />
         ) : (
           <Text style={styles.actionText}>Take Over</Text>
         )}
-      </TouchableOpacity>
+      </AppTouchable>
     </View>
   );
 }

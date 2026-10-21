@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ExercisePodium, PodiumEntry, PRMetric } from '../workout/pr';
 import { formatWeight, WeightUnit } from '../utils/units';
+import { distanceUnitFor, formatDistance, formatSetDuration } from '../workout/tracking';
 import { colors, radii } from '../theme';
 import { PRMark, SegmentedControl } from './ui';
 
@@ -17,6 +18,8 @@ const METRIC_OPTIONS: { key: PRMetric; label: string }[] = [
   { key: '1rm', label: 'e1RM' },
   { key: 'volume', label: 'Volume' },
   { key: 'reps', label: 'Reps' },
+  { key: 'distance', label: 'Distance' },
+  { key: 'duration', label: 'Time' },
 ];
 
 const RANK_LABELS = { 1: 'Best', 2: '2nd', 3: '3rd' } as const;
@@ -35,7 +38,9 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
   const options = METRIC_OPTIONS.filter(option => podium[option.key].length > 0);
   if (options.length === 0) return null;
 
-  const metric = options.some(option => option.key === selectedMetric) ? selectedMetric : options[0].key;
+  const metric = options.some(option => option.key === selectedMetric)
+    ? selectedMetric
+    : options[0].key;
   const entries = [1, 2, 3]
     .map(rank => podium[metric].find(entry => entry.rank === rank))
     .filter((entry): entry is PodiumEntry => Boolean(entry));
@@ -43,7 +48,7 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
   const formatValue = (entry: PodiumEntry): { primary: string; secondary: string } => {
     if (entry.metric === 'weight') {
       return {
-        primary: formatWeight(entry.weightKg, unit),
+        primary: `${entry.trackingType === 'weighted_bodyweight' ? '+' : ''}${formatWeight(entry.weightKg, unit)}`,
         secondary: `× ${entry.reps} ${entry.reps === 1 ? 'rep' : 'reps'}`,
       };
     }
@@ -57,6 +62,18 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
       return {
         primary: formatWeight(entry.value, unit),
         secondary: `${formatWeight(entry.weightKg, unit)} × ${entry.reps}`,
+      };
+    }
+    if (entry.metric === 'duration') {
+      return {
+        primary: formatSetDuration(entry.value),
+        secondary: entry.distanceM ? formatDistance(entry.distanceM, distanceUnitFor(unit)) : '',
+      };
+    }
+    if (entry.metric === 'distance') {
+      return {
+        primary: formatDistance(entry.value, distanceUnitFor(unit)),
+        secondary: entry.durationSeconds ? formatSetDuration(entry.durationSeconds) : '',
       };
     }
     return { primary: `${entry.value} reps`, secondary: '' };
@@ -87,14 +104,20 @@ export const ExercisePodiumView: React.FC<ExercisePodiumViewProps> = ({
                 year: 'numeric',
               })
             : '';
-          const meta = [dateStr, gymTrackingEnabled ? entry.gymName : undefined].filter(Boolean).join(' · ');
+          const meta = [dateStr, gymTrackingEnabled ? entry.gymName : undefined]
+            .filter(Boolean)
+            .join(' · ');
           return (
             <View key={`${entry.rank}-${idx}`} style={[styles.row, idx > 0 && styles.rowDivider]}>
               <PRMark rank={entry.rank} size={32} />
               <View style={styles.rowText}>
                 <View style={styles.valueRow}>
-                  <Text style={[styles.value, entry.rank === 1 && styles.valueBest]}>{value.primary}</Text>
-                  {value.secondary ? <Text style={styles.valueSecondary}>{value.secondary}</Text> : null}
+                  <Text style={[styles.value, entry.rank === 1 && styles.valueBest]}>
+                    {value.primary}
+                  </Text>
+                  {value.secondary ? (
+                    <Text style={styles.valueSecondary}>{value.secondary}</Text>
+                  ) : null}
                 </View>
                 {meta ? <Text style={styles.meta}>{meta}</Text> : null}
               </View>

@@ -1,24 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal,
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   FlatList,
-  ScrollView,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { AppTouchable } from './ui';
 import { Search, X, Plus, Check } from 'lucide-react-native';
 import { Exercise } from '../types';
-import { searchExercises, createCustomExercise, updateCustomExercise } from '../database/db';
+import { searchExercises } from '../database/db';
 
 import { colors } from '../theme';
+import { MUSCLE_GROUPS, EQUIPMENT_LIST } from '../workout/exercise-options';
+import { CustomExerciseModal, CustomExerciseSaveMode } from './CustomExerciseModal';
 import { ExerciseFilterBar } from './ExerciseFilterBar';
 import { IconButton } from './ui';
 import { EXERCISE_LIST_PERFORMANCE_PROPS, ExerciseListRow } from './ExerciseListRow';
 import { useStableCallback } from '../hooks/useStableCallback';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
 
 interface Props {
   visible: boolean;
@@ -28,96 +30,6 @@ interface Props {
   onSelectExercise: (exercise: Exercise) => void;
   onSelectMultiple?: (exercises: Exercise[]) => void;
 }
-
-const MUSCLE_GROUPS = [
-  'All',
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Biceps',
-  'Triceps',
-  'Quadriceps',
-  'Hamstrings',
-  'Glutes',
-  'Abdominals',
-  'Calves',
-];
-
-const EQUIPMENT_LIST = [
-  'All',
-  'Barbell',
-  'Dumbbell',
-  'Machine',
-  'Cable',
-  'Body Only',
-];
-
-const CUSTOM_MUSCLE_OPTIONS = [
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Biceps',
-  'Triceps',
-  'Quadriceps',
-  'Hamstrings',
-  'Glutes',
-  'Abdominals',
-  'Calves',
-];
-
-const CUSTOM_EQUIPMENT_OPTIONS = [
-  'Barbell',
-  'Dumbbell',
-  'Machine',
-  'Cable',
-  'Bodyweight',
-];
-
-const MUSCLE_ALIAS_MAP: Record<string, string> = {
-  lats: 'Back',
-  lat: 'Back',
-  traps: 'Back',
-  trap: 'Back',
-  rhomboids: 'Back',
-  lower_back: 'Back',
-  'lower back': 'Back',
-  quads: 'Quadriceps',
-  quad: 'Quadriceps',
-  quadriceps: 'Quadriceps',
-  hamstrings: 'Hamstrings',
-  hamstring: 'Hamstrings',
-  glutes: 'Glutes',
-  glute: 'Glutes',
-  abs: 'Abdominals',
-  core: 'Abdominals',
-  abdominals: 'Abdominals',
-  calves: 'Calves',
-  calf: 'Calves',
-  chest: 'Chest',
-  pectorals: 'Chest',
-  shoulders: 'Shoulders',
-  delts: 'Shoulders',
-  deltoids: 'Shoulders',
-  biceps: 'Biceps',
-  triceps: 'Triceps',
-};
-
-const EQUIPMENT_ALIAS_MAP: Record<string, string> = {
-  barbell: 'Barbell',
-  bb: 'Barbell',
-  dumbbell: 'Dumbbell',
-  db: 'Dumbbell',
-  machine: 'Machine',
-  'smith machine': 'Machine',
-  cable: 'Cable',
-  bodyweight: 'Bodyweight',
-  'body weight': 'Bodyweight',
-  'body only': 'Bodyweight',
-  body: 'Bodyweight',
-  kettlebell: 'Dumbbell',
-  bands: 'Cable',
-  band: 'Cable',
-};
 
 export const ExercisePickerModal: React.FC<Props> = ({
   visible,
@@ -138,9 +50,6 @@ export const ExercisePickerModal: React.FC<Props> = ({
   // Custom exercise modal state
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
-  const [customName, setCustomName] = useState('');
-  const [customMuscle, setCustomMuscle] = useState('Chest');
-  const [customEquipment, setCustomEquipment] = useState('Barbell');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -149,14 +58,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  useEffect(() => {
-    if (visible) {
-      loadExercises();
-      setSelectedExercises(new Map());
-    }
-  }, [visible, debouncedQuery, selectedMuscle, selectedEquipment]);
-
-  const loadExercises = async () => {
+  const loadExercises = useCallback(async () => {
     try {
       const results = await searchExercises(debouncedQuery, selectedMuscle, selectedEquipment);
       setExercises(results);
@@ -165,7 +67,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
     } finally {
       setInitialLoading(false);
     }
-  };
+  }, [debouncedQuery, selectedMuscle, selectedEquipment]);
+
+  useEffect(() => {
+    if (visible) {
+      loadExercises();
+      setSelectedExercises(new Map());
+    }
+  }, [visible, loadExercises]);
 
   const handleItemPress = (item: Exercise) => {
     if (multiSelect) {
@@ -186,9 +95,6 @@ export const ExercisePickerModal: React.FC<Props> = ({
 
   const handleOpenAddCustom = () => {
     setEditingExercise(null);
-    setCustomName('');
-    setCustomMuscle('Chest');
-    setCustomEquipment('Barbell');
     setShowCustomModal(true);
   };
 
@@ -197,68 +103,34 @@ export const ExercisePickerModal: React.FC<Props> = ({
 
   const handleOpenEditCustom = (exercise: Exercise) => {
     setEditingExercise(exercise);
-    setCustomName(exercise.name);
-
-    const rawMuscle = (exercise.primaryMuscles?.[0] || '').toLowerCase().trim();
-    const matchedMuscle =
-      CUSTOM_MUSCLE_OPTIONS.find(m => m.toLowerCase() === rawMuscle) ||
-      MUSCLE_ALIAS_MAP[rawMuscle] ||
-      'Chest';
-    setCustomMuscle(matchedMuscle);
-
-    const rawEquip = (exercise.equipment || '').toLowerCase().trim();
-    const matchedEquip =
-      CUSTOM_EQUIPMENT_OPTIONS.find(eq => eq.toLowerCase() === rawEquip) ||
-      EQUIPMENT_ALIAS_MAP[rawEquip] ||
-      (['kettlebell', 'db'].some(k => rawEquip.includes(k)) ? 'Dumbbell' :
-       rawEquip.includes('body') ? 'Bodyweight' :
-       rawEquip.includes('cable') || rawEquip.includes('band') ? 'Cable' :
-       rawEquip.includes('smith') || rawEquip.includes('machine') ? 'Machine' : 'Barbell');
-    setCustomEquipment(matchedEquip);
-
     setShowCustomModal(true);
   };
 
-  const handleSaveCustom = async () => {
-    const trimmed = customName.trim();
-    if (!trimmed) return;
+  const closeCustomModal = () => {
+    setShowCustomModal(false);
+    setEditingExercise(null);
+  };
 
-    if (editingExercise) {
-      const updated = await updateCustomExercise(editingExercise.id, {
-        name: trimmed,
-        category: editingExercise.category || 'strength',
-        equipment: customEquipment.toLowerCase(),
-        primaryMuscles: [customMuscle.toLowerCase()],
-      });
-      setShowCustomModal(false);
-      setEditingExercise(null);
-      setCustomName('');
-      await loadExercises();
-      if (selectedExercises.has(updated.id)) {
-        setSelectedExercises(prev => new Map(prev).set(updated.id, updated));
-      }
+  const handleCustomSaved = async (saved: Exercise, mode: CustomExerciseSaveMode) => {
+    await loadExercises();
+    if (mode === 'updated') {
+      setSelectedExercises(prev =>
+        prev.has(saved.id) ? new Map(prev).set(saved.id, saved) : prev,
+      );
+    } else if (multiSelect) {
+      setSelectedExercises(prev => new Map(prev).set(saved.id, saved));
     } else {
-      const created = await createCustomExercise({
-        name: trimmed,
-        category: 'strength',
-        equipment: customEquipment.toLowerCase(),
-        primaryMuscles: [customMuscle.toLowerCase()],
-      });
-      setShowCustomModal(false);
-      setCustomName('');
-      await loadExercises();
-      if (multiSelect) {
-        setSelectedExercises(prev => new Map(prev).set(created.id, created));
-      } else {
-        onSelectExercise(created);
-        onClose();
-      }
+      onSelectExercise(saved);
+      onClose();
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={styles.container}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
@@ -294,9 +166,14 @@ export const ExercisePickerModal: React.FC<Props> = ({
             clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <AppTouchable
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <X size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           )}
         </View>
 
@@ -318,7 +195,10 @@ export const ExercisePickerModal: React.FC<Props> = ({
           <FlatList
             data={exercises}
             keyExtractor={item => item.id}
-            contentContainerStyle={[styles.listContent, multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 }]}
+            contentContainerStyle={[
+              styles.listContent,
+              multiSelect && selectedExercises.size > 0 && { paddingBottom: 100 },
+            ]}
             keyboardShouldPersistTaps="handled"
             {...EXERCISE_LIST_PERFORMANCE_PROPS}
             extraData={selectedExercises}
@@ -334,16 +214,23 @@ export const ExercisePickerModal: React.FC<Props> = ({
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>No exercises found.</Text>
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.createCustomBar}
                   onPress={handleOpenAddCustom}
                   accessibilityRole="button"
+                  accessibilityLabel={
+                    searchQuery.trim()
+                      ? `Create custom exercise ${searchQuery.trim()}`
+                      : 'Create custom exercise'
+                  }
                 >
                   <Plus size={16} color={colors.primaryLight} />
                   <Text style={styles.createCustomText}>
-                    {searchQuery.trim() ? `Create "${searchQuery.trim()}"` : 'Create Custom Exercise'}
+                    {searchQuery.trim()
+                      ? `Create "${searchQuery.trim()}"`
+                      : 'Create Custom Exercise'}
                   </Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             }
           />
@@ -352,7 +239,7 @@ export const ExercisePickerModal: React.FC<Props> = ({
         {/* Floating Batch Add Bar */}
         {multiSelect && selectedExercises.size > 0 && (
           <View style={styles.floatingBarWrap}>
-            <TouchableOpacity
+            <AppTouchable
               style={styles.floatingAddBtn}
               onPress={() => {
                 if (onSelectMultiple) {
@@ -362,87 +249,24 @@ export const ExercisePickerModal: React.FC<Props> = ({
                 }
                 onClose();
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${selectedExercises.size} selected ${selectedExercises.size === 1 ? 'exercise' : 'exercises'}`}
             >
               <Check size={20} color={colors.onPrimary} strokeWidth={2.5} />
               <Text style={styles.floatingAddBtnText}>
                 Add {selectedExercises.size} Exercise{selectedExercises.size > 1 ? 's' : ''}
               </Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
         )}
 
-        {/* Custom Exercise Modal */}
-        <Modal
+        {/* Create / Edit Custom Exercise */}
+        <CustomExerciseModal
           visible={showCustomModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => {
-            setShowCustomModal(false);
-            setEditingExercise(null);
-          }}
-        >
-          <View style={styles.customModalOverlay}>
-            <View style={styles.customModalCard}>
-              <View style={styles.header}>
-                <Text style={styles.headerTitle}>
-                  {editingExercise ? 'Edit Custom Exercise' : 'New Custom Exercise'}
-                </Text>
-                <TouchableOpacity onPress={() => {
-                  setShowCustomModal(false);
-                  setEditingExercise(null);
-                }}>
-                  <X color={colors.textSecondary} size={22} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.fieldLabel}>Exercise Name</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. Bulgarian Split Squat"
-                placeholderTextColor={colors.textMuted}
-                value={customName}
-                onChangeText={setCustomName}
-                autoFocus
-              />
-
-              <Text style={styles.fieldLabel}>Primary Muscle</Text>
-              <View style={styles.modalPills}>
-                {CUSTOM_MUSCLE_OPTIONS.map(m => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[styles.modalPill, customMuscle === m && styles.modalPillActive]}
-                    onPress={() => setCustomMuscle(m)}
-                  >
-                    <Text style={[styles.modalPillText, customMuscle === m && styles.modalPillTextActive]}>
-                      {m}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.fieldLabel}>Equipment</Text>
-              <View style={styles.modalPills}>
-                {CUSTOM_EQUIPMENT_OPTIONS.map(eq => (
-                  <TouchableOpacity
-                    key={eq}
-                    style={[styles.modalPill, customEquipment === eq && styles.modalPillActive]}
-                    onPress={() => setCustomEquipment(eq)}
-                  >
-                    <Text style={[styles.modalPillText, customEquipment === eq && styles.modalPillTextActive]}>
-                      {eq}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity style={styles.saveCustomBtn} onPress={handleSaveCustom}>
-                <Text style={styles.saveCustomBtnText}>
-                  {editingExercise ? 'Save Changes' : 'Save & Add Exercise'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+          exercise={editingExercise}
+          onClose={closeCustomModal}
+          onSaved={handleCustomSaved}
+        />
       </View>
     </Modal>
   );
@@ -543,72 +367,6 @@ const styles = StyleSheet.create({
   emptyText: {
     color: colors.textMuted,
     fontSize: 15,
-  },
-  customModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  customModalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontWeight: '600',
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  modalInput: {
-    backgroundColor: colors.border,
-    borderRadius: 12,
-    height: 48,
-    paddingHorizontal: 14,
-    color: colors.text,
-    fontSize: 16,
-  },
-  modalPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  modalPill: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: colors.border,
-    borderRadius: 12,
-  },
-  modalPillActive: {
-    backgroundColor: colors.primary,
-  },
-  modalPillText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  modalPillTextActive: {
-    color: colors.text,
-    fontWeight: '700',
-  },
-  saveCustomBtn: {
-    backgroundColor: colors.success,
-    borderRadius: 14,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  saveCustomBtnText: {
-    color: colors.black,
-    fontSize: 16,
-    fontWeight: '700',
   },
   headerActions: {
     flexDirection: 'row',

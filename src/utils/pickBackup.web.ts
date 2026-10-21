@@ -40,7 +40,7 @@ export async function pickBackupJson(): Promise<string | null> {
           }
         }, 500);
       },
-      { once: true }
+      { once: true },
     );
 
     input.click();

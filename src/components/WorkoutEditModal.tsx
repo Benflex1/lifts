@@ -6,10 +6,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { Check, X, Plus, Trash2, Clock, Sparkles, Dumbbell } from 'lucide-react-native';
+import { AppTouchable } from './ui';
+import { Check, X, Plus, Trash2, Clock, Sparkles } from 'lucide-react-native';
 import { ActiveExercise, Exercise, Gym, SetType, Workout, WorkoutSet } from '../types';
 import { WeightUnit, displayToKg, kgToDisplay } from '../utils/units';
 import { applyWorkoutEdits } from '../workout/workout-edit';
@@ -19,9 +19,25 @@ import {
   parseDurationInput,
   estimateWorkoutDuration,
 } from '../workout/duration';
-import { formatDuration } from '../utils/calculator';
 import { sanitizeWeightInput, sanitizeRepsInput } from '../workout/sets';
 import { colors } from '../theme';
+import { useModalAccessibility } from '../hooks/useModalAccessibility';
+import { useSettings } from '../context/SettingsContext';
+import {
+  displayToMeters,
+  distanceUnitFor,
+  formatSetDuration,
+  getTrackingType,
+  metersToDisplay,
+  parseSetDuration,
+  resolveTrackingTypeForExercise,
+  sanitizeDurationInput,
+  usesDistance,
+  usesDuration,
+  usesReps,
+  usesWeight,
+  withTrackingType,
+} from '../workout/tracking';
 
 interface Props {
   visible: boolean;
@@ -36,6 +52,22 @@ interface Props {
 interface SetDraftValues {
   weight: string;
   reps: string;
+  duration?: string;
+  distance?: string;
+}
+
+function trackedDrafts(
+  set: WorkoutSet,
+  unit: WeightUnit,
+): Pick<SetDraftValues, 'duration' | 'distance'> {
+  return {
+    ...(set.durationSeconds !== undefined
+      ? { duration: formatSetDuration(set.durationSeconds) }
+      : {}),
+    ...(set.distanceM !== undefined
+      ? { distance: String(metersToDisplay(set.distanceM, distanceUnitFor(unit))) }
+      : {}),
+  };
 }
 
 const draftKey = (activeExerciseId: string, setId: string) => `${activeExerciseId}:${setId}`;
@@ -58,6 +90,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
   const [minutes, setMinutes] = useState('');
   const [exercises, setExercises] = useState<ActiveExercise[]>([]);
   const [draftValues, setDraftValues] = useState<Record<string, SetDraftValues>>({});
+  const { trackingTypesEnabled, trackingTypeOverrides } = useSettings();
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +109,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
     const clonedExercises: ActiveExercise[] = (workout.exercises || []).map((ex, exIdx) => ({
       ...ex,
       id: ex.id || `we-legacy-${exIdx}-${Date.now()}`,
-      sets: (ex.sets || []).map((s) => ({ ...s })),
+      sets: (ex.sets || []).map(s => ({ ...s })),
     }));
     setExercises(clonedExercises);
 
@@ -86,6 +119,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
         nextDrafts[draftKey(ex.id, set.id)] = {
           weight: String(kgToDisplay(set.weightKg, unit)),
           reps: String(set.reps),
+          ...trackedDrafts(set, unit),
         };
       }
     }
@@ -93,10 +127,20 @@ export const WorkoutEditModal: React.FC<Props> = ({
     setError(null);
   }, [visible, workout, unit]);
 
-  const updateDraft = (activeExerciseId: string, setId: string, field: 'weight' | 'reps', val: string) => {
+  const updateDraft = (
+    activeExerciseId: string,
+    setId: string,
+    field: keyof SetDraftValues,
+    val: string,
+  ) => {
     const key = draftKey(activeExerciseId, setId);
-    const sanitized = field === 'weight' ? sanitizeWeightInput(val) : sanitizeRepsInput(val);
-    setDraftValues((prev) => ({
+    const sanitized =
+      field === 'reps'
+        ? sanitizeRepsInput(val)
+        : field === 'duration'
+          ? sanitizeDurationInput(val)
+          : sanitizeWeightInput(val);
+    setDraftValues(prev => ({
       ...prev,
       [key]: {
         ...(prev[key] || { weight: '', reps: '' }),
@@ -110,40 +154,48 @@ export const WorkoutEditModal: React.FC<Props> = ({
     const newActiveId = `we-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newSetId = `set-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-1`;
 
+    const trackingType = resolveTrackingTypeForExercise(
+      newExercise,
+      trackingTypesEnabled,
+      trackingTypeOverrides,
+    );
     const newSet: WorkoutSet = {
       id: newSetId,
       setNumber: 1,
       type: 'normal',
       weightKg: 0,
-      reps: 10,
+      reps: usesReps(trackingType) ? 10 : 0,
       isCompleted: true,
     };
 
-    const newActiveExercise: ActiveExercise = {
-      id: newActiveId,
-      exerciseId: newExercise.id,
-      exercise: newExercise,
-      sets: [newSet],
-      restTimerSeconds: 90,
-    };
+    const newActiveExercise: ActiveExercise = withTrackingType<ActiveExercise>(
+      {
+        id: newActiveId,
+        exerciseId: newExercise.id,
+        exercise: newExercise,
+        sets: [newSet],
+        restTimerSeconds: 90,
+      },
+      trackingType,
+    );
 
-    setExercises((prev) => [...prev, newActiveExercise]);
-    setDraftValues((prev) => ({
+    setExercises(prev => [...prev, newActiveExercise]);
+    setDraftValues(prev => ({
       ...prev,
       [draftKey(newActiveId, newSetId)]: {
         weight: '0',
-        reps: '10',
+        reps: String(newSet.reps),
       },
     }));
   };
 
   const handleRemoveExercise = (activeExerciseId: string) => {
-    setExercises((prev) => prev.filter((ex) => ex.id !== activeExerciseId));
+    setExercises(prev => prev.filter(ex => ex.id !== activeExerciseId));
   };
 
   const handleAddSet = (activeExerciseId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
         const lastSet = ex.sets[ex.sets.length - 1];
         const lastDraft = lastSet ? draftValues[draftKey(activeExerciseId, lastSet.id)] : null;
@@ -153,15 +205,21 @@ export const WorkoutEditModal: React.FC<Props> = ({
           setNumber: ex.sets.length + 1,
           type: lastSet?.type || 'normal',
           weightKg: lastSet?.weightKg || 0,
-          reps: lastSet?.reps || 10,
+          reps: lastSet ? lastSet.reps : 10,
+          ...(lastSet?.durationSeconds !== undefined
+            ? { durationSeconds: lastSet.durationSeconds }
+            : {}),
+          ...(lastSet?.distanceM !== undefined ? { distanceM: lastSet.distanceM } : {}),
           isCompleted: true,
         };
 
-        setDraftValues((dPrev) => ({
+        setDraftValues(dPrev => ({
           ...dPrev,
           [draftKey(activeExerciseId, newSetId)]: {
             weight: lastDraft?.weight || String(kgToDisplay(newSet.weightKg, unit)),
             reps: lastDraft?.reps || String(newSet.reps),
+            ...(lastDraft?.duration !== undefined ? { duration: lastDraft.duration } : {}),
+            ...(lastDraft?.distance !== undefined ? { distance: lastDraft.distance } : {}),
           },
         }));
 
@@ -169,49 +227,49 @@ export const WorkoutEditModal: React.FC<Props> = ({
           ...ex,
           sets: [...ex.sets, newSet],
         };
-      })
+      }),
     );
   };
 
   const handleRemoveSet = (activeExerciseId: string, setId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
-        const filtered = ex.sets.filter((s) => s.id !== setId);
+        const filtered = ex.sets.filter(s => s.id !== setId);
         return {
           ...ex,
           sets: filtered.map((s, idx) => ({ ...s, setNumber: idx + 1 })),
         };
-      })
+      }),
     );
   };
 
   const handleToggleSetComplete = (activeExerciseId: string, setId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
         return {
           ...ex,
-          sets: ex.sets.map((s) => (s.id === setId ? { ...s, isCompleted: !s.isCompleted } : s)),
+          sets: ex.sets.map(s => (s.id === setId ? { ...s, isCompleted: !s.isCompleted } : s)),
         };
-      })
+      }),
     );
   };
 
   const handleCycleSetType = (activeExerciseId: string, setId: string) => {
-    setExercises((prev) =>
-      prev.map((ex) => {
+    setExercises(prev =>
+      prev.map(ex => {
         if (ex.id !== activeExerciseId) return ex;
         return {
           ...ex,
-          sets: ex.sets.map((s) => {
+          sets: ex.sets.map(s => {
             if (s.id !== setId) return s;
             const curIdx = SET_TYPES.indexOf(s.type);
             const nextType = SET_TYPES[(curIdx + 1) % SET_TYPES.length];
             return { ...s, type: nextType };
           }),
         };
-      })
+      }),
     );
   };
 
@@ -225,7 +283,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
   const handleSave = async () => {
     if (!workout) return;
 
-    if (gymTrackingEnabled && !gyms.some((gym) => gym.id === selectedGymId)) {
+    if (gymTrackingEnabled && !gyms.some(gym => gym.id === selectedGymId)) {
       setError('Please select a valid gym.');
       return;
     }
@@ -234,9 +292,9 @@ export const WorkoutEditModal: React.FC<Props> = ({
     setError(null);
     try {
       // Reconstitute exercises with latest draft values
-      const finalizedExercises: ActiveExercise[] = exercises.map((ex) => ({
+      const finalizedExercises: ActiveExercise[] = exercises.map(ex => ({
         ...ex,
-        sets: ex.sets.map((s) => {
+        sets: ex.sets.map(s => {
           const draft = draftValues[draftKey(ex.id, s.id)];
           const rawWeight = draft?.weight?.trim();
           const rawReps = draft?.reps?.trim();
@@ -251,23 +309,53 @@ export const WorkoutEditModal: React.FC<Props> = ({
             // Incomplete sets must never become NaN; default empty or invalid fields to clean numbers
             if (rawWeight !== undefined && rawWeight !== '') {
               const parsed = Number(rawWeight);
-              weightNum = Number.isFinite(parsed) && parsed >= 0 ? parsed : (Number.isFinite(s.weightKg) ? s.weightKg : 0);
+              weightNum =
+                Number.isFinite(parsed) && parsed >= 0
+                  ? parsed
+                  : Number.isFinite(s.weightKg)
+                    ? s.weightKg
+                    : 0;
             } else {
               weightNum = Number.isFinite(s.weightKg) ? s.weightKg : 0;
             }
 
             if (rawReps !== undefined && rawReps !== '') {
               const parsed = Number(rawReps);
-              repsNum = Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0 ? parsed : (Number.isFinite(s.reps) ? s.reps : 0);
+              repsNum =
+                Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0
+                  ? parsed
+                  : Number.isFinite(s.reps)
+                    ? s.reps
+                    : 0;
             } else {
               repsNum = Number.isFinite(s.reps) ? s.reps : 0;
             }
           }
 
+          const trackingType = getTrackingType(ex);
+          if (!usesReps(trackingType) && (rawReps === undefined || rawReps === '')) repsNum = 0;
+          if (!usesWeight(trackingType) && (rawWeight === undefined || rawWeight === ''))
+            weightNum = 0;
+          const durationSeconds =
+            draft?.duration !== undefined ? parseSetDuration(draft.duration) : s.durationSeconds;
+          const parsedDistance =
+            draft?.distance !== undefined && draft.distance.trim() !== ''
+              ? Number(draft.distance)
+              : undefined;
+          const distanceM =
+            draft?.distance === undefined
+              ? s.distanceM
+              : parsedDistance !== undefined && Number.isFinite(parsedDistance)
+                ? displayToMeters(parsedDistance, distanceUnitFor(unit))
+                : undefined;
+          const { durationSeconds: _duration, distanceM: _distance, ...rest } = s;
+
           return {
-            ...s,
+            ...rest,
             weightKg: displayToKg(weightNum, unit),
             reps: repsNum,
+            ...(durationSeconds !== undefined ? { durationSeconds } : {}),
+            ...(distanceM !== undefined ? { distanceM } : {}),
             isWeightEdited: true,
           };
         }),
@@ -292,20 +380,25 @@ export const WorkoutEditModal: React.FC<Props> = ({
     }
   };
 
+  // A11Y-04: modal container traps screen-reader focus and takes iOS focus on open.
+
+  const modalA11yRef = useModalAccessibility(visible);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View ref={modalA11yRef} accessibilityViewIsModal style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Edit Workout</Text>
-            <TouchableOpacity
+            <AppTouchable
               onPress={onClose}
               disabled={saving}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close edit workout"
             >
               <X size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
 
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -362,7 +455,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   <Text style={styles.durationUnitLabel}>m</Text>
                 </View>
 
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.autoEstimateBtn}
                   onPress={handleAutoEstimateDuration}
                   disabled={saving}
@@ -371,7 +464,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                 >
                   <Sparkles size={14} color={colors.warning} />
                   <Text style={styles.autoEstimateBtnText}>Auto</Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             </View>
 
@@ -395,10 +488,13 @@ export const WorkoutEditModal: React.FC<Props> = ({
               <>
                 <Text style={styles.label}>GYM</Text>
                 <View style={styles.gymOptions}>
-                  {gyms.map((gym) => (
-                    <TouchableOpacity
+                  {gyms.map(gym => (
+                    <AppTouchable
                       key={gym.id}
-                      style={[styles.gymOption, selectedGymId === gym.id && styles.gymOptionSelected]}
+                      style={[
+                        styles.gymOption,
+                        selectedGymId === gym.id && styles.gymOptionSelected,
+                      ]}
                       onPress={() => setSelectedGymId(gym.id)}
                       disabled={saving}
                       accessibilityRole="button"
@@ -414,7 +510,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                       >
                         {gym.name}
                       </Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   ))}
                 </View>
               </>
@@ -423,7 +519,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
             {/* Exercises Section */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>EXERCISES & SETS</Text>
-              <TouchableOpacity
+              <AppTouchable
                 style={styles.addExerciseHeaderBtn}
                 onPress={() => setShowExercisePicker(true)}
                 disabled={saving}
@@ -432,23 +528,25 @@ export const WorkoutEditModal: React.FC<Props> = ({
               >
                 <Plus size={14} color={colors.primary} />
                 <Text style={styles.addExerciseHeaderBtnText}>Add Exercise</Text>
-              </TouchableOpacity>
+              </AppTouchable>
             </View>
 
             {exercises.length === 0 ? (
               <View style={styles.emptyExercisesBlock}>
                 <Text style={styles.emptyExercisesText}>No exercises in this workout.</Text>
-                <TouchableOpacity
+                <AppTouchable
                   style={styles.addExercisePrimaryBtn}
                   onPress={() => setShowExercisePicker(true)}
                   disabled={saving}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add exercise"
                 >
                   <Plus size={16} color={colors.black} />
                   <Text style={styles.addExercisePrimaryBtnText}>Add Exercise</Text>
-                </TouchableOpacity>
+                </AppTouchable>
               </View>
             ) : (
-              exercises.map((exercise) => (
+              exercises.map(exercise => (
                 <View key={exercise.id} style={styles.exerciseBlock}>
                   <View style={styles.exerciseBlockHeader}>
                     <View style={styles.exerciseNameWrap}>
@@ -457,7 +555,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         {exercise.exercise.equipment} · {exercise.exercise.category}
                       </Text>
                     </View>
-                    <TouchableOpacity
+                    <AppTouchable
                       onPress={() => handleRemoveExercise(exercise.id)}
                       disabled={saving}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -465,25 +563,43 @@ export const WorkoutEditModal: React.FC<Props> = ({
                       accessibilityLabel={`Remove ${exercise.exercise.name} from workout`}
                     >
                       <Trash2 size={16} color={colors.danger} />
-                    </TouchableOpacity>
+                    </AppTouchable>
                   </View>
 
                   {/* Sets header */}
                   <View style={styles.setsTableHeader}>
                     <Text style={[styles.setsTableCol, { width: 34 }]}>SET</Text>
                     <Text style={[styles.setsTableCol, { width: 50 }]}>TYPE</Text>
-                    <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
-                      WEIGHT ({unit})
-                    </Text>
-                    <Text style={[styles.setsTableCol, { width: 64, textAlign: 'center' }]}>
-                      REPS
-                    </Text>
+                    {usesWeight(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
+                        {getTrackingType(exercise) === 'weighted_bodyweight'
+                          ? `ADDED (${unit})`
+                          : getTrackingType(exercise) === 'assisted_bodyweight'
+                            ? `ASSIST (${unit})`
+                            : `WEIGHT (${unit})`}
+                      </Text>
+                    )}
+                    {usesReps(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { width: 64, textAlign: 'center' }]}>
+                        REPS
+                      </Text>
+                    )}
+                    {usesDistance(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
+                        DISTANCE ({distanceUnitFor(unit)})
+                      </Text>
+                    )}
+                    {usesDuration(getTrackingType(exercise)) && (
+                      <Text style={[styles.setsTableCol, { flex: 1, textAlign: 'center' }]}>
+                        TIME
+                      </Text>
+                    )}
                     <View style={{ width: 30 }} />
                     <Text style={[styles.setsTableCol, { width: 24 }]} />
                   </View>
 
                   {/* Set rows */}
-                  {exercise.sets.map((set) => {
+                  {exercise.sets.map(set => {
                     const key = draftKey(exercise.id, set.id);
                     const draft = draftValues[key] || { weight: '', reps: '' };
                     return (
@@ -491,7 +607,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                         <Text style={styles.setNumber}>#{set.setNumber}</Text>
 
                         {/* Set Type Pill */}
-                        <TouchableOpacity
+                        <AppTouchable
                           style={[
                             styles.setTypePill,
                             set.type === 'warmup' && styles.setTypeWarmup,
@@ -507,45 +623,79 @@ export const WorkoutEditModal: React.FC<Props> = ({
                             {set.type === 'normal'
                               ? 'NORM'
                               : set.type === 'warmup'
-                              ? 'WARM'
-                              : set.type === 'drop'
-                              ? 'DROP'
-                              : 'FAIL'}
+                                ? 'WARM'
+                                : set.type === 'drop'
+                                  ? 'DROP'
+                                  : 'FAIL'}
                           </Text>
-                        </TouchableOpacity>
+                        </AppTouchable>
 
                         {/* Weight input */}
-                        <TextInput
-                          style={styles.setInput}
-                          value={draft.weight}
-                          onChangeText={(value) =>
-                            updateDraft(exercise.id, set.id, 'weight', value)
-                          }
-                          keyboardType="decimal-pad"
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          spellCheck={false}
-                          editable={!saving}
-                        />
+                        {usesWeight(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.setInput}
+                            value={draft.weight}
+                            onChangeText={value =>
+                              updateDraft(exercise.id, set.id, 'weight', value)
+                            }
+                            keyboardType="decimal-pad"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            spellCheck={false}
+                            editable={!saving}
+                          />
+                        )}
 
-                        <Text style={styles.timesText}>×</Text>
+                        {usesWeight(getTrackingType(exercise)) && (
+                          <Text style={styles.timesText}>×</Text>
+                        )}
 
                         {/* Reps input */}
-                        <TextInput
-                          style={styles.repsInput}
-                          value={draft.reps}
-                          onChangeText={(value) =>
-                            updateDraft(exercise.id, set.id, 'reps', value)
-                          }
-                          keyboardType="number-pad"
-                          autoCapitalize="none"
-                          autoCorrect={false}
-                          spellCheck={false}
-                          editable={!saving}
-                        />
+                        {usesReps(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.repsInput}
+                            value={draft.reps}
+                            onChangeText={value => updateDraft(exercise.id, set.id, 'reps', value)}
+                            keyboardType="number-pad"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            spellCheck={false}
+                            editable={!saving}
+                          />
+                        )}
+
+                        {usesDistance(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.setInput}
+                            value={draft.distance ?? ''}
+                            onChangeText={value =>
+                              updateDraft(exercise.id, set.id, 'distance', value)
+                            }
+                            keyboardType="decimal-pad"
+                            placeholder="-"
+                            placeholderTextColor={colors.textMuted}
+                            accessibilityLabel={`Set ${set.setNumber} distance`}
+                            editable={!saving}
+                          />
+                        )}
+
+                        {usesDuration(getTrackingType(exercise)) && (
+                          <TextInput
+                            style={styles.setInput}
+                            value={draft.duration ?? ''}
+                            onChangeText={value =>
+                              updateDraft(exercise.id, set.id, 'duration', value)
+                            }
+                            keyboardType="numbers-and-punctuation"
+                            placeholder="0:00"
+                            placeholderTextColor={colors.textMuted}
+                            accessibilityLabel={`Set ${set.setNumber} time`}
+                            editable={!saving}
+                          />
+                        )}
 
                         {/* Completed Toggle */}
-                        <TouchableOpacity
+                        <AppTouchable
                           style={[
                             styles.completeToggle,
                             set.isCompleted && styles.completeToggleActive,
@@ -559,10 +709,10 @@ export const WorkoutEditModal: React.FC<Props> = ({
                             size={14}
                             color={set.isCompleted ? colors.black : colors.textMuted}
                           />
-                        </TouchableOpacity>
+                        </AppTouchable>
 
                         {/* Delete Set */}
-                        <TouchableOpacity
+                        <AppTouchable
                           onPress={() => handleRemoveSet(exercise.id, set.id)}
                           disabled={saving}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -570,13 +720,13 @@ export const WorkoutEditModal: React.FC<Props> = ({
                           accessibilityLabel={`Delete set ${set.setNumber}`}
                         >
                           <X size={16} color={colors.textMuted} />
-                        </TouchableOpacity>
+                        </AppTouchable>
                       </View>
                     );
                   })}
 
                   {/* Add Set Button */}
-                  <TouchableOpacity
+                  <AppTouchable
                     style={styles.addSetButton}
                     onPress={() => handleAddSet(exercise.id)}
                     disabled={saving}
@@ -585,7 +735,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
                   >
                     <Plus size={14} color={colors.primary} />
                     <Text style={styles.addSetButtonText}>Add Set</Text>
-                  </TouchableOpacity>
+                  </AppTouchable>
                 </View>
               ))
             )}
@@ -595,17 +745,30 @@ export const WorkoutEditModal: React.FC<Props> = ({
 
           {/* Footer */}
           <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose} disabled={saving}>
+            <AppTouchable
+              style={styles.cancelButton}
+              onPress={onClose}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel workout edits"
+            >
               <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving}>
+            </AppTouchable>
+            <AppTouchable
+              style={styles.saveButton}
+              onPress={handleSave}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save workout changes"
+              accessibilityState={{ busy: saving, disabled: saving }}
+            >
               {saving ? (
                 <ActivityIndicator size="small" color={colors.black} />
               ) : (
                 <Check size={18} color={colors.black} />
               )}
               <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
-            </TouchableOpacity>
+            </AppTouchable>
           </View>
         </View>
 

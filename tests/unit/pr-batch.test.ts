@@ -19,10 +19,34 @@ const gyms: Gym[] = [
 ];
 
 const exercises: Exercise[] = [
-  { id: 'bench', name: 'Bench Press', category: 'strength', equipment: 'barbell', primaryMuscles: ['chest'] },
-  { id: 'press', name: 'Chest Press', category: 'strength', equipment: 'machine', primaryMuscles: ['chest'] },
-  { id: 'pullup', name: 'Pull-up', category: 'strength', equipment: 'body only', primaryMuscles: ['lats'] },
-  { id: 'row', name: 'Cable Row', category: 'strength', equipment: 'cable', primaryMuscles: ['back'] },
+  {
+    id: 'bench',
+    name: 'Bench Press',
+    category: 'strength',
+    equipment: 'barbell',
+    primaryMuscles: ['chest'],
+  },
+  {
+    id: 'press',
+    name: 'Chest Press',
+    category: 'strength',
+    equipment: 'machine',
+    primaryMuscles: ['chest'],
+  },
+  {
+    id: 'pullup',
+    name: 'Pull-up',
+    category: 'strength',
+    equipment: 'body only',
+    primaryMuscles: ['lats'],
+  },
+  {
+    id: 'row',
+    name: 'Cable Row',
+    category: 'strength',
+    equipment: 'cable',
+    primaryMuscles: ['back'],
+  },
 ];
 
 const scopes: Record<string, ExerciseGymScope | undefined> = {
@@ -31,7 +55,7 @@ const scopes: Record<string, ExerciseGymScope | undefined> = {
 
 function randomHistory(seed: number, count: number): Workout[] {
   const rand = rng(seed);
-  const pick = <T,>(items: T[]) => items[Math.floor(rand() * items.length)];
+  const pick = <T>(items: T[]) => items[Math.floor(rand() * items.length)];
   const base = Date.UTC(2025, 0, 1);
   const workouts: Workout[] = [];
   let day = 0;
@@ -71,7 +95,8 @@ function randomHistory(seed: number, count: number): Workout[] {
 
 function perWorkout(workouts: Workout[], gymTrackingEnabled: boolean) {
   const byExercise: Record<string, Workout[]> = {};
-  for (const w of workouts) for (const ex of w.exercises) (byExercise[ex.exerciseId] ||= []).push(w);
+  for (const w of workouts)
+    for (const ex of w.exercises) (byExercise[ex.exerciseId] ||= []).push(w);
   return Object.fromEntries(
     workouts.map(w => [w.id, evaluateWorkoutPRs(w, byExercise, gyms, gymTrackingEnabled, scopes)]),
   );
@@ -82,7 +107,10 @@ describe('evaluateAllWorkoutPRs', () => {
     for (const seed of [1, 7, 42, 1234, 99991]) {
       it(`matches per-workout evaluation (seed ${seed}, gym tracking ${gymTrackingEnabled ? 'on' : 'off'})`, () => {
         const history = randomHistory(seed, 60);
-        assert.deepStrictEqual(evaluateAllWorkoutPRs(history, gyms, gymTrackingEnabled, scopes), perWorkout(history, gymTrackingEnabled));
+        assert.deepStrictEqual(
+          evaluateAllWorkoutPRs(history, gyms, gymTrackingEnabled, scopes),
+          perWorkout(history, gymTrackingEnabled),
+        );
       });
     }
   }
@@ -91,14 +119,26 @@ describe('evaluateAllWorkoutPRs', () => {
     const history = randomHistory(5, 3).map((w, i) => ({
       ...w,
       gymId: 'g1',
-      exercises: [{
-        id: `e${i}`,
-        exerciseId: 'bench',
-        exercise: exercises[0],
-        sets: [{ id: `s${i}`, setNumber: 1, weightKg: 100 + i * 5, reps: 5, type: 'normal', isCompleted: true } as WorkoutSet],
-      }],
+      exercises: [
+        {
+          id: `e${i}`,
+          exerciseId: 'bench',
+          exercise: exercises[0],
+          sets: [
+            {
+              id: `s${i}`,
+              setNumber: 1,
+              weightKg: 100 + i * 5,
+              reps: 5,
+              type: 'normal',
+              isCompleted: true,
+            } as WorkoutSet,
+          ],
+        },
+      ],
     })) as Workout[];
     const result = evaluateAllWorkoutPRs(history, gyms, true, scopes);
-    for (const w of history) assert.equal(result[w.id].setPRs.get(w.exercises[0].sets[0].id)?.primary?.rank, 1);
+    for (const w of history)
+      assert.equal(result[w.id].setPRs.get(w.exercises[0].sets[0].id)?.primary?.rank, 1);
   });
 });

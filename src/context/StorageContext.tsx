@@ -1,5 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from 'react';
 import { getStore, initDatabase } from '../database/db';
+import { reportError } from '../utils/errorReporting';
+import { errorMessage } from '../utils/invariant';
 
 export interface StorageContextValue {
   isReady: boolean;
@@ -34,9 +43,9 @@ export function StorageProvider({ children }: { children: ReactNode }) {
       const store = await getStore();
       setIsReadOnly(Boolean(store.isReadOnly?.()));
       setIsReady(true);
-    } catch (err: any) {
-      console.error('Storage initialization failed:', err);
-      setError(err?.message || 'Storage initialization failed');
+    } catch (err: unknown) {
+      reportError(err, { scope: 'storage.init' });
+      setError(errorMessage(err) || 'Storage initialization failed');
       setIsReady(false);
     }
   }, []);
@@ -50,8 +59,8 @@ export function StorageProvider({ children }: { children: ReactNode }) {
         return acquired;
       }
       return true;
-    } catch (err: any) {
-      console.error('Failed to take over storage lease:', err);
+    } catch (err: unknown) {
+      reportError(err, { scope: 'storage.take-over-lease' });
       return false;
     }
   }, []);
@@ -64,15 +73,17 @@ export function StorageProvider({ children }: { children: ReactNode }) {
     if (!isReady) return;
     let unsubscribe: (() => void) | undefined;
     getStore()
-      .then((store) => {
+      .then(store => {
         setIsReadOnly(Boolean(store.isReadOnly?.()));
         if (store.onReadOnlyChange) {
-          unsubscribe = store.onReadOnlyChange((ro) => {
+          unsubscribe = store.onReadOnlyChange(ro => {
             setIsReadOnly(ro);
           });
         }
       })
-      .catch(() => {});
+      .catch(err => {
+        reportError(err, { scope: 'storage.read-only-subscription' });
+      });
 
     return () => {
       unsubscribe?.();
@@ -87,7 +98,9 @@ export function StorageProvider({ children }: { children: ReactNode }) {
         if (store.isReadOnly) {
           setIsReadOnly(Boolean(store.isReadOnly()));
         }
-      } catch (_) {}
+      } catch (err) {
+        reportError(err, { scope: 'storage.focus-refresh' });
+      }
     };
     window.addEventListener('focus', handleFocus);
     return () => {

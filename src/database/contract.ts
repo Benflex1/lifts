@@ -30,6 +30,11 @@ export interface DataSnapshot {
 
 export interface Store {
   init(): Promise<void>;
+  /**
+   * Cheap monotonic counter that advances on every write attempt. Callers use
+   * it to skip expensive reads when nothing has changed since their last load.
+   */
+  getDataRevision?(): Promise<number>;
   isReadOnly?(): boolean;
   tryAcquireLease?(): Promise<boolean>;
   onReadOnlyChange?(listener: (isReadOnly: boolean) => void): () => void;
@@ -45,9 +50,15 @@ export interface Store {
   saveRoutine(
     name: string,
     folderName: string,
-    exercises: { exerciseId: string; targetSets: number; targetReps: string; restTimerSeconds: number; supersetId?: string }[],
+    exercises: {
+      exerciseId: string;
+      targetSets: number;
+      targetReps: string;
+      restTimerSeconds: number;
+      supersetId?: string;
+    }[],
     notes?: string,
-    existingId?: string
+    existingId?: string,
   ): Promise<string>;
   deleteRoutine(id: string): Promise<void>;
   duplicateRoutine(id: string): Promise<string>;
@@ -57,7 +68,10 @@ export interface Store {
   getWorkoutHistory(): Promise<WorkoutHistorySummary[]>;
   getWorkoutDetail(workoutId: string): Promise<Workout | null>;
   deleteWorkout(workoutId: string): Promise<void>;
-  getHealthSyncRecord(workoutId: string, provider: HealthProviderId): Promise<HealthSyncRecord | null>;
+  getHealthSyncRecord(
+    workoutId: string,
+    provider: HealthProviderId,
+  ): Promise<HealthSyncRecord | null>;
   getHealthSyncRecords(status?: HealthSyncStatus): Promise<HealthSyncRecord[]>;
   saveHealthSyncRecord(record: HealthSyncRecord): Promise<void>;
   getGyms(): Promise<Gym[]>;
@@ -65,7 +79,11 @@ export interface Store {
   createGym(name: string, color?: string): Promise<Gym>;
   updateGym(id: string, updates: { name?: string; color?: string }): Promise<Gym>;
   setDefaultGym(id: string): Promise<void>;
-  deleteGym(id: string, replacementGymId: string, activeWorkoutGymId?: string | null): Promise<void>;
+  deleteGym(
+    id: string,
+    replacementGymId: string,
+    activeWorkoutGymId?: string | null,
+  ): Promise<void>;
   getExerciseGymScopes(): Promise<ExerciseGymScope[]>;
   getExerciseGymScope(exerciseId: string): Promise<ExerciseGymScope | null>;
   saveExerciseGymScope(scope: ExerciseGymScope): Promise<void>;
@@ -80,7 +98,7 @@ export interface Store {
   getExerciseStats(exerciseId: string, currentGymId?: string): Promise<DualExerciseStats>;
   reassignExerciseHistory(
     sourceExerciseId: string,
-    targetExerciseId: string
+    targetExerciseId: string,
   ): Promise<{ updatedWorkouts: number; updatedSets: number }>;
 
   getAllExercises(): Promise<Exercise[]>;
@@ -98,12 +116,11 @@ export interface Store {
       instructions?: string[];
       instructionUrl?: string;
       instructionUrlType?: 'website' | 'youtube';
-    }
+    },
   ): Promise<Exercise>;
 
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
   renameFolder(oldName: string, newName: string): Promise<void>;
   deleteFolder(name: string): Promise<void>;
-
 }

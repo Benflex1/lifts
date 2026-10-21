@@ -1,4 +1,4 @@
-import { DEFAULT_EXERCISES } from '../../database/seedData';
+import { getDefaultExercises } from '../../database/seedData';
 import { Exercise } from '../../types';
 import { createScopedId } from '../ids';
 import { ExerciseAssignmentItem } from './types';
@@ -136,13 +136,22 @@ export function tokenizeExerciseName(name: string): string[] {
  */
 export function detectEquipmentHint(name: string): string | null {
   const s = name.toLowerCase();
-  if (s.includes('dumbbell') || s.includes(' db') || s.startsWith('db ') || s.includes('(db)')) return 'dumbbell';
-  if (s.includes('barbell') || s.includes(' bb') || s.startsWith('bb ') || s.includes('(bb)')) return 'barbell';
+  if (s.includes('dumbbell') || s.includes(' db') || s.startsWith('db ') || s.includes('(db)'))
+    return 'dumbbell';
+  if (s.includes('barbell') || s.includes(' bb') || s.startsWith('bb ') || s.includes('(bb)'))
+    return 'barbell';
   if (s.includes('cable') || s.includes('rope') || s.includes('pulley')) return 'cable';
   if (s.includes('smith')) return 'machine';
-  if (s.includes('machine') || s.includes('leverage') || s.includes('plate loaded')) return 'machine';
+  if (s.includes('machine') || s.includes('leverage') || s.includes('plate loaded'))
+    return 'machine';
   if (s.includes('kettlebell') || s.includes(' kb') || s.startsWith('kb ')) return 'kettlebell';
-  if (s.includes('bodyweight') || s.includes('body only') || s.includes('assisted') || s.includes('body weight')) return 'body only';
+  if (
+    s.includes('bodyweight') ||
+    s.includes('body only') ||
+    s.includes('assisted') ||
+    s.includes('body weight')
+  )
+    return 'body only';
   return null;
 }
 
@@ -165,15 +174,50 @@ export function inferPrimaryMuscle(name: string, categoryHint?: string): string[
   }
 
   const s = name.toLowerCase();
-  if (s.includes('bench') || s.includes('chest') || s.includes('pec') || s.includes('fly')) return ['chest'];
-  if (s.includes('deadlift') || s.includes('rdl') || s.includes('hamstring') || s.includes('leg curl')) return ['hamstrings'];
-  if (s.includes('squat') || s.includes('leg press') || s.includes('lunge') || s.includes('leg extension')) return ['quadriceps'];
-  if (s.includes('pullup') || s.includes('pull up') || s.includes('pulldown') || s.includes('chin') || s.includes('row') || s.includes('lat')) return ['lats'];
-  if (s.includes('overhead') || s.includes('military') || s.includes('shoulder') || s.includes('lateral raise') || s.includes('deltoid')) return ['shoulders'];
+  if (s.includes('bench') || s.includes('chest') || s.includes('pec') || s.includes('fly'))
+    return ['chest'];
+  if (
+    s.includes('deadlift') ||
+    s.includes('rdl') ||
+    s.includes('hamstring') ||
+    s.includes('leg curl')
+  )
+    return ['hamstrings'];
+  if (
+    s.includes('squat') ||
+    s.includes('leg press') ||
+    s.includes('lunge') ||
+    s.includes('leg extension')
+  )
+    return ['quadriceps'];
+  if (
+    s.includes('pullup') ||
+    s.includes('pull up') ||
+    s.includes('pulldown') ||
+    s.includes('chin') ||
+    s.includes('row') ||
+    s.includes('lat')
+  )
+    return ['lats'];
+  if (
+    s.includes('overhead') ||
+    s.includes('military') ||
+    s.includes('shoulder') ||
+    s.includes('lateral raise') ||
+    s.includes('deltoid')
+  )
+    return ['shoulders'];
   if (s.includes('bicep') || s.includes('curl')) return ['biceps'];
-  if (s.includes('tricep') || s.includes('pushdown') || s.includes('skull crusher') || s.includes('dip')) return ['triceps'];
+  if (
+    s.includes('tricep') ||
+    s.includes('pushdown') ||
+    s.includes('skull crusher') ||
+    s.includes('dip')
+  )
+    return ['triceps'];
   if (s.includes('calf') || s.includes('calves')) return ['calves'];
-  if (s.includes('crunch') || s.includes('sit up') || s.includes('ab') || s.includes('plank')) return ['abdominals'];
+  if (s.includes('crunch') || s.includes('sit up') || s.includes('ab') || s.includes('plank'))
+    return ['abdominals'];
   if (s.includes('shrug') || s.includes('trap')) return ['traps'];
 
   return ['other'];
@@ -217,16 +261,16 @@ const COMMON_ALIASES: Record<string, string> = {
   'pec deck machine': 'Butterfly',
   'chest fly machine': 'Butterfly',
   'machine fly': 'Butterfly',
-  'dips': 'Dips_-_Chest_Version',
+  dips: 'Dips_-_Chest_Version',
   'chest dip': 'Dips_-_Chest_Version',
   'chest dips': 'Dips_-_Chest_Version',
   'push up': 'Pushups',
   'push ups': 'Pushups',
-  'pushup': 'Pushups',
-  'pushups': 'Pushups',
+  pushup: 'Pushups',
+  pushups: 'Pushups',
 
   // Back
-  'deadlift': 'Barbell_Deadlift',
+  deadlift: 'Barbell_Deadlift',
   'barbell deadlift': 'Barbell_Deadlift',
   'deadlift barbell': 'Barbell_Deadlift',
   'conventional deadlift': 'Barbell_Deadlift',
@@ -235,13 +279,13 @@ const COMMON_ALIASES: Record<string, string> = {
   'barbell romanian deadlift': 'Romanian_Deadlift',
   'romanian deadlift barbell': 'Romanian_Deadlift',
   'romanian deadlift dumbbell': 'Romanian_Deadlift',
-  'rdl': 'Romanian_Deadlift',
+  rdl: 'Romanian_Deadlift',
   'stiff leg deadlift': 'Stiff-Legged_Barbell_Deadlift',
   'stiff legged deadlift': 'Stiff-Legged_Barbell_Deadlift',
   'pull up': 'Pullups',
   'pull ups': 'Pullups',
-  'pullup': 'Pullups',
-  'pullups': 'Pullups',
+  pullup: 'Pullups',
+  pullups: 'Pullups',
   'chin up': 'Chin-Up',
   'chin ups': 'Chin-Up',
   'lat pulldown': 'Wide-Grip_Lat_Pulldown',
@@ -268,11 +312,11 @@ const COMMON_ALIASES: Record<string, string> = {
   'shrug barbell': 'Barbell_Shrug',
   'dumbbell shrug': 'Dumbbell_Shrug',
   'shrug dumbbell': 'Dumbbell_Shrug',
-  'hyperextension': 'Hyperextensions_Back_Extensions',
+  hyperextension: 'Hyperextensions_Back_Extensions',
   'back extension': 'Hyperextensions_Back_Extensions',
 
   // Shoulders
-  'ohp': 'Standing_Military_Press',
+  ohp: 'Standing_Military_Press',
   'ohp barbell': 'Standing_Military_Press',
   'bb ohp': 'Standing_Military_Press',
   'overhead press': 'Standing_Military_Press',
@@ -322,7 +366,7 @@ const COMMON_ALIASES: Record<string, string> = {
   'rope pushdown': 'Triceps_Pushdown_-_Rope_Attachment',
   'tricep rope pushdown': 'Triceps_Pushdown_-_Rope_Attachment',
   'skull crusher': 'Lying_Triceps_Press',
-  'skullcrusher': 'Lying_Triceps_Press',
+  skullcrusher: 'Lying_Triceps_Press',
   'skull crusher barbell': 'Lying_Triceps_Press',
   'lying triceps extension': 'Lying_Triceps_Press',
   'tricep extension': 'Lying_Triceps_Press',
@@ -332,7 +376,7 @@ const COMMON_ALIASES: Record<string, string> = {
   'tricep dips': 'Dips_-_Triceps_Version',
 
   // Legs
-  'squat': 'Barbell_Full_Squat',
+  squat: 'Barbell_Full_Squat',
   'squat barbell': 'Barbell_Full_Squat',
   'barbell squat': 'Barbell_Full_Squat',
   'back squat': 'Barbell_Full_Squat',
@@ -358,16 +402,16 @@ const COMMON_ALIASES: Record<string, string> = {
   'hip thrust barbell': 'Barbell_Hip_Thrust',
   'barbell hip thrust': 'Barbell_Hip_Thrust',
   'glute bridge': 'Barbell_Glute_Bridge',
-  'lunge': 'Barbell_Lunge',
+  lunge: 'Barbell_Lunge',
   'walking lunge': 'Dumbbell_Lunges',
   'lunge dumbbell': 'Dumbbell_Lunges',
 
   // Abs
-  'crunch': 'Crunches',
-  'crunches': 'Crunches',
+  crunch: 'Crunches',
+  crunches: 'Crunches',
   'cable crunch': 'Cable_Crunch',
   'hanging leg raise': 'Hanging_Leg_Raise',
-  'plank': 'Plank',
+  plank: 'Plank',
   'ab rollout': 'Barbell_Ab_Rollout',
   'ab wheel rollout': 'Barbell_Ab_Rollout',
   'russian twist': 'Russian_Twist',
@@ -386,18 +430,21 @@ export class ExerciseMapper {
   private allKnownExercises: Exercise[];
   private overrides = new Map<string, Exercise>();
   private usageStats = new Map<string, ExerciseUsageStats>();
-  private resolvedCache = new Map<string, {
-    exercise: Exercise;
-    isNew: boolean;
-    confidence: 'exact' | 'alias' | 'fuzzy' | 'custom' | 'manual';
-    isAutoMatched: boolean;
-  }>();
+  private resolvedCache = new Map<
+    string,
+    {
+      exercise: Exercise;
+      isNew: boolean;
+      confidence: 'exact' | 'alias' | 'fuzzy' | 'custom' | 'manual';
+      isAutoMatched: boolean;
+    }
+  >();
 
-  constructor(
-    existingExercises: Exercise[] = [],
-    overrides?: Record<string, Exercise>
-  ) {
-    this.allKnownExercises = [...DEFAULT_EXERCISES, ...existingExercises.filter(e => e.isCustom)];
+  constructor(existingExercises: Exercise[] = [], overrides?: Record<string, Exercise>) {
+    this.allKnownExercises = [
+      ...getDefaultExercises(),
+      ...existingExercises.filter(e => e.isCustom),
+    ];
 
     for (const ex of this.allKnownExercises) {
       this.bundledMap.set(ex.id, ex);
@@ -437,7 +484,7 @@ export class ExerciseMapper {
    */
   public getOrCreateExercise(
     rawName: string,
-    categoryHint?: string
+    categoryHint?: string,
   ): {
     exercise: Exercise;
     isNew: boolean;
@@ -446,7 +493,8 @@ export class ExerciseMapper {
   } {
     const trimmed = rawName.trim();
     if (!trimmed) {
-      const fallback = this.bundledMap.get('Barbell_Bench_Press_-_Medium_Grip') || DEFAULT_EXERCISES[0];
+      const fallback =
+        this.bundledMap.get('Barbell_Bench_Press_-_Medium_Grip') || getDefaultExercises()[0];
       return { exercise: fallback, isNew: false, confidence: 'exact', isAutoMatched: true };
     }
 
@@ -489,7 +537,12 @@ export class ExerciseMapper {
     if (this.normalizedMap.has(norm)) {
       const candidate = this.normalizedMap.get(norm)!;
       if (!equipHint || candidate.equipment.toLowerCase().includes(equipHint)) {
-        const res = { exercise: candidate, isNew: false, confidence: 'exact' as const, isAutoMatched: true };
+        const res = {
+          exercise: candidate,
+          isNew: false,
+          confidence: 'exact' as const,
+          isAutoMatched: true,
+        };
         this.resolvedCache.set(lowerKey, res);
         return res;
       }
@@ -504,7 +557,13 @@ export class ExerciseMapper {
     if (equipHint) {
       aliasKeys.push(`${norm} ${equipHint}`);
       aliasKeys.push(`${equipHint} ${norm}`);
-      aliasKeys.push(trimmed.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim());
+      aliasKeys.push(
+        trimmed
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim(),
+      );
     }
     aliasKeys.push(norm);
     if (tokenStr && tokenStr !== norm) {
@@ -519,13 +578,24 @@ export class ExerciseMapper {
           const exEq = (ex.equipment || '').toLowerCase();
           const exName = ex.name.toLowerCase();
           // Avoid contradictory equipment match (e.g. user specifies dumbbell but alias points to barbell)
-          if (equipHint === 'dumbbell' && (exEq.includes('barbell') || exName.includes('barbell'))) {
+          if (
+            equipHint === 'dumbbell' &&
+            (exEq.includes('barbell') || exName.includes('barbell'))
+          ) {
             continue;
           }
-          if (equipHint === 'barbell' && (exEq.includes('dumbbell') || exName.includes('dumbbell'))) {
+          if (
+            equipHint === 'barbell' &&
+            (exEq.includes('dumbbell') || exName.includes('dumbbell'))
+          ) {
             continue;
           }
-          const res = { exercise: ex, isNew: false, confidence: 'alias' as const, isAutoMatched: true };
+          const res = {
+            exercise: ex,
+            isNew: false,
+            confidence: 'alias' as const,
+            isAutoMatched: true,
+          };
           this.resolvedCache.set(lowerKey, res);
           return res;
         }
@@ -552,16 +622,25 @@ export class ExerciseMapper {
             candEq.includes('dumbbell') ||
             candName.includes('barbell') ||
             candName.includes('dumbbell');
-          if (equipHint === 'dumbbell' && (candEq.includes('barbell') || candName.includes('barbell'))) {
+          if (
+            equipHint === 'dumbbell' &&
+            (candEq.includes('barbell') || candName.includes('barbell'))
+          ) {
             continue;
           }
-          if (equipHint === 'barbell' && (candEq.includes('dumbbell') || candName.includes('dumbbell'))) {
+          if (
+            equipHint === 'barbell' &&
+            (candEq.includes('dumbbell') || candName.includes('dumbbell'))
+          ) {
             continue;
           }
           if ((equipHint === 'machine' || equipHint === 'cable') && isCandidateFreeWeight) {
             continue;
           }
-          if ((candEq.includes('machine') || candEq.includes('cable')) && (equipHint === 'barbell' || equipHint === 'dumbbell')) {
+          if (
+            (candEq.includes('machine') || candEq.includes('cable')) &&
+            (equipHint === 'barbell' || equipHint === 'dumbbell')
+          ) {
             continue;
           }
         }
@@ -620,7 +699,12 @@ export class ExerciseMapper {
 
       // If confidence score exceeds threshold, auto-match!
       if (bestCandidate && bestScore >= 0.75) {
-        const res = { exercise: bestCandidate, isNew: false, confidence: 'fuzzy' as const, isAutoMatched: true };
+        const res = {
+          exercise: bestCandidate,
+          isNew: false,
+          confidence: 'fuzzy' as const,
+          isAutoMatched: true,
+        };
         this.resolvedCache.set(lowerKey, res);
         return res;
       }
@@ -643,7 +727,12 @@ export class ExerciseMapper {
     this.bundledMap.set(customId, newExercise);
     this.normalizedMap.set(norm, newExercise);
 
-    const res = { exercise: newExercise, isNew: true, confidence: 'custom' as const, isAutoMatched: false };
+    const res = {
+      exercise: newExercise,
+      isNew: true,
+      confidence: 'custom' as const,
+      isAutoMatched: false,
+    };
     this.resolvedCache.set(lowerKey, res);
     return res;
   }

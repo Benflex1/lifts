@@ -21,15 +21,25 @@ function provider(overrides: Partial<HealthProvider> = {}): HealthProvider {
 
 function dependencies(
   overrides: Partial<HealthSyncSettingDependencies> = {},
-): HealthSyncSettingDependencies & { states: boolean[]; persisted: boolean[]; notifications: string[] } {
+): HealthSyncSettingDependencies & {
+  states: boolean[];
+  persisted: boolean[];
+  notifications: string[];
+} {
   const states: boolean[] = [];
   const persisted: boolean[] = [];
   const notifications: string[] = [];
   return {
     loadProvider: async () => provider(),
-    persist: async (enabled) => { persisted.push(enabled); },
-    setState: (enabled) => { states.push(enabled); },
-    notify: async ({ message }) => { notifications.push(message); },
+    persist: async enabled => {
+      persisted.push(enabled);
+    },
+    setState: enabled => {
+      states.push(enabled);
+    },
+    notify: async ({ message }) => {
+      notifications.push(message);
+    },
     states,
     persisted,
     notifications,
@@ -40,6 +50,9 @@ function dependencies(
 type RetryableDependencies = HealthSyncSettingDependencies & {
   retryPendingHealthSyncs: () => Promise<unknown>;
   logRetryFailure: (error: unknown) => void;
+  states: boolean[];
+  persisted: boolean[];
+  notifications: string[];
 };
 
 function retryableDependencies(): RetryableDependencies {
@@ -57,13 +70,16 @@ describe('authorizeHealthSync', () => {
   it('rejects an unavailable provider without requesting authorization', async () => {
     let requested = false;
     await assert.rejects(
-      () => authorizeHealthSync(provider({
-        isAvailable: async () => false,
-        requestWriteAuthorization: async () => {
-          requested = true;
-          return 'granted';
-        },
-      })),
+      () =>
+        authorizeHealthSync(
+          provider({
+            isAvailable: async () => false,
+            requestWriteAuthorization: async () => {
+              requested = true;
+              return 'granted';
+            },
+          }),
+        ),
       /health sync is unavailable/i,
     );
     assert.equal(requested, false);
@@ -81,14 +97,20 @@ describe('authorizeHealthSync', () => {
   });
 
   it('offers an Open Settings action for denied authorization when supported', async () => {
-    let notification: { action?: { label: string; onPress: () => void | Promise<void> } } | undefined;
+    let notification:
+      { action?: { label: string; onPress: () => void | Promise<void> } } | undefined;
     let opened = 0;
     const deps = dependencies({
-      loadProvider: async () => provider({
-        requestWriteAuthorization: async () => 'denied',
-        openPermissionSettings: async () => { opened += 1; },
-      }),
-      notify: async (options) => { notification = options; },
+      loadProvider: async () =>
+        provider({
+          requestWriteAuthorization: async () => 'denied',
+          openPermissionSettings: async () => {
+            opened += 1;
+          },
+        }),
+      notify: async options => {
+        notification = options;
+      },
     });
 
     await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /denied/i);
@@ -102,7 +124,9 @@ describe('authorizeHealthSync', () => {
     let notification: { action?: unknown } | undefined;
     const deps = dependencies({
       loadProvider: async () => provider({ requestWriteAuthorization: async () => 'unavailable' }),
-      notify: async (options) => { notification = options; },
+      notify: async options => {
+        notification = options;
+      },
     });
 
     await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /unavailable/i);
@@ -118,7 +142,12 @@ describe('authorizeHealthSync', () => {
 describe('health sync setting transitions', () => {
   it('returns immediately without work when the requested value is unchanged', async () => {
     let loaded = false;
-    const deps = dependencies({ loadProvider: async () => { loaded = true; return provider(); } });
+    const deps = dependencies({
+      loadProvider: async () => {
+        loaded = true;
+        return provider();
+      },
+    });
 
     const result = await updateHealthSyncSetting(false, false, deps);
 
@@ -128,7 +157,9 @@ describe('health sync setting transitions', () => {
   });
 
   it('leaves the setting disabled and unpersisted when the provider is unavailable', async () => {
-    const deps = dependencies({ loadProvider: async () => provider({ isAvailable: async () => false }) });
+    const deps = dependencies({
+      loadProvider: async () => provider({ isAvailable: async () => false }),
+    });
 
     await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /unavailable/i);
 
@@ -138,7 +169,9 @@ describe('health sync setting transitions', () => {
   });
 
   it('leaves the setting disabled and unpersisted when authorization is denied', async () => {
-    const deps = dependencies({ loadProvider: async () => provider({ requestWriteAuthorization: async () => 'denied' }) });
+    const deps = dependencies({
+      loadProvider: async () => provider({ requestWriteAuthorization: async () => 'denied' }),
+    });
 
     await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /denied/i);
 
@@ -161,10 +194,14 @@ describe('health sync setting transitions', () => {
     const deps = retryableDependencies();
     const events: string[] = [];
     let releaseRetry: (() => void) | undefined;
-    deps.persist = async () => { events.push('persist'); };
+    deps.persist = async () => {
+      events.push('persist');
+    };
     deps.retryPendingHealthSyncs = () => {
       events.push('retry');
-      return new Promise<void>((resolve) => { releaseRetry = resolve; });
+      return new Promise<void>(resolve => {
+        releaseRetry = resolve;
+      });
     };
 
     const result = await updateHealthSyncSetting(true, false, deps);
@@ -177,11 +214,15 @@ describe('health sync setting transitions', () => {
   it('logs retry failures without changing the successful enable result', async () => {
     const deps = retryableDependencies();
     const logged: string[] = [];
-    deps.retryPendingHealthSyncs = async () => { throw new Error('retry failed'); };
-    deps.logRetryFailure = (error) => { logged.push((error as Error).message); };
+    deps.retryPendingHealthSyncs = async () => {
+      throw new Error('retry failed');
+    };
+    deps.logRetryFailure = error => {
+      logged.push((error as Error).message);
+    };
 
     const result = await updateHealthSyncSetting(true, false, deps);
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>(resolve => setImmediate(resolve));
 
     assert.equal(result, true);
     assert.deepEqual(logged, ['retry failed']);
@@ -190,11 +231,20 @@ describe('health sync setting transitions', () => {
   it('authorizes before persisting an enabled setting', async () => {
     const events: string[] = [];
     const deps = dependencies({
-      loadProvider: async () => provider({
-        isAvailable: async () => { events.push('availability'); return true; },
-        requestWriteAuthorization: async () => { events.push('authorization'); return 'granted'; },
-      }),
-      persist: async () => { events.push('persist'); },
+      loadProvider: async () =>
+        provider({
+          isAvailable: async () => {
+            events.push('availability');
+            return true;
+          },
+          requestWriteAuthorization: async () => {
+            events.push('authorization');
+            return 'granted';
+          },
+        }),
+      persist: async () => {
+        events.push('persist');
+      },
     });
 
     await updateHealthSyncSetting(true, false, deps);
@@ -204,7 +254,12 @@ describe('health sync setting transitions', () => {
 
   it('disables without loading a provider or requesting authorization', async () => {
     let loaded = false;
-    const deps = dependencies({ loadProvider: async () => { loaded = true; return provider(); } });
+    const deps = dependencies({
+      loadProvider: async () => {
+        loaded = true;
+        return provider();
+      },
+    });
 
     const result = await updateHealthSyncSetting(false, true, deps);
 
@@ -216,7 +271,9 @@ describe('health sync setting transitions', () => {
 
   it('rolls back and notifies when persistence fails', async () => {
     const deps = dependencies({
-      persist: async () => { throw new Error('storage failed'); },
+      persist: async () => {
+        throw new Error('storage failed');
+      },
     });
 
     await assert.rejects(() => updateHealthSyncSetting(false, true, deps), /storage failed/);
@@ -227,7 +284,9 @@ describe('health sync setting transitions', () => {
 
   it('rolls back and notifies when enabling cannot be persisted', async () => {
     const deps = dependencies({
-      persist: async () => { throw new Error('enable storage failed'); },
+      persist: async () => {
+        throw new Error('enable storage failed');
+      },
     });
 
     await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /enable storage failed/);
@@ -240,7 +299,9 @@ describe('health sync setting transitions', () => {
     const deps = retryableDependencies();
     let retries = 0;
     deps.loadProvider = async () => null;
-    deps.retryPendingHealthSyncs = async () => { retries += 1; };
+    deps.retryPendingHealthSyncs = async () => {
+      retries += 1;
+    };
 
     const result = await updateHealthSyncSetting(true, false, deps);
 
@@ -253,7 +314,9 @@ describe('health sync setting transitions', () => {
 
   it('rolls back and notifies when loading the platform provider fails', async () => {
     const deps = dependencies({
-      loadProvider: async () => { throw new Error('provider load failed'); },
+      loadProvider: async () => {
+        throw new Error('provider load failed');
+      },
     });
 
     await assert.rejects(() => updateHealthSyncSetting(true, false, deps), /provider load failed/);

@@ -58,9 +58,14 @@ function openVersionTwoFixture(name: string): Promise<void> {
     request.onupgradeneeded = () => {
       const db = request.result;
       for (const [storeName, keyPath] of [
-        ['exercises', 'id'], ['routines', 'id'], ['workouts', 'id'],
-        ['workout_drafts', 'id'], ['settings', 'key'], ['metadata', 'key'],
-        ['gyms', 'id'], ['exercise_gym_scopes', 'exerciseId'],
+        ['exercises', 'id'],
+        ['routines', 'id'],
+        ['workouts', 'id'],
+        ['workout_drafts', 'id'],
+        ['settings', 'key'],
+        ['metadata', 'key'],
+        ['gyms', 'id'],
+        ['exercise_gym_scopes', 'exerciseId'],
       ] as [string, string][]) {
         if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath });
       }
@@ -81,20 +86,52 @@ describe('health sync ledger persistence', () => {
     const driver = new NodeSqliteDriver();
     try {
       await applyMigrations(driver, { maxVersion: 6 });
-      assert.equal(await driver.getFirstAsync<any>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'"), null);
+      assert.equal(
+        await driver.getFirstAsync<any>(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'",
+        ),
+        null,
+      );
 
-      await assert.rejects(() => applyMigrations(driver, { failAtVersion: 7 }), /Injected migration failure at version 7/);
-      assert.equal(await driver.getFirstAsync<any>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'"), null);
-      assert.equal(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 7'), null);
+      await assert.rejects(
+        () => applyMigrations(driver, { failAtVersion: 7 }),
+        /Injected migration failure at version 7/,
+      );
+      assert.equal(
+        await driver.getFirstAsync<any>(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'",
+        ),
+        null,
+      );
+      assert.equal(
+        await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 7'),
+        null,
+      );
 
       await applyMigrations(driver);
-      assert.ok(await driver.getFirstAsync<any>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'"));
-      assert.ok(await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 7'));
-      const columns = await driver.getAllAsync<{ name: string; pk: number }>('PRAGMA table_info(health_sync_records)');
-      assert.deepEqual(columns.filter(column => column.pk > 0).map(column => column.name), ['workout_id', 'provider']);
-      assert.equal((await driver.getFirstAsync<{ foreign_keys: number }>('PRAGMA foreign_keys'))?.foreign_keys, 1);
+      assert.ok(
+        await driver.getFirstAsync<any>(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'",
+        ),
+      );
+      assert.ok(
+        await driver.getFirstAsync<any>('SELECT version FROM schema_migrations WHERE version = 7'),
+      );
+      const columns = await driver.getAllAsync<{ name: string; pk: number }>(
+        'PRAGMA table_info(health_sync_records)',
+      );
+      assert.deepEqual(
+        columns.filter(column => column.pk > 0).map(column => column.name),
+        ['workout_id', 'provider'],
+      );
+      assert.equal(
+        (await driver.getFirstAsync<{ foreign_keys: number }>('PRAGMA foreign_keys'))?.foreign_keys,
+        1,
+      );
 
-      const indexes = await driver.getAllAsync<{ name: string }>('PRAGMA index_list(health_sync_records)');
+      const indexes = await driver.getAllAsync<{ name: string }>(
+        'PRAGMA index_list(health_sync_records)',
+      );
       assert.ok(indexes.some(index => index.name === 'health_sync_records_status_idx'));
 
       const foreignKeys = await driver.getAllAsync<{
@@ -107,15 +144,20 @@ describe('health sync ledger persistence', () => {
         on_delete: string;
         match: string;
       }>('PRAGMA foreign_key_list(health_sync_records)');
-      assert.deepEqual(foreignKeys.map(({ table, from, to, on_delete }) => ({ table, from, to, on_delete })), [{
-        table: 'workouts',
-        from: 'workout_id',
-        to: 'id',
-        on_delete: 'CASCADE',
-      }]);
+      assert.deepEqual(
+        foreignKeys.map(({ table, from, to, on_delete }) => ({ table, from, to, on_delete })),
+        [
+          {
+            table: 'workouts',
+            from: 'workout_id',
+            to: 'id',
+            on_delete: 'CASCADE',
+          },
+        ],
+      );
 
       const schema = await driver.getFirstAsync<{ sql: string }>(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'"
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'health_sync_records'",
       );
       const normalizedSchema = schema!.sql.replace(/\s+/g, ' ');
       assert.match(normalizedSchema, /CHECK\s*\(provider IN \('healthkit', 'health-connect'\)\)/);
@@ -123,16 +165,29 @@ describe('health sync ledger persistence', () => {
 
       await driver.runAsync(
         'INSERT INTO workouts (id, name, start_time, in_progress) VALUES (?, ?, ?, 0)',
-        'schema-workout', 'Schema workout', '2026-09-10T07:00:00.000Z'
+        'schema-workout',
+        'Schema workout',
+        '2026-09-10T07:00:00.000Z',
       );
-      const insertLedger = (provider: string, status: string) => driver.runAsync(
-        `INSERT INTO health_sync_records
+      const insertLedger = (provider: string, status: string) =>
+        driver.runAsync(
+          `INSERT INTO health_sync_records
          (workout_id, provider, payload_fingerprint, status, attempted_at)
          VALUES (?, ?, ?, ?, ?)`,
-        'schema-workout', provider, 'schema-fingerprint', status, '2026-09-10T08:00:00.000Z'
+          'schema-workout',
+          provider,
+          'schema-fingerprint',
+          status,
+          '2026-09-10T08:00:00.000Z',
+        );
+      await assert.rejects(
+        () => insertLedger('invalid-provider', 'pending'),
+        /CHECK constraint failed/,
       );
-      await assert.rejects(() => insertLedger('invalid-provider', 'pending'), /CHECK constraint failed/);
-      await assert.rejects(() => insertLedger('healthkit', 'invalid-status'), /CHECK constraint failed/);
+      await assert.rejects(
+        () => insertLedger('healthkit', 'invalid-status'),
+        /CHECK constraint failed/,
+      );
     } finally {
       driver.close();
     }
@@ -147,7 +202,10 @@ describe('health sync ledger persistence', () => {
       for (const record of records) await store.saveHealthSyncRecord(record);
       assert.deepEqual(await store.getHealthSyncRecords(), records);
       assert.deepEqual(await store.getHealthSyncRecords('failed'), [records[2]]);
-      assert.deepEqual(await store.getHealthSyncRecord(records[1].workoutId, records[1].provider), records[1]);
+      assert.deepEqual(
+        await store.getHealthSyncRecord(records[1].workoutId, records[1].provider),
+        records[1],
+      );
       assert.equal(await store.getHealthSyncRecord('missing', 'healthkit'), null);
 
       await store.deleteWorkout('ledger-pending');
@@ -158,7 +216,10 @@ describe('health sync ledger persistence', () => {
   });
 
   it('reopens native records with optional values preserved', async () => {
-    const tempFile = path.join(os.tmpdir(), `health-ledger-reopen-${Date.now()}-${Math.random()}.db`);
+    const tempFile = path.join(
+      os.tmpdir(),
+      `health-ledger-reopen-${Date.now()}-${Math.random()}.db`,
+    );
     const driver = new NodeSqliteDriver(tempFile);
     const store = createNativeStore(driver);
     try {
@@ -176,7 +237,11 @@ describe('health sync ledger persistence', () => {
         reopenedDriver.close();
       }
     } finally {
-      try { driver.close(); } catch (_) {}
+      try {
+        driver.close();
+      } catch (_) {
+        /* Ignore: best-effort cleanup. */
+      }
       if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
     }
   });
@@ -204,7 +269,10 @@ describe('health sync ledger persistence', () => {
       assert.equal((await store.getWorkoutDetail('legacy-idb-workout'))?.name, 'Ledger workout');
       assert.equal(await store.getSetting('legacy-setting'), 'kept');
       await store.saveHealthSyncRecord(records[0]);
-      assert.deepEqual(await store.getHealthSyncRecord(records[0].workoutId, records[0].provider), records[0]);
+      assert.deepEqual(
+        await store.getHealthSyncRecord(records[0].workoutId, records[0].provider),
+        records[0],
+      );
       assert.deepEqual(await store.getHealthSyncRecords('pending'), [records[0]]);
     } finally {
       await store.close();

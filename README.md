@@ -61,6 +61,7 @@ Most modern fitness apps start out great, only to lock your workouts behind expe
 - **Expandable Workout Log**: Drill down into every past workout to inspect completed weights, reps, and RPE pills.
 - **Perform Again**: 1-tap restart of past completed workouts from History, reconstructing all exercises, target sets, reps, and historical weights as suggestions.
 - **Atomic Backup & Restore (v3 export, v2 import)**: New exports include gym profiles and exercise scopes. Existing Schema v2 backups remain importable, and restore merges records safely with collision prevention.
+- **Automatic Android Backups**: Opt-in backups after completed workouts to a chosen folder, with a manual backup action, last-backup status, and retention of the newest 10 files. The folder permission stays on that device and is excluded from exported backups.
 - **Opt-In Health Export**: After local completion, export the session summary to Apple Health/HealthKit on iOS or Health Connect on Android. The Health Connect payload includes the workout title, strength-workout session type, and session start/end timing and duration; the HealthKit payload includes only the strength-workout type and session start/end timing and duration. Lifts does not read health data or export sets. The device-local `health_sync_enabled` setting and sync ledger are excluded from backups.
 
 ---
@@ -71,13 +72,14 @@ Lifts employs a dual-engine local storage architecture:
 - **Native (Android & iOS)**: Stored in a durable SQLite database via `expo-sqlite` with write queue serialization and transactional schema migrations (`src/database/nativeStore.ts`).
 - **Web**: Stored in client-side IndexedDB with single-writer lease protection (`src/database/webStore.ts`).
   - *Note on Web Limitations*: Data stored in the browser depends on local browser storage policies. Clearing browsing history, using incognito/private mode, or browser storage eviction can remove local data. For permanent and offline training, use the native Android or iOS builds.
+  - *Installable shell*: production web exports ship a manifest and a versioned service worker, completed by `scripts/postprocess-web-export.mjs`. Keep the first visit online until service-worker installation finishes; the matching shell and exported assets, including unvisited tab bundles, are then available offline. New releases install online and activate after existing app tabs close. Workout data still follows the storage caveat above.
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v18.0.0 or higher)
+- [Node.js](https://nodejs.org/) (v22.5.0 or higher; Node 24 is what CI and `.nvmrc` use)
 - [npm](https://www.npmjs.com/) (v9.0.0 or higher)
 - [Expo Go](https://expo.dev/client) app installed on your iOS or Android device (for standard web and non-health native development testing; it does not provide the HealthKit or Health Connect native modules)
 
@@ -158,6 +160,8 @@ To build a standalone debug APK locally without relying on cloud services:
 - [Product Roadmap](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
 - [Release & Verification Checklist](docs/release-checklist.md) (including signing and publishing)
+- [Navigation Model](docs/navigation.md)
+- [Platform Dispatch](docs/platform-dispatch.md)
 - [Multi-Gym Tracking & Machine Isolation Design Spec](docs/superpowers/specs/2026-09-10-multi-gym-tracking-design.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [Third-Party Notices](THIRD_PARTY_NOTICES.md)

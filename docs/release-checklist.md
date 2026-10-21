@@ -7,7 +7,7 @@ This document details the environment requirements, build procedures, and device
 ## 1. Local Toolchain & Build Prerequisites
 
 ### General
-- **Node.js**: v18.0.0 or v20.x LTS
+- **Node.js**: v22.5.0 or higher (Node 24 matches `.nvmrc` and CI)
 - **npm**: v9.0.0 or higher
 - **Expo CLI**: bundled via repository dependencies (`npx expo`)
 
@@ -45,6 +45,9 @@ This document details the environment requirements, build procedures, and device
 
 ## 2. Dependency Vulnerability Triage
 
+`npm run audit:policy` runs in CI (`npm audit --omit=dev`): any high or critical advisory in the production tree fails the build unless it is listed in `scripts/audit-policy.mjs`. Record the triage here before adding an advisory to that list, and never take an insecure `--force` downgrade.
+
+- **Accepted build/dev-tooling advisories (CI policy)**: `shell-quote` (critical, via `react-devtools-core`; dev-menu tooling that is not present in release builds), `brace-expansion`, `braces`, `micromatch`, and `source-map-js` (denial-of-service in Metro's glob and source-map tooling), and `node-forge` (via `@expo/code-signing-certificates`, CLI code-signing tooling). None of these paths execute in the shipped app; Dependabot tracks upstream fixes.
 - **Reported Advisory**: `GHSA-w5hq-g745-h8pq` (`uuid` < 11.1.1)
   - **Path**: `xcode` -> `uuid` and `@expo/ngrok` -> `uuid`
   - **Severity**: Moderate
@@ -147,14 +150,16 @@ Releases are built by `.github/workflows/release.yml` and signed with the Lifts 
 
 ### Cutting a release
 
-1. Set `expo.version` and the matching `android.versionCode` in `app.json`. Update the three `.fdroid.yml` build blocks and `CurrentVersion`/`CurrentVersionCode`, and add `fastlane/metadata/android/en-US/changelogs/<code>.txt` for each ABI code (`base × 10 + 1`, `+ 2`, `+ 4`).
-2. In `CHANGELOG.md`, move the `[Unreleased]` entries into a new `## [X.Y.Z]` section.
-3. Merge to `main`, then tag the merge commit and push the tag:
+1. Set `expo.version` and the matching `android.versionCode` in `app.json`. Run `npm run version:check` to confirm `package.json` agrees (CI runs the same check on every push). Update the three `.fdroid.yml` build blocks and `CurrentVersion`/`CurrentVersionCode`, and add `fastlane/metadata/android/en-US/changelogs/<code>.txt` for each ABI code (`base × 10 + 1`, `+ 2`, `+ 4`).
+2. Refresh the documentation checks: `docs/repository-audit-2026-10-18.md` reflects completed findings, and the test counts in `docs/audit-remediation-results.md` match the current `npm test` and `npm run test:integration` output.
+3. In `CHANGELOG.md`, move the `[Unreleased]` entries into a new `## [X.Y.Z]` section.
+4. Merge to `main`, then tag the merge commit and push the tag:
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-4. The workflow runs typecheck and both test suites, then:
+5. Confirm the end-to-end smoke journey is green for the tagged commit: `.github/workflows/e2e.yml` runs it on every `main` push that touches the app, and can be dispatched manually from `main`.
+6. The workflow runs typecheck and both test suites, then:
    - builds one unsigned APK per ABI with `fdroid build` in F-Droid's `buildserver-trixie` image from `.fdroid.yml` (the same bytes F-Droid will build), and signs each with the upload key using `apksigner` 34.0.0;
    - builds a universal APK with Gradle and `LIFTS_REQUIRE_RELEASE_SIGNING=true`;
    - rejects the Android debug certificate, checks the pinned fingerprint, and runs `apksigcopier compare` to prove the signature copies onto the unsigned F-Droid build;

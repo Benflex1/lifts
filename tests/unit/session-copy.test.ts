@@ -21,7 +21,7 @@ describe('paused workout copy', () => {
     assert.equal(PAUSED_WORKOUT_DIALOG_TITLE, 'Paused Workout Found');
     assert.equal(
       PAUSED_WORKOUT_DIALOG_MESSAGE,
-      'You have a paused workout saved. Would you like to continue it?'
+      'You have a paused workout saved. Would you like to continue it?',
     );
     assert.equal(PAUSED_WORKOUT_CONFIRM_LABEL, 'Continue Saved');
     assert.equal(PAUSED_WORKOUT_MODAL_TITLE, 'Paused Workouts');

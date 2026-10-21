@@ -14,8 +14,20 @@ import {
 } from '../../src/workout/gym-profile';
 
 const gyms: Gym[] = [
-  { id: 'gym-default', name: 'Default Gym', isDefault: true, color: DEFAULT_GYM_COLOR, createdAt: '2026-01-01T00:00:00.000Z' },
-  { id: 'gym-other', name: 'Other Gym', isDefault: false, color: GYM_COLOR_PALETTE[1], createdAt: '2026-01-01T00:00:00.000Z' },
+  {
+    id: 'gym-default',
+    name: 'Default Gym',
+    isDefault: true,
+    color: DEFAULT_GYM_COLOR,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'gym-other',
+    name: 'Other Gym',
+    isDefault: false,
+    color: GYM_COLOR_PALETTE[1],
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
 ];
 
 describe('gym profile validation', () => {
@@ -52,10 +64,19 @@ describe('gym profile validation', () => {
     assert.equal(isGymUsedByActiveWorkout('gym-default', 'gym-default'), true);
     assert.equal(isGymUsedByActiveWorkout('gym-default', null), false);
     assert.equal(isActiveWorkoutForGym({ gymId: 'gym-default' }, 'gym-default'), true);
-    assert.equal(isActiveWorkoutForGym({ gymId: 'gym-default', endTime: '2026-09-10T10:00:00.000Z' }, 'gym-default'), false);
+    assert.equal(
+      isActiveWorkoutForGym(
+        { gymId: 'gym-default', endTime: '2026-09-10T10:00:00.000Z' },
+        'gym-default',
+      ),
+      false,
+    );
 
     const renamedActiveGym = { ...gyms[0], name: 'Renamed Default' };
-    assert.equal(resolveActiveGymAfterRefresh([renamedActiveGym, gyms[1]], gyms[1], 'gym-default'), renamedActiveGym);
+    assert.equal(
+      resolveActiveGymAfterRefresh([renamedActiveGym, gyms[1]], gyms[1], 'gym-default'),
+      renamedActiveGym,
+    );
     assert.equal(resolveActiveGymAfterRefresh([gyms[0], gyms[1]], gyms[1], null), gyms[1]);
   });
 });

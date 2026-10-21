@@ -9,7 +9,7 @@ describe('Weight & Reps Input Display Logic', () => {
     value: number,
     completed: boolean,
     isEdited?: boolean,
-    unit: 'kg' | 'lb' = 'kg'
+    unit: 'kg' | 'lb' = 'kg',
   ) => {
     const effectiveEdited = completed || (isEdited !== undefined ? isEdited : value > 0);
     return effectiveEdited ? kgToDisplay(value, unit).toString() : '';
@@ -56,20 +56,19 @@ describe('Untouched Set Completion Resolution', () => {
   function resolveSetOnComplete(
     targetSet: WorkoutSet,
     targetReps: string | undefined,
-    setIndex: number
+    setIndex: number,
   ): WorkoutSet {
     let effectiveSet = targetSet;
-    const isWeightEdited = targetSet.isWeightEdited ?? (targetSet.weightKg > 0);
+    const isWeightEdited = targetSet.isWeightEdited ?? targetSet.weightKg > 0;
     const needsReps = targetSet.reps <= 0;
-    const needsWeight = !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
+    const needsWeight =
+      !isWeightEdited && targetSet.weightKg <= 0 && (targetSet.previousWeightKg ?? 0) > 0;
 
     if (needsReps || needsWeight) {
       const fallbackReps = needsReps
         ? initialReps(targetReps, setIndex, targetSet.previousReps)
         : targetSet.reps;
-      const fallbackWeight = needsWeight
-        ? (targetSet.previousWeightKg ?? 0)
-        : targetSet.weightKg;
+      const fallbackWeight = needsWeight ? (targetSet.previousWeightKg ?? 0) : targetSet.weightKg;
       effectiveSet = {
         ...targetSet,
         reps: fallbackReps,
@@ -181,7 +180,11 @@ describe('Untouched Set Completion Resolution', () => {
 
     const completed = resolveSetOnComplete(bodyweightSet, '8-12', 0);
     assert.equal(completed.isCompleted, true);
-    assert.equal(completed.weightKg, 0, 'Explicit 0 kg must NOT be overwritten by previousWeightKg');
+    assert.equal(
+      completed.weightKg,
+      0,
+      'Explicit 0 kg must NOT be overwritten by previousWeightKg',
+    );
     assert.equal(completed.reps, 10);
   });
 
@@ -257,7 +260,7 @@ describe('Swipe Left to Delete Gesture Logic', () => {
 
     // Delete set 2
     const remaining = sets
-      .filter((s) => s.id !== 's-2')
+      .filter(s => s.id !== 's-2')
       .map((s, idx) => ({ ...s, setNumber: idx + 1 }));
 
     assert.equal(remaining.length, 3);

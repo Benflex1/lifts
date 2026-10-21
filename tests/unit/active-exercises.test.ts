@@ -24,15 +24,17 @@ const makeActiveExercise = (id: string): ActiveExercise => ({
   restTimerSeconds: 90,
   targetReps: '8-12',
   notes: 'Keep shoulders packed',
-  sets: [{
-    id: `set-${id}`,
-    setNumber: 1,
-    type: 'normal',
-    weightKg: 80,
-    reps: 8,
-    rpe: 8,
-    isCompleted: true,
-  }],
+  sets: [
+    {
+      id: `set-${id}`,
+      setNumber: 1,
+      type: 'normal',
+      weightKg: 80,
+      reps: 8,
+      rpe: 8,
+      isCompleted: true,
+    },
+  ],
 });
 
 describe('active exercise operations', () => {
@@ -41,10 +43,16 @@ describe('active exercise operations', () => {
 
     const updated = moveActiveExerciseToIndex(exercises, 'active-a', 2);
 
-    assert.deepEqual(updated.map(exercise => exercise.exerciseId), ['b', 'c', 'a']);
+    assert.deepEqual(
+      updated.map(exercise => exercise.exerciseId),
+      ['b', 'c', 'a'],
+    );
     assert.deepEqual(updated[2].sets, exercises[0].sets);
     assert.equal(updated[2].notes, exercises[0].notes);
-    assert.deepEqual(exercises.map(exercise => exercise.exerciseId), ['a', 'b', 'c']);
+    assert.deepEqual(
+      exercises.map(exercise => exercise.exerciseId),
+      ['a', 'b', 'c'],
+    );
   });
 
   it('leaves the exercise list unchanged for unknown or out-of-range targets', () => {
@@ -75,19 +83,19 @@ describe('active exercise operations', () => {
 
     assert.deepEqual(
       moveActiveExercise(exercises, 'active-b', -1).map(exercise => exercise.exerciseId),
-      ['b', 'a', 'c']
+      ['b', 'a', 'c'],
     );
     assert.deepEqual(
       moveActiveExercise(exercises, 'active-b', 1).map(exercise => exercise.exerciseId),
-      ['a', 'c', 'b']
+      ['a', 'c', 'b'],
     );
     assert.deepEqual(
       moveActiveExercise(exercises, 'active-a', -1).map(exercise => exercise.exerciseId),
-      ['a', 'b', 'c']
+      ['a', 'b', 'c'],
     );
     assert.deepEqual(
       moveActiveExercise(exercises, 'active-c', 1).map(exercise => exercise.exerciseId),
-      ['a', 'b', 'c']
+      ['a', 'b', 'c'],
     );
   });
 
@@ -164,4 +172,3 @@ describe('active exercise operations', () => {
     assert.equal(updated[1].sets[1].previousReps, 10);
   });
 });
-

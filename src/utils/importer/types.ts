@@ -1,31 +1,15 @@
 import { DataSnapshot } from '../../database/contract';
-import { Exercise, SetType, Workout } from '../../types';
+import { Exercise, SetType } from '../../types';
 
 export type DetectedTrackerFormat = 'hevy' | 'strong' | 'lyfta' | 'fitnotes' | 'generic';
-
-export interface RawCsvSetRow {
-  workoutName: string;
-  dateStr: string;
-  startTimeStr?: string;
-  endTimeStr?: string;
-  durationStr?: string;
-  exerciseName: string;
-  category?: string;
-  setIndex?: number;
-  setType?: string;
-  weightStr?: string;
-  weightUnit?: string;
-  repsStr?: string;
-  rpeStr?: string;
-  exerciseNotes?: string;
-  workoutNotes?: string;
-}
 
 export interface ParsedSet {
   setNumber: number;
   type: SetType;
   weightKg: number;
   reps: number;
+  durationSeconds?: number;
+  distanceM?: number;
   rpe?: number;
   isCompleted: boolean;
   notes?: string;
@@ -41,7 +25,7 @@ export interface ParsedExerciseGroup {
 export interface ParsedWorkoutSession {
   name: string;
   startTime: string; // ISO 8601
-  endTime?: string;  // ISO 8601
+  endTime?: string; // ISO 8601
   durationSeconds: number;
   notes?: string;
   exerciseGroups: ParsedExerciseGroup[];

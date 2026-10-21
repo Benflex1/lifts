@@ -1,9 +1,16 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { Exercise } from '../../src/types';
-import { DEFAULT_EXERCISES } from '../../src/database/seedData';
-import { FREE_EXERCISE_DB_REVISION, getFreeExerciseDbImageUrls } from '../../src/database/exercise-source';
-import { REVIEWED_EXERCISE_ASSETS, getExerciseVisual } from '../../src/utils/exercise-media';
+import { getDefaultExercises } from '../../src/database/seedData';
+import {
+  FREE_EXERCISE_DB_REVISION,
+  getFreeExerciseDbImageUrls,
+} from '../../src/database/exercise-source';
+import {
+  REVIEWED_EXERCISE_ASSETS,
+  getExerciseVisual,
+  resolveExerciseVisual,
+} from '../../src/utils/exercise-media';
 
 const exercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   id: 'test-exercise',
@@ -23,7 +30,7 @@ describe('exercise visual resolver', () => {
 
   it('returns remote images for representative bundled exercises', () => {
     const expectedFallbackTemplates = ['core', 'hinge', 'core'] as const;
-    for (const [index, bundled] of DEFAULT_EXERCISES.slice(0, 3).entries()) {
+    for (const [index, bundled] of getDefaultExercises().slice(0, 3).entries()) {
       const descriptor = getExerciseVisual(bundled);
       assert.equal(descriptor.kind, 'remote-image', bundled.id);
       if (descriptor.kind !== 'remote-image') continue;
@@ -34,17 +41,24 @@ describe('exercise visual resolver', () => {
   });
 
   it('returns remote images for every bundled exercise at the pinned revision', () => {
-    for (const bundled of DEFAULT_EXERCISES) {
+    for (const bundled of getDefaultExercises()) {
       const descriptor = getExerciseVisual(bundled);
       assert.equal(descriptor.kind, 'remote-image', bundled.id);
       if (descriptor.kind !== 'remote-image') continue;
-      assert.ok(descriptor.imageUrls.every(url => url.includes(`/${FREE_EXERCISE_DB_REVISION}/`)), bundled.id);
+      assert.ok(
+        descriptor.imageUrls.every(url => url.includes(`/${FREE_EXERCISE_DB_REVISION}/`)),
+        bundled.id,
+      );
       assert.deepEqual(descriptor.imageUrls, getFreeExerciseDbImageUrls(bundled.id));
     }
   });
 
   it('returns a deterministic generated descriptor for an unknown exercise', () => {
-    const unknown = exercise({ id: 'custom-unknown', name: 'Something New', primaryMuscles: ['unknown'] });
+    const unknown = exercise({
+      id: 'custom-unknown',
+      name: 'Something New',
+      primaryMuscles: ['unknown'],
+    });
 
     assert.deepEqual(getExerciseVisual(unknown), {
       kind: 'generated',
@@ -55,7 +69,7 @@ describe('exercise visual resolver', () => {
   });
 
   it('does not use bundled remote media for a custom exercise with a colliding ID', () => {
-    const bundled = DEFAULT_EXERCISES[0];
+    const bundled = getDefaultExercises()[0];
     const descriptor = getExerciseVisual({
       ...bundled,
       isCustom: true,
@@ -66,12 +80,14 @@ describe('exercise visual resolver', () => {
   });
 
   it('returns generated media for a custom Plank instead of the reviewed local asset', () => {
-    const descriptor = getExerciseVisual(exercise({
-      id: 'Plank',
-      name: 'Plank',
-      isCustom: true,
-      primaryMuscles: ['abdominals'],
-    }));
+    const descriptor = getExerciseVisual(
+      exercise({
+        id: 'Plank',
+        name: 'Plank',
+        isCustom: true,
+        primaryMuscles: ['abdominals'],
+      }),
+    );
 
     assert.equal(descriptor.kind, 'generated');
   });
@@ -86,13 +102,23 @@ describe('exercise visual resolver', () => {
       [exercise({ name: 'Plank', primaryMuscles: ['abdominals'] }), 'core'],
       [exercise({ name: 'World’s Greatest Stretch', category: 'stretching' }), 'stretch'],
       [exercise({ name: 'Running', category: 'cardio', equipment: 'body only' }), 'cardio'],
-      [exercise({ name: 'Unclassified Movement', category: 'unknown-category', primaryMuscles: ['unknown'] }), 'general'],
+      [
+        exercise({
+          name: 'Unclassified Movement',
+          category: 'unknown-category',
+          primaryMuscles: ['unknown'],
+        }),
+        'general',
+      ],
     ];
 
     for (const [candidate, expectedTemplate] of cases) {
       const descriptor = getExerciseVisual(candidate);
       assert.equal(descriptor.kind, 'generated', candidate.name);
-      assert.equal(descriptor.kind === 'generated' ? descriptor.template : undefined, expectedTemplate);
+      assert.equal(
+        descriptor.kind === 'generated' ? descriptor.template : undefined,
+        expectedTemplate,
+      );
     }
   });
 
@@ -100,11 +126,13 @@ describe('exercise visual resolver', () => {
     const crunchNames = ['Crunch', 'Ab Crunch Machine'];
 
     for (const name of crunchNames) {
-      const descriptor = getExerciseVisual(exercise({
-        id: `test-${name.toLowerCase().replaceAll(' ', '-')}`,
-        name,
-        primaryMuscles: ['abdominals'],
-      }));
+      const descriptor = getExerciseVisual(
+        exercise({
+          id: `test-${name.toLowerCase().replaceAll(' ', '-')}`,
+          name,
+          primaryMuscles: ['abdominals'],
+        }),
+      );
 
       assert.equal(descriptor.kind, 'generated', name);
       assert.equal(descriptor.kind === 'generated' ? descriptor.template : undefined, 'core', name);
@@ -112,12 +140,43 @@ describe('exercise visual resolver', () => {
   });
 
   it('does not throw for unknown equipment or muscle names', () => {
-    assert.doesNotThrow(() => getExerciseVisual(exercise({
-      name: 'Unusual Movement',
-      category: 'mystery',
-      equipment: 'invented apparatus',
-      primaryMuscles: ['unknown muscle'],
-      secondaryMuscles: ['another unknown muscle'],
-    })));
+    assert.doesNotThrow(() =>
+      getExerciseVisual(
+        exercise({
+          name: 'Unusual Movement',
+          category: 'mystery',
+          equipment: 'invented apparatus',
+          primaryMuscles: ['unknown muscle'],
+          secondaryMuscles: ['another unknown muscle'],
+        }),
+      ),
+    );
+  });
+});
+
+describe('remote image preference', () => {
+  it('swaps a remote image for its generated fallback when remote images are off', () => {
+    const descriptor = getExerciseVisual(getDefaultExercises()[0]);
+    assert.equal(descriptor.kind, 'remote-image');
+    if (descriptor.kind !== 'remote-image') return;
+
+    assert.deepEqual(resolveExerciseVisual(descriptor, false), {
+      kind: 'generated',
+      template: descriptor.fallbackTemplate,
+      alt: descriptor.alt,
+    });
+  });
+
+  it('keeps the remote image when remote images are on', () => {
+    const descriptor = getExerciseVisual(getDefaultExercises()[0]);
+    assert.equal(resolveExerciseVisual(descriptor, true), descriptor);
+  });
+
+  it('leaves generated visuals unchanged when remote images are off', () => {
+    const generated = getExerciseVisual(
+      exercise({ id: 'custom-unknown', name: 'Something New', primaryMuscles: ['unknown'] }),
+    );
+    assert.equal(generated.kind, 'generated');
+    assert.equal(resolveExerciseVisual(generated, false), generated);
   });
 });
