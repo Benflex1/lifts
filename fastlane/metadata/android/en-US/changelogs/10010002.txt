@@ -1,0 +1,8 @@
+Progression, programs and more.
+
+- Next targets for each exercise from your last session.
+- Rotations: turn a routine folder into a program like Push, Pull, Legs, with an up-next card and optional deload weeks.
+- Optional body weight log with a trend chart.
+- Optional time, distance and bodyweight tracking, with matching progress charts.
+- Optional automatic backups after each workout.
+- Rest countdown buzz now plays on time with the phone locked.

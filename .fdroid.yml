@@ -13,9 +13,9 @@ RepoType: git
 Repo: https://github.com/Benflex1/lifts.git
 
 Builds:
-  - versionName: 1.0.5
-    versionCode: 10000051
-    commit: v1.0.5
+  - versionName: 1.1.0
+    versionCode: 10010001
+    commit: v1.1.0
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -43,9 +43,9 @@ Builds:
       - gradle assembleRelease -PliftsAbi=armeabi-v7a -PreactNativeArchitectures=armeabi-v7a
     ndk: r27b
 
-  - versionName: 1.0.5
-    versionCode: 10000052
-    commit: v1.0.5
+  - versionName: 1.1.0
+    versionCode: 10010002
+    commit: v1.1.0
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -73,9 +73,9 @@ Builds:
       - gradle assembleRelease -PliftsAbi=arm64-v8a -PreactNativeArchitectures=arm64-v8a
     ndk: r27b
 
-  - versionName: 1.0.5
-    versionCode: 10000054
-    commit: v1.0.5
+  - versionName: 1.1.0
+    versionCode: 10010004
+    commit: v1.1.0
     sudo:
       - echo "deb https://deb.debian.org/debian forky main" > /etc/apt/sources.list.d/forky.list
       - apt-get update
@@ -112,5 +112,5 @@ VercodeOperation:
   - '%c * 10 + 2'
   - '%c * 10 + 4'
 UpdateCheckData: app.json|"versionCode":\s*(\d+)|app.json|"version":\s*"([\d.]+)"
-CurrentVersion: 1.0.5
-CurrentVersionCode: 10000054
+CurrentVersion: 1.1.0
+CurrentVersionCode: 10010004
