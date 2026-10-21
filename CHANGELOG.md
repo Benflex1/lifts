@@ -7,6 +7,8 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.1.0]
+
 ### Added
 - Progress charts for timed and distance exercises. With time and distance tracking on, the exercise progression chart shows the longest set and total time for timed exercises, and distance, best pace and total time for distance exercises, with PRs marked. Faster paces plot higher, so up always means better.
 - Optional body weight log, off by default. Turn it on in Settings to log a weigh-in from the Progress tab, for today or the last two days. The card shows your latest weight, the change over about 30 days, a 7-day average, and a chart of your weigh-ins with a smoothed trend line. Weigh-ins travel with backups, and a restore adds the backup's days without overwriting yours.
