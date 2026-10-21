@@ -16,7 +16,12 @@ import {
   ProgressionMetric,
   isPointPrForMetric,
 } from '../workout/analytics';
-import { formatWeight, kgToDisplay, WeightUnit } from '../utils/units';
+import { formatWeight, WeightUnit } from '../utils/units';
+import {
+  formatTopSet,
+  pointsWithMetric,
+  PROGRESSION_METRICS,
+} from '../workout/progression-metrics';
 import { Trophy, TrendingUp, TrendingDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { bestEffortHaptic } from '../utils/haptics';
@@ -48,7 +53,12 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
     setSelectedIndex(null);
   }, [series.exerciseId, series.points.length, metric]);
 
-  const points = series.points;
+  const spec = PROGRESSION_METRICS[metric];
+  // Time and distance metrics skip sessions without that value, so a missing pace never plots as 0:00.
+  const points = useMemo(
+    () => pointsWithMetric(series.points, metric, unit),
+    [series.points, metric, unit],
+  );
 
   const handleLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -58,30 +68,14 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
   };
 
   const getPointValue = useCallback(
-    (p: ProgressionDataPoint): number => {
-      switch (metric) {
-        case 'e1rm':
-          return kgToDisplay(p.e1rmKg, unit);
-        case 'max_weight':
-          return kgToDisplay(p.maxWeightKg, unit);
-        case 'volume':
-          return kgToDisplay(p.totalVolumeKg, unit);
-        case 'max_reps':
-          return p.maxReps;
-        default:
-          return kgToDisplay(p.e1rmKg, unit);
-      }
-    },
-    [metric, unit],
+    (p: ProgressionDataPoint): number => spec.value(p, unit),
+    [spec, unit],
   );
 
-  const formatMetricValue = (val: number): string => {
-    if (metric === 'max_reps') {
-      return `${val} reps`;
-    }
-    const suffix = unit.toUpperCase();
-    return `${val} ${suffix}`;
-  };
+  const formatMetricValue = useCallback(
+    (val: number): string => spec.format(val, unit),
+    [spec, unit],
+  );
 
   // Dimensions
   const paddingLeft = 46;
@@ -102,15 +96,20 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
     let max = Math.max(...values);
 
     if (min === max) {
-      min = Math.max(0, min - 5);
-      max = max + 5;
+      // Weight-style metrics pad by 5 units; times and distances pad by a tenth so 5 km stays readable.
+      const pad =
+        metric === 'e1rm' || metric === 'max_weight' || metric === 'volume' || metric === 'max_reps'
+          ? 5
+          : Math.max(min * 0.1, 1);
+      min = Math.max(0, min - pad);
+      max = max + pad;
     } else {
       const margin = (max - min) * 0.12;
       min = Math.max(0, min - margin);
       max = max + margin;
     }
 
-    const valueSpan = Math.max(1, max - min);
+    const valueSpan = max - min || 1;
 
     const mappedCoords = points.map((p, idx) => {
       const x =
@@ -119,7 +118,8 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
           : paddingLeft + (idx / (points.length - 1)) * chartWidth;
 
       const val = getPointValue(p);
-      const normalizedY = (val - min) / valueSpan;
+      // Faster paces plot higher, so up always means better.
+      const normalizedY = spec.lowerIsBetter ? (max - val) / valueSpan : (val - min) / valueSpan;
       const y = paddingTop + chartHeight - normalizedY * chartHeight;
 
       return { x, y, point: p, value: val };
@@ -160,7 +160,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
       linePath: lineD,
       areaPath: areaD,
     };
-  }, [points, chartWidth, chartHeight, getPointValue]);
+  }, [points, metric, spec.lowerIsBetter, chartWidth, chartHeight, getPointValue]);
 
   const trajectoryStats = useMemo(() => {
     if (points.length === 0) return null;
@@ -197,6 +197,19 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
       if (points.length >= 2 && firstP.maxReps > 0) {
         changePct = Number((((lastP.maxReps - firstP.maxReps) / firstP.maxReps) * 100).toFixed(1));
       }
+    } else if (metric !== 'volume') {
+      // Time, distance and pace: best and change within the shown range.
+      const values = points.map(getPointValue);
+      const best = spec.lowerIsBetter ? Math.min(...values) : Math.max(...values);
+      const first = values[0];
+      const current = values[values.length - 1];
+      bestFormatted = formatMetricValue(best);
+      currentFormatted = formatMetricValue(current);
+      if (points.length >= 2 && first > 0) {
+        // For pace, a smaller number is an improvement, so it reads as a positive change.
+        const change = spec.lowerIsBetter ? first - current : current - first;
+        changePct = Number(((change / first) * 100).toFixed(1));
+      }
     } else {
       // volume
       const best = Math.max(...points.map(p => p.totalVolumeKg));
@@ -216,7 +229,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
       currentFormatted,
       totalSessions: points.length,
     };
-  }, [points, metric, unit, series.summary]);
+  }, [points, metric, unit, series.summary, spec.lowerIsBetter, getPointValue, formatMetricValue]);
 
   // Handle touch scrub
   const handleTouch = (evt: GestureResponderEvent) => {
@@ -251,7 +264,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
         <TrendingUp size={28} color={colors.textFaint} />
         <Text style={styles.emptyTitle}>No progression data yet</Text>
         <Text style={styles.emptySubtitle}>
-          Complete workouts with this exercise to visualize your 1RM and load curves over time.
+          Complete workouts with this exercise to see your progress over time.
         </Text>
       </View>
     );
@@ -259,10 +272,12 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
 
   // Y-axis grid values
   const midVal = (minVal + maxVal) / 2;
+  const topVal = spec.lowerIsBetter ? minVal : maxVal;
+  const bottomVal = spec.lowerIsBetter ? maxVal : minVal;
   const yLabels = [
-    { label: Math.round(maxVal).toString(), y: paddingTop },
-    { label: Math.round(midVal).toString(), y: paddingTop + chartHeight / 2 },
-    { label: Math.round(minVal).toString(), y: paddingTop + chartHeight },
+    { label: spec.axis(topVal, unit), y: paddingTop },
+    { label: spec.axis(midVal, unit), y: paddingTop + chartHeight / 2 },
+    { label: spec.axis(bottomVal, unit), y: paddingTop + chartHeight },
   ];
 
   return (
@@ -330,15 +345,7 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
             {isPointPrForMetric(activePoint, metric) && (
               <View style={styles.prBadge}>
                 <Trophy size={11} color={colors.warning} />
-                <Text style={styles.prBadgeText}>
-                  {metric === 'e1rm'
-                    ? 'NEW 1RM PR'
-                    : metric === 'max_weight'
-                      ? 'NEW WEIGHT PR'
-                      : metric === 'volume'
-                        ? 'NEW VOL PR'
-                        : 'NEW REPS PR'}
-                </Text>
+                <Text style={styles.prBadgeText}>{spec.prLabel}</Text>
               </View>
             )}
           </View>
@@ -347,25 +354,12 @@ export const ProgressionCurveView: React.FC<ProgressionCurveViewProps> = ({
             <Text style={styles.calloutMainVal}>
               {formatMetricValue(getPointValue(activePoint))}
             </Text>
-            <Text style={styles.calloutMetricLabel}>
-              {metric === 'e1rm'
-                ? 'Est. 1RM'
-                : metric === 'max_weight'
-                  ? 'Top Weight'
-                  : metric === 'volume'
-                    ? 'Session Volume'
-                    : 'Max Reps'}
-            </Text>
+            <Text style={styles.calloutMetricLabel}>{spec.callout}</Text>
           </View>
 
           <View style={styles.calloutFooter}>
             <Text style={styles.calloutTopSet}>
-              Best Set:{' '}
-              {activePoint.topSet.weightKg > 0
-                ? formatWeight(activePoint.topSet.weightKg, unit)
-                : 'BW'}{' '}
-              × {activePoint.topSet.reps}
-              {activePoint.topSet.rpe ? ` @${activePoint.topSet.rpe}` : ''}
+              Best Set: {formatTopSet(activePoint, series.trackingType, unit)}
             </Text>
             {gymTrackingEnabled && activePoint.gymName && (
               <Text style={styles.calloutGym} numberOfLines={1}>

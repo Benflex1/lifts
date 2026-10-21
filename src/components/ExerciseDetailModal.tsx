@@ -28,6 +28,11 @@ import { loadExerciseDetailData } from '../workout/exercise-detail';
 import { ExercisePodium } from '../workout/pr';
 import { ExercisePodiumView } from './ExercisePodiumView';
 import {
+  PROGRESSION_METRICS,
+  progressionMetricsFor,
+  resolveProgressionMetric,
+} from '../workout/progression-metrics';
+import {
   extractExerciseProgression,
   ProgressionMetric,
   TimeframeFilter,
@@ -432,52 +437,42 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
           {/* Progression Curve */}
           {progressionSeries &&
-            progressionSeries.points.some(point => point.maxWeightKg > 0 || point.maxReps > 0) && (
+            progressionSeries.points.some(
+              point =>
+                point.maxWeightKg > 0 ||
+                point.maxReps > 0 ||
+                point.maxDurationSeconds > 0 ||
+                point.maxDistanceM > 0,
+            ) && (
               <View style={styles.progressionSection}>
                 <View style={styles.progressionHeaderRow}>
                   <View style={styles.progressionTitleWrap}>
                     <Text style={styles.progressionTitleText}>Progress</Text>
                   </View>
                   <View style={styles.metricTabsRow}>
-                    {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map(
-                      m => {
-                        const isSelected = selectedMetric === m;
-                        const label =
-                          m === 'e1rm'
-                            ? 'Estimated 1RM'
-                            : m === 'max_weight'
-                              ? 'Heaviest Weight'
-                              : m === 'max_reps'
-                                ? 'Max Reps'
-                                : 'Total Volume';
-                        return (
-                          <TouchableOpacity
-                            key={m}
-                            style={[styles.metricTab, isSelected && styles.metricTabActive]}
-                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                            accessibilityRole="button"
-                            accessibilityLabel={label}
-                            accessibilityState={{ selected: isSelected }}
-                            onPress={() => setSelectedMetric(m)}
+                    {progressionMetricsFor(progressionSeries.trackingType).map(m => {
+                      const isSelected =
+                        resolveProgressionMetric(selectedMetric, progressionSeries.trackingType) ===
+                        m;
+                      const label = PROGRESSION_METRICS[m].label;
+                      return (
+                        <TouchableOpacity
+                          key={m}
+                          style={[styles.metricTab, isSelected && styles.metricTabActive]}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={label}
+                          accessibilityState={{ selected: isSelected }}
+                          onPress={() => setSelectedMetric(m)}
+                        >
+                          <Text
+                            style={[styles.metricTabText, isSelected && styles.metricTabTextActive]}
                           >
-                            <Text
-                              style={[
-                                styles.metricTabText,
-                                isSelected && styles.metricTabTextActive,
-                              ]}
-                            >
-                              {m === 'e1rm'
-                                ? '1RM'
-                                : m === 'max_weight'
-                                  ? 'Weight'
-                                  : m === 'max_reps'
-                                    ? 'Reps'
-                                    : 'Vol'}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      },
-                    )}
+                            {PROGRESSION_METRICS[m].chip}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 </View>
 
@@ -518,7 +513,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                 >
                   <ProgressionCurveView
                     series={progressionSeries}
-                    metric={selectedMetric}
+                    metric={resolveProgressionMetric(
+                      selectedMetric,
+                      progressionSeries.trackingType,
+                    )}
                     unit={unit}
                     height={190}
                     gymTrackingEnabled={gymTrackingEnabled}

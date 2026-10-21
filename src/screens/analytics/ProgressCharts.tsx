@@ -19,7 +19,12 @@ import {
 } from 'lucide-react-native';
 import { formatWeight } from '../../utils/units';
 import { colors } from '../../theme';
-import { ProgressionMetric, TimeframeFilter } from '../../workout/analytics';
+import { TimeframeFilter } from '../../workout/analytics';
+import {
+  PROGRESSION_METRICS,
+  progressionMetricsFor,
+  resolveProgressionMetric,
+} from '../../workout/progression-metrics';
 import { BodyWeightEntry } from '../../workout/body-weight';
 import { BodyWeightCard } from '../../components/BodyWeightCard';
 import { ExercisePickerModal } from '../../components/ExercisePickerModal';
@@ -65,6 +70,13 @@ export function ProgressCharts({
     unit,
     gymTrackingEnabled,
   } = analytics;
+
+  // Time and distance exercises chart their own metrics; the choice comes back for weight exercises.
+  const progressionTrackingType = progressionSeries?.trackingType ?? 'weight_reps';
+  const shownProgressionMetric = resolveProgressionMetric(
+    progressionMetric,
+    progressionTrackingType,
+  );
 
   return (
     <>
@@ -293,7 +305,8 @@ export function ProgressCharts({
                 <Text style={styles.toolTitle}>Exercise Progression</Text>
               </View>
               <Text style={styles.toolSubtitle}>
-                Estimated 1RM, load, and volume trajectory over time.
+                Strength, reps, time or distance over time, depending on how the exercise is
+                tracked.
               </Text>
 
               {/* Exercise Selector */}
@@ -341,16 +354,9 @@ export function ProgressCharts({
                 </View>
 
                 <View style={styles.filterGroup}>
-                  {(['e1rm', 'max_weight', 'max_reps', 'volume'] as ProgressionMetric[]).map(m => {
-                    const isSelected = progressionMetric === m;
-                    const label =
-                      m === 'e1rm'
-                        ? 'Estimated 1RM'
-                        : m === 'max_weight'
-                          ? 'Heaviest Weight'
-                          : m === 'max_reps'
-                            ? 'Max Reps'
-                            : 'Total Volume';
+                  {progressionMetricsFor(progressionTrackingType).map(m => {
+                    const isSelected = shownProgressionMetric === m;
+                    const label = PROGRESSION_METRICS[m].label;
                     return (
                       <TouchableOpacity
                         key={m}
@@ -364,13 +370,7 @@ export function ProgressCharts({
                         <Text
                           style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}
                         >
-                          {m === 'e1rm'
-                            ? '1RM'
-                            : m === 'max_weight'
-                              ? 'Weight'
-                              : m === 'max_reps'
-                                ? 'Reps'
-                                : 'Vol'}
+                          {PROGRESSION_METRICS[m].chip}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -428,7 +428,7 @@ export function ProgressCharts({
               {progressionSeries ? (
                 <ProgressionCurveView
                   series={progressionSeries}
-                  metric={progressionMetric}
+                  metric={shownProgressionMetric}
                   unit={unit}
                   height={190}
                   gymTrackingEnabled={gymTrackingEnabled}
