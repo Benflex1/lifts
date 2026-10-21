@@ -161,4 +161,88 @@ describe('time and distance progression', () => {
     assert.equal(series.points[1].maxDurationSeconds, 0);
     assert.equal(formatTopSet(series.points[1], 'weight_reps', 'kg'), '60 kg × 10');
   });
+
+  it('formats and plots every metric in both unit systems', () => {
+    const [point] = extractExerciseProgression(
+      [
+        workout('w1', '2026-09-01T10:00:00.000Z', [
+          exercise('run', 'distance_duration', [
+            { distanceM: 12000, durationSeconds: 3600, weightKg: 100, reps: 5 },
+          ]),
+        ]),
+      ],
+      'run',
+    ).points;
+    for (const unit of ['kg', 'lb'] as const) {
+      for (const spec of Object.values(PROGRESSION_METRICS)) {
+        const value = spec.value(point, unit);
+        assert.equal(typeof spec.format(value, unit), 'string');
+        assert.equal(typeof spec.axis(value, unit), 'string');
+      }
+    }
+    assert.equal(PROGRESSION_METRICS.max_reps.axis(5, 'kg'), '5');
+    assert.equal(PROGRESSION_METRICS.max_distance.axis(12, 'kg'), '12');
+    assert.equal(PROGRESSION_METRICS.max_distance.axis(5.25, 'kg'), '5.3');
+    assert.equal(PROGRESSION_METRICS.max_duration.axis(90, 'kg'), '1:30');
+    assert.equal(PROGRESSION_METRICS.max_reps.format(5, 'kg'), '5 reps');
+    assert.equal(PROGRESSION_METRICS.e1rm.format(100, 'kg'), '100 KG');
+  });
+
+  it('drops sessions without the chosen time or distance value, but keeps every weight session', () => {
+    const { points } = extractExerciseProgression(
+      [
+        workout('w1', '2026-09-01T10:00:00.000Z', [
+          exercise('run', 'distance_duration', [{ distanceM: 5000 }]),
+        ]),
+        workout('w2', '2026-09-03T10:00:00.000Z', [
+          exercise('run', 'distance_duration', [{ distanceM: 5000, durationSeconds: 1500 }]),
+        ]),
+      ],
+      'run',
+    );
+    assert.equal(pointsWithMetric(points, 'best_pace', 'kg').length, 1);
+    assert.equal(pointsWithMetric(points, 'max_distance', 'kg').length, 2);
+    assert.equal(pointsWithMetric(points, 'max_reps', 'kg').length, 2);
+  });
+
+  it('describes the best set for timed, distance and weight exercises', () => {
+    const plank = extractExerciseProgression(
+      [
+        workout('w1', '2026-09-01T10:00:00.000Z', [
+          exercise('plank', 'duration', [{ durationSeconds: 90 }]),
+        ]),
+      ],
+      'plank',
+    ).points[0];
+    const run = extractExerciseProgression(
+      [
+        workout('w1', '2026-09-01T10:00:00.000Z', [
+          exercise('run', 'distance_duration', [{ distanceM: 5000, durationSeconds: 1500 }]),
+          exercise('walk', 'distance_duration', [{ distanceM: 3000 }]),
+          exercise('jog', 'distance_duration', [{ durationSeconds: 600 }]),
+        ]),
+      ],
+      'run',
+    ).points[0];
+    assert.equal(formatTopSet(plank, 'duration', 'kg'), '1:30');
+    assert.equal(formatTopSet(run, 'distance_duration', 'kg'), '5 km in 25:00');
+    const walk = extractExerciseProgression(
+      [
+        workout('w1', '2026-09-01T10:00:00.000Z', [
+          exercise('walk', 'distance_duration', [{ distanceM: 3000 }]),
+        ]),
+      ],
+      'walk',
+    ).points[0];
+    assert.equal(formatTopSet(walk, 'distance_duration', 'kg'), '3 km');
+    const jog = extractExerciseProgression(
+      [
+        workout('w1', '2026-09-01T10:00:00.000Z', [
+          exercise('jog', 'distance_duration', [{ durationSeconds: 600 }]),
+        ]),
+      ],
+      'jog',
+    ).points[0];
+    assert.equal(formatTopSet(jog, 'distance_duration', 'kg'), '10:00');
+  });
 });
