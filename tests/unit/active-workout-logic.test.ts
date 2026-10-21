@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ActiveExercise, Gym, Workout, WorkoutSet } from '../../src/types';
+import { ActiveExercise, Gym, WorkoutSet } from '../../src/types';
 import {
-  buildPriorRecordIndex,
-  collectPriorWorkouts,
   computeDropSetSuggestions,
   computeLiveSetStats,
   findPreviousWorkingSet,
@@ -38,37 +36,6 @@ function makeActiveExercise(id: string, sets: WorkoutSet[]): ActiveExercise {
     },
     restTimerSeconds: 90,
     sets,
-  };
-}
-
-function makeWorkout(
-  id: string,
-  startTime: string,
-  exerciseId: string,
-  set: Partial<WorkoutSet>,
-): Workout {
-  return {
-    id,
-    name: id,
-    gymId: 'g1',
-    startTime,
-    durationSeconds: 3600,
-    totalVolumeKg: 0,
-    exercises: [
-      {
-        id: `ae-${id}`,
-        exerciseId,
-        exercise: {
-          id: exerciseId,
-          name: exerciseId,
-          category: 'strength',
-          equipment: 'barbell',
-          primaryMuscles: ['chest'],
-        },
-        restTimerSeconds: 90,
-        sets: [makeSet(`set-${id}`, { setNumber: 1, isCompleted: true, ...set })],
-      },
-    ],
   };
 }
 
@@ -113,36 +80,6 @@ test('getCompletedSetIds collects only completed set IDs', () => {
   ];
 
   assert.deepEqual([...getCompletedSetIds(exercises)].sort(), ['a1', 'b1']);
-});
-
-test('collectPriorWorkouts deduplicates across exercise histories and excludes the active workout', () => {
-  const w1 = makeWorkout('w1', '2024-01-01T10:00:00.000Z', 'ex1', {});
-  const w2 = makeWorkout('w2', '2024-01-02T10:00:00.000Z', 'ex2', {});
-  const active = makeWorkout('w3', '2024-01-03T10:00:00.000Z', 'ex1', {});
-
-  const history = { ex1: [w1, active], ex2: [w2, active], ex3: [w1] };
-
-  assert.deepEqual(
-    collectPriorWorkouts(history, active.startTime).map(workout => workout.id),
-    ['w1', 'w2'],
-  );
-  assert.deepEqual(
-    collectPriorWorkouts(history, undefined).map(workout => workout.id),
-    ['w1', 'w3', 'w2'],
-  );
-});
-
-test('buildPriorRecordIndex indexes prior workouts and skips the active one', () => {
-  const w1 = makeWorkout('w1', '2024-01-01T10:00:00.000Z', 'ex1', { weightKg: 100, reps: 5 });
-  const active = makeWorkout('w2', '2024-01-02T10:00:00.000Z', 'ex2', { weightKg: 50, reps: 5 });
-  const history = { ex1: [w1], ex2: [active] };
-
-  const index = buildPriorRecordIndex(history, active.startTime);
-  assert.deepEqual(index.leaderboard('ex1', null).weight, [100]);
-  assert.deepEqual(index.leaderboard('ex2', null).weight, []);
-
-  const fullIndex = buildPriorRecordIndex(history, undefined);
-  assert.deepEqual(fullIndex.leaderboard('ex2', null).weight, [50]);
 });
 
 test('resolveDisplayedActiveGym prefers the active gym, then the workout gym', () => {

@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildActiveWorkoutRecordIndex, evaluateActiveWorkoutPRs } from '../../src/workout/pr';
+import {
+  buildActiveWorkoutRecordIndex,
+  evaluateActiveWorkoutPRs,
+  formatPRDescription,
+} from '../../src/workout/pr';
 import { Exercise, Gym, Workout } from '../../src/types';
 
 const gyms: Gym[] = [{ id: 'g1', name: 'Home', color: '#000000', isDefault: true } as Gym];
@@ -78,5 +82,27 @@ describe('Live PR ranking during a workout', () => {
       rank(workout('active', '2026-10-10T10:00:00.000Z', [[65, 9]]), { bench: [] }).goldCount,
       1,
     );
+  });
+
+  it('does not call 60x10 a new record against an earlier 45 kg and a later-dated 60x14', () => {
+    const history = {
+      bench: [
+        workout('old', '2026-09-01T10:00:00.000Z', [[45, 10]]),
+        workout('imported', '2026-10-21T09:00:00.000Z', [[60, 14]]),
+      ],
+    };
+    const active = workout('active', '2026-10-20T20:00:00.000Z', [[60, 10]]);
+    assert.equal(rank(active, history).goldCount, 0);
+  });
+
+  it('describes what a record beat, including first-ever and reps at the same weight', () => {
+    const history = { bench: [workout('prev', '2026-10-01T10:00:00.000Z', [[65, 11]])] };
+    const reps = rank(workout('a', '2026-10-10T10:00:00.000Z', [[65, 12]]), history);
+    const repsDesc = formatPRDescription(reps.setPRs.get('a-s0')!.achievements[0], 'kg');
+    assert.match(repsDesc, /Most reps at 65 kg ever \(beats 11 reps\)/);
+
+    const first = rank(workout('b', '2026-10-10T10:00:00.000Z', [[65, 9]]), { bench: [] });
+    const firstDesc = formatPRDescription(first.setPRs.get('b-s0')!.achievements[0], 'kg');
+    assert.match(firstDesc, /first time logged/);
   });
 });

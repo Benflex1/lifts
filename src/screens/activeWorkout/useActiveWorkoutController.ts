@@ -24,12 +24,11 @@ import { applyPreviousSetStats } from '../../workout/gym-session';
 import { isOverloadFillTarget, OverloadSuggestion } from '../../workout/overload';
 import { countsLoad, getTrackingType, trackingTypeLabel } from '../../workout/tracking';
 import { getCompletedWorkoutsForExercises, getExerciseGymScope } from '../../database/db';
-import { evaluateWorkoutPRsWithSource } from '../../workout/pr';
+import { buildActiveWorkoutRecordIndex, evaluateActiveWorkoutPRs } from '../../workout/pr';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../../workout/supersets';
 import { getDefaultBarWeight, getDefaultIncrement, roundToIncrement } from '../../workout/warmup';
 import { PRCelebrationEvent } from '../../components/PRCelebrationToast';
 import {
-  buildPriorRecordIndex,
   computeLiveSetStats,
   findPreviousWorkingSet,
   getCompletedSetIds,
@@ -188,21 +187,23 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
 
   // Prior records are indexed once per loaded history, so re-ranking after each set change only
   // looks at this workout's sets instead of rescanning every past workout.
-  const activeStartTime = activeWorkout?.startTime;
-  const priorRecordIndex = useMemo(() => {
-    return buildPriorRecordIndex(exerciseWorkouts, activeStartTime);
-  }, [exerciseWorkouts, activeStartTime]);
+  const activeWorkoutId = activeWorkout?.id;
+  const priorRecordIndex = useMemo(
+    () => buildActiveWorkoutRecordIndex(exerciseWorkouts, activeWorkoutId),
+    [exerciseWorkouts, activeWorkoutId],
+  );
 
   const prSummary = useMemo(() => {
     if (!activeWorkout) return null;
-    return evaluateWorkoutPRsWithSource(
+    return evaluateActiveWorkoutPRs(
       activeWorkout,
+      exerciseWorkouts,
       priorRecordIndex,
       gyms,
       gymTrackingEnabled,
       exerciseScopes,
     );
-  }, [activeWorkout, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
+  }, [activeWorkout, exerciseWorkouts, priorRecordIndex, gyms, gymTrackingEnabled, exerciseScopes]);
 
   const previousCompletedSetIdsRef = useRef<Set<string> | null>(null);
 
