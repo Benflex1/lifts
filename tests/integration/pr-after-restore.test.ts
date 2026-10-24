@@ -132,3 +132,40 @@ describe('PR ranking when the backup was trained at a non-default gym', () => {
     },
   );
 });
+
+describe('Live PR baseline when several exercises share past workouts', () => {
+  for (const platform of ['native', 'web'] as const) {
+    it(`does not drop the second exercise's history [${platform}]`, async () => {
+      const fx = await createStoreFixture(platform);
+      const all = await fx.store.getAllExercises();
+      const bench = all.find(e => e.equipment === 'barbell')!;
+      const squat = all.find(e => e.equipment === 'dumbbell')!;
+      for (const [id, date] of [
+        ['a', '2026-09-01'],
+        ['b', '2026-09-08'],
+      ]) {
+        const w = workout(id, `${date}T10:00:00.000Z`, bench, [[100, 5]]);
+        w.exercises.push(
+          workout(`${id}2`, `${date}T10:00:00.000Z`, squat, [[50, 10]]).exercises[0],
+        );
+        await fx.store.saveCompletedWorkout(w);
+      }
+      const history = await fx.store.getCompletedWorkoutsForExercises([bench.id, squat.id]);
+      const active = workout('now', '2026-10-23T10:00:00.000Z', bench, [[90, 5]]);
+      active.exercises.push(
+        workout('now2', '2026-10-23T10:00:00.000Z', squat, [[40, 10]]).exercises[0],
+      );
+      const summary = evaluateActiveWorkoutPRs(
+        active,
+        history,
+        buildActiveWorkoutRecordIndex(history, active.id),
+        await fx.store.getGyms(),
+        false,
+      );
+      const texts = summary.achievements.map(
+        a => `${a.exerciseName}: ${formatPRDescription(a.achievement)}`,
+      );
+      assert.ok(!texts.some(t => t.includes('first time logged')), `got: ${texts.join(' | ')}`);
+    });
+  }
+});

@@ -547,13 +547,14 @@ export function buildActiveWorkoutRecordIndex(
   activeWorkoutId: string | undefined,
 ): PRHistoryIndex {
   const index = new PRHistoryIndex();
-  const loadedExerciseIds = new Set(Object.keys(historyByExercise));
-  const added = new Set<string>();
-  for (const list of Object.values(historyByExercise)) {
+  // Each exercise's list is indexed for that exercise only. The native store returns a workout once
+  // per exercise holding just that exercise's sets, so de-duplicating by workout id would drop the
+  // history of every exercise after the first one that shares a workout.
+  for (const [exerciseId, list] of Object.entries(historyByExercise)) {
+    const only = new Set([exerciseId]);
     for (const workout of list) {
-      if (workout.id === activeWorkoutId || added.has(workout.id)) continue;
-      added.add(workout.id);
-      index.add(workout, loadedExerciseIds);
+      if (workout.id === activeWorkoutId) continue;
+      index.add(workout, only);
     }
   }
   return index;
