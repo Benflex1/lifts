@@ -224,7 +224,8 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     for (const setId of currentCompleted) {
       if (!previousCompletedSetIdsRef.current.has(setId)) {
         const pr = prSummary?.setPRs.get(setId);
-        if (pr?.primary) {
+        // Only a new best celebrates; 2nd and 3rd place keep their badge quietly.
+        if (pr?.primary?.rank === 1) {
           bestEffortHaptic(() =>
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
           );
