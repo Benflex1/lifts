@@ -106,7 +106,10 @@ export function isSameSetPRResult(a?: SetPRResult, b?: SetPRResult): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   if (a.achievements.length !== b.achievements.length) return false;
-  return isSamePRAchievement(a.primary, b.primary);
+  if (!isSamePRAchievement(a.primary, b.primary)) return false;
+  return a.achievements.every((achievement, i) =>
+    isSamePRAchievement(achievement, b.achievements[i]),
+  );
 }
 
 /**
@@ -620,8 +623,12 @@ export function evaluateAllWorkoutPRs(
     for (const ex of w.exercises || []) (byExercise[ex.exerciseId] ||= []).push(w);
   }
   for (const w of workouts) {
-    if (!results[w.id])
-      results[w.id] = evaluateWorkoutPRs(w, byExercise, gyms, gymTrackingEnabled, scopesByExercise);
+    if (results[w.id]) continue;
+    // Without a start time there is no "before", so rank against every other workout.
+    const others = Object.fromEntries(
+      Object.entries(byExercise).map(([id, list]) => [id, list.filter(o => o.id !== w.id)]),
+    );
+    results[w.id] = evaluateWorkoutPRs(w, others, gyms, gymTrackingEnabled, scopesByExercise);
   }
   return results;
 }
@@ -704,7 +711,8 @@ export function formatPRDescription(achievement: PRAchievement, unit: WeightUnit
     return `Most reps at ${formatWeight(achievement.value, unit)}${scopeStr} (beats ${repsBeaten} ${repsBeaten === 1 ? 'rep' : 'reps'})`;
   }
   if (achievement.rank === 1 && achievement.previousRecord === undefined) {
-    prevStr = ' (first time logged)';
+    // Gym-scoped records only see this gym's history, so don't claim the exercise is new overall.
+    prevStr = achievement.scope === 'gym' ? ' (first time logged here)' : ' (first time logged)';
   }
 
   return `${headline}${scopeStr}${prevStr}`;

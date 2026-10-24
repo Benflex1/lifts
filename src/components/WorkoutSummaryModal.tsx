@@ -20,8 +20,14 @@ import { formatWeight } from '../utils/units';
 import { GymPickerModal } from './GymPickerModal';
 import { useDialog } from '../context/DialogContext';
 import { applyWorkoutEdits, reassignWorkoutGym } from '../workout/workout-edit';
+import { reportError } from '../utils/errorReporting';
 import { getCompletedWorkoutsForExercises, getExerciseGymScope } from '../database/db';
-import { evaluateWorkoutPRs, formatPRDescription, WorkoutPRSummary } from '../workout/pr';
+import {
+  buildActiveWorkoutRecordIndex,
+  evaluateWorkoutPRsWithSource,
+  formatPRDescription,
+  WorkoutPRSummary,
+} from '../workout/pr';
 import { PRBadge } from './PRBadge';
 import { ConfettiCelebration } from './ConfettiCelebration';
 import { WorkoutDurationModal } from './WorkoutDurationModal';
@@ -86,27 +92,35 @@ export function WorkoutSummaryModal({
     let mounted = true;
     const distinctExerciseIds = Array.from(new Set(workout.exercises.map(ex => ex.exerciseId)));
 
-    if (distinctExerciseIds.length === 0) return;
+    if (distinctExerciseIds.length === 0) {
+      setPrSummary(null);
+      return;
+    }
 
     Promise.all([
       getCompletedWorkoutsForExercises(distinctExerciseIds),
       Promise.all(distinctExerciseIds.map(id => getExerciseGymScope(id))),
-    ]).then(([workoutsByEx, scopes]) => {
-      if (!mounted) return;
-      const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
-      distinctExerciseIds.forEach((id, idx) => {
-        scopesByEx[id] = scopes[idx] || undefined;
-      });
+    ])
+      .then(([workoutsByEx, scopes]) => {
+        if (!mounted) return;
+        const scopesByEx: Record<string, ExerciseGymScope | undefined> = {};
+        distinctExerciseIds.forEach((id, idx) => {
+          scopesByEx[id] = scopes[idx] || undefined;
+        });
 
-      const summary = evaluateWorkoutPRs(
-        workout,
-        workoutsByEx,
-        gyms,
-        gymTrackingEnabled,
-        scopesByEx,
-      );
-      setPrSummary(summary);
-    });
+        // Same baseline the live logger used: every other saved workout, whatever its start time.
+        const summary = evaluateWorkoutPRsWithSource(
+          workout,
+          buildActiveWorkoutRecordIndex(workoutsByEx, workout.id),
+          gyms,
+          gymTrackingEnabled,
+          scopesByEx,
+        );
+        setPrSummary(summary);
+      })
+      .catch(error => {
+        reportError(error, { scope: 'summary.pr' });
+      });
 
     return () => {
       mounted = false;
