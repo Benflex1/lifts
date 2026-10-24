@@ -1334,6 +1334,11 @@ export function createNativeStore(driver: SqliteDriver): Store {
 
     for (const id of uniqueIds) {
       result[id] = [];
+      // The catalog cache can lag a write; fall back to the table before calling an id unknown.
+      if (!exercisesById.has(id)) {
+        const found = await getExerciseById(id);
+        if (found) exercisesById.set(id, found);
+      }
       if (exercisesById.has(id)) knownIds.push(id);
     }
     if (knownIds.length === 0) return result;

@@ -276,3 +276,16 @@ test('HistoryCard falls back to the exercise-name list when a detail is unavaila
   assert.ok(texts.includes('Bench Press • Incline Press'));
   assert.ok(!texts.includes('Edit Workout'));
 });
+
+test('HistoryCard does not count 2nd or 3rd place as PRs', async () => {
+  const { HistoryCard } = await import('../../src/screens/history/HistoryCard');
+
+  const silverOnly = { ...makePRSummary(), goldCount: 0, silverCount: 1, totalCount: 1 };
+  const renderer = render(
+    React.createElement(HistoryCard, makeProps([], { prSummary: silverOnly }) as any),
+  );
+  const texts = allTexts(renderer);
+
+  assert.ok(!texts.includes('1 PR'));
+  assert.ok(!texts.some(text => /^\d+ PRs?$/.test(text)));
+});

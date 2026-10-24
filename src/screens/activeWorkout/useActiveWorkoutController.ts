@@ -24,6 +24,7 @@ import { applyPreviousSetStats } from '../../workout/gym-session';
 import { isOverloadFillTarget, OverloadSuggestion } from '../../workout/overload';
 import { countsLoad, getTrackingType, trackingTypeLabel } from '../../workout/tracking';
 import { getCompletedWorkoutsForExercises, getExerciseGymScope } from '../../database/db';
+import { reportError } from '../../utils/errorReporting';
 import { buildActiveWorkoutRecordIndex, evaluateActiveWorkoutPRs } from '../../workout/pr';
 import { getSupersetMetadata, resolveNextSupersetTarget } from '../../workout/supersets';
 import { getDefaultBarWeight, getDefaultIncrement, roundToIncrement } from '../../workout/warmup';
@@ -151,36 +152,52 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     }));
   }, [activeWorkout?.exercises]);
 
+  // Ids whose history is being fetched. A request must survive later edits to the workout, or a
+  // slow load (e.g. right after a large import) is cancelled by every set change and never lands.
+  const historyInFlightRef = useRef<Set<string>>(new Set());
+  const isUnmountedRef = useRef(false);
+  useEffect(() => {
+    isUnmountedRef.current = false;
+    return () => {
+      isUnmountedRef.current = true;
+    };
+  }, []);
+
   useEffect(() => {
     if (!activeWorkout) return;
     const missingIds = Array.from(new Set(activeWorkout.exercises.map(ex => ex.exerciseId))).filter(
-      id => !(id in exerciseWorkouts),
+      id => !(id in exerciseWorkouts) && !historyInFlightRef.current.has(id),
     );
 
     if (missingIds.length === 0) return;
 
-    let mounted = true;
+    missingIds.forEach(id => historyInFlightRef.current.add(id));
     Promise.all([
       getCompletedWorkoutsForExercises(missingIds),
       Promise.all(missingIds.map(id => getExerciseGymScope(id))),
-    ]).then(([workoutsByEx, scopes]) => {
-      if (!mounted) return;
-      setExerciseWorkouts(prev => ({
-        ...prev,
-        ...workoutsByEx,
-      }));
-      setExerciseScopes(prev => {
-        const next = { ...prev };
-        missingIds.forEach((id, idx) => {
-          next[id] = scopes[idx] || undefined;
+    ])
+      .then(([workoutsByEx, scopes]) => {
+        if (isUnmountedRef.current) return;
+        setExerciseWorkouts(prev => ({
+          ...prev,
+          ...workoutsByEx,
+        }));
+        setExerciseScopes(prev => {
+          const next = { ...prev };
+          missingIds.forEach((id, idx) => {
+            next[id] = scopes[idx] || undefined;
+          });
+          return next;
         });
-        return next;
+      })
+      .catch(error => {
+        // Leave the ids unloaded so the next change to the workout retries; ranking stays off
+        // for them meanwhile instead of treating a failed load as an empty history.
+        reportError(error, { scope: 'activeWorkout.pr-history' });
+      })
+      .finally(() => {
+        missingIds.forEach(id => historyInFlightRef.current.delete(id));
       });
-    });
-
-    return () => {
-      mounted = false;
-    };
     // Keyed to the exercise list identity; scopes are merged incrementally and must not reload per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkout?.exercises]);
@@ -224,7 +241,8 @@ export function useActiveWorkoutController({ onFinish }: { onFinish: (workout: W
     for (const setId of currentCompleted) {
       if (!previousCompletedSetIdsRef.current.has(setId)) {
         const pr = prSummary?.setPRs.get(setId);
-        if (pr?.primary) {
+        // Only a new best celebrates; 2nd and 3rd place keep their badge quietly.
+        if (pr?.primary?.rank === 1) {
           bestEffortHaptic(() =>
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
           );

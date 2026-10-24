@@ -90,11 +90,11 @@ export const HistoryCard: React.FC<HistoryCardProps> = ({
               <Layers size={14} color={colors.textMuted} />
               <Text style={styles.metricText}>{item.totalSets} sets</Text>
             </View>
-            {prSummary && prSummary.totalCount > 0 && (
+            {prSummary && prSummary.goldCount > 0 && (
               <View style={[styles.metric, styles.prMetric]}>
                 <Trophy size={13} color={colors.gold} />
                 <Text style={styles.metricPRText}>
-                  {prSummary.totalCount} PR{prSummary.totalCount > 1 ? 's' : ''}
+                  {prSummary.goldCount} PR{prSummary.goldCount > 1 ? 's' : ''}
                 </Text>
               </View>
             )}
