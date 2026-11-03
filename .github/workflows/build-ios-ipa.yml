@@ -82,14 +82,15 @@ jobs:
         run: |
           set -euo pipefail
           products="$RUNNER_TEMP/lifts-ios-build/Build/Products/Release-iphoneos"
-          mapfile -t apps < <(find "$products" -maxdepth 1 -type d -name '*.app' -print)
-          if [[ "${#apps[@]}" -ne 1 ]]; then
-            echo "::error::Expected exactly one iPhone .app; found ${#apps[@]}"
+          app_count="$(find "$products" -maxdepth 1 -type d -name '*.app' | wc -l | tr -d '[:space:]')"
+          if [[ "$app_count" -ne 1 ]]; then
+            echo "::error::Expected exactly one iPhone .app; found $app_count"
             exit 1
           fi
+          app_path="$(find "$products" -maxdepth 1 -type d -name '*.app' -print -quit)"
 
           mkdir -p "$RUNNER_TEMP/lifts-ipa/Payload" build-artifacts
-          /usr/bin/ditto "${apps[0]}" "$RUNNER_TEMP/lifts-ipa/Payload/$(basename "${apps[0]}")"
+          /usr/bin/ditto "$app_path" "$RUNNER_TEMP/lifts-ipa/Payload/$(basename "$app_path")"
           (
             cd "$RUNNER_TEMP/lifts-ipa"
             /usr/bin/zip -qry "$GITHUB_WORKSPACE/build-artifacts/Lifts-unsigned.ipa" Payload
