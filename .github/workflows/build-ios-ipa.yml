@@ -1,0 +1,108 @@
+name: Build iOS IPA (SideStore)
+
+# SideStore signs the IPA on each tester's iPhone with their own free Apple Account.
+# This job intentionally does not use Apple signing credentials or EAS distribution.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [develop]
+    paths:
+      - '.github/workflows/build-ios-ipa.yml'
+      - 'App.tsx'
+      - 'app.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'assets/**'
+      - 'modules/**'
+      - 'plugins/**'
+      - 'src/**'
+      - 'index.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned-ipa:
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify the Apple toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Generate the native iOS project
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: pod install
+
+      - name: Compile an unsigned iPhone Release build
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)"
+          if [[ -z "$workspace" ]]; then
+            echo "::error::Expo prebuild did not create an iOS workspace"
+            exit 1
+          fi
+          scheme="$(basename "$workspace" .xcworkspace)"
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/lifts-ios-build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Package unsigned IPA for SideStore
+        shell: bash
+        run: |
+          set -euo pipefail
+          products="$RUNNER_TEMP/lifts-ios-build/Build/Products/Release-iphoneos"
+          app_count="$(find "$products" -maxdepth 1 -type d -name '*.app' | wc -l | tr -d '[:space:]')"
+          if [[ "$app_count" -ne 1 ]]; then
+            echo "::error::Expected exactly one iPhone .app; found $app_count"
+            exit 1
+          fi
+          app_path="$(find "$products" -maxdepth 1 -type d -name '*.app' -print -quit)"
+
+          mkdir -p "$RUNNER_TEMP/lifts-ipa/Payload" build-artifacts
+          /usr/bin/ditto "$app_path" "$RUNNER_TEMP/lifts-ipa/Payload/$(basename "$app_path")"
+          (
+            cd "$RUNNER_TEMP/lifts-ipa"
+            /usr/bin/zip -qry "$GITHUB_WORKSPACE/build-artifacts/Lifts-unsigned.ipa" Payload
+          )
+          /usr/bin/unzip -t build-artifacts/Lifts-unsigned.ipa
+          shasum -a 256 build-artifacts/Lifts-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifts-ios-unsigned-ipa
+          path: build-artifacts/Lifts-unsigned.ipa
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
