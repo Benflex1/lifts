@@ -7,6 +7,14 @@ GitHub Release notes for tag `vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.0]
+
+### Added
+- Edit the date of a finished workout. The Edit Workout screen now has a date field with previous and next day buttons. The time of day and duration are kept, future dates are rejected, and streaks, records and charts follow the new date.
+
+### Fixed
+- Personal records are counted correctly after restoring a backup and for workouts that contain several exercises. A fresh restore could call an exercise done many times "first time logged", and only the first exercise sharing a past workout was ranked against its history.
+
 ## [1.1.0]
 
 ### Added
