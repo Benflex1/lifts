@@ -9,10 +9,24 @@ import {
   View,
 } from 'react-native';
 import { AppTouchable } from './ui';
-import { Check, X, Plus, Trash2, Clock, Sparkles } from 'lucide-react-native';
+import {
+  Check,
+  X,
+  Plus,
+  Trash2,
+  Clock,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react-native';
 import { ActiveExercise, Exercise, Gym, SetType, Workout, WorkoutSet } from '../types';
 import { WeightUnit, displayToKg, kgToDisplay } from '../utils/units';
-import { applyWorkoutEdits } from '../workout/workout-edit';
+import {
+  applyWorkoutEdits,
+  moveStartTimeToDate,
+  shiftDateInput,
+  toLocalDateInput,
+} from '../workout/workout-edit';
 import { ExercisePickerModal } from './ExercisePickerModal';
 import {
   secondsToHoursMinutes,
@@ -92,6 +106,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
   const [draftValues, setDraftValues] = useState<Record<string, SetDraftValues>>({});
   const { trackingTypesEnabled, trackingTypeOverrides } = useSettings();
   const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [dateText, setDateText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,6 +116,7 @@ export const WorkoutEditModal: React.FC<Props> = ({
     setName(workout.name);
     setNotes(workout.notes || '');
     setSelectedGymId(workout.gymId);
+    setDateText(toLocalDateInput(workout.startTime));
 
     const { hours: h, minutes: m } = secondsToHoursMinutes(workout.durationSeconds);
     setHours(h > 0 ? String(h) : '');
@@ -368,6 +384,10 @@ export const WorkoutEditModal: React.FC<Props> = ({
         notes,
         gymId: gymTrackingEnabled ? selectedGymId : workout.gymId,
         durationSeconds: totalDurationSeconds,
+        startTime:
+          dateText === toLocalDateInput(workout.startTime)
+            ? workout.startTime
+            : moveStartTimeToDate(workout.startTime, dateText),
         exercises: finalizedExercises,
       });
 
@@ -415,6 +435,44 @@ export const WorkoutEditModal: React.FC<Props> = ({
               spellCheck={false}
               editable={!saving}
             />
+
+            {/* Date */}
+            <Text style={styles.label}>DATE</Text>
+            <View style={styles.durationCard}>
+              <View style={styles.durationRow}>
+                <AppTouchable
+                  onPress={() => setDateText(prev => shiftDateInput(prev, -1) ?? prev)}
+                  disabled={saving}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous day"
+                >
+                  <ChevronLeft size={20} color={colors.primary} />
+                </AppTouchable>
+                <TextInput
+                  style={[styles.durationInput, styles.dateInput]}
+                  value={dateText}
+                  onChangeText={setDateText}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={colors.textMuted}
+                  maxLength={10}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  editable={!saving}
+                  accessibilityLabel="Workout date, year-month-day"
+                />
+                <AppTouchable
+                  onPress={() => setDateText(prev => shiftDateInput(prev, 1) ?? prev)}
+                  disabled={saving}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next day"
+                >
+                  <ChevronRight size={20} color={colors.primary} />
+                </AppTouchable>
+              </View>
+            </View>
 
             {/* Duration Section */}
             <Text style={styles.label}>WORKOUT DURATION</Text>
@@ -859,6 +917,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     paddingVertical: 2,
+  },
+  dateInput: {
+    flex: 1,
+    width: undefined,
+    fontSize: 16,
   },
   durationUnitLabel: {
     color: colors.textSecondary,

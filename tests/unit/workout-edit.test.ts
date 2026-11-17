@@ -1,7 +1,13 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { Workout } from '../../src/types';
-import { applyWorkoutEdits, reassignWorkoutGym } from '../../src/workout/workout-edit';
+import { Workout, WorkoutHistorySummary } from '../../src/types';
+import {
+  applyWorkoutEdits,
+  moveStartTimeToDate,
+  reassignWorkoutGym,
+  shiftDateInput,
+} from '../../src/workout/workout-edit';
+import { buildWeekSnapshot } from '../../src/workout/week-summary';
 
 const workoutFixture = (): Workout => ({
   id: 'workout-1',
@@ -309,5 +315,54 @@ describe('applyWorkoutEdits', () => {
     assert.equal(updated.exercises[0].sets[0].id, 'b1-set-1');
     assert.equal(updated.exercises[1].sets[0].id, 'b2-set-1');
     assert.equal(updated.totalVolumeKg, 100 * 5 + 60 * 12);
+  });
+});
+
+describe('changing a workout date', () => {
+  const noon = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12, 0, 0).toISOString();
+
+  it('moves to another day and keeps the time of day', () => {
+    const start = new Date(2026, 10, 10, 18, 30, 0).toISOString();
+    const moved = moveStartTimeToDate(start, '2026-11-03', new Date(2026, 10, 14));
+    const d = new Date(moved);
+    assert.deepEqual(
+      [d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()],
+      [2026, 10, 3, 18, 30],
+    );
+  });
+
+  it('rejects malformed, impossible and future dates', () => {
+    const now = new Date(2026, 10, 14, 12);
+    const start = noon(2026, 11, 10);
+    assert.throws(() => moveStartTimeToDate(start, '11/03/2026', now));
+    assert.throws(() => moveStartTimeToDate(start, '2026-02-30', now));
+    assert.throws(() => moveStartTimeToDate(start, '2026-11-20', now));
+  });
+
+  it('shifts date text by whole days across month boundaries', () => {
+    assert.equal(shiftDateInput('2026-03-01', -1), '2026-02-28');
+    assert.equal(shiftDateInput('2026-12-31', 1), '2027-01-01');
+    assert.equal(shiftDateInput('nope', 1), null);
+  });
+
+  it('shifts end time with the new start and restores a weekly streak', () => {
+    const now = new Date(2026, 10, 14, 12); // Saturday
+    const mk = (id: string, start: string): WorkoutHistorySummary =>
+      ({ id, startTime: start, totalVolumeKg: 0, durationSeconds: 0 }) as WorkoutHistorySummary;
+    // Workouts this week and 2 weeks ago, nothing last week: streak is 1.
+    const history = [mk('a', noon(2026, 11, 10)), mk('b', noon(2026, 10, 28))];
+    assert.equal(buildWeekSnapshot(history, now).streakWeeks, 1);
+
+    const base = workoutFixture();
+    const moved = applyWorkoutEdits(
+      { ...base, startTime: noon(2026, 10, 28), endTime: noon(2026, 10, 28) },
+      {
+        startTime: moveStartTimeToDate(noon(2026, 10, 28), '2026-11-05', now),
+        durationSeconds: 3600,
+      },
+    );
+    assert.equal(new Date(moved.endTime!).getTime() - new Date(moved.startTime).getTime(), 3600000);
+    const after = [history[0], mk('b', moved.startTime)];
+    assert.equal(buildWeekSnapshot(after, now).streakWeeks, 2);
   });
 });

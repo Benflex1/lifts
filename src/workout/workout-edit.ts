@@ -164,3 +164,50 @@ export function reassignWorkoutGym(workout: Workout, gymId: string): Workout {
     sets: [],
   });
 }
+
+/** Local calendar date of an ISO timestamp as YYYY-MM-DD. */
+export function toLocalDateInput(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Adds (or subtracts) whole calendar days to a YYYY-MM-DD string. Returns null if invalid. */
+export function shiftDateInput(value: string, days: number): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days);
+  return toLocalDateInput(d.toISOString());
+}
+
+/**
+ * Moves a workout start time to another local calendar day (YYYY-MM-DD), keeping the time of day.
+ * Throws on malformed dates, non-existent dates (e.g. 2026-02-30) and dates in the future.
+ */
+export function moveStartTimeToDate(
+  startTime: string,
+  dateInput: string,
+  now: Date = new Date(),
+): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateInput.trim());
+  if (!match) throw new Error('Date must be in YYYY-MM-DD format');
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const original = new Date(startTime);
+  if (!Number.isFinite(original.getTime())) throw new Error('Start time must be a valid date');
+  const moved = new Date(
+    year,
+    month - 1,
+    day,
+    original.getHours(),
+    original.getMinutes(),
+    original.getSeconds(),
+    original.getMilliseconds(),
+  );
+  if (moved.getFullYear() !== year || moved.getMonth() !== month - 1 || moved.getDate() !== day) {
+    throw new Error('That date does not exist');
+  }
+  if (moved.getTime() > now.getTime()) throw new Error('Workout date cannot be in the future');
+  return moved.toISOString();
+}
