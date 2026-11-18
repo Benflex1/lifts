@@ -36,6 +36,10 @@ const ACCEPTED_ADVISORIES = new Map([
     'https://github.com/advisories/GHSA-68fv-2mgg-jv7q',
     'source-map-js via Metro source maps: build-time only',
   ],
+  [
+    'https://github.com/advisories/GHSA-mrhx-c7xc-m3w5',
+    'zod via @expo/cli and eslint-plugin-react-hooks: CLI/lint tooling validating its own config, not in the app bundle',
+  ],
 ]);
 
 function runAudit() {

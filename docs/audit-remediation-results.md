@@ -70,12 +70,12 @@ This document maps each finding identified in the comprehensive codebase audit t
 
 ## Test Suite Execution Evidence
 
-Counts refreshed against the current suite (2026-10-18); the original remediation run recorded 147 passing tests. See `docs/repository-audit-2026-10-18.md` for per-phase evidence.
+Counts refreshed against the current suite (2026-11-17); the original remediation run recorded 147 passing tests. See `docs/repository-audit-2026-10-18.md` for per-phase evidence.
 
 ```
-Unit Tests: 580
-Integration Tests: 173
-Total Tests Passed: 753
+Unit Tests: 760
+Integration Tests: 197 (+1 todo)
+Total Tests Passed: 957
 Total Tests Failed: 0
 TypeScript Validation: Clean (0 errors)
 Lint / Format: Clean (0 errors)

@@ -47,6 +47,7 @@ export function useWorkoutHistory(): WorkoutHistoryQuery {
   const requestRef = useRef(0);
   const hasLoadedRef = useRef(false);
   const revisionRef = useRef<number | null>(null);
+  const gymTrackingRef = useRef(gymTrackingEnabled);
   const gymsRef = useRef(gyms);
   const detailsRef = useRef(details);
   const prsRef = useRef(prs);
@@ -98,11 +99,21 @@ export function useWorkoutHistory(): WorkoutHistoryQuery {
       // expensive reload (list + snapshot + PR pass) can be skipped entirely.
       // Stores without a revision counter always reload.
       const revision = (await store.getDataRevision?.()) ?? null;
-      if (skipIfUnchanged && revision !== null && revision === revisionRef.current) return;
+      // PR ranking also depends on the gym-tracking setting, which a data revision does not cover.
+      const gymTrackingChanged = gymTrackingRef.current !== gymTrackingEnabled;
+      if (
+        skipIfUnchanged &&
+        !gymTrackingChanged &&
+        revision !== null &&
+        revision === revisionRef.current
+      ) {
+        return;
+      }
 
       const [list, gymList] = await Promise.all([getWorkoutHistory(), getGyms()]);
       if (requestId !== requestRef.current) return;
       revisionRef.current = revision;
+      gymTrackingRef.current = gymTrackingEnabled;
 
       hasLoadedRef.current = true;
       setHistory(list);

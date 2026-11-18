@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   buildActiveWorkoutRecordIndex,
   evaluateActiveWorkoutPRs,
+  evaluateAllWorkoutPRs,
   formatPRDescription,
+  isSameSetPRResult,
 } from '../../src/workout/pr';
 import { Exercise, Gym, Workout } from '../../src/types';
 
@@ -104,5 +106,43 @@ describe('Live PR ranking during a workout', () => {
     const first = rank(workout('b', '2026-10-10T10:00:00.000Z', [[65, 9]]), { bench: [] });
     const firstDesc = formatPRDescription(first.setPRs.get('b-s0')!.achievements[0], 'kg');
     assert.match(firstDesc, /first time logged/);
+  });
+});
+
+describe('PR wording and comparison helpers', () => {
+  const base = {
+    rank: 1 as const,
+    metric: 'weight' as const,
+    value: 100,
+    isTie: false,
+  };
+
+  it('does not claim a gym-scoped first record is new overall', () => {
+    const gymText = formatPRDescription({ ...base, scope: 'gym', gymName: 'Home' });
+    assert.ok(gymText.endsWith('(first time logged here)'), gymText);
+    const globalText = formatPRDescription({ ...base, scope: 'global' });
+    assert.ok(globalText.endsWith('(first time logged)'), globalText);
+  });
+
+  it('treats results with different secondary achievements as different', () => {
+    const primary = { ...base, scope: 'global' as const };
+    const volumeA = { ...primary, metric: 'volume' as const, value: 500 };
+    const volumeB = { ...volumeA, value: 600 };
+    const a = { setId: 's', primary, achievements: [primary, volumeA] };
+    const b = { setId: 's', primary, achievements: [primary, volumeB] };
+    assert.equal(isSameSetPRResult(a, b), false);
+    assert.equal(isSameSetPRResult(a, { ...a, achievements: [primary, { ...volumeA }] }), true);
+  });
+
+  it('ranks a workout without a start time against others, not against itself', () => {
+    const prev = workout('prev', '2026-10-01T10:00:00.000Z', [[100, 5]]);
+    const noTime = workout('x', '', [[90, 5]]);
+    (noTime as { startTime?: string }).startTime = undefined;
+    const results = evaluateAllWorkoutPRs([prev, noTime], gyms, false);
+    assert.equal(results.x.setPRs.size, 1, 'only 2nd place against the 100 kg set');
+    assert.equal(results.x.goldCount, 0);
+    const lone = workout('y', '', [[90, 5]]);
+    (lone as { startTime?: string }).startTime = undefined;
+    assert.equal(evaluateAllWorkoutPRs([lone], gyms, false).y.goldCount, 1);
   });
 });

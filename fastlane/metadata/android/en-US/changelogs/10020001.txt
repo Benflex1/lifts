@@ -1,0 +1,5 @@
+Set the date on a finished workout.
+
+- Edit Workout now has a date field with previous and next day buttons. The time of day and duration are kept.
+- Streaks, records and charts follow the new date, and future dates are rejected.
+- Personal records are counted correctly after restoring a backup and for workouts with several exercises.
